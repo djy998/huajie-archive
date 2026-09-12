@@ -971,6 +971,7 @@ function initTabs(){
       document.querySelectorAll(".tab-panel").forEach(p => {
         p.hidden = (p.id !== "panel-" + tab);
       });
+      playEnterAnim(document.getElementById("panel-" + tab));
     });
   });
 }
@@ -1143,9 +1144,11 @@ function initDayNight(){
   applyTileBackgrounds(isDay);
   let dayNightLocked = false;
   btn.addEventListener("click", () => {
-    if(dayNightLocked) return;
-    dayNightLocked = true;
-    setTimeout(() => { dayNightLocked = false; }, 1000);
+    if(fxEnabled && dayNightLocked) return;
+    if(fxEnabled){
+      dayNightLocked = true;
+      setTimeout(() => { dayNightLocked = false; }, 1000);
+    }
     const willBeDay = !document.body.classList.contains("day-mode");
     if(!fxEnabled){
       document.body.classList.remove("fx-crossfading");
@@ -1214,7 +1217,6 @@ function initHashRoute(){
 function openLightboxSrc(src){
   document.getElementById("lightboxImg").src = src;
   document.getElementById("lightboxOverlay").hidden = false;
-  playEnterAnim(document.getElementById("lightboxImg"));
   resetLightboxTransform();
 }
 function openLightbox(imgEl){
@@ -1237,6 +1239,9 @@ function resetLightboxTransform(){
 function applyLightboxTransform(){
   const img = document.getElementById("lightboxImg");
   img.style.transform = `translate(${lbState.tx}px, ${lbState.ty}px) scale(${lbState.scale})`;
+  if(!lbState.dragging){
+    img.style.cursor = lbState.scale > 1 ? "zoom-out" : "zoom-in";
+  }
 }
 function zoomAt(clientX, clientY, factor){
   const img = document.getElementById("lightboxImg");
@@ -1263,7 +1268,9 @@ function lbPointerDown(x, y){
   lbState.moved = false;
   lbState.startX = x - lbState.tx;
   lbState.startY = y - lbState.ty;
-  document.getElementById("lightboxImg").classList.add("is-dragging");
+  const img = document.getElementById("lightboxImg");
+  img.classList.add("is-dragging");
+  img.style.cursor = "grabbing";
 }
 function lbPointerMove(x, y){
   if(!lbState.dragging) return;
@@ -1274,7 +1281,9 @@ function lbPointerMove(x, y){
 }
 function lbPointerUp(){
   lbState.dragging = false;
-  document.getElementById("lightboxImg").classList.remove("is-dragging");
+  const img = document.getElementById("lightboxImg");
+  img.classList.remove("is-dragging");
+  img.style.cursor = lbState.scale > 1 ? "zoom-out" : "zoom-in";
 }
 
 function initLightbox(){
