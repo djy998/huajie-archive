@@ -447,7 +447,7 @@
 
   <!-- ============ 活动详情（最新活动 / 历届活动某一届） ============ -->
   <section id="view-detail" class="view" hidden>
-    <button class="back-btn" data-back>← 返回</button>
+    <button class="back-btn" id="detailBackBtn" data-back>← 返回</button>
     <div class="detail-hero" id="detailHero">
       <h2 id="detailTitle"></h2>
       <p id="detailMeta"></p>
@@ -476,7 +476,7 @@
 
   <!-- ============ 历届活动列表 ============ -->
   <section id="view-archive-list" class="view" hidden>
-    <button class="back-btn" data-back>← 返回</button>
+    <button class="back-btn" id="archiveBackBtn" data-back>← 返回</button>
     <h2 class="section-title">往期街区活动</h2>
     <div class="album-grid" id="albumGrid"></div>
   </section>
@@ -846,6 +846,7 @@ function renderTabContent(tab){
 
 function openDetail(data){
   currentDetail = data;
+  document.getElementById("detailBackBtn").style.display = "";
   document.getElementById("detailHero").style.backgroundImage = data.cover ? `url('${data.cover}')` : "";
   document.getElementById("detailTitle").textContent = data.title;
   document.getElementById("detailMeta").textContent = [data.dateLabel, data.location].filter(Boolean).join(" · ");
@@ -925,6 +926,7 @@ function openLatestEvent(){
     : { ...LATEST_EVENT, title: "敬请期待", isLatest: true });
 }
 function openArchiveList(){
+  document.getElementById("archiveBackBtn").style.display = "";
   renderAlbumGrid();
   showView("view-archive-list");
 }
@@ -1098,8 +1100,10 @@ function initHashRoute(){
     showView("view-internal");
   } else if(location.hash === "#latest"){
     openLatestEvent();
+    document.getElementById("detailBackBtn").style.display = "none";
   } else if(location.hash === "#previous"){
     openArchiveList();
+    document.getElementById("archiveBackBtn").style.display = "none";
   }
 }
 
