@@ -361,6 +361,8 @@
     content:"";position:absolute;inset:0;background:rgba(18,14,30,0.82);border-radius:inherit;z-index:0;
   }
   .info-box > *{position:relative;z-index:1;}
+  @keyframes fxFadeOnly{from{opacity:0;}to{opacity:1;}}
+  .fx-fade-only{animation:fxFadeOnly .5s ease both;}
   .info-title{font-family:var(--brush);font-size:2.2rem;color:var(--lantern-soft);margin-bottom:20px;}
   .info-text p{color:var(--text-soft);font-size:1.02rem;line-height:2;margin-bottom:16px;}
   .info-date{color:var(--text-mute);font-size:.8rem;text-align:right;}
@@ -382,7 +384,7 @@
   footer{text-align:center;padding:30px 24px 50px;color:var(--text-mute);font-size:.78rem;}
 
   @media (max-width:640px){
-    .tile-grid{grid-template-columns:1fr;}
+    .tile-grid, .tile-grid.tile-grid-3{grid-template-columns:1fr;}
     .tile-hero{min-height:300px;}
     .shop-item{grid-template-columns:32px 1fr;}
     .shop-item .price{grid-column:2;text-align:left;padding-top:4px;}
@@ -1170,10 +1172,21 @@ function initDayNight(){
   });
 }
 
+function playFadeOnly(el){
+  if(!el) return;
+  if(!fxEnabled){
+    el.classList.remove("fx-fade-only");
+    return;
+  }
+  el.classList.remove("fx-fade-only");
+  void el.offsetWidth;
+  el.classList.add("fx-fade-only");
+}
+
 function openInfoModal(){
   document.getElementById("infoBox").style.backgroundImage = `url('${INFO_BG_IMAGE}')`;
   document.getElementById("infoOverlay").hidden = false;
-  playEnterAnim(document.getElementById("infoBox"));
+  playFadeOnly(document.getElementById("infoBox"));
 }
 function closeInfoModal(){
   document.getElementById("infoOverlay").hidden = true;
@@ -1311,30 +1324,71 @@ function initLightbox(){
   });
 
   let lastTap = 0;
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let pinching = false;
+
+  function touchDist(touches){
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   img.addEventListener("touchstart", (e) => {
-    if(e.touches.length === 1){
+    if(e.touches.length === 2){
+      pinching = true;
+      lbState.dragging = false;
+      pinchStartDist = touchDist(e.touches);
+      pinchStartScale = lbState.scale;
+      const rect = img.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const px = ((midX - rect.left) / rect.width) * 100;
+      const py = ((midY - rect.top) / rect.height) * 100;
+      img.style.transformOrigin = `${px}% ${py}%`;
+    } else if(e.touches.length === 1 && !pinching){
       lbPointerDown(e.touches[0].clientX, e.touches[0].clientY);
     }
   });
   img.addEventListener("touchmove", (e) => {
-    if(e.touches.length === 1 && lbState.scale > 1){
+    if(e.touches.length === 2){
+      e.preventDefault();
+      const dist = touchDist(e.touches);
+      let newScale = pinchStartScale * (dist / pinchStartDist);
+      newScale = Math.min(Math.max(newScale, 1), 20);
+      lbState.scale = newScale;
+      if(newScale <= 1.001){
+        lbState.scale = 1;
+        lbState.tx = 0;
+        lbState.ty = 0;
+      }
+      lbState.moved = true;
+      applyLightboxTransform();
+    } else if(e.touches.length === 1 && !pinching && lbState.scale > 1){
       lbPointerMove(e.touches[0].clientX, e.touches[0].clientY);
       e.preventDefault();
     }
   }, { passive:false });
   img.addEventListener("touchend", (e) => {
-    if(!lbState.moved){
-      const now = Date.now();
-      const touch = e.changedTouches[0];
-      if(now - lastTap < 320){
-        resetLightboxTransform();
-        lastTap = 0;
-      } else {
-        zoomAt(touch.clientX, touch.clientY, 2.5);
-        lastTap = now;
+    if(e.touches.length === 0){
+      if(pinching){
+        pinching = false;
+        lbPointerUp();
+        return;
       }
+      if(!lbState.moved){
+        const now = Date.now();
+        const touch = e.changedTouches[0];
+        if(now - lastTap < 320){
+          resetLightboxTransform();
+          lastTap = 0;
+        } else {
+          zoomAt(touch.clientX, touch.clientY, 2.5);
+          lastTap = now;
+        }
+      }
+      lbPointerUp();
     }
-    lbPointerUp();
   });
 }
 
@@ -1517,6 +1571,9 @@ function clearAllFxEnterClasses(){
   document.querySelectorAll(".fx-page-enter").forEach(el => {
     el.classList.remove("fx-page-enter");
     el.style.animationDelay = "";
+  });
+  document.querySelectorAll(".fx-fade-only").forEach(el => {
+    el.classList.remove("fx-fade-only");
   });
 }
 
