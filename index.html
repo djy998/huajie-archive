@@ -84,6 +84,18 @@
   .fx-toggle{right:70px;opacity:0.4;}
   .fx-toggle.is-active{opacity:1;}
 
+  @keyframes fxPageEnter{
+    from{opacity:0;transform:translateY(14px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+  .fx-page-enter{animation:fxPageEnter .7s ease both;}
+
+  .fx-flash{
+    position:fixed;inset:0;z-index:400;background:var(--ink);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;
+  }
+  .fx-flash.show{opacity:1;}
+
   #fxLayer{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
   .fx-petal{
     position:absolute;top:-8%;opacity:0.6;line-height:1;
@@ -388,6 +400,7 @@
 <body>
 
 <div id="fxLayer" aria-hidden="true"></div>
+<div class="fx-flash" id="fxFlash" aria-hidden="true"></div>
 
 <header class="site-header">
   <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">🌙</button>
@@ -776,9 +789,17 @@ const MINI_REVIEWS = [
 
 let currentDetail = null;
 
+function playEnterAnim(el){
+  if(!fxEnabled || !el) return;
+  el.classList.remove("fx-page-enter");
+  void el.offsetWidth;
+  el.classList.add("fx-page-enter");
+}
+
 function showView(id){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== id));
   window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+  playEnterAnim(document.getElementById(id));
 }
 
 function showToast(msg){
@@ -1057,16 +1078,29 @@ function initDayNight(){
   }
   applyTileBackgrounds(isDay);
   btn.addEventListener("click", () => {
-    const nowDay = document.body.classList.toggle("day-mode");
-    btn.textContent = nowDay ? "☀️" : "🌙";
-    applyTileBackgrounds(nowDay);
-    applyFx();
+    const doSwitch = () => {
+      const nowDay = document.body.classList.toggle("day-mode");
+      btn.textContent = nowDay ? "☀️" : "🌙";
+      applyTileBackgrounds(nowDay);
+      applyFx();
+    };
+    if(!fxEnabled){
+      doSwitch();
+      return;
+    }
+    const flash = document.getElementById("fxFlash");
+    flash.classList.add("show");
+    setTimeout(() => {
+      doSwitch();
+      setTimeout(() => flash.classList.remove("show"), 30);
+    }, 250);
   });
 }
 
 function openInfoModal(){
   document.getElementById("infoBox").style.backgroundImage = `url('${INFO_BG_IMAGE}')`;
   document.getElementById("infoOverlay").hidden = false;
+  playEnterAnim(document.getElementById("infoBox"));
 }
 function closeInfoModal(){
   document.getElementById("infoOverlay").hidden = true;
@@ -1110,6 +1144,7 @@ function initHashRoute(){
 function openLightboxSrc(src){
   document.getElementById("lightboxImg").src = src;
   document.getElementById("lightboxOverlay").hidden = false;
+  playEnterAnim(document.getElementById("lightboxImg"));
   resetLightboxTransform();
 }
 function openLightbox(imgEl){
@@ -1232,6 +1267,7 @@ function openCaptcha(pending){
   turnstilePending = pending;
   document.getElementById("captchaMsg").hidden = true;
   document.getElementById("captchaOverlay").hidden = false;
+  playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
   renderTurnstile();
 }
 let turnstileRetryTimer = null;
@@ -1300,6 +1336,7 @@ async function onTurnstileSuccess(){
       showToast("群号：" + GROUP_QQ);
     }
     document.getElementById("groupOverlay").hidden = false;
+    playEnterAnim(document.querySelector("#groupOverlay .group-box"));
   }
 }
 function initCaptcha(){
@@ -1376,6 +1413,8 @@ function initFxToggle(){
   fxEnabled = getDefaultFxEnabled();
   btn.classList.toggle("is-active", fxEnabled);
   applyFx();
+  playEnterAnim(document.querySelector(".site-header"));
+  playEnterAnim(document.querySelector("main"));
   btn.addEventListener("click", () => {
     fxEnabled = !fxEnabled;
     btn.classList.toggle("is-active", fxEnabled);
