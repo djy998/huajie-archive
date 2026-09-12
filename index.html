@@ -116,6 +116,24 @@
   .site-header .tagline{margin-top:8px;color:var(--text-mute);font-size:1.05rem;font-weight:600;letter-spacing:.06em;}
   body.day-mode .site-header .brand{color:#ffd60a;}
   body.day-mode .site-header .tagline{color:#5b4326;}
+  body.day-mode .tile-hero p,
+  body.day-mode .tile-hint,
+  body.day-mode .tile-eyebrow,
+  body.day-mode .back-btn,
+  body.day-mode .detail-hero p,
+  body.day-mode .tab-btn,
+  body.day-mode .empty-note,
+  body.day-mode .empty-note-left,
+  body.day-mode .shop-item .num,
+  body.day-mode .shop-item .desc,
+  body.day-mode .review-caption,
+  body.day-mode footer{
+    color:#ffd60a;
+  }
+  body.day-mode .back-btn{border-color:#ffd60a;}
+  body.day-mode .back-btn:hover{background:#ffd60a;color:#1c1830;}
+  body.day-mode .tab-btn{border-color:#ffd60a;}
+  body.day-mode .tab-btn.is-active{color:var(--accent-ink);}
 
   /* ---------- views ---------- */
   main{max-width:960px;margin:0 auto;padding:0 24px 80px;}
@@ -176,8 +194,6 @@
     padding:8px 18px;border-radius:999px;font-size:.85rem;margin:28px 0 20px;
   }
   .back-btn:hover{border-color:var(--accent);color:var(--accent-soft);}
-  body.day-mode .back-btn{border-color:#6a2fb0;color:#6a2fb0;}
-  body.day-mode .back-btn:hover{background:#6a2fb0;color:#fff;}
   .section-title{font-family:var(--brush);font-size:2rem;color:var(--lantern-soft);margin-bottom:20px;}
 
   /* ---------- detail view ---------- */
@@ -211,6 +227,7 @@
     color:var(--text-mute);font-size:.9rem;padding:40px 20px;text-align:center;
     background:var(--panel-soft);border:1px dashed var(--line);border-radius:var(--radius-sm);
   }
+  .empty-note-left{text-align:left;color:var(--text-soft);}
   .tab-gallery{display:flex;flex-direction:column;gap:16px;margin-bottom:16px;}
   .tab-gallery img{width:100%;border-radius:var(--radius-sm);display:block;cursor:zoom-in;}
 
@@ -268,7 +285,7 @@
   }
   .review-photo:hover{transform:translateY(-4px);}
   .review-caption{margin-top:10px;font-size:.85rem;color:var(--text-soft);text-align:center;}
-  body.day-mode .review-caption{color:#4a3018;}
+  body.day-mode .review-caption{color:#ffd60a;}
 
   /* ---------- internal ---------- */
   .gate-card{
@@ -818,7 +835,7 @@ function renderTabContent(tab){
     html += `<div class="tab-gallery">` + tab.images.map(src => `<img src="${src}" loading="lazy" onclick="openLightbox(this)">`).join("") + `</div>`;
   }
   if(tab.text){
-    html += `<div class="empty-note" style="text-align:left;color:var(--text-soft);">${tab.text}</div>`;
+    html += `<div class="empty-note empty-note-left">${tab.text}</div>`;
   }
   if(tab.link){
     html += `<a class="ticket-badge-inline" href="${tab.link.url}" target="_blank" rel="noopener" style="display:inline-block;">${tab.link.label || "查看详情"}</a>`;
