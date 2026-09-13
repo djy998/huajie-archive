@@ -223,7 +223,7 @@
     width:34%;max-width:150px;flex-shrink:0;margin-left:8%;object-fit:contain;
     filter:drop-shadow(0 6px 14px rgba(0,0,0,0.18));
   }
-  #latestTile .tile-hover-fx img{width:44%;max-width:220px;}
+  #latestTile .tile-hover-fx img{width:50%;max-width:250px;}
   #latestTile .tile-hover-fx{background:linear-gradient(120deg,#e993fc,#fe6b95);}
   #archiveTile .tile-hover-fx{background:linear-gradient(120deg,#99b7ff,#e795ff);}
   #venueTile .tile-hover-fx{background:linear-gradient(120deg,#88ce51,#c6e265);}
@@ -236,17 +236,20 @@
     background:transparent;transition:background .5s ease, justify-content .5s ease;
     justify-content:center;padding-left:48%;
   }
+  body.fx-hover-enabled .tile:hover .tile-overlay h3{
+    font-size:1.28em;font-weight:800;
+  }
   body.fx-hover-enabled .tile:hover .tile-overlay h3,
   body.fx-hover-enabled .tile:hover .tile-eyebrow,
   body.fx-hover-enabled .tile:hover .tile-hero p,
   body.fx-hover-enabled .tile:hover .tile-hint{
-    color:#f9e389 !important;text-shadow:1px 1px 0 #c98a3a, -1px 1px 0 #c98a3a, 0 2px 6px rgba(0,0,0,0.25);
+    color:#f9e389 !important;
     transition:color .3s ease;
   }
   body.fx-hover-enabled #infoTile:hover .tile-overlay h3,
   body.fx-hover-enabled #internalTile:hover .tile-overlay h3,
   body.fx-hover-enabled #groupTile:hover .tile-overlay h3{
-    color:#cb6ce6 !important;text-shadow:1px 1px 0 #7a2f96, -1px 1px 0 #7a2f96, 0 2px 6px rgba(0,0,0,0.2);
+    color:#cb6ce6 !important;
   }
   body.fx-hover-enabled .tile:hover .tile-cta{
     background:rgba(255,255,255,0.25);border-color:#f9e389;color:#f9e389 !important;
