@@ -502,6 +502,12 @@
     </div>
 
     <div id="internalBoard" hidden>
+      <div class="gate-card" style="margin-bottom:30px;">
+        <h2 style="font-size:1.3rem;">站点开关</h2>
+        <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
+        <button id="lockdownToggleBtn">切换</button>
+        <p class="form-msg" id="lockdownMsg" hidden></p>
+      </div>
       <h2 class="section-title">公告板</h2>
       <div id="announcementList"></div>
     </div>
@@ -578,9 +584,8 @@ const SKY_DAY_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgG
 const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";
 const GROUP_QQ = "453278026";
 
-/* Supabase 配置——密码判断和公告内容都放在数据库那边，网页代码里不出现密码本身 */
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
+/* Cloudflare Worker 地址——密码判断和公告内容都放在 Worker+D1 那边，网页代码里不出现密码本身 */
+const WORKER_URL = "";
 
 const LATEST_EVENT = {
   title: "",              // 定下活动名字后填在这里，首页会自动换成标题
@@ -774,7 +779,7 @@ const ARCHIVE_EVENTS = [
   }
 ];
 
-/* 公告内容现在存在 Supabase 的 announcements 表里，不再写在这个文件里 */
+/* 公告内容现在存在 Cloudflare D1 的 announcements 表里，不再写在这个文件里 */
 
 /* 小型活动回顾——相册制，往数组里加 { image, caption } 就行，新的加最前面 */
 const MINI_REVIEWS = [
@@ -998,6 +1003,10 @@ function initNav(){
     window.open(VENUE_URL, "_blank", "noopener");
   });
   document.getElementById("groupTile").addEventListener("click", () => {
+    if(siteLockdown){
+      showToast("当前活动群暂不开放，敬请谅解");
+      return;
+    }
     openCaptcha("group");
   });
   document.querySelectorAll("[data-back]").forEach(btn => {
@@ -1005,26 +1014,18 @@ function initNav(){
   });
 }
 
-let supabaseClient = null;
-let supabaseLoadPromise = null;
-function loadSupabaseScript(){
-  if(window.supabase) return Promise.resolve();
-  if(supabaseLoadPromise) return supabaseLoadPromise;
-  supabaseLoadPromise = new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-  return supabaseLoadPromise;
-}
-async function getSupabaseClient(){
-  if(supabaseClient) return supabaseClient;
-  if(!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  await loadSupabaseScript();
-  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return supabaseClient;
+async function callWorker(payload){
+  if(!WORKER_URL) return null;
+  try{
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  }catch(e){
+    return null;
+  }
 }
 
 function initInternal(){
@@ -1040,7 +1041,7 @@ async function checkInternalPassword(){
   const btn = document.getElementById("internalSubmit");
   msg.hidden = true;
 
-  if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
+  if(!WORKER_URL){
     msg.hidden = false;
     msg.textContent = "数据库还没配置好，暂时无法验证密码。";
     return;
@@ -1050,28 +1051,15 @@ async function checkInternalPassword(){
   msg.hidden = false;
   msg.textContent = "验证中…";
 
-  let client;
-  try{
-    client = await getSupabaseClient();
-  }catch(e){
-    client = null;
-  }
-  if(!client){
-    btn.disabled = false;
-    msg.hidden = false;
-    msg.textContent = "加载失败，检查一下网络后再试";
-    return;
-  }
-
-  const { data, error } = await client.rpc("get_announcements", { p_password: input.value });
+  const data = await callWorker({ action: "get_announcements", password: input.value });
   btn.disabled = false;
 
-  if(error){
+  if(!data){
     msg.hidden = false;
-    msg.textContent = "验证失败，请稍后重试：" + error.message;
+    msg.textContent = "连接失败，检查一下网络后再试";
     return;
   }
-  if(!data || !data.ok){
+  if(!data.ok){
     msg.hidden = false;
     msg.textContent = "密码不对，再试试";
     return;
@@ -1080,6 +1068,46 @@ async function checkInternalPassword(){
   document.getElementById("internalGate").hidden = true;
   document.getElementById("internalBoard").hidden = false;
   renderAnnouncements(data.items);
+  internalAdminPassword = input.value;
+  refreshLockdownStatus();
+}
+
+let internalAdminPassword = null;
+
+async function refreshLockdownStatus(){
+  const status = document.getElementById("lockdownStatus");
+  status.textContent = "当前状态：读取中…";
+  const data = await callWorker({ action: "get_lockdown" });
+  if(!data){
+    status.textContent = "当前状态：读取失败";
+    return;
+  }
+  status.textContent = data.value
+    ? "当前状态：已开启（复制不加联系方式，活动群提示暂不开放）"
+    : "当前状态：关闭（正常运行）";
+  document.getElementById("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
+}
+
+function initLockdownToggle(){
+  document.getElementById("lockdownToggleBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("lockdownToggleBtn");
+    const msg = document.getElementById("lockdownMsg");
+    msg.hidden = true;
+    const nextValue = btn.dataset.current !== "1";
+    btn.disabled = true;
+    const data = await callWorker({
+      action: "set_lockdown",
+      password: internalAdminPassword,
+      value: nextValue
+    });
+    btn.disabled = false;
+    if(!data || !data.ok){
+      msg.hidden = false;
+      msg.textContent = "切换失败，请重新登录内部入口后再试";
+      return;
+    }
+    refreshLockdownStatus();
+  });
 }
 
 function cacheNightBackgrounds(){
@@ -1203,9 +1231,13 @@ function initInfo(){
     infoText.addEventListener("copy", (e) => {
       const selection = window.getSelection().toString();
       if(!selection) return;
-      e.clipboardData.setData("text/plain", selection + "\n\n合作联系QQ1316816234");
-      e.preventDefault();
-      openCaptcha(null);
+      if(siteLockdown) return;
+      if(turnstileVerified){
+        e.clipboardData.setData("text/plain", selection + "\n\n合作联系QQ1316816234");
+        e.preventDefault();
+      } else {
+        openCaptcha("copy_verify");
+      }
     });
   }
 }
@@ -1390,6 +1422,14 @@ function initLightbox(){
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 let turnstilePending = null;
 let turnstileWidgetId = null;
+let turnstileVerified = false;
+let siteLockdown = false;
+
+function checkLockdown(){
+  callWorker({ action: "get_lockdown" }).then(data => {
+    if(data) siteLockdown = !!data.value;
+  });
+}
 
 function openCaptcha(pending){
   turnstilePending = pending;
@@ -1456,6 +1496,7 @@ async function onTurnstileSuccess(){
     turnstileWidgetId = null;
   }
   turnstilePending = null;
+  turnstileVerified = true;
   if(pending === "group"){
     try{
       await navigator.clipboard.writeText(GROUP_QQ);
@@ -1465,6 +1506,8 @@ async function onTurnstileSuccess(){
     }
     document.getElementById("groupOverlay").hidden = false;
     playEnterAnim(document.querySelector("#groupOverlay .group-box"));
+  } else if(pending === "copy_verify"){
+    showToast("验证通过，之后复制会附上联系方式");
   }
 }
 function initCaptcha(){
@@ -1597,6 +1640,8 @@ initInfo();
 initHashRoute();
 initLightbox();
 initCaptcha();
+checkLockdown();
+initLockdownToggle();
 </script>
 
 </body>
