@@ -1718,6 +1718,9 @@ function initFxToggle(){
 
 function spawnClickBurst(x, y){
   const layer = document.getElementById("fxClickLayer");
+  if(layer.children.length > 60){
+    layer.innerHTML = "";
+  }
   const isDay = document.body.classList.contains("day-mode");
   const petals = ["🌸","🌼","🌿","🍃"];
   const count = 7;
@@ -1751,10 +1754,14 @@ function isFxExcludedTarget(el){
   );
 }
 
+let lastBurstTime = 0;
 function initClickBurst(){
   document.addEventListener("click", (e) => {
     if(!fxEnabled) return;
     if(isFxExcludedTarget(e.target)) return;
+    const now = Date.now();
+    if(now - lastBurstTime < 150) return;
+    lastBurstTime = now;
     spawnClickBurst(e.clientX, e.clientY);
   });
 }
