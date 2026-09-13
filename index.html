@@ -86,6 +86,22 @@
   .fx-toggle{right:70px;opacity:0.4;}
   .fx-toggle.is-active{opacity:1;}
 
+  #fxClickLayer{position:fixed;inset:0;z-index:500;pointer-events:none;overflow:hidden;}
+  .fx-burst-petal{position:absolute;font-size:16px;will-change:transform,opacity;animation:fxBurstFall .9s ease-out forwards;}
+  @keyframes fxBurstFall{
+    0%{transform:translate(-50%,-50%) rotate(0deg) scale(1);opacity:.9;}
+    100%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) rotate(var(--br)) scale(.6);opacity:0;}
+  }
+  .fx-burst-star{
+    position:absolute;width:5px;height:5px;border-radius:50%;
+    background:#fff4d6;box-shadow:0 0 6px 2px rgba(255,244,214,0.8);
+    will-change:transform,opacity;animation:fxBurstStar .7s ease-out forwards;
+  }
+  @keyframes fxBurstStar{
+    0%{transform:translate(-50%,-50%) scale(1);opacity:1;}
+    100%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(.2);opacity:0;}
+  }
+
   @keyframes fxPageEnter{
     from{opacity:0;transform:translateY(14px);}
     to{opacity:1;transform:translateY(0);}
@@ -396,6 +412,7 @@
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
+<div id="fxClickLayer" aria-hidden="true"></div>
 
 <header class="site-header">
   <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">🌙</button>
@@ -1699,6 +1716,49 @@ function initFxToggle(){
   });
 }
 
+function spawnClickBurst(x, y){
+  const layer = document.getElementById("fxClickLayer");
+  const isDay = document.body.classList.contains("day-mode");
+  const petals = ["🌸","🌼","🌿","🍃"];
+  const count = 7;
+  for(let i = 0; i < count; i++){
+    const el = document.createElement("span");
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 26 + Math.random() * 46;
+    const bx = Math.cos(angle) * dist;
+    const by = Math.sin(angle) * dist + 16;
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.setProperty("--bx", bx + "px");
+    el.style.setProperty("--by", by + "px");
+    if(isDay){
+      el.className = "fx-burst-petal";
+      el.textContent = petals[Math.floor(Math.random() * petals.length)];
+      el.style.fontSize = (12 + Math.random() * 8) + "px";
+      el.style.setProperty("--br", (Math.random() * 180 - 90) + "deg");
+    } else {
+      el.className = "fx-burst-star";
+    }
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+  }
+}
+
+function isFxExcludedTarget(el){
+  return !!el.closest(
+    "button, a, input, textarea, select, label, .tile, .tab-btn, .back-btn, " +
+    ".info-overlay, .lightbox-overlay, .review-photo, .album-card"
+  );
+}
+
+function initClickBurst(){
+  document.addEventListener("click", (e) => {
+    if(!fxEnabled) return;
+    if(isFxExcludedTarget(e.target)) return;
+    spawnClickBurst(e.clientX, e.clientY);
+  });
+}
+
 renderHome();
 initTabs();
 initNav();
@@ -1711,6 +1771,7 @@ initLightbox();
 initCaptcha();
 initLockdownToggle();
 initPostAnnouncement();
+initClickBurst();
 </script>
 
 </body>
