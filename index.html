@@ -502,11 +502,25 @@
     </div>
 
     <div id="internalBoard" hidden>
-      <div class="gate-card" style="margin-bottom:30px;">
+      <div class="gate-card" id="lockdownPanel" style="margin-bottom:30px;" hidden>
         <h2 style="font-size:1.3rem;">站点开关</h2>
         <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
         <button id="lockdownToggleBtn">切换</button>
         <p class="form-msg" id="lockdownMsg" hidden></p>
+      </div>
+      <div class="gate-card" id="postAnnouncementPanel" style="margin-bottom:30px;" hidden>
+        <h2 style="font-size:1.3rem;">发布公告</h2>
+        <textarea id="announcementText" placeholder="写点什么…" style="width:100%;min-height:100px;margin-bottom:14px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-soft);color:var(--cream);font-family:inherit;font-size:.9rem;"></textarea>
+        <div style="margin-bottom:16px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;margin-right:24px;">
+            <input type="checkbox" id="announceShowA" checked> 给A显示
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;">
+            <input type="checkbox" id="announceShowB" checked> 给B显示
+          </label>
+        </div>
+        <button id="postAnnouncementBtn">发布</button>
+        <p class="form-msg" id="postAnnouncementMsg" hidden></p>
       </div>
       <h2 class="section-title">公告板</h2>
       <div id="announcementList"></div>
@@ -585,7 +599,7 @@ const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";
 const GROUP_QQ = "453278026";
 
 /* Cloudflare Worker 地址——密码判断和公告内容都放在 Worker+D1 那边，网页代码里不出现密码本身 */
-const WORKER_URL = "https://huayu-api.1316816234.workers.dev/";
+const WORKER_URL = "";
 
 const LATEST_EVENT = {
   title: "",              // 定下活动名字后填在这里，首页会自动换成标题
@@ -950,18 +964,27 @@ function renderAlbumGrid(){
   });
 }
 
-function renderAnnouncements(items){
+function renderAnnouncements(items, isAdmin){
   const el = document.getElementById("announcementList");
   if(!items || !items.length){
     el.innerHTML = `<div class="empty-note">公告板还没有内容</div>`;
     return;
   }
-  el.innerHTML = items.map(a => `
+  el.innerHTML = items.map(a => {
+    let tag = "";
+    if(isAdmin){
+      const targets = [];
+      if(a.show_a) targets.push("A");
+      if(a.show_b) targets.push("B");
+      tag = `<span style="font-size:.75rem;color:var(--wisteria-soft);margin-left:8px;">[${targets.length ? targets.join("+") : "谁都看不到"}]</span>`;
+    }
+    return `
     <div class="announcement">
-      <div class="date">${new Date(a.created_at).toLocaleDateString("zh-CN")}</div>
+      <div class="date">${new Date(a.created_at).toLocaleDateString("zh-CN")}${tag}</div>
       <div class="body">${a.body}</div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function initTabs(){
@@ -1002,8 +1025,8 @@ function initNav(){
   document.getElementById("internalTile").addEventListener("click", () => {
     window.open(VENUE_URL, "_blank", "noopener");
   });
-  document.getElementById("groupTile").addEventListener("click", () => {
-    if(siteLockdown){
+  document.getElementById("groupTile").addEventListener("click", async () => {
+    if(await isLockedDown()){
       showToast("当前活动群暂不开放，敬请谅解");
       return;
     }
@@ -1067,9 +1090,55 @@ async function checkInternalPassword(){
 
   document.getElementById("internalGate").hidden = true;
   document.getElementById("internalBoard").hidden = false;
-  renderAnnouncements(data.items);
-  internalAdminPassword = input.value;
-  refreshLockdownStatus();
+  renderAnnouncements(data.items, data.isAdmin);
+
+  const lockdownPanel = document.getElementById("lockdownPanel");
+  const postPanel = document.getElementById("postAnnouncementPanel");
+  if(data.isAdmin){
+    lockdownPanel.hidden = false;
+    postPanel.hidden = false;
+    internalAdminPassword = input.value;
+    refreshLockdownStatus();
+  } else {
+    lockdownPanel.hidden = true;
+    postPanel.hidden = true;
+  }
+}
+
+async function refreshAnnouncements(){
+  const data = await callWorker({ action: "get_announcements", password: internalAdminPassword });
+  if(data && data.ok) renderAnnouncements(data.items, data.isAdmin);
+}
+
+function initPostAnnouncement(){
+  document.getElementById("postAnnouncementBtn").addEventListener("click", async () => {
+    const text = document.getElementById("announcementText");
+    const msg = document.getElementById("postAnnouncementMsg");
+    const btn = document.getElementById("postAnnouncementBtn");
+    msg.hidden = true;
+    if(!text.value.trim()){
+      msg.hidden = false;
+      msg.textContent = "写点内容再发布吧";
+      return;
+    }
+    btn.disabled = true;
+    const data = await callWorker({
+      action: "post_announcement",
+      password: internalAdminPassword,
+      content: text.value,
+      show_a: document.getElementById("announceShowA").checked,
+      show_b: document.getElementById("announceShowB").checked
+    });
+    btn.disabled = false;
+    if(!data || !data.ok){
+      msg.hidden = false;
+      msg.textContent = "发布失败，请重试";
+      return;
+    }
+    text.value = "";
+    showToast("公告已发布");
+    refreshAnnouncements();
+  });
 }
 
 let internalAdminPassword = null;
@@ -1210,6 +1279,7 @@ function openInfoModal(){
   document.getElementById("infoBox").style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);
   document.getElementById("infoOverlay").hidden = false;
   playFadeOnly(document.getElementById("infoBox"));
+  isLockedDown().then(v => { siteLockdown = v; });
 }
 function closeInfoModal(){
   document.getElementById("infoOverlay").hidden = true;
@@ -1425,10 +1495,9 @@ let turnstileWidgetId = null;
 let turnstileVerified = false;
 let siteLockdown = false;
 
-function checkLockdown(){
-  callWorker({ action: "get_lockdown" }).then(data => {
-    if(data) siteLockdown = !!data.value;
-  });
+async function isLockedDown(){
+  const data = await callWorker({ action: "get_lockdown" });
+  return data ? !!data.value : false;
 }
 
 function openCaptcha(pending){
@@ -1640,8 +1709,8 @@ initInfo();
 initHashRoute();
 initLightbox();
 initCaptcha();
-checkLockdown();
 initLockdownToggle();
+initPostAnnouncement();
 </script>
 
 </body>
