@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -173,7 +173,17 @@
             <input type="checkbox" id="announceShowB" checked> 给B显示
           </label>
         </div>
+        <div class="announcement-image-field">
+          <input type="file" id="announcementImageInput" accept="image/*" hidden>
+          <button type="button" id="announcementImagePickBtn" class="pill-btn-outline">配图</button>
+          <span class="form-msg" id="announcementImageStatus" hidden></span>
+          <div class="announcement-image-preview" id="announcementImagePreview" hidden>
+            <img id="announcementImagePreviewImg" src="" alt="">
+            <button type="button" id="announcementImageRemoveBtn" aria-label="移除图片">×</button>
+          </div>
+        </div>
         <button id="postAnnouncementBtn">发布</button>
+        <button id="cancelEditAnnouncementBtn" type="button" class="cancel-edit-btn" hidden>取消编辑</button>
         <p class="form-msg" id="postAnnouncementMsg" hidden></p>
       </div>
       <h2 class="section-title">公告板</h2>
@@ -629,8 +639,9 @@ function openDetail(data){
 
   document.getElementById("reviewTabBtn").hidden = !!data.hideReview;
 
-  document.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("is-active", i === 0));
-  document.querySelectorAll(".tab-panel").forEach((p,i) => p.hidden = (i !== 0));
+  const detailView = document.getElementById("view-detail");
+  detailView.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("is-active", i === 0));
+  detailView.querySelectorAll(".tab-panel").forEach((p,i) => p.hidden = (i !== 0));
 
   showView("view-detail");
 }
@@ -650,6 +661,16 @@ function renderAlbumGrid(){
   });
 }
 
+function escapeHtml(text){
+  return String(text).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
 function renderAnnouncements(items, isAdmin){
   const el = document.getElementById("announcementList");
   if(!items || !items.length){
@@ -658,28 +679,54 @@ function renderAnnouncements(items, isAdmin){
   }
   el.innerHTML = items.map(a => {
     let tag = "";
+    let adminBtns = "";
     if(isAdmin){
       const targets = [];
       if(a.show_a) targets.push("A");
       if(a.show_b) targets.push("B");
       tag = `<span style="font-size:.75rem;color:var(--wisteria-soft);margin-left:8px;">[${targets.length ? targets.join("+") : "谁都看不到"}]</span>`;
+      adminBtns = `
+        <div class="announcement-admin-btns">
+          <button type="button" class="announcement-edit-btn" data-id="${a.id}">编辑</button>
+          <button type="button" class="announcement-delete-btn" data-id="${a.id}">删除</button>
+        </div>`;
     }
+    const imageHtml = a.image_url
+      ? `<img src="${a.image_url}" loading="lazy" class="announcement-image" onclick="openLightboxSrc('${a.image_url}')">`
+      : "";
     return `
     <div class="announcement">
       <div class="date">${new Date(a.created_at).toLocaleDateString("zh-CN")}${tag}</div>
-      <div class="body">${a.body}</div>
+      <div class="body">${escapeHtml(a.body)}</div>
+      ${imageHtml}
+      ${adminBtns}
     </div>
   `;
   }).join("");
+
+  if(isAdmin){
+    el.querySelectorAll(".announcement-edit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const item = items.find(x => String(x.id) === btn.dataset.id);
+        if(!item) return;
+        startEditAnnouncement(item);
+      });
+    });
+    el.querySelectorAll(".announcement-delete-btn").forEach(btn => {
+      btn.addEventListener("click", () => deleteAnnouncement(btn.dataset.id));
+    });
+  }
 }
 
 function initTabs(){
-  document.querySelectorAll(".tab-btn").forEach(btn => {
+  /* 只在活动详情视图内部找 .tab-btn/.tab-panel，避免和花街介绍弹窗里同名的标签页互相打架 */
+  const detailView = document.getElementById("view-detail");
+  detailView.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("is-active"));
+      detailView.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("is-active"));
       btn.classList.add("is-active");
       const tab = btn.dataset.tab;
-      document.querySelectorAll(".tab-panel").forEach(p => {
+      detailView.querySelectorAll(".tab-panel").forEach(p => {
         p.hidden = (p.id !== "panel-" + tab);
       });
       playEnterAnim(document.getElementById("panel-" + tab));
@@ -796,7 +843,132 @@ async function refreshAnnouncements(){
   if(data && data.ok) renderAnnouncements(data.items, data.isAdmin);
 }
 
+let editingAnnouncementId = null;
+let pendingAnnouncementImageUrl = null;
+
+function showAnnouncementImagePreview(url){
+  const preview = document.getElementById("announcementImagePreview");
+  const img = document.getElementById("announcementImagePreviewImg");
+  if(url){
+    img.src = url;
+    preview.hidden = false;
+  } else {
+    img.src = "";
+    preview.hidden = true;
+  }
+}
+
+function compressImageFile(file, maxDim = 1600, quality = 0.82){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read fail"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode fail"));
+      img.onload = () => {
+        let width = img.naturalWidth, height = img.naturalHeight;
+        if(Math.max(width, height) > maxDim){
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(blob => {
+          if(!blob){ reject(new Error("encode fail")); return; }
+          const fr2 = new FileReader();
+          fr2.onload = () => resolve({ base64: fr2.result.split(",")[1], contentType: blob.type || "image/webp" });
+          fr2.onerror = () => reject(new Error("encode read fail"));
+          fr2.readAsDataURL(blob);
+        }, "image/webp", quality);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function initAnnouncementImageUpload(){
+  const input = document.getElementById("announcementImageInput");
+  const pickBtn = document.getElementById("announcementImagePickBtn");
+  const removeBtn = document.getElementById("announcementImageRemoveBtn");
+  const status = document.getElementById("announcementImageStatus");
+  if(!input || !pickBtn) return;
+
+  pickBtn.addEventListener("click", () => input.click());
+  removeBtn.addEventListener("click", () => {
+    pendingAnnouncementImageUrl = null;
+    showAnnouncementImagePreview(null);
+  });
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if(!file) return;
+    status.hidden = false;
+    status.textContent = "图片处理中…";
+    pickBtn.disabled = true;
+    try{
+      const { base64, contentType } = await compressImageFile(file);
+      const data = await callWorker({
+        action: "upload_announcement_image",
+        password: internalAdminPassword,
+        image: base64,
+        content_type: contentType
+      });
+      if(!data || !data.ok) throw new Error(data && data.error || "upload failed");
+      pendingAnnouncementImageUrl = `${WORKER_URL}image/${data.key}`;
+      showAnnouncementImagePreview(pendingAnnouncementImageUrl);
+      status.hidden = true;
+    }catch(e){
+      status.textContent = "图片上传失败，请重试";
+    }
+    pickBtn.disabled = false;
+  });
+}
+
+function startEditAnnouncement(item){
+  editingAnnouncementId = item.id;
+  document.getElementById("announcementText").value = item.body;
+  document.getElementById("announceShowA").checked = !!item.show_a;
+  document.getElementById("announceShowB").checked = !!item.show_b;
+  pendingAnnouncementImageUrl = item.image_url || null;
+  showAnnouncementImagePreview(pendingAnnouncementImageUrl);
+  document.getElementById("postAnnouncementBtn").textContent = "保存修改";
+  document.getElementById("cancelEditAnnouncementBtn").hidden = false;
+  document.getElementById("announcementText").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelEditAnnouncement(){
+  editingAnnouncementId = null;
+  pendingAnnouncementImageUrl = null;
+  showAnnouncementImagePreview(null);
+  document.getElementById("announcementText").value = "";
+  document.getElementById("announceShowA").checked = true;
+  document.getElementById("announceShowB").checked = true;
+  document.getElementById("postAnnouncementBtn").textContent = "发布";
+  document.getElementById("cancelEditAnnouncementBtn").hidden = true;
+}
+
+async function deleteAnnouncement(id){
+  if(!confirm("确定要删除这条公告吗？删除后无法恢复。")) return;
+  const data = await callWorker({
+    action: "delete_announcement",
+    password: internalAdminPassword,
+    id
+  });
+  if(!data || !data.ok){
+    showToast("删除失败，请重试");
+    return;
+  }
+  showToast("已删除");
+  if(String(editingAnnouncementId) === String(id)) cancelEditAnnouncement();
+  refreshAnnouncements();
+}
+
 function initPostAnnouncement(){
+  document.getElementById("cancelEditAnnouncementBtn").addEventListener("click", cancelEditAnnouncement);
   document.getElementById("postAnnouncementBtn").addEventListener("click", async () => {
     const text = document.getElementById("announcementText");
     const msg = document.getElementById("postAnnouncementMsg");
@@ -809,20 +981,23 @@ function initPostAnnouncement(){
     }
     btn.disabled = true;
     const data = await callWorker({
-      action: "post_announcement",
+      action: editingAnnouncementId ? "edit_announcement" : "post_announcement",
       password: internalAdminPassword,
+      id: editingAnnouncementId,
       content: text.value,
       show_a: document.getElementById("announceShowA").checked,
-      show_b: document.getElementById("announceShowB").checked
+      show_b: document.getElementById("announceShowB").checked,
+      image_url: pendingAnnouncementImageUrl
     });
     btn.disabled = false;
     if(!data || !data.ok){
       msg.hidden = false;
-      msg.textContent = "发布失败，请重试";
+      msg.textContent = editingAnnouncementId ? "保存失败，请重试" : "发布失败，请重试";
       return;
     }
-    text.value = "";
-    showToast("公告已发布");
+    const wasEditing = !!editingAnnouncementId;
+    cancelEditAnnouncement();
+    showToast(wasEditing ? "公告已更新" : "公告已发布");
     refreshAnnouncements();
   });
 }
@@ -1580,6 +1755,7 @@ initLightbox();
 initCaptcha();
 initLockdownToggle();
 initPostAnnouncement();
+initAnnouncementImageUpload();
 initClickBurst();
 initBootScreen();
 </script>

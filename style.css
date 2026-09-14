@@ -340,6 +340,34 @@
   }
   .announcement .date{font-size:.76rem;color:var(--text-mute);margin-bottom:6px;}
   .announcement .body{color:var(--text-soft);font-size:.9rem;white-space:pre-wrap;}
+  .announcement-image{
+    display:block;width:100%;max-width:360px;border-radius:var(--radius-sm);
+    margin:12px 0;cursor:zoom-in;
+  }
+  .announcement-image-field{margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .pill-btn-outline{
+    background:none;border:1px solid var(--line);color:var(--text-soft);
+    padding:8px 20px;border-radius:999px;font-size:.85rem;
+  }
+  .announcement-image-preview{position:relative;display:inline-block;}
+  .announcement-image-preview img{
+    display:block;max-width:140px;max-height:100px;border-radius:10px;object-fit:cover;
+  }
+  .announcement-image-preview button{
+    position:absolute;top:-8px;right:-8px;width:22px;height:22px;line-height:1;
+    background:var(--ink);color:var(--cream);border:1px solid var(--line);border-radius:50%;font-size:.85rem;
+  }
+  .announcement-admin-btns{margin-top:12px;display:flex;gap:10px;}
+  .announcement-edit-btn,.announcement-delete-btn{
+    background:var(--panel-soft);border:1px solid var(--line);color:var(--text-soft);
+    padding:5px 16px;border-radius:999px;font-size:.78rem;
+  }
+  .announcement-delete-btn{color:#e08e84;border-color:#e08e84;}
+  #cancelEditAnnouncementBtn{
+    background:none;border:1px solid var(--line);color:var(--text-soft);
+    padding:10px 22px;border-radius:999px;font-size:.88rem;margin-left:12px;
+  }
+  #cancelEditAnnouncementBtn[hidden]{display:none;}
 
   /* ---------- 白天模式：弹窗底色改金色 ---------- */
   body.day-mode .gate-card,
