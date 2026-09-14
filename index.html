@@ -974,7 +974,7 @@ function renderInfoGallery(){
   const grid = document.getElementById("infoGalleryGrid");
   if(!grid) return;
   grid.innerHTML = INFO_GALLERY.map(src =>
-    `<img src="${src}" loading="lazy" onclick="openLightbox(this)">`
+    `<img src="${src}" loading="lazy" onclick="openGalleryLightbox(this)">`
   ).join("");
 }
 function switchInfoTab(tab){
@@ -1052,17 +1052,38 @@ function initHashRoute(){
   }
 }
 
-function openLightboxSrc(src){
-  document.getElementById("lightboxImg").src = src;
+let lightboxMode = "normal"; /* "gallery" = 花街介绍相册里点开的图，取消放大/拖动，双击代替网页背景 */
+
+function openLightboxSrc(src, mode){
+  lightboxMode = mode === "gallery" ? "gallery" : "normal";
+  const img = document.getElementById("lightboxImg");
+  img.src = src;
+  img.style.cursor = lightboxMode === "gallery" ? "default" : "";
   document.getElementById("lightboxOverlay").hidden = false;
   resetLightboxTransform();
 }
 function openLightbox(imgEl){
   openLightboxSrc(imgEl.src);
 }
+function openGalleryLightbox(imgEl){
+  openLightboxSrc(imgEl.src, "gallery");
+}
+function setSiteBackgroundFromLightbox(){
+  const img = document.getElementById("lightboxImg");
+  if(!img.src) return;
+  const uri = `url('${img.src}')`;
+  const skyBase = document.getElementById("skyBase");
+  const skyFade = document.getElementById("skyFade");
+  skyBase.style.backgroundImage = uri;
+  skyFade.style.backgroundImage = uri;
+  skyFade.style.opacity = "0";
+  showToast("已设为网页背景");
+  closeLightbox();
+}
 function closeLightbox(){
   document.getElementById("lightboxOverlay").hidden = true;
   document.getElementById("lightboxImg").src = "";
+  lightboxMode = "normal";
   resetLightboxTransform();
 }
 
@@ -1140,12 +1161,19 @@ function initLightbox(){
   window.addEventListener("mouseup", lbPointerUp);
   img.addEventListener("click", (e) => {
     e.stopPropagation();
+    if(lightboxMode === "gallery") return; /* 相册图片取消点击放大 */
     if(lbState.moved){ lbState.moved = false; return; }
     zoomAt(e.clientX, e.clientY, 2.5);
   });
   img.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    if(lightboxMode === "gallery") return;
     zoomAt(e.clientX, e.clientY, 1/2.5);
+  });
+  img.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    if(lightboxMode !== "gallery") return;
+    setSiteBackgroundFromLightbox();
   });
 
   let lastTap = 0;
@@ -1160,6 +1188,7 @@ function initLightbox(){
   }
 
   img.addEventListener("touchstart", (e) => {
+    if(lightboxMode === "gallery") return; /* 相册图片取消捏合缩放/拖动 */
     if(e.touches.length === 2){
       pinching = true;
       lbState.dragging = false;
@@ -1176,6 +1205,7 @@ function initLightbox(){
     }
   });
   img.addEventListener("touchmove", (e) => {
+    if(lightboxMode === "gallery") return;
     if(e.touches.length === 2){
       e.preventDefault();
       const dist = touchDist(e.touches);
@@ -1195,6 +1225,18 @@ function initLightbox(){
     }
   }, { passive:false });
   img.addEventListener("touchend", (e) => {
+    if(lightboxMode === "gallery"){
+      if(e.touches.length === 0 && e.changedTouches.length){
+        const now = Date.now();
+        if(now - lastTap < 320){
+          setSiteBackgroundFromLightbox(); /* 相册图片双击（双击代替长按拖动/捏合）设为网页背景 */
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      }
+      return;
+    }
     if(e.touches.length === 0){
       if(pinching){
         pinching = false;
