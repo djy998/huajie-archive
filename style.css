@@ -415,3 +415,43 @@
     html{scroll-behavior:auto;}
     *{transition:none !important;}
   }
+
+/* ===== 首次访问开屏图 ===== */
+body.boot-pending header,
+body.boot-pending main,
+body.boot-pending footer{
+  display:none;
+}
+#bootOverlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:600;
+  align-items:center;
+  justify-content:center;
+}
+body.boot-pending #bootOverlay{
+  display:flex;
+}
+#bootImage{
+  width:min(46vw,280px);
+  cursor:pointer;
+  filter:drop-shadow(0 8px 30px rgba(0,0,0,0.35));
+  transition:transform .2s ease;
+  -webkit-user-drag:none;
+  user-select:none;
+}
+#bootImage:hover{
+  transform:scale(1.04);
+}
+#bootImage.is-spinning{
+  animation:bootSpin 1s ease-in-out;
+  pointer-events:none;
+}
+@keyframes bootSpin{
+  from{ transform:rotate(0deg); }
+  to{ transform:rotate(720deg); }
+}
+@media (prefers-reduced-motion:reduce){
+  #bootImage.is-spinning{ animation:none; }
+}

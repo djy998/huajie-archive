@@ -23,6 +23,21 @@
 </head>
 <body>
 
+<script>
+/* 首次访问检测：必须在其余内容渲染前尽早执行，避免老用户闪一下开屏图 */
+(function(){
+  try{
+    if(!localStorage.getItem("hj_visited")){
+      document.body.classList.add("boot-pending");
+    }
+  }catch(e){}
+})();
+</script>
+
+<div id="bootOverlay">
+  <img id="bootImage" src="boot-moguri.webp" alt="点击进入花街" title="点击进入">
+</div>
+
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
@@ -942,6 +957,8 @@ function openInfoModal(){
 }
 function closeInfoModal(){
   document.getElementById("infoOverlay").hidden = true;
+  /* 首次开屏自动弹出的这次"花街介绍"只算一次特殊状态，关闭后恢复正常的复制规则 */
+  firstBootInfoOpen = false;
 }
 function initInfo(){
   document.getElementById("infoClose").addEventListener("click", closeInfoModal);
@@ -961,6 +978,7 @@ function initInfo(){
       const selection = window.getSelection().toString();
       if(!selection) return;
       if(siteLockdown) return;
+      if(firstBootInfoOpen) return; /* 首次开屏自动弹出的这次，复制不附带联系方式 */
       if(turnstileVerified){
         e.clipboardData.setData("text/plain", selection + "\n\n合作联系QQ1316816234");
         e.preventDefault();
@@ -1153,6 +1171,7 @@ let turnstilePending = null;
 let turnstileWidgetId = null;
 let turnstileVerified = false;
 let siteLockdown = false;
+let firstBootInfoOpen = false; /* 首次开屏点击进入后自动弹出"花街介绍"期间为 true */
 
 async function isLockedDown(){
   const data = await callWorker({ action: "get_lockdown" });
@@ -1421,6 +1440,25 @@ function initClickBurst(){
   });
 }
 
+function initBootScreen(){
+  const overlay = document.getElementById("bootOverlay");
+  const img = document.getElementById("bootImage");
+  if(!overlay || !img) return;
+  if(!document.body.classList.contains("boot-pending")){
+    return; /* 老用户：早期脚本已经不加 boot-pending，直接跳过 */
+  }
+  img.addEventListener("click", () => {
+    if(img.classList.contains("is-spinning")) return;
+    try{ localStorage.setItem("hj_visited", "1"); }catch(e){}
+    img.classList.add("is-spinning");
+    setTimeout(() => {
+      document.body.classList.remove("boot-pending");
+      firstBootInfoOpen = true;
+      openInfoModal();
+    }, 1000);
+  }, { once: true });
+}
+
 renderHome();
 initTabs();
 initNav();
@@ -1434,6 +1472,7 @@ initCaptcha();
 initLockdownToggle();
 initPostAnnouncement();
 initClickBurst();
+initBootScreen();
 </script>
 
 </body>
