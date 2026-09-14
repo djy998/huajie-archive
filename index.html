@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 
@@ -152,8 +152,10 @@
       <label for="internalPassword" class="visually-hidden">密码</label>
       <div class="password-field">
         <input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
-        <button type="button" class="password-toggle-btn" id="internalPasswordToggle" aria-label="显示密码">👁</button>
       </div>
+      <label class="password-show-label">
+        <input type="checkbox" id="internalPasswordShow"> 显示密码
+      </label>
       <button id="internalSubmit">进入</button>
       <p class="form-msg" id="internalMsg" hidden></p>
     </div>
@@ -623,6 +625,11 @@ function renderTabContent(tab){
 
 function openDetail(data){
   currentDetail = data;
+  if(data && data.isLatest){
+    setRoute("#latest");
+  } else if(data && data.id){
+    setRoute("#event-" + data.id);
+  }
   document.getElementById("detailBackBtn").style.display = "";
   document.getElementById("detailHero").style.backgroundImage = data.cover ? `url('${data.cover}')` : "";
   document.getElementById("detailTitle").textContent = data.title;
@@ -757,6 +764,7 @@ function openLatestEvent(){
     : { ...LATEST_EVENT, title: "敬请期待", isLatest: true });
 }
 function openArchiveList(){
+  setRoute("#previous");
   document.getElementById("archiveBackBtn").style.display = "";
   renderAlbumGrid();
   showView("view-archive-list");
@@ -783,7 +791,7 @@ function initNav(){
     openCaptcha("group");
   });
   document.querySelectorAll("[data-back]").forEach(btn => {
-    btn.addEventListener("click", () => showView("view-home"));
+    btn.addEventListener("click", goHome);
   });
 }
 
@@ -1234,16 +1242,41 @@ function initInfo(){
   }
 }
 
-function initHashRoute(){
-  if(location.hash === "#internal"){
-    showView("view-internal");
-  } else if(location.hash === "#latest"){
-    openLatestEvent();
-    document.getElementById("detailBackBtn").style.display = "none";
-  } else if(location.hash === "#previous"){
-    openArchiveList();
-    document.getElementById("archiveBackBtn").style.display = "none";
+/* 完整路由：每个视图对应一个稳定 hash，前进/后退都能正确复原 */
+function setRoute(hash){
+  const target = hash || "";
+  if(location.hash !== target){
+    location.hash = target;
   }
+}
+function goHome(){
+  setRoute("");
+  showView("view-home");
+}
+function routeFromHash(){
+  const hash = location.hash;
+  if(hash === "#internal"){
+    showView("view-internal");
+  } else if(hash === "#latest"){
+    openLatestEvent();
+  } else if(hash === "#previous"){
+    openArchiveList();
+  } else if(hash === "#mini-review"){
+    openMiniReview();
+  } else if(hash.indexOf("#event-") === 0){
+    const ev = ARCHIVE_EVENTS.find(e => e.id === hash.slice("#event-".length));
+    if(ev){
+      openDetail(ev);
+    } else {
+      goHome();
+    }
+  } else {
+    showView("view-home");
+  }
+}
+function initHashRoute(){
+  routeFromHash();
+  window.addEventListener("hashchange", routeFromHash);
 }
 
 let lightboxMode = "normal"; /* "gallery" = 花街介绍相册里点开的图，取消放大/拖动，双击代替网页背景 */
@@ -1552,6 +1585,7 @@ function initCaptcha(){
 }
 
 function openMiniReview(){
+  setRoute("#mini-review");
   const grid = document.getElementById("miniReviewGrid");
   if(!MINI_REVIEWS.length){
     grid.innerHTML = `<div class="empty-note">还没有内容，敬请期待</div>`;
@@ -1770,15 +1804,12 @@ function initBootScreen(){
   }, { passive: false });
 }
 
-function initPasswordToggle(inputId, btnId){
+function initPasswordToggle(inputId, checkboxId){
   const input = document.getElementById(inputId);
-  const btn = document.getElementById(btnId);
-  if(!input || !btn) return;
-  btn.addEventListener("click", () => {
-    const show = input.type === "password";
-    input.type = show ? "text" : "password";
-    btn.textContent = show ? "🙈" : "👁";
-    btn.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+  const checkbox = document.getElementById(checkboxId);
+  if(!input || !checkbox) return;
+  checkbox.addEventListener("change", () => {
+    input.type = checkbox.checked ? "text" : "password";
   });
 }
 
@@ -1863,7 +1894,7 @@ initClickBurst();
 initBootScreen();
 initA11yTiles();
 initA11yModals();
-initPasswordToggle("internalPassword", "internalPasswordToggle");
+initPasswordToggle("internalPassword", "internalPasswordShow");
 </script>
 
 </body>
