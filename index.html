@@ -35,7 +35,9 @@
 </script>
 
 <div id="bootOverlay">
-  <img id="bootImage" src="boot-moguri.webp" alt="点击进入花街" title="点击进入">
+  <button type="button" id="bootImageBtn" aria-label="点击进入花街">
+    <img id="bootImage" src="boot-moguri.webp" alt="" draggable="false">
+  </button>
 </div>
 
 <div id="skyBase"></div>
@@ -1442,21 +1444,37 @@ function initClickBurst(){
 
 function initBootScreen(){
   const overlay = document.getElementById("bootOverlay");
+  const btn = document.getElementById("bootImageBtn");
   const img = document.getElementById("bootImage");
-  if(!overlay || !img) return;
+  if(!overlay || !btn || !img) return;
   if(!document.body.classList.contains("boot-pending")){
     return; /* 老用户：早期脚本已经不加 boot-pending，直接跳过 */
   }
-  img.addEventListener("click", () => {
-    if(img.classList.contains("is-spinning")) return;
+
+  let triggered = false;
+  function enter(){
+    if(triggered) return;
+    triggered = true;
     try{ localStorage.setItem("hj_visited", "1"); }catch(e){}
+    btn.disabled = true;
     img.classList.add("is-spinning");
+    /* 用 setTimeout 兜底，不依赖动画事件——就算某些手机浏览器禁用/跳过了动画，
+       1 秒后也一定会正常进入网站，图片不会卡死在最上面 */
     setTimeout(() => {
       document.body.classList.remove("boot-pending");
+      overlay.style.display = "none"; /* 内联样式兜底，确保一定消失 */
       firstBootInfoOpen = true;
       openInfoModal();
     }, 1000);
-  }, { once: true });
+  }
+
+  /* 同时监听 click 和 touchend：部分手机浏览器（尤其是微信/QQ内置浏览器）
+     对纯 <img> 的点击事件支持不稳定，改成真正的 <button> 并双重绑定更可靠 */
+  btn.addEventListener("click", enter);
+  btn.addEventListener("touchend", (e) => {
+    e.preventDefault(); /* 防止 touchend 之后又补发一次 click 导致重复触发或系统手势干扰 */
+    enter();
+  }, { passive: false });
 }
 
 renderHome();
