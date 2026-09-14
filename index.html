@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -48,7 +48,7 @@
 <header class="site-header">
   <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">🌙</button>
   <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">✨</button>
-  <div class="brand">花舞之街 · 薰风花语町</div>
+  <h1 class="brand">花舞之街 · 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区31-45,49号房 及 公寓1-2号房间<br>
     薰风花语町-高脚孤丘22区36,45,49,54-60号房 及 公寓3-17号房间</p>
@@ -149,8 +149,11 @@
     <div class="gate-card" id="internalGate">
       <h2>内部入口</h2>
       <p class="hint">部队 / 管理使用，需要密码</p>
-      <input type="password" id="internalPassword" placeholder="输入密码">
-      <br>
+      <label for="internalPassword" class="visually-hidden">密码</label>
+      <div class="password-field">
+        <input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
+        <button type="button" class="password-toggle-btn" id="internalPasswordToggle" aria-label="显示密码">👁</button>
+      </div>
       <button id="internalSubmit">进入</button>
       <p class="form-msg" id="internalMsg" hidden></p>
     </div>
@@ -195,14 +198,14 @@
 
 <footer>花街档案 · 非官方玩家自制内容 · 内容以活动群公告为准</footer>
 
-<div class="lightbox-overlay" id="lightboxOverlay" hidden>
+<div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
   <button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
   <img id="lightboxImg" src="" alt="">
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<div class="info-overlay" id="captchaOverlay" hidden>
+<div class="info-overlay" id="captchaOverlay" role="dialog" aria-modal="true" aria-label="验证" hidden>
   <div class="gate-card" style="position:relative;">
     <button class="info-close" id="captchaClose" aria-label="关闭">×</button>
     <h2>先验证一下</h2>
@@ -212,7 +215,7 @@
   </div>
 </div>
 
-<div class="info-overlay" id="groupOverlay" hidden>
+<div class="info-overlay" id="groupOverlay" role="dialog" aria-modal="true" aria-label="加入活动群" hidden>
   <div class="info-box group-box">
     <button class="info-close" id="groupClose" aria-label="关闭">×</button>
     <h2 class="info-title">加入活动群</h2>
@@ -221,7 +224,7 @@
   </div>
 </div>
 
-<div class="info-overlay" id="infoOverlay" hidden>
+<div class="info-overlay" id="infoOverlay" role="dialog" aria-modal="true" aria-label="花街介绍" hidden>
   <div class="info-box" id="infoBox">
     <button class="info-close" id="infoClose" aria-label="关闭">×</button>
     <h2 class="info-title">花街</h2>
@@ -595,12 +598,19 @@ function renderShopsPanel(areas){
 }
 
 function renderTabContent(tab){
+  /* 兼容以后不小心按注释写法直接填了字符串（比如 manual: "活动手册正在制作"）的情况，
+     不然实际只认 {text,images,link} 对象格式，字符串会被判定成"没内容"而显示占位提示 */
+  if(typeof tab === "string"){
+    return tab
+      ? `<div class="empty-note empty-note-left">${escapeHtml(tab)}</div>`
+      : `<div class="empty-note">内容整理中，稍后会补充~</div>`;
+  }
   if(!tab || (!tab.images && !tab.text && !tab.link)){
     return `<div class="empty-note">内容整理中，稍后会补充~</div>`;
   }
   let html = "";
   if(tab.images && tab.images.length){
-    html += `<div class="tab-gallery">` + tab.images.map(src => `<img src="${src}" loading="lazy" onclick="openLightbox(this)">`).join("") + `</div>`;
+    html += `<div class="tab-gallery">` + tab.images.map(src => `<img src="${src}" loading="lazy" decoding="async" onclick="openLightbox(this)">`).join("") + `</div>`;
   }
   if(tab.text){
     html += `<div class="empty-note empty-note-left">${tab.text}</div>`;
@@ -640,7 +650,10 @@ function openDetail(data){
   document.getElementById("reviewTabBtn").hidden = !!data.hideReview;
 
   const detailView = document.getElementById("view-detail");
-  detailView.querySelectorAll(".tab-btn").forEach((b,i) => b.classList.toggle("is-active", i === 0));
+  detailView.querySelectorAll(".tab-btn").forEach((b,i) => {
+    b.classList.toggle("is-active", i === 0);
+    b.setAttribute("aria-selected", i === 0 ? "true" : "false");
+  });
   detailView.querySelectorAll(".tab-panel").forEach((p,i) => p.hidden = (i !== 0));
 
   showView("view-detail");
@@ -723,8 +736,12 @@ function initTabs(){
   const detailView = document.getElementById("view-detail");
   detailView.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      detailView.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("is-active"));
+      detailView.querySelectorAll(".tab-btn").forEach(b => {
+        b.classList.remove("is-active");
+        b.setAttribute("aria-selected", "false");
+      });
       btn.classList.add("is-active");
+      btn.setAttribute("aria-selected", "true");
       const tab = btn.dataset.tab;
       detailView.querySelectorAll(".tab-panel").forEach(p => {
         p.hidden = (p.id !== "panel-" + tab);
@@ -1154,7 +1171,9 @@ function renderInfoGallery(){
 }
 function switchInfoTab(tab){
   document.querySelectorAll(".info-tabs .tab-btn").forEach(btn => {
-    btn.classList.toggle("is-active", btn.dataset.infoTab === tab);
+    const active = btn.dataset.infoTab === tab;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
   });
   document.getElementById("infoPanelIntro").hidden = tab !== "intro";
   document.getElementById("infoPanelGallery").hidden = tab !== "gallery";
@@ -1539,7 +1558,9 @@ function openMiniReview(){
   } else {
     grid.innerHTML = MINI_REVIEWS.map(item => `
       <div class="review-item">
-        <div class="review-photo" style="background-image:url('${item.image}')" onclick="openLightboxSrc('${item.image}')"></div>
+        <button type="button" class="review-photo" onclick="openLightboxSrc('${item.image}')">
+          <img src="${item.image}" alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
+        </button>
         ${item.caption ? `<p class="review-caption">${item.caption}</p>` : ""}
       </div>
     `).join("");
@@ -1603,7 +1624,12 @@ function applyFx(){
 }
 let fxEnabled = true;
 function getDefaultFxEnabled(){
-  return window.innerWidth > 760;
+  /* 如果用户在页面里手动切换过一次，记住这个选择，优先于其他判断 */
+  let stored = null;
+  try{ stored = localStorage.getItem("hj_fx_enabled"); }catch(e){}
+  if(stored !== null) return stored === "1";
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return !reduceMotion && window.innerWidth > 760;
 }
 function playPageEnterStagger(){
   const blocks = [
@@ -1651,6 +1677,7 @@ function initFxToggle(){
   playPageEnterStagger();
   btn.addEventListener("click", () => {
     fxEnabled = !fxEnabled;
+    try{ localStorage.setItem("hj_fx_enabled", fxEnabled ? "1" : "0"); }catch(e){}
     btn.classList.toggle("is-active", fxEnabled);
     document.body.classList.toggle("fx-hover-enabled", fxEnabled);
     applyFx();
@@ -1743,8 +1770,84 @@ function initBootScreen(){
   }, { passive: false });
 }
 
+function initPasswordToggle(inputId, btnId){
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if(!input || !btn) return;
+  btn.addEventListener("click", () => {
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.textContent = show ? "🙈" : "👁";
+    btn.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
+  });
+}
+
+function initA11yTiles(){
+  /* 首页六张卡片原本是纯 div，鼠标/触摸能点但键盘focus不到、读屏也认不出是按钮 */
+  document.querySelectorAll("main .tile[id]").forEach(el => {
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    el.addEventListener("keydown", (e) => {
+      if(e.key === "Enter" || e.key === " " || e.key === "Spacebar"){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+}
+
+function initA11yTabs(container){
+  if(!container) return;
+  const tabsWrap = container.querySelector(".tabs");
+  if(tabsWrap) tabsWrap.setAttribute("role", "tablist");
+  container.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", btn.classList.contains("is-active") ? "true" : "false");
+  });
+}
+
+const A11Y_MODALS = ["infoOverlay", "groupOverlay", "captchaOverlay", "lightboxOverlay"];
+
+function closeTopA11yModal(){
+  for(const id of A11Y_MODALS){
+    const el = document.getElementById(id);
+    if(el && !el.hidden){
+      if(id === "infoOverlay") closeInfoModal();
+      else if(id === "groupOverlay") el.hidden = true;
+      else if(id === "captchaOverlay") closeCaptcha();
+      else if(id === "lightboxOverlay") closeLightbox();
+      return true;
+    }
+  }
+  return false;
+}
+
+function focusModalClose(overlayId, closeBtnId){
+  const el = document.getElementById(overlayId);
+  if(!el) return;
+  const observer = new MutationObserver(() => {
+    if(!el.hidden){
+      const btn = document.getElementById(closeBtnId);
+      if(btn) btn.focus();
+    }
+  });
+  observer.observe(el, { attributes: true, attributeFilter: ["hidden"] });
+}
+
+function initA11yModals(){
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape") closeTopA11yModal();
+  });
+  focusModalClose("infoOverlay", "infoClose");
+  focusModalClose("groupOverlay", "groupClose");
+  focusModalClose("captchaOverlay", "captchaClose");
+  focusModalClose("lightboxOverlay", "lightboxClose");
+}
+
 renderHome();
 initTabs();
+initA11yTabs(document.getElementById("view-detail"));
+initA11yTabs(document.getElementById("infoBox"));
 initNav();
 initInternal();
 initDayNight();
@@ -1758,6 +1861,9 @@ initPostAnnouncement();
 initAnnouncementImageUpload();
 initClickBurst();
 initBootScreen();
+initA11yTiles();
+initA11yModals();
+initPasswordToggle("internalPassword", "internalPasswordToggle");
 </script>
 
 </body>

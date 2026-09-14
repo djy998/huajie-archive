@@ -308,11 +308,26 @@
   .album-card .title{font-family:var(--brush);font-size:1.25rem;color:var(--cream);line-height:1.3;}
 
   .review-item{display:flex;flex-direction:column;}
+
+  .visually-hidden{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+  .password-field{position:relative;}
+  .password-field input{padding-right:44px;}
+  .password-toggle-btn{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:none;font-size:1rem;padding:6px;color:var(--text-mute);cursor:pointer;
+  }
   .review-photo{
-    aspect-ratio:4/3;border-radius:var(--radius-sm);background-size:cover;background-position:center;
+    display:block;width:100%;aspect-ratio:4/3;border-radius:var(--radius-sm);
+    background:none;border:none;padding:0;overflow:hidden;
     cursor:zoom-in;box-shadow:0 14px 34px rgba(0,0,0,0.4);transition:transform .2s;
   }
   .review-photo:hover{transform:translateY(-4px);}
+  .review-photo img{
+    width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit;
+  }
   .review-caption{margin-top:10px;font-size:.85rem;color:var(--text-soft);text-align:center;}
   body.day-mode .review-caption{color:#e4eb7b;}
 
@@ -350,6 +365,7 @@
     padding:8px 20px;border-radius:999px;font-size:.85rem;
   }
   .announcement-image-preview{position:relative;display:inline-block;}
+  .announcement-image-preview[hidden]{display:none;}
   .announcement-image-preview img{
     display:block;max-width:140px;max-height:100px;border-radius:10px;object-fit:cover;
   }
