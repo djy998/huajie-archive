@@ -174,7 +174,11 @@
     filter:drop-shadow(0 1px 2px rgba(60,42,10,.30));
     animation-name:fxLeafTumble,fxLeafLight;
     animation-timing-function:ease-in-out,ease-in-out;
-    animation-iteration-count:infinite,infinite;}
+    animation-iteration-count:infinite,infinite;
+    /* Z 轴翻滚必须 alternate 来回摆：漏写的话默认 normal，每个周期末尾会从 tilt-end
+       瞬间跳回 tilt-start（最大 ~68°+缩放跳变）——不翻转的叶子没有别的旋转来掩盖它，
+       看起来就是"飘到一半突然重置"。明暗动画保持 normal（关键帧首尾对称，循环衔接连续）。 */
+    animation-direction:normal,alternate;}
   @keyframes fxLeafFall{
     from{transform:translate3d(0,-14vh,0);}
     to{transform:translate3d(var(--drift,60px),116vh,0);}
