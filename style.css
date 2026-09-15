@@ -130,6 +130,47 @@
   .site-header .tagline{margin-top:8px;color:var(--text-mute);font-size:1.05rem;font-weight:600;letter-spacing:.06em;}
   body.day-mode .site-header .brand{color:#e4eb7b;}
   body.day-mode .site-header .tagline{color:#5b4326;}
+
+  /* ---------- 自定义背景时的标题区毛玻璃 ----------------------------------
+     只有在花街介绍相册里双击图片"设为网页背景"(body.custom-bg) 才存在这个盒子：
+     默认 content:none，元素根本不生成，不影响正常背景的渲染开销。
+     点🌙/️切回默认天空时 JS 摘掉 custom-bg，毛玻璃随之消失。 */
+  .site-header::before{content:none;}
+  body.custom-bg .site-header::before{
+    content:"";position:absolute;z-index:0;
+    left:50%;transform:translateX(-50%);
+    top:10px;bottom:16px;
+    width:min(1040px,calc(100% - 32px));
+    border-radius:34px;
+    background:rgba(20,16,36,.34);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 20px 56px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.12);
+    -webkit-backdrop-filter:blur(17px) saturate(1.14);
+    backdrop-filter:blur(17px) saturate(1.14);
+    animation:hjGlassIn .45s ease both;
+  }
+  body.custom-bg .site-header .brand,
+  body.custom-bg .site-header .tagline{position:relative;z-index:1;}
+  body.custom-bg .daynight-toggle{z-index:2;}
+  body.custom-bg.day-mode .site-header::before{
+    background:rgba(255,251,238,.42);
+    border-color:rgba(255,255,255,.62);
+    box-shadow:0 20px 56px rgba(96,64,16,.18), inset 0 1px 0 rgba(255,255,255,.78);
+  }
+  /* 白天模式的底板是浅色磨砂，原来压在浅蓝天空上的浅黄标题(#e4eb7b)到这里会发虚，
+     毛玻璃的目的就是让文字读得清，所以这里把标题/副标题换成墨色。 */
+  body.custom-bg.day-mode .site-header .brand{color:#5b3610;}
+  body.custom-bg.day-mode .site-header .tagline{color:#4a3018;}
+  @keyframes hjGlassIn{from{opacity:0;transform:translateX(-50%) scale(.985);}to{opacity:1;transform:translateX(-50%) scale(1);}}
+  @media (max-width:640px){
+    body.custom-bg .site-header::before{
+      width:calc(100% - 20px);top:6px;bottom:10px;border-radius:24px;
+    }
+  }
+  @media (prefers-reduced-motion:reduce){
+    body.custom-bg .site-header::before{animation:none;}
+  }
+  /* ---------- 自定义背景结束 ---------- */
   body.day-mode .tile-hero p,
   body.day-mode .tile-hint,
   body.day-mode .tile-eyebrow,
@@ -315,10 +356,11 @@
   }
   .password-field{position:relative;}
   .password-show-label{
-    display:flex;align-items:center;gap:6px;margin:8px 0 0;font-size:.85rem;
-    color:var(--text-mute);cursor:pointer;user-select:none;
+    display:flex;justify-content:center;align-items:center;gap:8px;
+    margin:14px 0 0;font-size:.86rem;color:var(--text-mute);
+    cursor:pointer;user-select:none;-webkit-user-select:none;white-space:nowrap;
   }
-  .password-show-label input[type="checkbox"]{margin:0;cursor:pointer;}
+  .password-show-label:hover{color:var(--text-soft);}
   .review-photo{
     display:block;width:100%;aspect-ratio:4/3;border-radius:var(--radius-sm);
     background:none;border:none;padding:0;overflow:hidden;
@@ -337,16 +379,51 @@
     padding:36px 32px;text-align:center;
   }
   .gate-card h2{font-family:var(--brush);font-size:1.8rem;color:var(--lantern-soft);margin-bottom:10px;}
-  .gate-card .hint{color:var(--text-mute);font-size:.85rem;margin-bottom:22px;}  .gate-card input{
+  .gate-card .hint{color:var(--text-mute);font-size:.85rem;margin-bottom:22px;}
+  /* 注意：这里必须排除 checkbox。以前 .gate-card input 的 width:100% 会套到「显示密码」
+     和「给A显示/给B显示」这几个复选框上，把勾选框撑满整行，文字被挤到右边换行竖排。 */
+  .gate-card input:not([type="checkbox"]){
     width:100%;background:var(--ink-2);border:1px solid var(--line);border-radius:999px;
     color:var(--cream);font-family:var(--serif);font-size:.95rem;padding:11px 18px;text-align:center;
     margin-bottom:14px;
   }
-  .gate-card input:focus{border-color:var(--accent);}
-  .gate-card button{
-    background:var(--accent);color:var(--accent-ink);border:none;padding:10px 30px;
-    border-radius:999px;font-weight:600;font-size:.92rem;
+  .gate-card input:not([type="checkbox"]):focus{border-color:var(--accent);}
+  .gate-card textarea{
+    width:100%;min-height:104px;margin-bottom:16px;padding:13px 16px;resize:vertical;
+    border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-soft);
+    color:var(--cream);font-family:inherit;font-size:.9rem;line-height:1.7;text-align:left;
   }
+  .gate-card textarea:focus{outline:none;border-color:var(--accent);}
+  /* 统一的复选框外观：自己画一个，避免各浏览器原生样式尺寸不一 */
+  .gate-card input[type="checkbox"]{
+    appearance:none;-webkit-appearance:none;flex:none;width:17px;height:17px;margin:0;
+    border:1px solid var(--line);border-radius:5px;background:var(--ink-2);cursor:pointer;
+    display:inline-grid;place-content:center;line-height:1;transition:background .15s,border-color .15s;
+  }
+  .gate-card input[type="checkbox"]:checked{background:var(--accent);border-color:var(--accent);}
+  .gate-card input[type="checkbox"]:checked::after{content:"✓";color:var(--accent-ink);font-size:12px;font-weight:700;}
+  /* 一行内的选项组：居中、不换行 */
+  .announce-audience{display:flex;justify-content:center;align-items:center;gap:12px 28px;flex-wrap:wrap;margin-bottom:18px;}
+  .audience-opt{
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer;
+    user-select:none;-webkit-user-select:none;font-size:.88rem;color:var(--text-mute);
+  }
+  .audience-opt:hover{color:var(--text-soft);}
+  .gate-card button{
+    background:var(--accent);color:var(--accent-ink);border:1px solid transparent;padding:10px 30px;
+    border-radius:999px;font-weight:600;font-size:.92rem;
+    transition:background .2s,border-color .2s,box-shadow .2s;
+  }
+  /* 「进入 / 切换 / 发布」和分享按钮是同一套按钮样式，白天模式下同样会被金色卡片吞掉，
+     这里一起做描边处理 */
+  body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn){
+    background:#fff8e8;color:#5b3610;border:1.5px solid #8a5a1c;
+    box-shadow:0 6px 16px rgba(96,60,10,.22), inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn):hover{background:#ffe9b8;border-color:#6b4310;}
+  body.day-mode #cancelEditAnnouncementBtn{background:rgba(255,251,238,.45);color:#5b3610;border-color:#8a5a1c;}
+  /* 注：配图按钮同时命中上面的 .gate-card button（带 :not(#id) 的特指度更高），
+     所以它在白天模式跟着变成实心胶囊，这里不再单独覆盖 .pill-btn-outline。 */
   .form-msg{margin-top:14px;font-size:.85rem;color:#e08e84;}
   .form-msg[hidden]{display:none;}
 
@@ -401,10 +478,29 @@
   body.day-mode .info-text p{color:#4a3018;}
   body.day-mode .info-close{color:#6b4a24;}
   body.day-mode .info-close:hover{color:#3a2508;}
-  body.day-mode .gate-card input{
+  body.day-mode .gate-card input:not([type="checkbox"]){
     background:#f6e3bb;color:#3a2508;border-color:#c98f3a;
   }
   body.day-mode .gate-card input::placeholder{color:#8a6a3a;}
+  body.day-mode .gate-card textarea{
+    background:rgba(255,252,240,.55);color:#3a2508;border-color:#c98f3a;
+  }
+  body.day-mode .gate-card input[type="checkbox"]{
+    background:#f6e3bb;border-color:#c98f3a;
+  }
+  body.day-mode .gate-card input[type="checkbox"]:checked{background:#8a5a1c;border-color:#8a5a1c;}
+  body.day-mode .gate-card input[type="checkbox"]:checked::after{color:#fff6e0;}
+  body.day-mode .password-show-label,
+  body.day-mode .audience-opt{color:#6b4a24;}
+  body.day-mode .password-show-label:hover,
+  body.day-mode .audience-opt:hover{color:#3a2508;}
+  /* 白天模式下天空很亮，原来的淡黄描边（#e4eb7b）在浅蓝底上只有 2.4:1 对比度，
+     从 /activity 之类深链进来时那枚「返回」几乎看不见，所以改成实心胶囊 */
+  body.day-mode .back-btn{
+    color:#4a2b06;background:rgba(255,251,238,.86);border-color:rgba(122,80,20,.42);
+    box-shadow:0 6px 16px rgba(96,64,16,.16), inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  body.day-mode .back-btn:hover{background:#fffdf6;color:#1c1830;border-color:#7a5014;}
   body.day-mode .announcement .date{color:#6b4a24;}
   body.day-mode .announcement .body{color:#4a3018;}
 
@@ -430,8 +526,18 @@
   }
   .share-site-btn{
     display:block;margin:18px auto 0;background:var(--accent);color:var(--accent-ink);
-    border:none;padding:10px 30px;border-radius:999px;font-weight:600;font-size:.92rem;
+    border:1px solid transparent;padding:10px 30px;border-radius:999px;font-weight:600;font-size:.92rem;
+    transition:background .2s,border-color .2s,box-shadow .2s,transform .2s;
   }
+  .share-site-btn:hover{transform:translateY(-1px);}
+  /* 白天模式下这块金色弹窗和按钮的 --accent(#f0b562) 亮度几乎相同，按钮会"糊"进背景里，
+     所以这里加实心描边 + 投影，把边界明确画出来 */
+  body.day-mode .share-site-btn{
+    background:#fff8e8;color:#5b3610;border:1.5px solid #8a5a1c;
+    box-shadow:0 6px 16px rgba(96,60,10,.22), inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  body.day-mode .share-site-btn:hover{background:#ffe9b8;border-color:#6b4310;}
+  body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.32);}
   @keyframes fxFadeOnly{from{opacity:0;}to{opacity:1;}}
   .fx-fade-only{animation:fxFadeOnly .5s ease both;}
   .info-title{font-family:var(--brush);font-size:2.2rem;color:var(--lantern-soft);margin-bottom:20px;}

@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -169,13 +169,13 @@
       </div>
       <div class="gate-card" id="postAnnouncementPanel" style="margin-bottom:30px;" hidden>
         <h2 style="font-size:1.3rem;">发布公告</h2>
-        <textarea id="announcementText" placeholder="写点什么…" style="width:100%;min-height:100px;margin-bottom:14px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--panel-soft);color:var(--cream);font-family:inherit;font-size:.9rem;"></textarea>
-        <div style="margin-bottom:16px;">
-          <label style="display:inline-flex;align-items:center;gap:6px;margin-right:24px;">
-            <input type="checkbox" id="announceShowA" checked> 给A显示
+        <textarea id="announcementText" placeholder="写点什么…"></textarea>
+        <div class="announce-audience">
+          <label class="audience-opt" for="announceShowA">
+            <input type="checkbox" id="announceShowA" checked><span>给 A 显示</span>
           </label>
-          <label style="display:inline-flex;align-items:center;gap:6px;">
-            <input type="checkbox" id="announceShowB" checked> 给B显示
+          <label class="audience-opt" for="announceShowB">
+            <input type="checkbox" id="announceShowB" checked><span>给 B 显示</span>
           </label>
         </div>
         <div class="announcement-image-field">
@@ -1141,6 +1141,8 @@ function initDayNight(){
       document.body.classList.toggle("day-mode");
       btn.textContent = willBeDay ? "☀️" : "🌙";
       document.getElementById("skyBase").style.backgroundImage = `url('${willBeDay ? SKY_DAY_URI : SKY_NIGHT_URI}')`;
+      document.getElementById("skyFade").style.backgroundImage = "";
+      document.body.classList.remove("custom-bg");   /* 回到默认天空，标题区毛玻璃一并撤掉 */
       applyTileBackgrounds(willBeDay);
       applyFx();
       return;
@@ -1152,7 +1154,11 @@ function initDayNight(){
     crossfadeSky(willBeDay, duration);
     crossfadeTileBackgrounds(willBeDay, duration);
     applyFx();
-    setTimeout(() => { document.body.classList.remove("fx-crossfading"); }, duration + 80);
+    document.body.classList.remove("custom-bg");     /* 回到默认天空，标题区毛玻璃一并撤掉 */
+    setTimeout(() => {
+      document.body.classList.remove("fx-crossfading");
+      document.getElementById("skyFade").style.backgroundImage = "";
+    }, duration + 80);
   });
 }
 
@@ -1274,9 +1280,47 @@ function routeFromHash(){
     showView("view-home");
   }
 }
+/* 从 /activity、/previous 这类跳转页进来时（它们用 location.replace 换掉自己那条历史），
+   或者从二维码里的深链直接打开时，会话历史中本站只有当前这一条：按浏览器/系统的"返回"
+   会直接离开网站（about:blank），从用户角度看就是"没有返回键"。
+   这里把当前历史条目改写成首页，再把深链 hash 压回去，于是"返回"先回到首页而不是退出站点。
+   返回 true 表示这次是冷启动深链，用来把站内按钮文案换成更准确的"← 返回首页"。 */
+function ensureBaseHistory(){
+  const hash = location.hash;
+  if(!hash || hash === "#") return false;
+  try{
+    if(sessionStorage.getItem("hj_base")) return false;   /* 同一会话只补一次，避免反复刷新堆积历史条目 */
+    sessionStorage.setItem("hj_base", "1");
+    /* 先把当前条目改写成首页，再压回深链条目：这样"返回"落在首页上。
+       注意这里必须用 pushState 而不是 location.hash = ——给 location.hash 赋值时
+       Chrome 可能只是更新当前条目的 URL（实测 history.length 不变），补不出可返回的条目。 */
+    history.replaceState({hjBase: true}, "", location.pathname + location.search);
+    history.pushState(null, "", hash);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+function markBackButtonsForDeepLink(){
+  document.querySelectorAll(".view .back-btn").forEach(btn => { btn.textContent = "← 返回首页"; });
+}
+/* hashchange 和 popstate 会因为 pushState 补出来的条目一起触发，
+   这里合并到下一帧只跑一次路由，避免入场动画被重放两遍。 */
+let routeScheduled = false;
+function scheduleRoute(){
+  if(routeScheduled) return;
+  routeScheduled = true;
+  requestAnimationFrame(() => {
+    routeScheduled = false;
+    routeFromHash();   /* 开屏图盖着时也照常定位，视图本身是 display:none，进入后状态就是对的 */
+  });
+}
 function initHashRoute(){
+  const coldDeepLink = ensureBaseHistory();
   routeFromHash();
-  window.addEventListener("hashchange", routeFromHash);
+  if(coldDeepLink) markBackButtonsForDeepLink();
+  window.addEventListener("hashchange", scheduleRoute);
+  window.addEventListener("popstate", scheduleRoute);
 }
 
 let lightboxMode = "normal"; /* "gallery" = 花街介绍相册里点开的图，取消放大/拖动，双击代替网页背景 */
@@ -1304,6 +1348,9 @@ function setSiteBackgroundFromLightbox(){
   skyBase.style.backgroundImage = uri;
   skyFade.style.backgroundImage = uri;
   skyFade.style.opacity = "0";
+  /* 自定义背景盖住了原来的天空，标题区的对比度就不可控了，
+     这里挂一个标记让 CSS 在标题区加一层毛玻璃底板 */
+  document.body.classList.add("custom-bg");
   showToast("已设为网页背景");
   closeLightbox();
 }
@@ -1897,5 +1944,5 @@ initA11yModals();
 initPasswordToggle("internalPassword", "internalPasswordShow");
 </script>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b4476cecb77b69',t:'MTc4OTQ0MDE1NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
