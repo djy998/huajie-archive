@@ -96,6 +96,15 @@
     display:flex;justify-content:center;align-items:baseline;flex-wrap:wrap;gap:6px 12px;
     margin-top:16px;font-size:.8rem;letter-spacing:.08em;color:var(--text-mute);
   }
+  /* 时间条默认隐藏：点标题中间的「·」切换显隐 */
+  .hj-clock.is-hidden{display:none;}
+  .brand-dot{
+    display:inline-block;margin:0;padding:0;border:0;background:none;
+    font:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;
+    cursor:pointer;user-select:none;
+  }
+  .brand-dot:hover{opacity:.55;}
+  .brand-dot:focus-visible{outline:2px solid var(--lantern-soft);outline-offset:3px;border-radius:6px;}
   .hj-clock-cell{display:inline-flex;align-items:baseline;gap:7px;}
   .hj-clock-label{font-size:.7rem;opacity:.8;letter-spacing:.14em;}
   .hj-clock-time{

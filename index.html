@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -53,12 +53,13 @@
     <span class="hj-music-note" aria-hidden="true">&#9834;</span>
     <span class="hj-music-bars" aria-hidden="true"><i></i><i></i><i></i></span>
   </button>
-  <h1 class="brand">花舞之街 · 薰风花语町</h1>
+  <h1 class="brand">花舞之街<button type="button" class="brand-dot" id="clockToggle" aria-pressed="false" aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条"><span aria-hidden="true">·</span></button> 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
     薰风花语町-高脚孤丘22区扩建区36,45,49,54-60号房 及 扩建区公寓3-17号房间</p>
-  <!-- 时间条：国服时间(UTC+8) 与 艾欧泽亚时间，每秒钟刷新，页面切后台时暂停 -->
-  <p class="hj-clock" id="hjClock" role="timer" aria-live="off" aria-label="国服时间与艾欧泽亚时间">
+  <!-- 时间条：国服时间(UTC+8) 与 艾欧泽亚时间(ET，游戏内时钟：1 ET 时 = 175 现实秒)，
+       每秒钟刷新，页面切后台时暂停；默认隐藏，点击标题中间的「·」切换显隐 -->
+  <p class="hj-clock is-hidden" id="hjClock" role="timer" aria-live="off" aria-label="国服时间与艾欧泽亚时间">
     <span class="hj-clock-cell">
       <span class="hj-clock-label">国服</span>
       <span class="hj-clock-time" id="hjTimeCN">--:--:--</span>
@@ -2178,18 +2179,22 @@ function initMusic(){
 
 /* =========================================================================
    时间条（预铺）：国服时间固定 UTC+8，不跟着访客手机时区跑；
-   艾欧泽亚时间 = 现实 200 秒 = 游戏 1 小时（一天 80 分钟），且以 1970-01-01 0:00 UTC 起算，
-   所以直接拿时间戳换算，跟访客在哪个时区无关。
+   艾欧泽亚时间(ET)：游戏内时钟流速 = 144/7 ≈ 20.5714 倍现实时间
+   （1 ET 小时 = 175 现实秒 = 2 分 55 秒，1 ET 日 = 70 现实分钟，
+     1 ET 分钟 = 35/12 ≈ 2.9167 现实秒），以 1970-01-01 0:00 UTC 起算——
+   倍率 144/7 正好让「每个周日 0:00（JST）恰好 ET 0:00」严格成立，
+   与游戏内时钟完全一致（参考 FF14 中文维基「艾欧泽亚 · 时间」）。
    ========================================================================= */
-const EORZEA_HOUR_SECONDS = 200;
+const EORZEA_RATE = 144 / 7;               /* 现实 1 秒 = ET 144/7 秒 */
+const EORZEA_DAY_SECONDS = 24 * 3600;      /* ET 一天 = 86400 秒 */
 const REAL_TZ_OFFSET_MIN = 480;
 function hjPad(n){ return (n < 10 ? "0" : "") + n; }
 function hjReadClocks(){
   const now = Date.now();
   const real = new Date(now + REAL_TZ_OFFSET_MIN * 60000);
-  const e = (now / 1000) / EORZEA_HOUR_SECONDS;
-  const etHour = Math.floor(e % 24);
-  const etMin = Math.floor((e % 1) * 60);
+  const etSec = ((now / 1000) * EORZEA_RATE) % EORZEA_DAY_SECONDS;
+  const etHour = Math.floor(etSec / 3600);
+  const etMin = Math.floor(etSec / 60) % 60;
   return {
     cn: hjPad(real.getUTCHours()) + ":" + hjPad(real.getUTCMinutes()) + ":" + hjPad(real.getUTCSeconds()),
     et: hjPad(etHour) + ":" + hjPad(etMin),
@@ -2210,9 +2215,28 @@ function hjClockTick(){
 }
 function initClock(){
   hjClockTick();
-  /* 艾欧泽亚的 1 分钟 = 现实 3.3 秒，所以 1 秒刷一次足够；切到后台就什么都不做，省电 */
+  /* ET 的 1 分钟 = 现实约 2.92 秒，所以 1 秒刷一次足够；切到后台就什么都不做，省电 */
   hjClockTimer = setInterval(() => { if(!document.hidden) hjClockTick(); }, 1000);
   document.addEventListener("visibilitychange", () => { if(!document.hidden) hjClockTick(); });
+}
+
+/* 时间条显隐：点击标题中间的「·」切换，默认隐藏（不持久化，刷新后恢复隐藏） */
+function initClockToggle(){
+  const dot = document.getElementById("clockToggle");
+  const clock = document.getElementById("hjClock");
+  if(!dot || !clock) return;
+  const sync = () => {
+    const hidden = clock.classList.contains("is-hidden");
+    dot.setAttribute("aria-pressed", String(!hidden));
+    dot.setAttribute("aria-label", hidden ? "显示时间条（国服时间与艾欧泽亚时间）" : "隐藏时间条");
+    dot.setAttribute("title", hidden ? "点击显示时间条" : "点击隐藏时间条");
+  };
+  dot.addEventListener("click", () => {
+    clock.classList.toggle("is-hidden");
+    sync();
+    if(!clock.classList.contains("is-hidden")) hjClockTick(); /* 切回显示时立即刷新到当前时间 */
+  });
+  sync();
 }
 
 renderHome();
@@ -2237,8 +2261,8 @@ initA11yModals();
 initPasswordToggle("internalPassword", "internalPasswordShow");
 initMusic();
 initClock();
+initClockToggle();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b744b40bb3ed81',t:'MTc4OTQ3MTUwMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
