@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -549,6 +549,8 @@ function playViewEnterStagger(viewId, gridId){
 
 function showView(id){
   document.querySelectorAll(".view").forEach(v => v.hidden = (v.id !== id));
+  if(coldEntryView && id !== coldEntryView) coldEntryView = null;   /* 已经在站内跳转过了 */
+  else hideColdEntryBack();                                          /* 仍停在冷启动落点：不显示返回键 */
   window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
   playEnterAnim(document.getElementById(id));
 }
@@ -1280,47 +1282,28 @@ function routeFromHash(){
     showView("view-home");
   }
 }
-/* 从 /activity、/previous 这类跳转页进来时（它们用 location.replace 换掉自己那条历史），
-   或者从二维码里的深链直接打开时，会话历史中本站只有当前这一条：按浏览器/系统的"返回"
-   会直接离开网站（about:blank），从用户角度看就是"没有返回键"。
-   这里把当前历史条目改写成首页，再把深链 hash 压回去，于是"返回"先回到首页而不是退出站点。
-   返回 true 表示这次是冷启动深链，用来把站内按钮文案换成更准确的"← 返回首页"。 */
-function ensureBaseHistory(){
-  const hash = location.hash;
-  if(!hash || hash === "#") return false;
-  try{
-    if(sessionStorage.getItem("hj_base")) return false;   /* 同一会话只补一次，避免反复刷新堆积历史条目 */
-    sessionStorage.setItem("hj_base", "1");
-    /* 先把当前条目改写成首页，再压回深链条目：这样"返回"落在首页上。
-       注意这里必须用 pushState 而不是 location.hash = ——给 location.hash 赋值时
-       Chrome 可能只是更新当前条目的 URL（实测 history.length 不变），补不出可返回的条目。 */
-    history.replaceState({hjBase: true}, "", location.pathname + location.search);
-    history.pushState(null, "", hash);
-    return true;
-  }catch(e){
-    return false;
-  }
-}
-function markBackButtonsForDeepLink(){
-  document.querySelectorAll(".view .back-btn").forEach(btn => { btn.textContent = "← 返回首页"; });
-}
-/* hashchange 和 popstate 会因为 pushState 补出来的条目一起触发，
-   这里合并到下一帧只跑一次路由，避免入场动画被重放两遍。 */
-let routeScheduled = false;
-function scheduleRoute(){
-  if(routeScheduled) return;
-  routeScheduled = true;
-  requestAnimationFrame(() => {
-    routeScheduled = false;
-    routeFromHash();   /* 开屏图盖着时也照常定位，视图本身是 display:none，进入后状态就是对的 */
-  });
+/* 冷启动直达（从 /activity、/previous 这类分享链接跳进来，或二维码扫到某个深链）时，
+   用户不是从站内别的页面进来的，「← 返回」没有意义 —— 把首个落点视图上的返回键藏掉。
+   只要之后在站内继续跳转（showView 切到别的视图），标记就清除，返回键恢复正常。 */
+let coldEntryView = null;
+function hideColdEntryBack(){
+  if(!coldEntryView) return;
+  const view = document.getElementById(coldEntryView);
+  if(!view) return;
+  const btn = view.querySelector(".back-btn");
+  if(btn) btn.style.display = "none";
 }
 function initHashRoute(){
-  const coldDeepLink = ensureBaseHistory();
+  const coldDeepLink = !!location.hash && location.hash !== "#";
   routeFromHash();
-  if(coldDeepLink) markBackButtonsForDeepLink();
-  window.addEventListener("hashchange", scheduleRoute);
-  window.addEventListener("popstate", scheduleRoute);
+  if(coldDeepLink){
+    const landing = document.querySelector(".view:not([hidden])");
+    if(landing && landing.querySelector(".back-btn")){
+      coldEntryView = landing.id;
+      hideColdEntryBack();
+    }
+  }
+  window.addEventListener("hashchange", routeFromHash);
 }
 
 let lightboxMode = "normal"; /* "gallery" = 花街介绍相册里点开的图，取消放大/拖动，双击代替网页背景 */
@@ -1944,5 +1927,6 @@ initA11yModals();
 initPasswordToggle("internalPassword", "internalPasswordShow");
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b4476cecb77b69',t:'MTc4OTQ0MDE1NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b467fc294aaa18',t:'MTc4OTQ0MTQ4OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

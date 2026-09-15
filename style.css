@@ -260,8 +260,10 @@
 
   /* ---------- back button / section title ---------- */
   .back-btn{
-    background:none;border:1px solid var(--line);color:var(--text-soft);
+    background:rgba(20,16,36,.20);border:1px solid var(--line);color:var(--text-soft);
     padding:8px 18px;border-radius:999px;font-size:.85rem;margin:28px 0 20px;
+    -webkit-backdrop-filter:blur(9px) saturate(1.08);backdrop-filter:blur(9px) saturate(1.08);
+    transition:border-color .2s,color .2s,background .2s;
   }
   .back-btn:hover{border-color:var(--accent);color:var(--accent-soft);}
   .section-title{font-family:var(--brush);font-size:2rem;color:var(--lantern-soft);margin-bottom:20px;}
@@ -494,13 +496,12 @@
   body.day-mode .audience-opt{color:#6b4a24;}
   body.day-mode .password-show-label:hover,
   body.day-mode .audience-opt:hover{color:#3a2508;}
-  /* 白天模式下天空很亮，原来的淡黄描边（#e4eb7b）在浅蓝底上只有 2.4:1 对比度，
-     从 /activity 之类深链进来时那枚「返回」几乎看不见，所以改成实心胶囊 */
+  /* 白天模式天空很亮，原来的浅黄描边(#e4eb7b)压在浅蓝底上只有 2.4:1，容易"看不见"。
+     这里不改配色（保持原本的样子），只垫一层薄薄的烟熏玻璃把背景压暗、模糊掉。 */
   body.day-mode .back-btn{
-    color:#4a2b06;background:rgba(255,251,238,.86);border-color:rgba(122,80,20,.42);
-    box-shadow:0 6px 16px rgba(96,64,16,.16), inset 0 1px 0 rgba(255,255,255,.7);
+    background:rgba(48,34,18,.26);border-color:#e4eb7b;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
   }
-  body.day-mode .back-btn:hover{background:#fffdf6;color:#1c1830;border-color:#7a5014;}
   body.day-mode .announcement .date{color:#6b4a24;}
   body.day-mode .announcement .body{color:#4a3018;}
 
@@ -518,7 +519,7 @@
   }
   .info-tabs{margin-bottom:22px;}
   .info-gallery-grid{
-    display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:4px;
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:4px;
   }
   .info-gallery-grid img{
     width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--radius-sm);
@@ -562,6 +563,7 @@
 
   @media (max-width:640px){
     .tile-grid, .tile-grid.tile-grid-3{grid-template-columns:1fr;}
+    .info-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
     .tile-hero{aspect-ratio:1399/1374;}
     #archiveTile,#venueTile{aspect-ratio:1404/792;}
     .shop-item{grid-template-columns:32px 1fr;}
