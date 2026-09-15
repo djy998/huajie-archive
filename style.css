@@ -111,10 +111,19 @@
   body.day-mode .hj-clock-cell.is-night .hj-clock-time{color:#5b3610;}
 
   #fxClickLayer{position:fixed;inset:0;z-index:500;pointer-events:none;overflow:hidden;}
-  .fx-burst-petal{position:absolute;font-size:16px;will-change:transform,opacity;animation:fxBurstFall .9s ease-out forwards;}
+  .fx-burst-petal{
+    position:absolute;font-size:16px;background-size:contain;background-repeat:no-repeat;background-position:center;
+    will-change:transform,opacity;
+    animation:fxBurstFall .95s ease-out forwards;
+    filter:drop-shadow(0 1px 2px rgba(60,42,10,.30));
+  }
   @keyframes fxBurstFall{
-    0%{transform:translate(-50%,-50%) rotate(0deg) scale(1);opacity:.9;}
-    100%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) rotate(var(--br)) scale(.6);opacity:0;}
+    0%{transform:translate(-50%,-50%) scale(.55) rotateZ(0deg) rotateY(0deg);opacity:0;}
+    18%{opacity:.95;}
+    62%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by) * .4)) scale(1)
+         rotateZ(var(--br,40deg)) rotateY(calc(var(--bf,180deg) * .55));}
+    100%{transform:translate(calc(-50% + var(--bx) * 1.22), calc(-50% + var(--by) * 2.3)) scale(.82)
+         rotateZ(calc(var(--br,40deg) * 1.9)) rotateY(var(--bf,180deg));opacity:0;}
   }
   .fx-burst-star{
     position:absolute;width:5px;height:5px;border-radius:50%;
@@ -134,16 +143,59 @@
 
 
   #fxLayer{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
-  .fx-petal{
-    position:absolute;top:-8%;opacity:0.7;
-    background-size:contain;background-repeat:no-repeat;background-position:center;
-    animation-name:fxFall;animation-timing-function:linear;animation-iteration-count:infinite;
-    will-change:transform;
-    filter:drop-shadow(0 2px 3px rgba(0,0,0,0.12));
+  /* ---------- 白天飘落的花叶：四层嵌套 ----------
+     一片叶子 = 四个各有独立周期的动画叠在一起，所以轨迹不会一眼看出在循环：
+       .fx-leaf       下落整程 + 单向风偏移 + 进出场淡入淡出
+       .fx-leaf-sway  左右摆动（ease-in-out + alternate，约等于一条正弦曲线）
+       .fx-leaf-flip  绕 Y 轴 3D 翻转，外层有 perspective，转到侧面会被压扁
+       .fx-leaf-face  贴图本身：绕 Z 轴来回翻滚 + 随翻面周期的明暗变化（翻到背面变暗）
+     幅度/时长/相位都在 JS 里随机（renderDayFx）。 */
+  .fx-leaf{
+    position:absolute;top:var(--static-top,0);left:0;opacity:0;
+    will-change:transform,opacity;
+    animation-name:fxLeafFall,fxLeafFade;
+    animation-timing-function:linear,linear;
+    animation-iteration-count:infinite,infinite;
   }
-  @keyframes fxFall{
-    0%{transform:translate(0,0) rotate(0deg);}
-    100%{transform:translate(var(--drift,20px), 118vh) rotate(var(--spin,340deg));}
+  .fx-leaf-sway,.fx-leaf-flip,.fx-leaf-face{display:block;width:100%;height:100%;}
+  .fx-leaf-sway{perspective:520px;animation-name:fxLeafSway;animation-timing-function:ease-in-out;
+    animation-iteration-count:infinite;animation-direction:alternate;}
+  .fx-leaf-flip{transform-style:preserve-3d;animation-name:fxLeafFlip;
+    animation-timing-function:linear;animation-iteration-count:infinite;}
+  .fx-leaf-face{background-size:contain;background-repeat:no-repeat;background-position:center;
+    filter:drop-shadow(0 1px 2px rgba(60,42,10,.30));
+    animation-name:fxLeafTumble,fxLeafLight;
+    animation-timing-function:ease-in-out,linear;
+    animation-iteration-count:infinite,infinite;}
+  @keyframes fxLeafFall{
+    from{transform:translate3d(0,-14vh,0);}
+    to{transform:translate3d(var(--drift,60px),116vh,0);}
+  }
+  @keyframes fxLeafFade{
+    0%{opacity:0;}6%{opacity:var(--op,.8);}86%{opacity:var(--op,.8);}100%{opacity:0;}
+  }
+  @keyframes fxLeafSway{
+    from{transform:translate3d(calc(var(--sway,26px) * -1),0,0) skewX(var(--sway-skew,0deg));}
+    to{transform:translate3d(var(--sway,26px),0,0) skewX(calc(var(--sway-skew,0deg) * -1));}
+  }
+  @keyframes fxLeafFlip{
+    from{transform:rotateY(0deg);}
+    to{transform:rotateY(var(--flip-turn,360deg));}
+  }
+  @keyframes fxLeafTumble{
+    from{transform:rotateZ(var(--tilt-start,-16deg)) scale(1);}
+    to{transform:rotateZ(var(--tilt-end,20deg)) scale(.94);}
+  }
+  /* 侧对镜头（25%/75%，正好是宽度被压到最窄的时候）最暗，正面迎光最亮；
+     转过去露出叶背时稍微再暗一点。delay 与 fxLeafFlip 共用，所以不会错位。 */
+  @keyframes fxLeafLight{
+    0%,100%{filter:brightness(1) saturate(1) drop-shadow(0 1px 2px rgba(60,42,10,.30));}
+    25%,75%{filter:brightness(.7) saturate(.84) drop-shadow(0 1px 1px rgba(60,42,10,.44));}
+    50%{filter:brightness(.9) saturate(.94) drop-shadow(0 1px 2px rgba(60,42,10,.34));}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .fx-leaf,.fx-leaf-sway,.fx-leaf-flip,.fx-leaf-face{animation:none;}
+    .fx-leaf{opacity:var(--op,.8);}
   }
   .fx-star{
     position:absolute;width:2px;height:2px;border-radius:50%;
@@ -194,10 +246,15 @@
     border-color:rgba(255,255,255,.62);
     box-shadow:0 20px 56px rgba(96,64,16,.18), inset 0 1px 0 rgba(255,255,255,.78);
   }
-  /* 白天模式的底板是浅色磨砂，原来压在浅蓝天空上的浅黄标题(#e4eb7b)到这里会发虚，
-     毛玻璃的目的就是让文字读得清，所以这里把标题/副标题换成墨色。 */
-  body.custom-bg.day-mode .site-header .brand{color:#5b3610;}
-  body.custom-bg.day-mode .site-header .tagline{color:#4a3018;}
+  /* 标题/副标题在换背景后**保持白天模式原本的配色**（淡黄 #e4eb7b + 棕 #5b4326），
+     不再跟着变成墨色。浅色照片上发虚的问题靠一层柔和暗影兜住，只加阴影不改字色。 */
+  body.custom-bg.day-mode .site-header .brand{
+    text-shadow:0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34);
+  }
+  body.custom-bg.day-mode .site-header .tagline,
+  body.custom-bg.day-mode .site-header .hj-clock{
+    text-shadow:0 1px 1px rgba(255,252,240,.7);
+  }
   @keyframes hjGlassIn{from{opacity:0;transform:translateX(-50%) scale(.985);}to{opacity:1;transform:translateX(-50%) scale(1);}}
   @media (max-width:640px){
     body.custom-bg .site-header::before{
