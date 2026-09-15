@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -1696,19 +1696,27 @@ function renderDayFx(){
     const w = rand(15, 31);                           /* 比原来的 13~22 略大，才看得见翻转 */
     const fall = rand(9.5, 19);                       /* 下落一整程 */
     const swayDur = rand(1.9, 5.6);                   /* 左右摆动，周期和下落在 1.9~5.6s 里随机 */
-    const flipDur = rand(2.1, 6.6);                   /* 绕 Y 轴翻面 */
+    const flipDur = rand(2.1, 6.6);                   /* 绕 Y 轴翻面（左右翻转） */
+    const flipXDur = rand(1.6, 5.4);                  /* 绕 X 轴翻面（上下翻转），周期与 Y 翻转错开 */
     const tumbleDur = rand(2.6, 7.4);                  /* 绕 Z 轴翻滚 */
     const el = document.createElement("span");
     el.className = "fx-leaf";
     el.style.left = rand(-3, 101).toFixed(2) + "vw";
     el.style.width = w.toFixed(1) + "px";
     el.style.height = (w / sprite.ar).toFixed(1) + "px";   /* 贴图不是正方形，按各自宽高比给高 */
-    setMs(el, [fall, fall]);
+    /* 下落和淡入淡出必须共用同一个负 delay：两个动画相位各随机时，
+       叶子会在屏幕中间就开始淡出、换个相位又凭空淡回，看起来就是"飘到一半突然重置"。
+       共用 delay 后，淡入淡出只发生在下落线的两端（都在屏幕外）。 */
+    const fallDelay = -Math.random() * fall;
+    el.style.animationDuration = fall.toFixed(2) + "s, " + fall.toFixed(2) + "s";
+    el.style.animationDelay = fallDelay.toFixed(2) + "s, " + fallDelay.toFixed(2) + "s";
     el.style.setProperty("--op", rand(.5, .88).toFixed(2));
     el.style.setProperty("--sway", Math.round(rand(10, 54)) + "px");
     el.style.setProperty("--sway-skew", rand(0, 7).toFixed(1) + "deg");
     el.style.setProperty("--drift", Math.round(rand(-70, 150)) + "px");
-    /* 三种"重量"：轻的翻得急、沉的不太翻、中间的正常翻，整屏就不会像同一支舞 */
+    /* 三种"重量"：轻的翻得急、沉的不太翻、中间的正常翻，整屏就不会像同一支舞。
+       上下翻转（flipx）沿用同一支"重量"：沉的叶子两个轴都不翻，轻的叶子两个轴都翻得急，
+       看起来才是同一批叶子在三维翻滚，而不是左右翻和上下翻各演各的。 */
     const r = Math.random();
     const turn = r < .18 ? 0 : (r < .38 ? 720 : 360);
     el.style.setProperty("--flip-turn", (turn * sign()) + "deg");
@@ -1724,14 +1732,31 @@ function renderDayFx(){
     flip.className = "fx-leaf-flip";
     flip.style.animationDuration = flipDur.toFixed(2) + "s";
     flip.style.animationDelay = flipDelay.toFixed(2) + "s";
+    /* 上下翻转层：翻多少度跟着 Y 翻转的"重量"走 ——
+       轻的（Y 转 720°）上下也整翻 360°，linear 连续翻；
+       中间的（Y 转 360°）上下翻 180° 半翻，alternate 翻到背面再扑回来，避免循环时跳变；
+       沉的（Y 不转）上下也不翻。方向随机正负，delay 单独随机，和 Y 轴错开相位。 */
+    const flipX = document.createElement("span");
+    flipX.className = "fx-leaf-flipx";
+    const flipXTurn = turn === 0 ? 0 : (turn === 720 ? 360 : 180);
+    flipX.style.setProperty("--flipx-turn", (flipXTurn * sign()) + "deg");
+    flipX.style.animationDuration = flipXDur.toFixed(2) + "s";
+    flipX.style.animationDelay = (-Math.random() * flipXDur).toFixed(2) + "s";
+    if(flipXTurn === 180){
+      flipX.style.animationDirection = "alternate";
+      flipX.style.animationTimingFunction = "ease-in-out";
+    }
     const face = document.createElement("span");
     face.className = "fx-leaf-face";
     face.style.backgroundImage = "url('" + sprite.src + "')";
-    const lightDur = turn === 0 ? flipDur * 2 : flipDur;      /* 不翻转的叶子只慢慢呼吸 */
+    /* 不翻转的叶子只慢慢呼吸；翻转的叶子明暗周期 = 翻转周期 * 360/转数，
+       这样 720° 的轻叶子明暗也会正好对住每一次侧对镜头，不会错位闪烁 */
+    const lightDur = turn === 0 ? flipDur * 2 : flipDur * 360 / turn;
     face.style.animationDuration = tumbleDur.toFixed(2) + "s, " + lightDur.toFixed(2) + "s";
     face.style.animationDelay = (-Math.random() * tumbleDur).toFixed(2) + "s, " +
       (turn === 0 ? (-Math.random() * lightDur).toFixed(2) : flipDelay.toFixed(2)) + "s";
-    flip.appendChild(face);
+    flip.appendChild(flipX);
+    flipX.appendChild(face);
     sway.appendChild(flip);
     el.appendChild(sway);
     frag.appendChild(el);
@@ -1851,8 +1876,7 @@ function spawnClickBurst(x, y){
       el.style.width = w.toFixed(1) + "px";
       el.style.height = (w / sprite.ar).toFixed(1) + "px";
       el.style.backgroundImage = "url('" + sprite.src + "')";
-      el.style.setProperty("--br", (Math.random() * 220 - 110).toFixed(1) + "deg");
-      el.style.setProperty("--bf", ((90 + Math.random() * 260) * (Math.random() > .5 ? 1 : -1)).toFixed(1) + "deg");
+      el.style.setProperty("--br", (Math.random() * 140 - 70).toFixed(1) + "deg");
       el.style.animationDuration = (0.85 + Math.random() * 0.5).toFixed(2) + "s";
     } else if(isDay){
       el.className = "fx-burst-petal";                 /* 贴图被清空时的兜底：退回原来的表情符号 */

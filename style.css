@@ -117,13 +117,16 @@
     animation:fxBurstFall .95s ease-out forwards;
     filter:drop-shadow(0 1px 2px rgba(60,42,10,.30));
   }
+  /* 点击爆花：先沿 --bx/--by 向外扩散（ease-out 自然减速），到位后只轻轻漂一点、
+     原地缓慢自转，然后直接淡出缩小消失 —— 不再做末段高速位移和翻面。 */
   @keyframes fxBurstFall{
-    0%{transform:translate(-50%,-50%) scale(.55) rotateZ(0deg) rotateY(0deg);opacity:0;}
-    18%{opacity:.95;}
-    62%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by) * .4)) scale(1)
-         rotateZ(var(--br,40deg)) rotateY(calc(var(--bf,180deg) * .55));}
-    100%{transform:translate(calc(-50% + var(--bx) * 1.22), calc(-50% + var(--by) * 2.3)) scale(.82)
-         rotateZ(calc(var(--br,40deg) * 1.9)) rotateY(var(--bf,180deg));opacity:0;}
+    0%{transform:translate(-50%,-50%) scale(.55) rotateZ(0deg);opacity:0;}
+    16%{opacity:.95;}
+    48%{transform:translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(1)
+         rotateZ(calc(var(--br,40deg) * .6));}
+    72%{opacity:.85;}
+    100%{transform:translate(calc(-50% + var(--bx) * 1.05), calc(-50% + var(--by) * 1.1)) scale(.7)
+         rotateZ(var(--br,40deg));opacity:0;}
   }
   .fx-burst-star{
     position:absolute;width:5px;height:5px;border-radius:50%;
@@ -143,11 +146,12 @@
 
 
   #fxLayer{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;}
-  /* ---------- 白天飘落的花叶：四层嵌套 ----------
-     一片叶子 = 四个各有独立周期的动画叠在一起，所以轨迹不会一眼看出在循环：
+  /* ---------- 白天飘落的花叶：五层嵌套 ----------
+     一片叶子 = 五个各有独立周期的动画叠在一起，所以轨迹不会一眼看出在循环：
        .fx-leaf       下落整程 + 单向风偏移 + 进出场淡入淡出
        .fx-leaf-sway  左右摆动（ease-in-out + alternate，约等于一条正弦曲线）
-       .fx-leaf-flip  绕 Y 轴 3D 翻转，外层有 perspective，转到侧面会被压扁
+       .fx-leaf-flip  绕 Y 轴 3D 翻转（左右翻转），外层有 perspective，转到侧面会被压扁
+       .fx-leaf-flipx 绕 X 轴 3D 翻转（上下翻转），周期与 Y 翻转错开，两片轴一起翻才像真实翻滚
        .fx-leaf-face  贴图本身：绕 Z 轴来回翻滚 + 随翻面周期的明暗变化（翻到背面变暗）
      幅度/时长/相位都在 JS 里随机（renderDayFx）。 */
   .fx-leaf{
@@ -157,15 +161,19 @@
     animation-timing-function:linear,linear;
     animation-iteration-count:infinite,infinite;
   }
-  .fx-leaf-sway,.fx-leaf-flip,.fx-leaf-face{display:block;width:100%;height:100%;}
+  .fx-leaf-sway,.fx-leaf-flip,.fx-leaf-flipx,.fx-leaf-face{display:block;width:100%;height:100%;}
   .fx-leaf-sway{perspective:520px;animation-name:fxLeafSway;animation-timing-function:ease-in-out;
     animation-iteration-count:infinite;animation-direction:alternate;}
   .fx-leaf-flip{transform-style:preserve-3d;animation-name:fxLeafFlip;
     animation-timing-function:linear;animation-iteration-count:infinite;}
+  /* 上下翻转层：默认线性整转，JS 会按叶子"重量"改 --flipx-turn / direction / timing
+     （180° 半翻用 alternate 来回扑，360° 整翻用 linear 连续翻，沉的不翻直接 0deg） */
+  .fx-leaf-flipx{transform-style:preserve-3d;animation-name:fxLeafFlipX;
+    animation-timing-function:linear;animation-iteration-count:infinite;}
   .fx-leaf-face{background-size:contain;background-repeat:no-repeat;background-position:center;
     filter:drop-shadow(0 1px 2px rgba(60,42,10,.30));
     animation-name:fxLeafTumble,fxLeafLight;
-    animation-timing-function:ease-in-out,linear;
+    animation-timing-function:ease-in-out,ease-in-out;
     animation-iteration-count:infinite,infinite;}
   @keyframes fxLeafFall{
     from{transform:translate3d(0,-14vh,0);}
@@ -182,19 +190,26 @@
     from{transform:rotateY(0deg);}
     to{transform:rotateY(var(--flip-turn,360deg));}
   }
+  /* 上下翻转（绕 X 轴）：--flipx-turn 由 JS 随机（0 / ±180 / ±360）。
+     ±180 的叶子在 JS 里把 direction 设为 alternate，翻到背面再扑回来，不会跳变。 */
+  @keyframes fxLeafFlipX{
+    from{transform:rotateX(0deg);}
+    to{transform:rotateX(var(--flipx-turn,0deg));}
+  }
   @keyframes fxLeafTumble{
     from{transform:rotateZ(var(--tilt-start,-16deg)) scale(1);}
     to{transform:rotateZ(var(--tilt-end,20deg)) scale(.94);}
   }
-  /* 侧对镜头（25%/75%，正好是宽度被压到最窄的时候）最暗，正面迎光最亮；
-     转过去露出叶背时稍微再暗一点。delay 与 fxLeafFlip 共用，所以不会错位。 */
+  /* 侧对镜头（25%/75%，正好是被压到最窄的时候）稍暗，正面迎光最亮。
+     delay 与 fxLeafFlip 共用、周期按翻转角度折算（JS 里 720° 的叶子周期减半），
+     所以明暗始终对住侧对镜头的时刻；摆动幅度收窄 + ease-in-out，避免硬切像"闪烁"。 */
   @keyframes fxLeafLight{
     0%,100%{filter:brightness(1) saturate(1) drop-shadow(0 1px 2px rgba(60,42,10,.30));}
-    25%,75%{filter:brightness(.7) saturate(.84) drop-shadow(0 1px 1px rgba(60,42,10,.44));}
-    50%{filter:brightness(.9) saturate(.94) drop-shadow(0 1px 2px rgba(60,42,10,.34));}
+    25%,75%{filter:brightness(.8) saturate(.9) drop-shadow(0 1px 2px rgba(60,42,10,.38));}
+    50%{filter:brightness(.93) saturate(.96) drop-shadow(0 1px 2px rgba(60,42,10,.32));}
   }
   @media (prefers-reduced-motion:reduce){
-    .fx-leaf,.fx-leaf-sway,.fx-leaf-flip,.fx-leaf-face{animation:none;}
+    .fx-leaf,.fx-leaf-sway,.fx-leaf-flip,.fx-leaf-flipx,.fx-leaf-face{animation:none;}
     .fx-leaf{opacity:var(--op,.8);}
   }
   .fx-star{
