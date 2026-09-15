@@ -74,6 +74,42 @@
   .fx-toggle{right:70px;opacity:0.4;}
   .fx-toggle.is-active{opacity:1;}
 
+  /* ---------- 背景音乐（预铺：音源待接入） ---------- */
+  .music-toggle{right:122px;}
+  .music-toggle.is-empty{opacity:.45;}
+  .music-toggle.is-playing{opacity:1;border-color:var(--accent);}
+  .hj-music-note{line-height:1;font-size:1.05rem;}
+  .hj-music-bars{display:none;align-items:flex-end;gap:2px;height:14px;}
+  .hj-music-bars i{display:block;width:2px;height:4px;border-radius:1px;background:currentColor;
+    animation:hjMusicBar .95s ease-in-out infinite;}
+  .hj-music-bars i:nth-child(2){animation-delay:.16s;}
+  .hj-music-bars i:nth-child(3){animation-delay:.32s;}
+  @keyframes hjMusicBar{0%,100%{height:4px;}50%{height:14px;}}
+  .music-toggle.is-playing .hj-music-note{display:none;}
+  .music-toggle.is-playing .hj-music-bars{display:flex;}
+  @media (prefers-reduced-motion:reduce){
+    .hj-music-bars i{animation:none;height:9px;}
+  }
+
+  /* ---------- 时间条：国服 UTC+8 + 艾欧泽亚时间 ---------- */
+  .hj-clock{
+    display:flex;justify-content:center;align-items:baseline;flex-wrap:wrap;gap:6px 12px;
+    margin-top:16px;font-size:.8rem;letter-spacing:.08em;color:var(--text-mute);
+  }
+  .hj-clock-cell{display:inline-flex;align-items:baseline;gap:7px;}
+  .hj-clock-label{font-size:.7rem;opacity:.8;letter-spacing:.14em;}
+  .hj-clock-time{
+    color:var(--text-soft);letter-spacing:.05em;
+    font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;
+  }
+  .hj-clock-sep{width:1px;height:11px;background:var(--line);align-self:center;}
+  .hj-et-glyph{font-style:normal;margin-right:4px;font-size:.78rem;opacity:.9;}
+  .hj-clock-cell.is-night .hj-clock-time{color:var(--wisteria-soft);}
+  body.day-mode .hj-clock{color:#6b4a24;}
+  body.day-mode .hj-clock-time{color:#4a3018;}
+  body.day-mode .hj-clock-sep{background:rgba(90,60,20,.28);}
+  body.day-mode .hj-clock-cell.is-night .hj-clock-time{color:#5b3610;}
+
   #fxClickLayer{position:fixed;inset:0;z-index:500;pointer-events:none;overflow:hidden;}
   .fx-burst-petal{position:absolute;font-size:16px;will-change:transform,opacity;animation:fxBurstFall .9s ease-out forwards;}
   @keyframes fxBurstFall{
@@ -150,7 +186,8 @@
     animation:hjGlassIn .45s ease both;
   }
   body.custom-bg .site-header .brand,
-  body.custom-bg .site-header .tagline{position:relative;z-index:1;}
+  body.custom-bg .site-header .tagline,
+  body.custom-bg .site-header .hj-clock{position:relative;z-index:1;}
   body.custom-bg .daynight-toggle{z-index:2;}
   body.custom-bg.day-mode .site-header::before{
     background:rgba(255,251,238,.42);
@@ -563,6 +600,10 @@
 
   @media (max-width:640px){
     .tile-grid, .tile-grid.tile-grid-3{grid-template-columns:1fr;}
+    .daynight-toggle{width:40px;height:40px;top:14px;}
+    .fx-toggle{right:64px;}
+    .music-toggle{right:118px;top:14px;}
+    .hj-clock{margin-top:14px;gap:4px 9px;font-size:.74rem;padding:0 4px;}
     .info-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
     .tile-hero{aspect-ratio:1399/1374;}
     #archiveTile,#venueTile{aspect-ratio:1404/792;}
