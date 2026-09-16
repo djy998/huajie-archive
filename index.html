@@ -2310,8 +2310,8 @@ initClockToggle();
    点赞系统（配合 Worker 的 get_likes / add_like 接口）
    - 目标：活动详情页 act:<id>、小型回顾图片 mini:<文件名>、花街相册图片 info:<文件名>
    - 显示：心形玻璃按钮 + 计数；点过赞后心形实心
-   - 限制：服务器强制每人每日（UTC+8）最多新增 10 次点赞，同一目标只能赞一次，
-     前端只做预检和提示
+   - 限制：服务器强制每人每日（UTC+8）最多新增 10 次点赞；同一目标可以重复点赞，
+     每点一次消耗一次当日额度，前端只做预检和提示
    - Worker 不可用或点赞接口未部署时：按钮保持隐藏，不影响其它任何功能
    ========================================================================= */
 const LIKE_DAILY_LIMIT = 10;
@@ -2390,10 +2390,6 @@ function setupDetailLike(data){
 async function onLikeBtnClick(btn){
   const key = btn.dataset.likeKey;
   if(!key) return;
-  if(hjLikeState.liked.has(key)){
-    showToast("\u5df2\u7ecf\u70b9\u8fc7\u8d5e\u5566");
-    return;
-  }
   if(hjLikeState.remaining <= 0){
     showToast("\u4eca\u5929 10 \u6b21\u70b9\u8d5e\u5df2\u7528\u5b8c\uff0c\u660e\u5929\u518d\u6765\u5427");
     return;
@@ -2407,13 +2403,6 @@ async function onLikeBtnClick(btn){
     if(typeof data.remaining === "number") hjLikeState.remaining = data.remaining;
     paintLikes();
     showToast("\u70b9\u8d5e\u6210\u529f\uff0c\u4eca\u5929\u8fd8\u5269 " + hjLikeState.remaining + " \u6b21");
-    return;
-  }
-  if(data && data.error === "already_liked"){
-    hjLikeState.liked.add(key);
-    if(typeof data.count === "number") hjLikeState.counts[key] = data.count;
-    paintLikes();
-    showToast("\u5df2\u7ecf\u70b9\u8fc7\u8d5e\u5566");
     return;
   }
   if(data && data.error === "daily_limit"){
@@ -2433,10 +2422,6 @@ document.addEventListener("click", (e) => {
 </script>
 
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-</body>
-</html>
-sights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
