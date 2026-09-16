@@ -55,10 +55,9 @@
 <header class="site-header">
   <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">🌙</button>
   <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">✨</button>
-  <button class="daynight-toggle music-toggle is-empty" id="musicToggle" type="button"
-          aria-label="播放背景音乐（音源待接入）" aria-pressed="false" title="背景音乐 · 音源待接入">
-    <span class="hj-music-note" aria-hidden="true">&#9834;</span>
-    <span class="hj-music-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+  <button class="daynight-toggle sound-toggle" id="soundToggle" type="button"
+          aria-label="开启声音" aria-pressed="false" title="开启声音">
+    <span class="hj-sound-icon" aria-hidden="true">🔇</span>
   </button>
   <h1 class="brand">花舞之街<button type="button" class="brand-dot" id="clockToggle" aria-pressed="false" aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条"><span aria-hidden="true">·</span></button> 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
@@ -828,7 +827,7 @@ function initNav(){
     openMiniReview();
   });
   $("infoTile").addEventListener("click", () => {
-    openInfoModal();
+    openCaptcha("info");
   });
   $("internalTile").addEventListener("click", () => {
     window.open(VENUE_URL, "_blank", "noopener");
@@ -1592,7 +1591,7 @@ function renderTurnstile(){
     setMsg(msg, "");
     turnstileWidgetId = window.turnstile.render(el, {
       sitekey: TURNSTILE_SITE_KEY,
-      callback: onTurnstileSuccess,
+      callback: (token) => onTurnstileSuccess(token),
       "error-callback": () => {
         setMsg(msg, "验证组件加载失败，检查一下网络后重新打开试试");
       }
@@ -1628,8 +1627,21 @@ function closeCaptcha(){
   }
   turnstilePending = null;
 }
-async function onTurnstileSuccess(){
+async function onTurnstileSuccess(token){
   const pending = turnstilePending;
+  const msg = $("captchaMsg");
+
+  /* 前端小组件跑完挑战只说明浏览器完成了 Turnstile 的验证流程，
+     真正"确认不是机器人"要把 token 交给 Worker 走 Cloudflare 的 siteverify 接口再确认一次，
+     不然任何人绕过前端直接调 callWorker 都能假装验证通过。 */
+  setMsg(msg, "验证中…");
+  const verify = await callWorker({ action: "verify_turnstile", token });
+  if(!verify || !verify.ok){
+    setMsg(msg, "验证未通过，请重新完成一次");
+    renderTurnstile();
+    return;
+  }
+
   $("captchaOverlay").hidden = true;
   if(window.turnstile && turnstileWidgetId !== null){
     window.turnstile.remove(turnstileWidgetId);
@@ -1648,6 +1660,8 @@ async function onTurnstileSuccess(){
     playEnterAnim(document.querySelector("#groupOverlay .group-box"));
   } else if(pending === "copy_verify"){
     showToast("验证通过，之后复制会附上联系方式");
+  } else if(pending === "info"){
+    openInfoModal();
   }
 }
 function initCaptcha(){
@@ -2020,7 +2034,7 @@ function initA11yModals(){
 const hjMusic = {
   audio:null, tracks:MUSIC_TRACKS.slice(), index:0, loaded:"", playing:false, wantPlay:false,
   fadeRaf:0, pauseTimer:0, swapping:false, vol:MUSIC_VOLUME,
-  btn(){ return $("musicToggle"); },
+  btn(){ return $("soundToggle"); },
   hasTracks(){ return this.tracks.length > 0; },
   dayMode(){ return document.body.classList.contains("day-mode"); },
   pickIndex(){
@@ -2126,7 +2140,7 @@ const hjMusic = {
     this.vol = Math.max(0, Math.min(1, Number(v) || 0));
     if(this.audio && this.playing) this.audio.volume = this.vol;
   },
-  remember(){ try{ localStorage.setItem("hj_music_on", this.wantPlay ? "1" : "0"); }catch(e){} },
+  remember(){ try{ localStorage.setItem("hj_sound_on", this.wantPlay ? "1" : "0"); }catch(e){} },
   load(list){
     this.tracks = (Array.isArray(list) ? list : []).filter(t => t && t.src);
     this.index = 0; this.loaded = "";
@@ -2135,14 +2149,17 @@ const hjMusic = {
     if(this.wantPlay && this.hasTracks()) this.play();
   },
   sync(){
+    /* 简单的全局声音开关：按钮只反映"用户想不想开声音"（wantPlay），
+       不区分有没有音源、有没有正在淡入淡出这些内部细节。 */
     const btn = this.btn();
     if(!btn) return;
-    btn.classList.toggle("is-empty", !this.hasTracks());
-    btn.classList.toggle("is-playing", !!this.playing);
-    btn.setAttribute("aria-pressed", this.playing ? "true" : "false");
-    const t = this.current();
-    btn.setAttribute("aria-label", this.hasTracks() ? (this.playing ? "暂停背景音乐" : "播放背景音乐") : "播放背景音乐（音源待接入）");
-    btn.title = this.hasTracks() ? (t && t.title ? t.title : "背景音乐") : "背景音乐 · 音源待接入";
+    const on = this.wantPlay;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "关闭声音" : "开启声音");
+    btn.title = on ? "关闭声音" : "开启声音";
+    const icon = btn.querySelector(".hj-sound-icon");
+    if(icon) icon.textContent = on ? "🔊" : "🔇";
   }
 };
 /* 留一个口子，方便以后从控制台或从 Worker 那边喂歌单 */
@@ -2154,14 +2171,14 @@ window.HJ_MUSIC = {
   setVolume: v => hjMusic.setVolume(v),
   get tracks(){ return hjMusic.tracks; }
 };
-function initMusic(){
+function initSound(){
   const btn = hjMusic.btn();
   if(!btn) return;
   btn.addEventListener("click", () => hjMusic.toggle());
   hjMusic.sync();
   let saved = null;
-  try{ saved = localStorage.getItem("hj_music_on"); }catch(e){}
-  /* 上次开着的话，等第一次真实交互再放——浏览器的自动播放限制只能这样绕。 */
+  try{ saved = localStorage.getItem("hj_sound_on"); }catch(e){}
+  /* 默认关闭；上次开着的话，等第一次真实交互再放——浏览器的自动播放限制只能这样绕。 */
   if(saved === "1" && hjMusic.hasTracks()){
     const kick = () => {
       document.removeEventListener("pointerdown", kick);
@@ -2254,7 +2271,7 @@ initBootScreen();
 initA11yTiles();
 initA11yModals();
 initPasswordToggle("internalPassword", "internalPasswordShow");
-initMusic();
+initSound();
 initClock();
 initClockToggle();
 </script>
