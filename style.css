@@ -1537,3 +1537,29 @@ body.day-mode .hj-like-chip{
   flex-wrap:wrap;margin:0 0 18px;
 }
 .group-btn-row .share-site-btn{margin:0;}
+
+
+/* ---------- 星芒节时间覆盖（内部入口 · 管理员模式） ---------- */
+.starlight-fields{display:flex;justify-content:center;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:0 0 18px;}
+.starlight-field{flex:1 1 165px;min-width:150px;display:flex;flex-direction:column;gap:6px;}
+.starlight-field > span{font-size:.78rem;color:var(--text-mute);text-align:center;line-height:1.4;}
+/* 盖掉 .gate-card input 默认的整行下边距，两个时间框的间距交给 flex gap 管理
+   （.gate-card .starlight-field input 与 .gate-card input:not([type=checkbox]) 特指度相同，
+     靠"写在后面"生效） */
+.gate-card .starlight-field input{margin-bottom:0;font-size:.85rem;padding:10px 12px;}
+.starlight-sep{padding:0 2px 12px;color:var(--text-mute);font-size:.85rem;}
+.starlight-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;}
+/* datetime-local 右侧的日历小图标默认是黑色，暗色模式下要显式声明配色才看得见 */
+#starlightPanel input[type="datetime-local"]{color-scheme:dark;}
+body.day-mode #starlightPanel input[type="datetime-local"]{color-scheme:light;}
+body.day-mode .starlight-field > span{color:#6b4a24;}
+body.day-mode .starlight-sep{color:#6b4a24;}
+/* 「清除覆盖」按钮：和「取消编辑」同族的描边胶囊。用 id 选择器特指度天然高过
+   .gate-card button 的实心样式，不需要再改上面既有的白天模式规则 */
+#starlightClearBtn{
+  background:none;border:1px solid var(--line);color:var(--text-soft);
+  padding:10px 22px;border-radius:999px;font-size:.88rem;
+}
+#starlightClearBtn:hover{color:var(--text);border-color:var(--text-soft);}
+body.day-mode #starlightClearBtn{background:rgba(255,251,238,.45);color:#5b3610;border-color:#8a5a1c;}
+body.day-mode #starlightClearBtn:hover{background:rgba(255,251,238,.75);}

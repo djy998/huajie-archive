@@ -5,6 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>花舞之街 · 薰风花语町</title>
+  <!-- 2026-09 功能修订：
+       ① 天气图标改为从仓库 weather/ 目录读取（不再直连灰机 wiki）
+       ② 「活动群」「花街介绍」的人机验证通过后 5 分钟内不再重复弹出
+       ③ 内部入口密码每累计输错 5 次弹出一次人机验证（防暴力尝试，刷新不清零）
+       ④ 管理员模式新增「星芒节时间覆盖」：所设时段内所有天气档显示为「小雪」 -->
 
   <!-- 分享卡片：og-image.jpg 放在站点根目录，1200x630 -->
   <meta property="og:type" content="website">
@@ -26,7 +31,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=30">
+  <link rel="stylesheet" href="style.css?v=31">
 </head>
 <body>
 
@@ -217,6 +222,27 @@
         <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
         <button id="lockdownToggleBtn">切换</button>
         <p class="form-msg" id="lockdownMsg" hidden></p>
+      </div>
+      <div class="gate-card" id="starlightPanel" style="margin-bottom:30px;" hidden>
+        <h2 style="font-size:1.3rem;">星芒节时间覆盖</h2>
+        <p class="hint">星芒节期间游戏内全境强制下雪，而天气算法不感知活动。<br>在这里按国服时间（UTC+8）设置活动时段，时段内所有天气档都会显示为「小雪」。</p>
+        <p class="hint" id="starlightStatus">当前状态：读取中…</p>
+        <div class="starlight-fields">
+          <label class="starlight-field">
+            <span>从（国服时间）</span>
+            <input type="datetime-local" id="starlightStart">
+          </label>
+          <span class="starlight-sep" aria-hidden="true">—</span>
+          <label class="starlight-field">
+            <span>到（国服时间）</span>
+            <input type="datetime-local" id="starlightEnd">
+          </label>
+        </div>
+        <div class="starlight-actions">
+          <button id="starlightSaveBtn">保存</button>
+          <button id="starlightClearBtn" type="button">清除覆盖</button>
+        </div>
+        <p class="form-msg" id="starlightMsg" hidden></p>
       </div>
       <div class="gate-card" id="postAnnouncementPanel" style="margin-bottom:30px;" hidden>
         <h2 style="font-size:1.3rem;">发布公告</h2>
@@ -847,7 +873,7 @@ function initNav(){
     openMiniReview();
   });
   $("infoTile").addEventListener("click", () => {
-    openCaptcha("info");
+    requestCaptcha("info");   /* 5 分钟内验证过就直接打开，不再弹窗 */
   });
   $("internalTile").addEventListener("click", () => {
     window.open(VENUE_URL, "_blank", "noopener");
@@ -857,7 +883,7 @@ function initNav(){
       showToast("当前活动群暂不开放，敬请谅解");
       return;
     }
-    openCaptcha("group");
+    requestCaptcha("group");  /* 5 分钟内验证过就直接打开，不再弹窗 */
   });
   document.querySelectorAll("[data-back]").forEach(btn => {
     btn.addEventListener("click", goHome);
@@ -885,6 +911,20 @@ function initInternal(){
   });
 }
 
+/* 内部入口密码错误计数：存 localStorage，刷新页面不清零；
+   每累计输错 PW_FAIL_CAPTCHA_EVERY(5) 次弹一次人机验证，输对密码后清零。 */
+const PW_FAIL_KEY = "hj_pw_fail_count";
+const PW_FAIL_CAPTCHA_EVERY = 5;
+function getPwFailCount(){
+  try{ return Number(localStorage.getItem(PW_FAIL_KEY)) || 0; }catch(e){ return 0; }
+}
+function setPwFailCount(n){
+  try{
+    if(n > 0) localStorage.setItem(PW_FAIL_KEY, String(n));
+    else localStorage.removeItem(PW_FAIL_KEY);
+  }catch(e){}
+}
+
 async function checkInternalPassword(){
   const input = $("internalPassword");
   const msg = $("internalMsg");
@@ -907,9 +947,20 @@ async function checkInternalPassword(){
     return;
   }
   if(!data.ok){
+    /* 密码错误：累计计数，每满 5 次触发一次人机验证（防暴力尝试）。
+       这里故意用 openCaptcha 而不是 requestCaptcha——这道闸不受 5 分钟免验证窗口豁免。 */
+    const fails = getPwFailCount() + 1;
+    setPwFailCount(fails);
+    if(fails % PW_FAIL_CAPTCHA_EVERY === 0){
+      setMsg(msg, "密码不对，错误次数太多，先完成人机验证");
+      openCaptcha("internal");
+      return;
+    }
     setMsg(msg, "密码不对，再试试");
     return;
   }
+
+  setPwFailCount(0);   /* 密码正确：错误计数清零 */
 
   $("internalGate").hidden = true;
   $("internalBoard").hidden = false;
@@ -917,14 +968,18 @@ async function checkInternalPassword(){
 
   const lockdownPanel = $("lockdownPanel");
   const postPanel = $("postAnnouncementPanel");
+  const starlightPanel = $("starlightPanel");
   if(data.isAdmin){
     lockdownPanel.hidden = false;
     postPanel.hidden = false;
+    starlightPanel.hidden = false;
     internalAdminPassword = input.value;
     refreshLockdownStatus();
+    syncStarlightPanel();
   } else {
     lockdownPanel.hidden = true;
     postPanel.hidden = true;
+    starlightPanel.hidden = true;
   }
 }
 
@@ -1317,7 +1372,7 @@ function initInfo(){
       if(!selection) return;
       if(siteLockdown) return;
       if(firstBootInfoOpen) return; /* 首次开屏自动弹出的这次，复制不附带联系方式 */
-      if(turnstileVerified){
+      if(isCaptchaFresh()){   /* 5 分钟内验证通过即视为真人 */
         e.clipboardData.setData("text/plain", selection + "\n\n合作联系QQ1316816234");
         e.preventDefault();
       } else {
@@ -1596,7 +1651,25 @@ function initLightbox(){
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 let turnstilePending = null;
 let turnstileWidgetId = null;
-let turnstileVerified = false;
+/* 验证通过后 5 分钟内免重复验证：时间戳存 localStorage，刷新页面、换标签页都仍然有效。
+   「活动群」「花街介绍」「复制附联系方式」共用这一个窗口；
+   密码连错触发的验证（openCaptcha("internal")）不受它豁免。 */
+const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
+const CAPTCHA_OK_KEY = "hj_captcha_ok_at";
+function captchaOkAt(){
+  try{ return Number(localStorage.getItem(CAPTCHA_OK_KEY)) || 0; }catch(e){ return 0; }
+}
+function markCaptchaOk(){
+  try{ localStorage.setItem(CAPTCHA_OK_KEY, String(Date.now())); }catch(e){}
+}
+function isCaptchaFresh(){
+  return Date.now() - captchaOkAt() < CAPTCHA_GRACE_MS;
+}
+/* 统一的验证入口：还在 5 分钟有效期内就直接执行对应动作，否则弹验证窗口 */
+function requestCaptcha(pending){
+  if(isCaptchaFresh()){ runCaptchaPending(pending); return; }
+  openCaptcha(pending);
+}
 let turnstileFailStreak = 0;   /* 后端校验连续失败计数：防"验证失败→自动重建"死循环 */
 let siteLockdown = false;
 let firstBootInfoOpen = false; /* 首次开屏点击进入后自动弹出"花街介绍"期间为 true */
@@ -1693,14 +1766,23 @@ async function onTurnstileSuccess(token){
     turnstileWidgetId = null;
   }
   turnstilePending = null;
-  turnstileVerified = true;
+  markCaptchaOk();   /* 记下通过时间：之后 5 分钟内不再重复弹验证 */
+  runCaptchaPending(pending);
+}
+/* 验证通过后（或 5 分钟有效期内跳过验证窗口时）真正要执行的动作 */
+function runCaptchaPending(pending){
   if(pending === "group"){
     $("groupOverlay").hidden = false;
     playEnterAnim(document.querySelector("#groupOverlay .group-box"));
   } else if(pending === "copy_verify"){
-    showToast("验证通过，之后复制会附上联系方式");
+    showToast("验证通过，5 分钟内复制会附上联系方式");
   } else if(pending === "info"){
     openInfoModal();
+  } else if(pending === "internal"){
+    /* 密码连错触发的验证：通过后回到密码框继续输入即可 */
+    showToast("验证通过，可以继续输入密码");
+    const pw = $("internalPassword");
+    if(pw) pw.focus();
   }
 }
 function initCaptcha(){
@@ -2295,8 +2377,10 @@ function initClockToggle(){
 /* =========================================================================
    高脚孤丘天气（高脚孤丘 / The Goblet）
    - 位置：时间条第二行，随时间条一同显隐
-   - 显示：当前 + 未来 5 档，共 6 档；图标与灰机 wiki 同源
+   - 显示：当前 + 未来 5 档，共 6 档
            格式  当前【碧空】→【晴朗】→…（→ 为分隔符，图标 18px）
+   - 图标：从本站仓库 weather/ 文件夹读取，文件名 = 天气名（如 weather/碧空.png），
+           不再从灰机 wiki 外链；新增天气时把同名 png 放进 weather/ 即可
    - 天气分布：与游戏内 WeatherRate TheGoblet 一致
            碧空 40 / 晴朗 20 / 阴云 25 / 薄雾 10 / 小雨 5
            （详见 https://ff14.huijiwiki.com/wiki/天气预报 及灰机原始数据）
@@ -2305,14 +2389,23 @@ function initClockToggle(){
            按 ET 0/8/16 三档取样，seed = days*100 + timeChunk(8/16/0 对应 ET 0/8/16)，
            step1=(seed<<11)^seed, step2=(step1>>>8)^step1, chance = step2%100
            同 ET 0/8/16 档内结果稳定，ET 08:00 / 16:00 / 00:00 切换
+   - 星芒节覆盖：游戏内星芒节期间全境强制「小雪」，上面的算法不感知活动；
+           管理员可在内部入口的「星芒节时间覆盖」面板设置时段，
+           落在时段内的天气档一律显示「小雪」（实现见下方 hjStarlight 段）
    ========================================================================= */
+const HJ_WEATHER_ICON_DIR = "weather/";
+function hjWeatherIcon(name){
+  return HJ_WEATHER_ICON_DIR + encodeURIComponent(name) + ".png";
+}
+/* limit 为几率累计上限，须升序；name 与 weather/ 下的图标文件名一一对应 */
 const HJ_GOBLET_WEATHERS = [
-  { limit: 40, name: "碧空", icon: "https://huiji-public.huijistatic.com/ff14/uploads/f/f6/060201.png" },
-  { limit: 60, name: "晴朗", icon: "https://huiji-public.huijistatic.com/ff14/uploads/d/de/060202.png" },
-  { limit: 85, name: "阴云", icon: "https://huiji-public.huijistatic.com/ff14/uploads/3/33/060203.png" },
-  { limit: 95, name: "薄雾", icon: "https://huiji-public.huijistatic.com/ff14/uploads/6/63/060204.png" },
-  { limit: 100, name: "小雨", icon: "https://huiji-public.huijistatic.com/ff14/uploads/9/9a/060207.png" }
+  { limit: 40,  name: "碧空" },
+  { limit: 60,  name: "晴朗" },
+  { limit: 85,  name: "阴云" },
+  { limit: 95,  name: "薄雾" },
+  { limit: 100, name: "小雨" }
 ];
+const HJ_STARLIGHT_WEATHER = { name: "小雪" };   /* 星芒节覆盖时段内强制显示的天气 */
 function hjGobletWeatherAt(unixSec){
   const u = Math.floor(unixSec);
   const eHours = Math.floor(u / 175);
@@ -2333,7 +2426,8 @@ function hjGobletForecast(count){
   const out = [];
   for(let i = 0; i < count; i++){
     const t = now + i * 8 * 175; /* 1 个 ET 窗(8h) = 现实 1400 秒 = 23分20秒 */
-    out.push(hjGobletWeatherAt(t));
+    /* 该时间档若落在星芒节覆盖时段内，强制显示「小雪」（实现见下方 hjStarlight 段） */
+    out.push(hjStarlightActiveAt(t * 1000) ? { ...HJ_STARLIGHT_WEATHER } : hjGobletWeatherAt(t));
   }
   return out;
 }
@@ -2348,13 +2442,170 @@ function hjRenderWeather(){
   const arrow = '<span class="hj-weather-arrow" aria-hidden="true">→</span>';
   const parts = seq.map((w, i) => {
     const cls = i === 0 ? "hj-wx is-current" : "hj-wx";
-    const icon = '<img src="' + w.icon + '" alt="' + w.name + '" loading="lazy" decoding="async" width="18" height="18">';
+    const icon = '<img src="' + hjWeatherIcon(w.name) + '" alt="' + w.name + '" loading="lazy" decoding="async" width="18" height="18">';
     const name = '<span class="hj-wx-name">' + w.name + '</span>';
     const prefix = i === 0 ? '<span class="hj-wx-current-prefix">当前</span>' : '';
     return '<span class="' + cls + '" title="' + w.name + '">' + prefix + icon + name + '</span>';
   });
   seqEl.innerHTML = parts.join(arrow);
   seqEl.dataset.rendered = "1";
+}
+
+/* =========================================================================
+   星芒节时间覆盖（内部入口 · 管理员模式）
+   - 用途：游戏内星芒节期间全境强制下雪，天气算法算不出这个；管理员在这里
+     手动设置活动起止时间，落在时段内的天气档全部显示「小雪」
+   - 时间口径：国服时间（UTC+8），与时间条上的「国服」时间一致；
+     无论管理员/访客设备处于什么时区，设置和判定都按 UTC+8 解释
+   - 存储：优先走 Worker 的 get_starlight / set_starlight（全局，对所有访客生效）；
+     Worker 还没部署该接口时自动退化为 localStorage（仅管理员本机生效），
+     部署方法见随附的 worker-starlight-patch.md
+   - 前端约定：
+     get_starlight            → { ok:true, value:{ start, end } | null }   (epoch 毫秒)
+     set_starlight {password, value} → { ok:true } | { ok:false, error }
+   ========================================================================= */
+const STARLIGHT_LOCAL_KEY = "hj_starlight";
+const STARLIGHT_TZ_OFFSET_MIN = 480;   /* 国服时间 = UTC+8 */
+let hjStarlight = null;                /* { start, end }（epoch 毫秒）或 null */
+
+/* "2026-12-15T16:00"（datetime-local 的值）→ epoch 毫秒，按 UTC+8 解释 */
+function starlightToEpochMs(value){
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || ""));
+  if(!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - STARLIGHT_TZ_OFFSET_MIN * 60000;
+}
+/* epoch 毫秒 → "2026-12-15T16:00"（UTC+8），用于回填 datetime-local 输入框 */
+function starlightToInputValue(ms){
+  const d = new Date(ms + STARLIGHT_TZ_OFFSET_MIN * 60000);
+  return d.getUTCFullYear() + "-" + hjPad(d.getUTCMonth() + 1) + "-" + hjPad(d.getUTCDate())
+    + "T" + hjPad(d.getUTCHours()) + ":" + hjPad(d.getUTCMinutes());
+}
+/* epoch 毫秒 → "2026年12月15日 16:00"（UTC+8），用于状态文字 */
+function starlightToLabel(ms){
+  const d = new Date(ms + STARLIGHT_TZ_OFFSET_MIN * 60000);
+  return d.getUTCFullYear() + "年" + (d.getUTCMonth() + 1) + "月" + d.getUTCDate() + "日 "
+    + hjPad(d.getUTCHours()) + ":" + hjPad(d.getUTCMinutes());
+}
+/* 某一时刻是否落在星芒节覆盖时段内（天气算法逐档调用它） */
+function hjStarlightActiveAt(epochMs){
+  return !!hjStarlight && epochMs >= hjStarlight.start && epochMs <= hjStarlight.end;
+}
+function readStarlightLocal(){
+  try{
+    const raw = localStorage.getItem(STARLIGHT_LOCAL_KEY);
+    if(!raw) return null;
+    const v = JSON.parse(raw);
+    return (v && Number.isFinite(v.start) && Number.isFinite(v.end) && v.end > v.start)
+      ? { start: v.start, end: v.end } : null;
+  }catch(e){ return null; }
+}
+function writeStarlightLocal(value){
+  try{
+    if(value) localStorage.setItem(STARLIGHT_LOCAL_KEY, JSON.stringify(value));
+    else localStorage.removeItem(STARLIGHT_LOCAL_KEY);
+  }catch(e){}
+}
+/* 启动时拉取全局设置：Worker 支持则以它为准并缓存到本地；
+   Worker 未部署接口或网络失败时退回 localStorage 缓存 */
+async function loadStarlight(){
+  const data = await callWorker({ action: "get_starlight" });
+  if(data && data.ok){
+    const v = data.value;
+    hjStarlight = (v && Number.isFinite(v.start) && Number.isFinite(v.end) && v.end > v.start)
+      ? { start: v.start, end: v.end } : null;
+    writeStarlightLocal(hjStarlight);   /* 本地缓存一份，Worker 临时连不上时也还能正确显示 */
+  } else {
+    hjStarlight = readStarlightLocal();
+  }
+  refreshStarlightStatus();
+  hjWeatherLastKey = "";   /* 强制天气条重画一次 */
+  hjRenderWeather();
+}
+function refreshStarlightStatus(){
+  const status = $("starlightStatus");
+  if(!status) return;
+  if(!hjStarlight){
+    status.textContent = "当前状态：未设置（天气按算法正常显示）";
+    return;
+  }
+  const now = Date.now();
+  const active = now >= hjStarlight.start && now <= hjStarlight.end;
+  status.textContent = "当前时段：" + starlightToLabel(hjStarlight.start) + " — " + starlightToLabel(hjStarlight.end)
+    + (active ? "（进行中：所有天气显示为小雪）" : "（不在时段内：天气按算法正常显示）");
+}
+/* 把当前设置回填到两个 datetime-local 输入框 */
+function syncStarlightInputs(){
+  const startInput = $("starlightStart");
+  const endInput = $("starlightEnd");
+  if(!startInput || !endInput) return;
+  startInput.value = hjStarlight ? starlightToInputValue(hjStarlight.start) : "";
+  endInput.value = hjStarlight ? starlightToInputValue(hjStarlight.end) : "";
+}
+/* 管理员登录成功后调用：刷新状态文字 + 回填输入框 + 清掉上次的提示 */
+function syncStarlightPanel(){
+  refreshStarlightStatus();
+  syncStarlightInputs();
+  setMsg($("starlightMsg"), "");
+}
+/* 保存 / 清除的统一提交入口：value = { start, end } 或 null（清除） */
+async function saveStarlight(value){
+  const msg = $("starlightMsg");
+  const saveBtn = $("starlightSaveBtn");
+  const clearBtn = $("starlightClearBtn");
+  setMsg(msg, "保存中…");
+  saveBtn.disabled = true;
+  clearBtn.disabled = true;
+  const data = await callWorker({ action: "set_starlight", password: internalAdminPassword, value });
+  saveBtn.disabled = false;
+  clearBtn.disabled = false;
+
+  if(data && data.ok){
+    hjStarlight = value;
+    writeStarlightLocal(value);
+    setMsg(msg, "");
+    showToast(value ? "星芒节时段已保存，期间全站天气显示为小雪" : "已清除星芒节覆盖，天气恢复正常计算");
+  } else if(data && data.error === "unknown action"){
+    /* Worker 还没部署星芒节接口：退化为本机保存，仅当前浏览器生效 */
+    hjStarlight = value;
+    writeStarlightLocal(value);
+    setMsg(msg, value
+      ? "注意：Worker 还没部署星芒节接口，本次设置只在你的这台浏览器生效；按 worker-starlight-patch.md 部署后即对全部访客生效"
+      : "已清除（本机）。Worker 部署星芒节接口后，清除才会同步到全部访客");
+  } else if(!data){
+    setMsg(msg, "连接失败，检查一下网络后再试");
+    return;
+  } else {
+    setMsg(msg, "保存失败，请重新登录内部入口后再试");
+    return;
+  }
+  refreshStarlightStatus();
+  syncStarlightInputs();
+  hjWeatherLastKey = "";
+  hjRenderWeather();
+}
+function initStarlightPanel(){
+  const saveBtn = $("starlightSaveBtn");
+  const clearBtn = $("starlightClearBtn");
+  if(!saveBtn || !clearBtn) return;
+  saveBtn.addEventListener("click", () => {
+    const msg = $("starlightMsg");
+    setMsg(msg, "");
+    const start = starlightToEpochMs($("starlightStart").value);
+    const end = starlightToEpochMs($("starlightEnd").value);
+    if(!Number.isFinite(start) || !Number.isFinite(end)){
+      setMsg(msg, "先把开始和结束时间都填完整");
+      return;
+    }
+    if(end <= start){
+      setMsg(msg, "结束时间要晚于开始时间");
+      return;
+    }
+    saveStarlight({ start, end });
+  });
+  clearBtn.addEventListener("click", () => {
+    setMsg($("starlightMsg"), "");
+    saveStarlight(null);
+  });
 }
 
 renderHome();
@@ -2370,6 +2621,7 @@ initHashRoute();
 initLightbox();
 initCaptcha();
 initLockdownToggle();
+initStarlightPanel();
 initPostAnnouncement();
 initAnnouncementImageUpload();
 initClickBurst();
@@ -2380,6 +2632,9 @@ initPasswordToggle("internalPassword", "internalPasswordShow");
 initSound();
 initClock();
 initClockToggle();
+/* 异步拉取星芒节覆盖时段（Worker 未部署接口时自动退回 localStorage 缓存），
+   拿到结果后天气条会在下一秒的时钟 tick 里自动切换显示 */
+loadStarlight();
 </script>
 
 <script>
@@ -2498,8 +2753,6 @@ document.addEventListener("click", (e) => {
 }, true);
 </script>
 
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
