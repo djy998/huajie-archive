@@ -747,3 +747,503 @@ body.boot-pending #bootOverlay{
 @media (prefers-reduced-motion:reduce){
   #bootImage.is-spinning{ animation:none; }
 }
+
+/* ==========================================================================
+   按钮玻璃质感强化（统一追加在文件最后：同特指度后来居上，覆盖前面的旧样式）
+   做法：
+   - 玻璃感：半透明底色 + 斜向白色高光渐变 + backdrop-filter 模糊提饱和 + 半透明白描边
+   - 立体感（只突出一点点）：inset 顶部 1px 高光线 + inset 底部淡内阴影 + 外部柔和投影
+   - 手感：hover 轻轻上浮、投影加深；active 按下回落、内阴影反转，做出"按进去"的效果
+   白天模式(day-mode)统一换成暖色（奶油金/烟熏棕）玻璃变体，投影用暖棕色而非冷黑色。
+   ========================================================================== */
+
+/* ---------- 头部圆形开关：🌙 昼夜 / ✨ 动效 / 🔇 声音 ---------- */
+.daynight-toggle{
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.07) 46%, rgba(255,255,255,.14) 100%),
+    rgba(26,21,46,.42);
+  border:1px solid rgba(255,255,255,.26);
+  box-shadow:
+    0 5px 14px rgba(10,7,22,.38),
+    inset 0 1px 0 rgba(255,255,255,.34),
+    inset 0 -6px 12px rgba(12,9,26,.3);
+  -webkit-backdrop-filter:blur(10px) saturate(1.35);
+  backdrop-filter:blur(10px) saturate(1.35);
+  transition:border-color .2s, background .25s, box-shadow .25s, transform .2s, opacity .25s;
+}
+.daynight-toggle:hover{
+  border-color:var(--accent);
+  transform:translateY(-1.5px);
+  box-shadow:
+    0 8px 18px rgba(10,7,22,.45),
+    inset 0 1px 0 rgba(255,255,255,.42),
+    inset 0 -6px 12px rgba(12,9,26,.3);
+}
+.daynight-toggle:active{
+  transform:translateY(.5px) scale(.95);
+  box-shadow:
+    0 2px 6px rgba(10,7,22,.4),
+    inset 0 2px 7px rgba(9,6,20,.45);
+}
+body.day-mode .daynight-toggle{
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.34) 100%),
+    rgba(255,249,235,.5);
+  border-color:rgba(255,255,255,.7);
+  box-shadow:
+    0 5px 14px rgba(96,64,16,.22),
+    inset 0 1px 0 rgba(255,255,255,.9),
+    inset 0 -6px 12px rgba(140,95,25,.14);
+}
+body.day-mode .daynight-toggle:hover{
+  border-color:var(--accent);
+  box-shadow:
+    0 8px 18px rgba(96,64,16,.28),
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -6px 12px rgba(140,95,25,.14);
+}
+body.day-mode .daynight-toggle:active{
+  box-shadow:
+    0 2px 6px rgba(96,64,16,.26),
+    inset 0 2px 7px rgba(120,80,20,.28);
+}
+
+/* ---------- 返回按钮 ---------- */
+.back-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.1) 100%),
+    rgba(22,17,40,.34);
+  border:1px solid rgba(233,224,255,.24);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.3),
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 -5px 10px rgba(10,8,22,.22);
+  -webkit-backdrop-filter:blur(12px) saturate(1.3);
+  backdrop-filter:blur(12px) saturate(1.3);
+  transition:border-color .2s, color .2s, background .25s, box-shadow .25s, transform .2s;
+}
+.back-btn:hover{
+  border-color:var(--accent);color:var(--accent-soft);
+  transform:translateY(-1.5px);
+  box-shadow:
+    0 7px 16px rgba(8,6,18,.38),
+    inset 0 1px 0 rgba(255,255,255,.32),
+    inset 0 -5px 10px rgba(10,8,22,.22);
+}
+.back-btn:active{
+  transform:translateY(.5px) scale(.985);
+  box-shadow:0 2px 6px rgba(8,6,18,.32), inset 0 2px 7px rgba(8,6,18,.35);
+}
+body.day-mode .back-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.18) 100%),
+    rgba(48,34,18,.3);
+  border-color:#e4eb7b;
+  box-shadow:
+    0 4px 12px rgba(70,48,12,.26),
+    inset 0 1px 0 rgba(255,255,255,.32),
+    inset 0 -5px 10px rgba(28,18,6,.28);
+}
+body.day-mode .back-btn:hover{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.24) 100%),
+    #e4eb7b;
+  color:#1c1830;
+  box-shadow:
+    0 7px 16px rgba(70,48,12,.3),
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -5px 10px rgba(60,45,5,.25);
+}
+
+/* ---------- 详情页 Tab ---------- */
+.tab-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.09) 100%),
+    rgba(42,35,68,.42);
+  border:1px solid rgba(233,224,255,.22);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.28),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+  -webkit-backdrop-filter:blur(10px) saturate(1.25);
+  backdrop-filter:blur(10px) saturate(1.25);
+  transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
+}
+.tab-btn:hover{
+  transform:translateY(-1.5px);
+  border-color:rgba(233,224,255,.4);
+  box-shadow:
+    0 7px 16px rgba(8,6,18,.36),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+}
+.tab-btn:active{
+  transform:translateY(.5px) scale(.98);
+  box-shadow:0 2px 6px rgba(8,6,18,.3), inset 0 2px 7px rgba(8,6,18,.35);
+}
+.tab-btn.is-active{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.44) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.14) 100%),
+    var(--accent);
+  border-color:rgba(255,255,255,.5);
+  color:var(--accent-ink);font-weight:600;
+  box-shadow:
+    0 6px 16px rgba(8,6,18,.34),
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -6px 12px rgba(70,42,8,.26);
+}
+.tab-btn.is-active:hover{border-color:rgba(255,255,255,.62);}
+body.day-mode .tab-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.16) 100%),
+    rgba(74,48,20,.28);
+  border-color:#e4eb7b;
+  box-shadow:
+    0 4px 12px rgba(96,64,16,.2),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -5px 10px rgba(40,26,8,.24);
+}
+body.day-mode .tab-btn.is-active{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 42%, rgba(120,75,10,.06) 76%, rgba(120,75,10,.16) 100%),
+    var(--accent);
+  border-color:rgba(255,255,255,.65);
+  color:var(--accent-ink);
+  box-shadow:
+    0 6px 16px rgba(96,60,10,.26),
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -6px 12px rgba(140,90,15,.22);
+}
+
+/* ---------- 首页大图上的「查看详情」胶囊 ---------- */
+.tile-cta{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.14) 100%),
+    rgba(247,240,226,.14);
+  border:1px solid rgba(247,240,226,.45);
+  box-shadow:
+    0 4px 14px rgba(10,7,22,.32),
+    inset 0 1px 0 rgba(255,255,255,.36),
+    inset 0 -5px 10px rgba(18,12,28,.2);
+  -webkit-backdrop-filter:blur(8px) saturate(1.3);
+  backdrop-filter:blur(8px) saturate(1.3);
+  transition:background .25s, box-shadow .25s, transform .2s;
+}
+.tile-cta:hover{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
+    rgba(247,240,226,.2);
+  transform:translateY(-1.5px);
+  box-shadow:
+    0 7px 18px rgba(10,7,22,.4),
+    inset 0 1px 0 rgba(255,255,255,.45),
+    inset 0 -5px 10px rgba(18,12,28,.2);
+}
+
+/* ---------- 门票徽章：圆形大徽章只加玻璃高光，行内胶囊做 accent 玻璃 ---------- */
+.ticket-badge{
+  box-shadow:
+    0 12px 28px rgba(240,181,98,.5),
+    inset 0 3px 8px rgba(255,255,255,.55),
+    inset 0 -9px 18px rgba(122,72,10,.38);
+  transition:transform .2s, box-shadow .25s;
+}
+.ticket-badge:active{transform:scale(.97);}
+.ticket-badge-inline{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.44) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    var(--accent);
+  border:1px solid rgba(255,255,255,.45);
+  color:var(--accent-ink);
+  box-shadow:
+    0 6px 16px rgba(10,7,22,.34),
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -6px 12px rgba(70,42,8,.24);
+  transition:transform .2s, box-shadow .25s, filter .2s;
+}
+.ticket-badge-inline:hover{
+  transform:translateY(-1.5px);filter:brightness(1.05);
+  box-shadow:
+    0 9px 20px rgba(10,7,22,.4),
+    inset 0 1px 0 rgba(255,255,255,.6),
+    inset 0 -6px 12px rgba(70,42,8,.24);
+}
+.ticket-badge-inline:active{
+  transform:translateY(.5px) scale(.985);filter:brightness(.98);
+  box-shadow:0 3px 8px rgba(10,7,22,.34), inset 0 2px 8px rgba(60,36,6,.3);
+}
+
+/* ---------- 内部页/公告表单的主按钮（进入·切换·发布·配图） ---------- */
+.gate-card button{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    var(--accent);
+  border:1px solid rgba(255,255,255,.42);
+  color:var(--accent-ink);
+  box-shadow:
+    0 6px 16px rgba(10,7,22,.34),
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 -6px 12px rgba(70,42,8,.22);
+  -webkit-backdrop-filter:blur(6px) saturate(1.15);
+  backdrop-filter:blur(6px) saturate(1.15);
+  transition:background .2s, border-color .2s, box-shadow .25s, transform .18s, filter .2s;
+}
+.gate-card button:hover{
+  transform:translateY(-1.5px);
+  filter:brightness(1.05);
+  box-shadow:
+    0 9px 20px rgba(10,7,22,.4),
+    inset 0 1px 0 rgba(255,255,255,.58),
+    inset 0 -6px 12px rgba(70,42,8,.22);
+}
+.gate-card button:active{
+  transform:translateY(.5px) scale(.985);
+  filter:brightness(.97);
+  box-shadow:0 3px 8px rgba(10,7,22,.32), inset 0 2px 8px rgba(58,34,6,.32);
+}
+body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn){
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.3) 42%, rgba(150,100,20,.05) 76%, rgba(150,100,20,.14) 100%),
+    #fff8e8;
+  color:#5b3610;
+  border:1.5px solid #8a5a1c;
+  box-shadow:
+    0 6px 16px rgba(96,60,10,.26),
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -6px 12px rgba(150,100,20,.16);
+}
+body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn):hover{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.36) 42%, rgba(150,100,20,.06) 76%, rgba(150,100,20,.16) 100%),
+    #ffe9b8;
+  border-color:#6b4310;
+}
+body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn):active{
+  box-shadow:0 3px 8px rgba(96,60,10,.24), inset 0 2px 8px rgba(140,95,20,.3);
+}
+
+/* ---------- 取消编辑按钮（幽灵胶囊 → 轻玻璃） ---------- */
+#cancelEditAnnouncementBtn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
+    rgba(22,17,40,.3);
+  border:1px solid rgba(233,224,255,.26);
+  color:var(--text-soft);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.28),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+  -webkit-backdrop-filter:blur(10px) saturate(1.25);
+  backdrop-filter:blur(10px) saturate(1.25);
+  transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
+}
+#cancelEditAnnouncementBtn:hover{
+  border-color:var(--accent);color:var(--accent-soft);
+  transform:translateY(-1.5px);
+  box-shadow:
+    0 7px 16px rgba(8,6,18,.36),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+}
+#cancelEditAnnouncementBtn:active{
+  transform:translateY(.5px) scale(.985);
+  box-shadow:0 2px 6px rgba(8,6,18,.3), inset 0 2px 7px rgba(8,6,18,.35);
+}
+body.day-mode #cancelEditAnnouncementBtn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.3) 100%),
+    rgba(255,251,238,.5);
+  border-color:#8a5a1c;
+  color:#5b3610;
+  box-shadow:
+    0 4px 12px rgba(96,60,10,.2),
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -5px 10px rgba(140,95,25,.12);
+}
+
+/* ---------- 公告的编辑/删除小按钮 ---------- */
+.announcement-edit-btn,.announcement-delete-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.03) 52%, rgba(255,255,255,.08) 100%),
+    rgba(42,35,68,.38);
+  border:1px solid rgba(233,224,255,.22);
+  color:var(--text-soft);
+  box-shadow:
+    0 3px 10px rgba(8,6,18,.25),
+    inset 0 1px 0 rgba(255,255,255,.2),
+    inset 0 -4px 8px rgba(10,8,22,.18);
+  -webkit-backdrop-filter:blur(8px) saturate(1.2);
+  backdrop-filter:blur(8px) saturate(1.2);
+  transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
+}
+.announcement-edit-btn:hover,.announcement-delete-btn:hover{
+  transform:translateY(-1px);
+  border-color:var(--accent);
+  box-shadow:
+    0 6px 14px rgba(8,6,18,.32),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -4px 8px rgba(10,8,22,.18);
+}
+.announcement-edit-btn:active,.announcement-delete-btn:active{
+  transform:translateY(.5px) scale(.97);
+  box-shadow:0 2px 5px rgba(8,6,18,.28), inset 0 2px 6px rgba(8,6,18,.32);
+}
+.announcement-delete-btn{color:#e08e84;border-color:rgba(224,142,132,.55);}
+.announcement-delete-btn:hover{border-color:#e08e84;}
+body.day-mode .announcement-edit-btn,body.day-mode .announcement-delete-btn{
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.14) 52%, rgba(255,255,255,.26) 100%),
+    rgba(255,250,238,.42);
+  border-color:rgba(138,90,28,.45);
+  color:#5b3610;
+  box-shadow:
+    0 3px 10px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -4px 8px rgba(140,95,25,.1);
+}
+body.day-mode .announcement-delete-btn{color:#a33c2f;border-color:rgba(163,60,47,.6);}
+body.day-mode .announcement-delete-btn:hover{border-color:#a33c2f;}
+
+/* ---------- 公告配图预览右上角的「×」小圆按钮 ----------
+   注意：必须放在 .gate-card button 之后 —— 两者特指度相同(0,1,1)，后来居上。 */
+.announcement-image-preview button{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 55%, rgba(255,255,255,.16) 100%),
+    rgba(24,19,42,.72);
+  border:1px solid rgba(255,255,255,.32);
+  box-shadow:0 3px 8px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.35);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  transition:transform .15s, box-shadow .2s, background .2s;
+}
+.announcement-image-preview button:hover{
+  transform:scale(1.1);
+  box-shadow:0 5px 12px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.45);
+}
+.announcement-image-preview button:active{transform:scale(.92);}
+
+/* ---------- 分享本站按钮 ---------- */
+.share-site-btn{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    var(--accent);
+  border:1px solid rgba(255,255,255,.42);
+  color:var(--accent-ink);
+  box-shadow:
+    0 6px 16px rgba(10,7,22,.32),
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 -6px 12px rgba(70,42,8,.22);
+  -webkit-backdrop-filter:blur(6px) saturate(1.15);
+  backdrop-filter:blur(6px) saturate(1.15);
+  transition:background .2s, border-color .2s, box-shadow .25s, transform .2s, filter .2s;
+}
+.share-site-btn:hover{
+  transform:translateY(-2px);
+  filter:brightness(1.05);
+  box-shadow:
+    0 10px 22px rgba(10,7,22,.4),
+    inset 0 1px 0 rgba(255,255,255,.58),
+    inset 0 -6px 12px rgba(70,42,8,.22);
+}
+.share-site-btn:active{
+  transform:translateY(.5px) scale(.985);
+  filter:brightness(.97);
+  box-shadow:0 3px 8px rgba(10,7,22,.3), inset 0 2px 8px rgba(58,34,6,.3);
+}
+body.day-mode .share-site-btn{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.3) 42%, rgba(150,100,20,.05) 76%, rgba(150,100,20,.14) 100%),
+    #fff8e8;
+  color:#5b3610;
+  border:1.5px solid #8a5a1c;
+  box-shadow:
+    0 6px 16px rgba(96,60,10,.26),
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -6px 12px rgba(150,100,20,.16);
+}
+body.day-mode .share-site-btn:hover{
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.36) 42%, rgba(150,100,20,.06) 76%, rgba(150,100,20,.16) 100%),
+    #ffe9b8;
+  border-color:#6b4310;
+}
+body.day-mode .share-site-btn:active{
+  box-shadow:0 3px 8px rgba(96,60,10,.24), inset 0 2px 8px rgba(140,95,20,.3);
+}
+body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.42);}
+
+/* ---------- 大图弹窗关闭按钮 ---------- */
+.lightbox-close{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.15) 100%),
+    rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.3);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.4),
+    inset 0 -6px 12px rgba(0,0,0,.25);
+  -webkit-backdrop-filter:blur(10px) saturate(1.25);
+  backdrop-filter:blur(10px) saturate(1.25);
+  transition:background .2s, transform .2s, box-shadow .25s;
+}
+.lightbox-close:hover{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.22) 100%),
+    rgba(255,255,255,.16);
+  transform:translateY(-1.5px);
+  box-shadow:
+    0 9px 22px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 -6px 12px rgba(0,0,0,.25);
+}
+.lightbox-close:active{
+  transform:scale(.93);
+  box-shadow:0 3px 8px rgba(0,0,0,.45), inset 0 2px 8px rgba(0,0,0,.4);
+}
+
+/* ---------- 信息弹窗关闭按钮：从纯文字改成小玻璃圆片，跟其它按钮统一 ---------- */
+.info-close{
+  width:36px;height:36px;border-radius:50%;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.1) 100%),
+    rgba(20,16,36,.3);
+  border:1px solid var(--line);
+  box-shadow:0 3px 10px rgba(8,6,18,.28), inset 0 1px 0 rgba(255,255,255,.2);
+  -webkit-backdrop-filter:blur(8px) saturate(1.2);
+  backdrop-filter:blur(8px) saturate(1.2);
+  transition:color .2s, border-color .2s, background .25s, box-shadow .25s, transform .2s;
+}
+.info-close:hover{
+  color:var(--cream);
+  border-color:var(--accent);
+  transform:translateY(-1px);
+  box-shadow:0 6px 14px rgba(8,6,18,.34), inset 0 1px 0 rgba(255,255,255,.28);
+}
+.info-close:active{transform:scale(.93);}
+body.day-mode .info-close{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.3) 100%),
+    rgba(255,250,238,.45);
+  border-color:rgba(138,90,28,.4);
+  box-shadow:0 3px 10px rgba(96,60,10,.2), inset 0 1px 0 rgba(255,255,255,.85);
+}
+
+/* ---------- 减弱动态偏好：关掉上浮/按压位移，只保留静态玻璃质感 ---------- */
+@media (prefers-reduced-motion:reduce){
+  .daynight-toggle:hover,.daynight-toggle:active,
+  .back-btn:hover,.back-btn:active,
+  .tab-btn:hover,.tab-btn:active,
+  .tile-cta:hover,
+  .ticket-badge:active,.ticket-badge-inline:hover,.ticket-badge-inline:active,
+  .gate-card button:hover,.gate-card button:active,
+  #cancelEditAnnouncementBtn:hover,#cancelEditAnnouncementBtn:active,
+  .announcement-edit-btn:hover,.announcement-edit-btn:active,
+  .announcement-delete-btn:hover,.announcement-delete-btn:active,
+  .announcement-image-preview button:hover,.announcement-image-preview button:active,
+  .share-site-btn:hover,.share-site-btn:active,
+  .lightbox-close:hover,.lightbox-close:active,
+  .info-close:hover,.info-close:active{
+    transform:none;
+  }
+}
