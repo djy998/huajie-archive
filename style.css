@@ -749,484 +749,510 @@ body.boot-pending #bootOverlay{
 }
 
 /* ==========================================================================
-   按钮玻璃质感强化（统一追加在文件最后：同特指度后来居上，覆盖前面的旧样式）
-   做法：
-   - 玻璃感：半透明底色 + 斜向白色高光渐变 + backdrop-filter 模糊提饱和 + 半透明白描边
-   - 立体感（只突出一点点）：inset 顶部 1px 高光线 + inset 底部淡内阴影 + 外部柔和投影
-   - 手感：hover 轻轻上浮、投影加深；active 按下回落、内阴影反转，做出"按进去"的效果
-   白天模式(day-mode)统一换成暖色（奶油金/烟熏棕）玻璃变体，投影用暖棕色而非冷黑色。
+   按钮玻璃质感强化（第二版：整体调淡一档；首页 6 个大磁贴加轻玻璃）
+   - 玻璃感：半透明底 + 斜向白高光渐变 + backdrop-filter 轻磨砂 + 半透明描边
+   - 立体感：inset 顶部高光线 + 底部淡内阴影 + 外部柔和投影，全部比第一版收淡
+   - 手感：hover 只上浮 1px，active 轻轻按下
+   白天模式(day-mode)用暖色（奶油金/烟熏棕）玻璃变体。
    ========================================================================== */
+
+/* ---------- 首页 6 个大磁贴：最新活动 / 往期街区活动 / 小型活动回顾 /
+              花街介绍 / 场地使用登记 / 活动群 ----------
+   遮罩渐变只调淡透明度（.94 → .82）让画面更透出来；不加任何模糊，
+   原版贴图保持清晰（backdrop-filter 在圆角处还会产生一圈噪点伪影，已移除）。
+   立体感全部做在"边界"上：用 inset 阴影画一圈很淡的玻璃内缘 + 顶缘 1px 高光 +
+   双层外投影；不用真 border，避免圆角处出现毛边。 */
+.tile{
+  box-shadow:
+    0 2px 8px rgba(8,6,18,.24),
+    0 22px 48px rgba(0,0,0,.4),
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16);
+  transition:transform .25s ease, box-shadow .25s ease;
+}
+.tile-sm:hover,.tile-hero:hover{
+  transform:translateY(-6px);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.28),
+    0 30px 64px rgba(0,0,0,.48),
+    inset 0 0 0 1px rgba(255,255,255,.1),
+    inset 0 1px 0 rgba(255,255,255,.2);
+}
+.tile:active{transform:translateY(-2px) scale(.994);}
+.tile-overlay{
+  background:linear-gradient(180deg, rgba(28,24,48,.03) 28%, rgba(20,16,36,.82) 94%);
+}
 
 /* ---------- 头部圆形开关：🌙 昼夜 / ✨ 动效 / 🔇 声音 ---------- */
 .daynight-toggle{
   background:
-    linear-gradient(158deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.07) 46%, rgba(255,255,255,.14) 100%),
-    rgba(26,21,46,.42);
-  border:1px solid rgba(255,255,255,.26);
+    linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
+    rgba(26,21,46,.34);
+  border:1px solid rgba(255,255,255,.2);
   box-shadow:
-    0 5px 14px rgba(10,7,22,.38),
-    inset 0 1px 0 rgba(255,255,255,.34),
-    inset 0 -6px 12px rgba(12,9,26,.3);
-  -webkit-backdrop-filter:blur(10px) saturate(1.35);
-  backdrop-filter:blur(10px) saturate(1.35);
+    0 4px 10px rgba(10,7,22,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 9px rgba(12,9,26,.18);
+  -webkit-backdrop-filter:blur(9px) saturate(1.22);
+  backdrop-filter:blur(9px) saturate(1.22);
   transition:border-color .2s, background .25s, box-shadow .25s, transform .2s, opacity .25s;
 }
 .daynight-toggle:hover{
   border-color:var(--accent);
-  transform:translateY(-1.5px);
+  transform:translateY(-1px);
   box-shadow:
-    0 8px 18px rgba(10,7,22,.45),
-    inset 0 1px 0 rgba(255,255,255,.42),
-    inset 0 -6px 12px rgba(12,9,26,.3);
+    0 6px 14px rgba(10,7,22,.32),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -4px 9px rgba(12,9,26,.18);
 }
 .daynight-toggle:active{
-  transform:translateY(.5px) scale(.95);
+  transform:translateY(.5px) scale(.96);
   box-shadow:
-    0 2px 6px rgba(10,7,22,.4),
-    inset 0 2px 7px rgba(9,6,20,.45);
+    0 2px 5px rgba(10,7,22,.3),
+    inset 0 2px 6px rgba(9,6,20,.32);
 }
 body.day-mode .daynight-toggle{
   background:
-    linear-gradient(158deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.34) 100%),
-    rgba(255,249,235,.5);
-  border-color:rgba(255,255,255,.7);
+    linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
+    rgba(255,249,235,.4);
+  border-color:rgba(255,255,255,.6);
   box-shadow:
-    0 5px 14px rgba(96,64,16,.22),
-    inset 0 1px 0 rgba(255,255,255,.9),
-    inset 0 -6px 12px rgba(140,95,25,.14);
+    0 4px 10px rgba(96,64,16,.15),
+    inset 0 1px 0 rgba(255,255,255,.72),
+    inset 0 -4px 9px rgba(140,95,25,.09);
 }
 body.day-mode .daynight-toggle:hover{
   border-color:var(--accent);
   box-shadow:
-    0 8px 18px rgba(96,64,16,.28),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -6px 12px rgba(140,95,25,.14);
+    0 6px 14px rgba(96,64,16,.2),
+    inset 0 1px 0 rgba(255,255,255,.8),
+    inset 0 -4px 9px rgba(140,95,25,.09);
 }
 body.day-mode .daynight-toggle:active{
   box-shadow:
-    0 2px 6px rgba(96,64,16,.26),
-    inset 0 2px 7px rgba(120,80,20,.28);
+    0 2px 5px rgba(96,64,16,.18),
+    inset 0 2px 6px rgba(120,80,20,.2);
 }
 
 /* ---------- 返回按钮 ---------- */
 .back-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.1) 100%),
-    rgba(22,17,40,.34);
-  border:1px solid rgba(233,224,255,.24);
+    linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
+    rgba(22,17,40,.26);
+  border:1px solid rgba(233,224,255,.2);
   box-shadow:
-    0 4px 12px rgba(8,6,18,.3),
-    inset 0 1px 0 rgba(255,255,255,.24),
-    inset 0 -5px 10px rgba(10,8,22,.22);
-  -webkit-backdrop-filter:blur(12px) saturate(1.3);
-  backdrop-filter:blur(12px) saturate(1.3);
+    0 3px 10px rgba(8,6,18,.22),
+    inset 0 1px 0 rgba(255,255,255,.18),
+    inset 0 -4px 8px rgba(10,8,22,.16);
+  -webkit-backdrop-filter:blur(10px) saturate(1.2);
+  backdrop-filter:blur(10px) saturate(1.2);
   transition:border-color .2s, color .2s, background .25s, box-shadow .25s, transform .2s;
 }
 .back-btn:hover{
   border-color:var(--accent);color:var(--accent-soft);
-  transform:translateY(-1.5px);
+  transform:translateY(-1px);
   box-shadow:
-    0 7px 16px rgba(8,6,18,.38),
-    inset 0 1px 0 rgba(255,255,255,.32),
-    inset 0 -5px 10px rgba(10,8,22,.22);
+    0 5px 12px rgba(8,6,18,.28),
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 -4px 8px rgba(10,8,22,.16);
 }
 .back-btn:active{
   transform:translateY(.5px) scale(.985);
-  box-shadow:0 2px 6px rgba(8,6,18,.32), inset 0 2px 7px rgba(8,6,18,.35);
+  box-shadow:0 2px 5px rgba(8,6,18,.24), inset 0 2px 6px rgba(8,6,18,.26);
 }
 body.day-mode .back-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.18) 100%),
-    rgba(48,34,18,.3);
+    linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.14) 100%),
+    rgba(48,34,18,.22);
   border-color:#e4eb7b;
   box-shadow:
-    0 4px 12px rgba(70,48,12,.26),
-    inset 0 1px 0 rgba(255,255,255,.32),
-    inset 0 -5px 10px rgba(28,18,6,.28);
+    0 3px 10px rgba(70,48,12,.18),
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 -4px 8px rgba(28,18,6,.2);
 }
 body.day-mode .back-btn:hover{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.24) 100%),
+    linear-gradient(165deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.18) 100%),
     #e4eb7b;
   color:#1c1830;
   box-shadow:
-    0 7px 16px rgba(70,48,12,.3),
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -5px 10px rgba(60,45,5,.25);
+    0 5px 12px rgba(70,48,12,.22),
+    inset 0 1px 0 rgba(255,255,255,.4),
+    inset 0 -4px 8px rgba(60,45,5,.18);
 }
 
 /* ---------- 详情页 Tab ---------- */
 .tab-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.09) 100%),
-    rgba(42,35,68,.42);
-  border:1px solid rgba(233,224,255,.22);
+    linear-gradient(165deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 50%, rgba(255,255,255,.06) 100%),
+    rgba(42,35,68,.32);
+  border:1px solid rgba(233,224,255,.18);
   box-shadow:
-    0 4px 12px rgba(8,6,18,.28),
-    inset 0 1px 0 rgba(255,255,255,.22),
-    inset 0 -5px 10px rgba(10,8,22,.2);
-  -webkit-backdrop-filter:blur(10px) saturate(1.25);
-  backdrop-filter:blur(10px) saturate(1.25);
+    0 3px 10px rgba(8,6,18,.2),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 -4px 8px rgba(10,8,22,.14);
+  -webkit-backdrop-filter:blur(9px) saturate(1.18);
+  backdrop-filter:blur(9px) saturate(1.18);
   transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
 }
 .tab-btn:hover{
-  transform:translateY(-1.5px);
-  border-color:rgba(233,224,255,.4);
+  transform:translateY(-1px);
+  border-color:rgba(233,224,255,.32);
   box-shadow:
-    0 7px 16px rgba(8,6,18,.36),
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -5px 10px rgba(10,8,22,.2);
+    0 5px 12px rgba(8,6,18,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 8px rgba(10,8,22,.14);
 }
 .tab-btn:active{
   transform:translateY(.5px) scale(.98);
-  box-shadow:0 2px 6px rgba(8,6,18,.3), inset 0 2px 7px rgba(8,6,18,.35);
+  box-shadow:0 2px 5px rgba(8,6,18,.22), inset 0 2px 6px rgba(8,6,18,.26);
 }
 .tab-btn.is-active{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.44) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.14) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
     var(--accent);
-  border-color:rgba(255,255,255,.5);
+  border-color:rgba(255,255,255,.36);
   color:var(--accent-ink);font-weight:600;
   box-shadow:
-    0 6px 16px rgba(8,6,18,.34),
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -6px 12px rgba(70,42,8,.26);
+    0 4px 12px rgba(8,6,18,.24),
+    inset 0 1px 0 rgba(255,255,255,.38),
+    inset 0 -5px 10px rgba(70,42,8,.16);
 }
-.tab-btn.is-active:hover{border-color:rgba(255,255,255,.62);}
+.tab-btn.is-active:hover{border-color:rgba(255,255,255,.48);}
 body.day-mode .tab-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.16) 100%),
-    rgba(74,48,20,.28);
+    linear-gradient(165deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.12) 100%),
+    rgba(74,48,20,.2);
   border-color:#e4eb7b;
   box-shadow:
-    0 4px 12px rgba(96,64,16,.2),
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -5px 10px rgba(40,26,8,.24);
+    0 3px 10px rgba(96,64,16,.14),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 8px rgba(40,26,8,.16);
 }
 body.day-mode .tab-btn.is-active{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 42%, rgba(120,75,10,.06) 76%, rgba(120,75,10,.16) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 42%, rgba(120,75,10,.04) 76%, rgba(120,75,10,.1) 100%),
     var(--accent);
-  border-color:rgba(255,255,255,.65);
+  border-color:rgba(255,255,255,.5);
   color:var(--accent-ink);
   box-shadow:
-    0 6px 16px rgba(96,60,10,.26),
-    inset 0 1px 0 rgba(255,255,255,.85),
-    inset 0 -6px 12px rgba(140,90,15,.22);
+    0 4px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -5px 10px rgba(140,90,15,.14);
 }
 
-/* ---------- 首页大图上的「查看详情」胶囊 ---------- */
+/* ---------- 首页大图上的「查看详情」胶囊（跟 6 大磁贴一起调淡） ---------- */
 .tile-cta{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.14) 100%),
-    rgba(247,240,226,.14);
-  border:1px solid rgba(247,240,226,.45);
+    linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
+    rgba(247,240,226,.1);
+  border:1px solid rgba(247,240,226,.38);
   box-shadow:
-    0 4px 14px rgba(10,7,22,.32),
-    inset 0 1px 0 rgba(255,255,255,.36),
-    inset 0 -5px 10px rgba(18,12,28,.2);
-  -webkit-backdrop-filter:blur(8px) saturate(1.3);
-  backdrop-filter:blur(8px) saturate(1.3);
+    0 3px 10px rgba(10,7,22,.2),
+    inset 0 1px 0 rgba(255,255,255,.24),
+    inset 0 -4px 8px rgba(18,12,28,.12);
+  -webkit-backdrop-filter:blur(6px) saturate(1.2);
+  backdrop-filter:blur(6px) saturate(1.2);
   transition:background .25s, box-shadow .25s, transform .2s;
 }
 .tile-cta:hover{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
-    rgba(247,240,226,.2);
-  transform:translateY(-1.5px);
+    linear-gradient(165deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.13) 100%),
+    rgba(247,240,226,.16);
+  transform:translateY(-1px);
   box-shadow:
-    0 7px 18px rgba(10,7,22,.4),
-    inset 0 1px 0 rgba(255,255,255,.45),
-    inset 0 -5px 10px rgba(18,12,28,.2);
+    0 5px 12px rgba(10,7,22,.26),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -4px 8px rgba(18,12,28,.12);
 }
 
-/* ---------- 门票徽章：圆形大徽章只加玻璃高光，行内胶囊做 accent 玻璃 ---------- */
+/* ---------- 门票徽章：圆形大徽章只加淡高光，行内胶囊做淡 accent 玻璃 ---------- */
 .ticket-badge{
   box-shadow:
     0 12px 28px rgba(240,181,98,.5),
-    inset 0 3px 8px rgba(255,255,255,.55),
-    inset 0 -9px 18px rgba(122,72,10,.38);
+    inset 0 2px 6px rgba(255,255,255,.4),
+    inset 0 -8px 16px rgba(122,72,10,.26);
   transition:transform .2s, box-shadow .25s;
 }
 .ticket-badge:active{transform:scale(.97);}
 .ticket-badge-inline{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.44) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.08) 100%),
     var(--accent);
-  border:1px solid rgba(255,255,255,.45);
+  border:1px solid rgba(255,255,255,.32);
   color:var(--accent-ink);
   box-shadow:
-    0 6px 16px rgba(10,7,22,.34),
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -6px 12px rgba(70,42,8,.24);
+    0 4px 12px rgba(10,7,22,.24),
+    inset 0 1px 0 rgba(255,255,255,.38),
+    inset 0 -5px 10px rgba(70,42,8,.15);
   transition:transform .2s, box-shadow .25s, filter .2s;
 }
 .ticket-badge-inline:hover{
-  transform:translateY(-1.5px);filter:brightness(1.05);
+  transform:translateY(-1px);filter:brightness(1.04);
   box-shadow:
-    0 9px 20px rgba(10,7,22,.4),
-    inset 0 1px 0 rgba(255,255,255,.6),
-    inset 0 -6px 12px rgba(70,42,8,.24);
+    0 6px 16px rgba(10,7,22,.3),
+    inset 0 1px 0 rgba(255,255,255,.44),
+    inset 0 -5px 10px rgba(70,42,8,.15);
 }
 .ticket-badge-inline:active{
   transform:translateY(.5px) scale(.985);filter:brightness(.98);
-  box-shadow:0 3px 8px rgba(10,7,22,.34), inset 0 2px 8px rgba(60,36,6,.3);
+  box-shadow:0 2px 6px rgba(10,7,22,.24), inset 0 2px 7px rgba(60,36,6,.22);
 }
 
 /* ---------- 内部页/公告表单的主按钮（进入·切换·发布·配图） ---------- */
 .gate-card button{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
     var(--accent);
-  border:1px solid rgba(255,255,255,.42);
+  border:1px solid rgba(255,255,255,.3);
   color:var(--accent-ink);
   box-shadow:
-    0 6px 16px rgba(10,7,22,.34),
-    inset 0 1px 0 rgba(255,255,255,.5),
-    inset 0 -6px 12px rgba(70,42,8,.22);
-  -webkit-backdrop-filter:blur(6px) saturate(1.15);
-  backdrop-filter:blur(6px) saturate(1.15);
+    0 4px 12px rgba(10,7,22,.24),
+    inset 0 1px 0 rgba(255,255,255,.36),
+    inset 0 -5px 10px rgba(70,42,8,.14);
+  -webkit-backdrop-filter:blur(5px) saturate(1.1);
+  backdrop-filter:blur(5px) saturate(1.1);
   transition:background .2s, border-color .2s, box-shadow .25s, transform .18s, filter .2s;
 }
 .gate-card button:hover{
-  transform:translateY(-1.5px);
-  filter:brightness(1.05);
+  transform:translateY(-1px);
+  filter:brightness(1.04);
   box-shadow:
-    0 9px 20px rgba(10,7,22,.4),
-    inset 0 1px 0 rgba(255,255,255,.58),
-    inset 0 -6px 12px rgba(70,42,8,.22);
+    0 6px 16px rgba(10,7,22,.3),
+    inset 0 1px 0 rgba(255,255,255,.42),
+    inset 0 -5px 10px rgba(70,42,8,.14);
 }
 .gate-card button:active{
   transform:translateY(.5px) scale(.985);
-  filter:brightness(.97);
-  box-shadow:0 3px 8px rgba(10,7,22,.32), inset 0 2px 8px rgba(58,34,6,.32);
+  filter:brightness(.98);
+  box-shadow:0 2px 6px rgba(10,7,22,.22), inset 0 2px 7px rgba(58,34,6,.24);
 }
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn){
   background:
-    linear-gradient(168deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.3) 42%, rgba(150,100,20,.05) 76%, rgba(150,100,20,.14) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 42%, rgba(150,100,20,.03) 76%, rgba(150,100,20,.09) 100%),
     #fff8e8;
   color:#5b3610;
   border:1.5px solid #8a5a1c;
   box-shadow:
-    0 6px 16px rgba(96,60,10,.26),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -6px 12px rgba(150,100,20,.16);
+    0 4px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.8),
+    inset 0 -5px 10px rgba(150,100,20,.1);
 }
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn):hover{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.36) 42%, rgba(150,100,20,.06) 76%, rgba(150,100,20,.16) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.66) 0%, rgba(255,255,255,.24) 42%, rgba(150,100,20,.04) 76%, rgba(150,100,20,.1) 100%),
     #ffe9b8;
   border-color:#6b4310;
 }
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn):active{
-  box-shadow:0 3px 8px rgba(96,60,10,.24), inset 0 2px 8px rgba(140,95,20,.3);
+  box-shadow:0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
 }
 
 /* ---------- 取消编辑按钮（幽灵胶囊 → 轻玻璃） ---------- */
 #cancelEditAnnouncementBtn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
-    rgba(22,17,40,.3);
-  border:1px solid rgba(233,224,255,.26);
+    linear-gradient(165deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.06) 100%),
+    rgba(22,17,40,.22);
+  border:1px solid rgba(233,224,255,.2);
   color:var(--text-soft);
   box-shadow:
-    0 4px 12px rgba(8,6,18,.28),
-    inset 0 1px 0 rgba(255,255,255,.22),
-    inset 0 -5px 10px rgba(10,8,22,.2);
-  -webkit-backdrop-filter:blur(10px) saturate(1.25);
-  backdrop-filter:blur(10px) saturate(1.25);
+    0 3px 10px rgba(8,6,18,.2),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 -4px 8px rgba(10,8,22,.14);
+  -webkit-backdrop-filter:blur(9px) saturate(1.18);
+  backdrop-filter:blur(9px) saturate(1.18);
   transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
 }
 #cancelEditAnnouncementBtn:hover{
   border-color:var(--accent);color:var(--accent-soft);
-  transform:translateY(-1.5px);
+  transform:translateY(-1px);
   box-shadow:
-    0 7px 16px rgba(8,6,18,.36),
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -5px 10px rgba(10,8,22,.2);
+    0 5px 12px rgba(8,6,18,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 8px rgba(10,8,22,.14);
 }
 #cancelEditAnnouncementBtn:active{
   transform:translateY(.5px) scale(.985);
-  box-shadow:0 2px 6px rgba(8,6,18,.3), inset 0 2px 7px rgba(8,6,18,.35);
+  box-shadow:0 2px 5px rgba(8,6,18,.22), inset 0 2px 6px rgba(8,6,18,.26);
 }
 body.day-mode #cancelEditAnnouncementBtn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.3) 100%),
-    rgba(255,251,238,.5);
+    linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
+    rgba(255,251,238,.4);
   border-color:#8a5a1c;
   color:#5b3610;
   box-shadow:
-    0 4px 12px rgba(96,60,10,.2),
-    inset 0 1px 0 rgba(255,255,255,.85),
-    inset 0 -5px 10px rgba(140,95,25,.12);
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -4px 8px rgba(140,95,25,.08);
 }
 
 /* ---------- 公告的编辑/删除小按钮 ---------- */
 .announcement-edit-btn,.announcement-delete-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.03) 52%, rgba(255,255,255,.08) 100%),
-    rgba(42,35,68,.38);
-  border:1px solid rgba(233,224,255,.22);
+    linear-gradient(165deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.02) 52%, rgba(255,255,255,.06) 100%),
+    rgba(42,35,68,.28);
+  border:1px solid rgba(233,224,255,.18);
   color:var(--text-soft);
   box-shadow:
-    0 3px 10px rgba(8,6,18,.25),
-    inset 0 1px 0 rgba(255,255,255,.2),
-    inset 0 -4px 8px rgba(10,8,22,.18);
-  -webkit-backdrop-filter:blur(8px) saturate(1.2);
-  backdrop-filter:blur(8px) saturate(1.2);
+    0 2px 8px rgba(8,6,18,.18),
+    inset 0 1px 0 rgba(255,255,255,.14),
+    inset 0 -3px 6px rgba(10,8,22,.12);
+  -webkit-backdrop-filter:blur(7px) saturate(1.15);
+  backdrop-filter:blur(7px) saturate(1.15);
   transition:background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
 }
 .announcement-edit-btn:hover,.announcement-delete-btn:hover{
   transform:translateY(-1px);
   border-color:var(--accent);
   box-shadow:
-    0 6px 14px rgba(8,6,18,.32),
-    inset 0 1px 0 rgba(255,255,255,.28),
-    inset 0 -4px 8px rgba(10,8,22,.18);
+    0 4px 10px rgba(8,6,18,.24),
+    inset 0 1px 0 rgba(255,255,255,.2),
+    inset 0 -3px 6px rgba(10,8,22,.12);
 }
 .announcement-edit-btn:active,.announcement-delete-btn:active{
   transform:translateY(.5px) scale(.97);
-  box-shadow:0 2px 5px rgba(8,6,18,.28), inset 0 2px 6px rgba(8,6,18,.32);
+  box-shadow:0 1px 4px rgba(8,6,18,.2), inset 0 2px 5px rgba(8,6,18,.24);
 }
-.announcement-delete-btn{color:#e08e84;border-color:rgba(224,142,132,.55);}
+.announcement-delete-btn{color:#e08e84;border-color:rgba(224,142,132,.45);}
 .announcement-delete-btn:hover{border-color:#e08e84;}
 body.day-mode .announcement-edit-btn,body.day-mode .announcement-delete-btn{
   background:
-    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.14) 52%, rgba(255,255,255,.26) 100%),
-    rgba(255,250,238,.42);
-  border-color:rgba(138,90,28,.45);
+    linear-gradient(165deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.1) 52%, rgba(255,255,255,.18) 100%),
+    rgba(255,250,238,.32);
+  border-color:rgba(138,90,28,.38);
   color:#5b3610;
   box-shadow:
-    0 3px 10px rgba(96,60,10,.18),
-    inset 0 1px 0 rgba(255,255,255,.85),
-    inset 0 -4px 8px rgba(140,95,25,.1);
+    0 2px 8px rgba(96,60,10,.12),
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -3px 6px rgba(140,95,25,.07);
 }
-body.day-mode .announcement-delete-btn{color:#a33c2f;border-color:rgba(163,60,47,.6);}
+body.day-mode .announcement-delete-btn{color:#a33c2f;border-color:rgba(163,60,47,.5);}
 body.day-mode .announcement-delete-btn:hover{border-color:#a33c2f;}
 
 /* ---------- 公告配图预览右上角的「×」小圆按钮 ----------
    注意：必须放在 .gate-card button 之后 —— 两者特指度相同(0,1,1)，后来居上。 */
 .announcement-image-preview button{
   background:
-    linear-gradient(160deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 55%, rgba(255,255,255,.16) 100%),
-    rgba(24,19,42,.72);
-  border:1px solid rgba(255,255,255,.32);
-  box-shadow:0 3px 8px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.35);
-  -webkit-backdrop-filter:blur(6px);
-  backdrop-filter:blur(6px);
+    linear-gradient(160deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 55%, rgba(255,255,255,.1) 100%),
+    rgba(24,19,42,.6);
+  border:1px solid rgba(255,255,255,.24);
+  box-shadow:0 2px 6px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25);
+  -webkit-backdrop-filter:blur(5px);
+  backdrop-filter:blur(5px);
   transition:transform .15s, box-shadow .2s, background .2s;
 }
 .announcement-image-preview button:hover{
-  transform:scale(1.1);
-  box-shadow:0 5px 12px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.45);
+  transform:scale(1.08);
+  box-shadow:0 4px 9px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.32);
 }
 .announcement-image-preview button:active{transform:scale(.92);}
 
 /* ---------- 分享本站按钮 ---------- */
 .share-site-btn{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 42%, rgba(0,0,0,.05) 76%, rgba(0,0,0,.13) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
     var(--accent);
-  border:1px solid rgba(255,255,255,.42);
+  border:1px solid rgba(255,255,255,.3);
   color:var(--accent-ink);
   box-shadow:
-    0 6px 16px rgba(10,7,22,.32),
-    inset 0 1px 0 rgba(255,255,255,.5),
-    inset 0 -6px 12px rgba(70,42,8,.22);
-  -webkit-backdrop-filter:blur(6px) saturate(1.15);
-  backdrop-filter:blur(6px) saturate(1.15);
+    0 4px 12px rgba(10,7,22,.22),
+    inset 0 1px 0 rgba(255,255,255,.36),
+    inset 0 -5px 10px rgba(70,42,8,.14);
+  -webkit-backdrop-filter:blur(5px) saturate(1.1);
+  backdrop-filter:blur(5px) saturate(1.1);
   transition:background .2s, border-color .2s, box-shadow .25s, transform .2s, filter .2s;
 }
 .share-site-btn:hover{
-  transform:translateY(-2px);
-  filter:brightness(1.05);
+  transform:translateY(-1px);
+  filter:brightness(1.04);
   box-shadow:
-    0 10px 22px rgba(10,7,22,.4),
-    inset 0 1px 0 rgba(255,255,255,.58),
-    inset 0 -6px 12px rgba(70,42,8,.22);
+    0 7px 16px rgba(10,7,22,.28),
+    inset 0 1px 0 rgba(255,255,255,.42),
+    inset 0 -5px 10px rgba(70,42,8,.14);
 }
 .share-site-btn:active{
   transform:translateY(.5px) scale(.985);
-  filter:brightness(.97);
-  box-shadow:0 3px 8px rgba(10,7,22,.3), inset 0 2px 8px rgba(58,34,6,.3);
+  filter:brightness(.98);
+  box-shadow:0 2px 6px rgba(10,7,22,.2), inset 0 2px 7px rgba(58,34,6,.22);
 }
 body.day-mode .share-site-btn{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,.3) 42%, rgba(150,100,20,.05) 76%, rgba(150,100,20,.14) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 42%, rgba(150,100,20,.03) 76%, rgba(150,100,20,.09) 100%),
     #fff8e8;
   color:#5b3610;
   border:1.5px solid #8a5a1c;
   box-shadow:
-    0 6px 16px rgba(96,60,10,.26),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -6px 12px rgba(150,100,20,.16);
+    0 4px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.8),
+    inset 0 -5px 10px rgba(150,100,20,.1);
 }
 body.day-mode .share-site-btn:hover{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.36) 42%, rgba(150,100,20,.06) 76%, rgba(150,100,20,.16) 100%),
+    linear-gradient(168deg, rgba(255,255,255,.66) 0%, rgba(255,255,255,.24) 42%, rgba(150,100,20,.04) 76%, rgba(150,100,20,.1) 100%),
     #ffe9b8;
   border-color:#6b4310;
 }
 body.day-mode .share-site-btn:active{
-  box-shadow:0 3px 8px rgba(96,60,10,.24), inset 0 2px 8px rgba(140,95,20,.3);
+  box-shadow:0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
 }
-body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.42);}
+body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.3);}
 
 /* ---------- 大图弹窗关闭按钮 ---------- */
 .lightbox-close{
   background:
-    linear-gradient(160deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.15) 100%),
-    rgba(255,255,255,.1);
-  border:1px solid rgba(255,255,255,.3);
+    linear-gradient(160deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.1) 100%),
+    rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.22);
   box-shadow:
-    0 6px 18px rgba(0,0,0,.45),
-    inset 0 1px 0 rgba(255,255,255,.4),
-    inset 0 -6px 12px rgba(0,0,0,.25);
-  -webkit-backdrop-filter:blur(10px) saturate(1.25);
-  backdrop-filter:blur(10px) saturate(1.25);
+    0 4px 14px rgba(0,0,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -5px 10px rgba(0,0,0,.18);
+  -webkit-backdrop-filter:blur(9px) saturate(1.18);
+  backdrop-filter:blur(9px) saturate(1.18);
   transition:background .2s, transform .2s, box-shadow .25s;
 }
 .lightbox-close:hover{
   background:
-    linear-gradient(160deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.22) 100%),
-    rgba(255,255,255,.16);
-  transform:translateY(-1.5px);
+    linear-gradient(160deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.1) 50%, rgba(255,255,255,.16) 100%),
+    rgba(255,255,255,.12);
+  transform:translateY(-1px);
   box-shadow:
-    0 9px 22px rgba(0,0,0,.5),
-    inset 0 1px 0 rgba(255,255,255,.5),
-    inset 0 -6px 12px rgba(0,0,0,.25);
+    0 6px 16px rgba(0,0,0,.4),
+    inset 0 1px 0 rgba(255,255,255,.36),
+    inset 0 -5px 10px rgba(0,0,0,.18);
 }
 .lightbox-close:active{
   transform:scale(.93);
-  box-shadow:0 3px 8px rgba(0,0,0,.45), inset 0 2px 8px rgba(0,0,0,.4);
+  box-shadow:0 2px 6px rgba(0,0,0,.35), inset 0 2px 7px rgba(0,0,0,.3);
 }
 
-/* ---------- 信息弹窗关闭按钮：从纯文字改成小玻璃圆片，跟其它按钮统一 ---------- */
+/* ---------- 信息弹窗关闭按钮：小玻璃圆片，跟其它按钮统一 ---------- */
 .info-close{
   width:36px;height:36px;border-radius:50%;padding:0;
   display:flex;align-items:center;justify-content:center;
   background:
-    linear-gradient(160deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.1) 100%),
-    rgba(20,16,36,.3);
+    linear-gradient(160deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
+    rgba(20,16,36,.22);
   border:1px solid var(--line);
-  box-shadow:0 3px 10px rgba(8,6,18,.28), inset 0 1px 0 rgba(255,255,255,.2);
-  -webkit-backdrop-filter:blur(8px) saturate(1.2);
-  backdrop-filter:blur(8px) saturate(1.2);
+  box-shadow:0 2px 8px rgba(8,6,18,.2), inset 0 1px 0 rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(7px) saturate(1.15);
+  backdrop-filter:blur(7px) saturate(1.15);
   transition:color .2s, border-color .2s, background .25s, box-shadow .25s, transform .2s;
 }
 .info-close:hover{
   color:var(--cream);
   border-color:var(--accent);
   transform:translateY(-1px);
-  box-shadow:0 6px 14px rgba(8,6,18,.34), inset 0 1px 0 rgba(255,255,255,.28);
+  box-shadow:0 4px 10px rgba(8,6,18,.26), inset 0 1px 0 rgba(255,255,255,.2);
 }
 .info-close:active{transform:scale(.93);}
 body.day-mode .info-close{
   background:
-    linear-gradient(160deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.3) 100%),
-    rgba(255,250,238,.45);
-  border-color:rgba(138,90,28,.4);
-  box-shadow:0 3px 10px rgba(96,60,10,.2), inset 0 1px 0 rgba(255,255,255,.85);
+    linear-gradient(160deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
+    rgba(255,250,238,.35);
+  border-color:rgba(138,90,28,.32);
+  box-shadow:0 2px 8px rgba(96,60,10,.14), inset 0 1px 0 rgba(255,255,255,.65);
 }
 
 /* ---------- 减弱动态偏好：关掉上浮/按压位移，只保留静态玻璃质感 ---------- */
@@ -1246,4 +1272,59 @@ body.day-mode .info-close{
   .info-close:hover,.info-close:active{
     transform:none;
   }
+}
+
+/* ==========================================================================
+   卡片类表面统一加"一点点"边界立体感
+   覆盖：详情页横幅（点开磁贴后的标题/副标题区）、信息弹窗、内部页卡片、
+         公告卡片、档案相册磁贴、留言板照片磁贴
+   做法与首页大磁贴一致：不加模糊、不用真 border，
+   只用 inset 阴影画一圈很淡的玻璃内缘 + 顶缘 1px 高光 + 柔和外投影。
+   ========================================================================== */
+.detail-hero,.gate-card{
+  box-shadow:
+    0 2px 8px rgba(8,6,18,.2),
+    0 18px 40px rgba(0,0,0,.32),
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16);
+}
+.info-box{
+  box-shadow:
+    0 2px 10px rgba(6,4,14,.3),
+    0 30px 70px rgba(0,0,0,.5),
+    inset 0 0 0 1px rgba(255,255,255,.09),
+    inset 0 1px 0 rgba(255,255,255,.18);
+}
+.announcement{
+  box-shadow:
+    0 2px 6px rgba(8,6,18,.16),
+    0 12px 28px rgba(0,0,0,.24),
+    inset 0 0 0 1px rgba(255,255,255,.07),
+    inset 0 1px 0 rgba(255,255,255,.14);
+}
+.album-card,.review-photo{
+  box-shadow:
+    0 2px 6px rgba(8,6,18,.2),
+    0 14px 34px rgba(0,0,0,.4),
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16);
+}
+/* 白天模式：外投影换暖棕色，内缘高光稍提亮一点压住金底 */
+body.day-mode .detail-hero,
+body.day-mode .gate-card,
+body.day-mode .announcement,
+body.day-mode .info-box{
+  box-shadow:
+    0 2px 8px rgba(96,64,16,.14),
+    0 18px 40px rgba(96,64,16,.2),
+    inset 0 0 0 1px rgba(255,255,255,.14),
+    inset 0 1px 0 rgba(255,255,255,.28);
+}
+body.day-mode .album-card,
+body.day-mode .review-photo{
+  box-shadow:
+    0 2px 6px rgba(96,64,16,.14),
+    0 14px 34px rgba(96,64,16,.2),
+    inset 0 0 0 1px rgba(255,255,255,.12),
+    inset 0 1px 0 rgba(255,255,255,.24);
 }
