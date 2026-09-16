@@ -9,7 +9,9 @@
        ① 天气图标改为从仓库 weather/ 目录读取（不再直连灰机 wiki）
        ② 「活动群」「花街介绍」的人机验证通过后 5 分钟内不再重复弹出
        ③ 内部入口密码每累计输错 5 次弹出一次人机验证（防暴力尝试，刷新不清零）
-       ④ 管理员模式新增「星芒节时间覆盖」：所设时段内所有天气档显示为「小雪」 -->
+       ④ 管理员模式新增「星芒节时间覆盖」：所设时段内所有天气档显示为「小雪」
+       ⑤ 声音（音乐）按钮暂时隐藏，原位改为时钟按钮：时间条与天气的显隐开关
+         从标题「·」移到该按钮上，「·」还原为纯文本 -->
 
   <!-- 分享卡片：og-image.jpg 放在站点根目录，1200x630 -->
   <meta property="og:type" content="website">
@@ -31,7 +33,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=31">
+  <link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
 
@@ -65,19 +67,25 @@
   <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
   </button>
-  <button class="daynight-toggle sound-toggle" id="soundToggle" type="button"
+  <!-- 时钟按钮：切换时间条（国服/艾欧泽亚时间与高脚孤丘天气）显隐；此功能原挂在标题的「·」上 -->
+  <button class="daynight-toggle clock-toggle" id="clockToggle" type="button" aria-pressed="false"
+          aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+  </button>
+  <!-- 背景音乐暂未接入：声音按钮先隐藏（代码保留，去掉 hidden 属性即可恢复显示） -->
+  <button class="daynight-toggle sound-toggle" id="soundToggle" type="button" hidden
           aria-label="开启声音" aria-pressed="false" title="开启声音">
     <span class="hj-sound-icon" aria-hidden="true">
       <svg class="ico ico-vol-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
       <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
     </span>
   </button>
-  <h1 class="brand">花舞之街<button type="button" class="brand-dot" id="clockToggle" aria-pressed="false" aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条"><span aria-hidden="true">·</span></button> 薰风花语町</h1>
+  <h1 class="brand">花舞之街 · 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
     薰风花语町-高脚孤丘22区扩建区36,45,49,54-60号房 及 扩建区公寓3-17号房间</p>
   <!-- 时间条：国服时间(UTC+8) 与 艾欧泽亚时间(ET，游戏内时钟：1 ET 时 = 175 现实秒)，
-       每秒钟刷新，页面切后台时暂停；默认隐藏，点击标题中间的「·」切换显隐 -->
+       每秒钟刷新，页面切后台时暂停；默认隐藏，点击右上角时钟按钮切换显隐 -->
   <p class="hj-clock is-hidden" id="hjClock" role="timer" aria-live="off" aria-label="国服时间与艾欧泽亚时间">
     <span class="hj-clock-cell">
       <span class="hj-clock-label">国服</span>
@@ -2355,18 +2363,20 @@ function initClock(){
   document.addEventListener("visibilitychange", () => { if(!document.hidden) hjClockTick(); });
 }
 
-/* 时间条显隐：点击标题中间的「·」切换，默认隐藏（不持久化，刷新后恢复隐藏） */
+/* 时间条显隐：点击右上角时钟按钮切换，默认隐藏（不持久化，刷新后恢复隐藏）。
+   按钮的高亮（.is-active）与 aria-pressed 状态在这里一并同步。 */
 function initClockToggle(){
-  const dot = $("clockToggle");
+  const btn = $("clockToggle");
   const clock = $("hjClock");
-  if(!dot || !clock) return;
+  if(!btn || !clock) return;
   const sync = () => {
     const hidden = clock.classList.contains("is-hidden");
-    dot.setAttribute("aria-pressed", String(!hidden));
-    dot.setAttribute("aria-label", hidden ? "显示时间条（国服时间与艾欧泽亚时间）" : "隐藏时间条");
-    dot.setAttribute("title", hidden ? "点击显示时间条" : "点击隐藏时间条");
+    btn.classList.toggle("is-active", !hidden);
+    btn.setAttribute("aria-pressed", String(!hidden));
+    btn.setAttribute("aria-label", hidden ? "显示时间条（国服时间与艾欧泽亚时间）" : "隐藏时间条");
+    btn.setAttribute("title", hidden ? "点击显示时间条" : "点击隐藏时间条");
   };
-  dot.addEventListener("click", () => {
+  btn.addEventListener("click", () => {
     clock.classList.toggle("is-hidden");
     sync();
     if(!clock.classList.contains("is-hidden")) hjClockTick(); /* 切回显示时立即刷新到当前时间 */
@@ -2754,5 +2764,5 @@ document.addEventListener("click", (e) => {
 </script>
 
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3c24c2a3eecafb8',t:'MTc4OTU4NzE1MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
