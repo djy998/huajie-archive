@@ -26,7 +26,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 
@@ -1580,6 +1580,7 @@ const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 let turnstilePending = null;
 let turnstileWidgetId = null;
 let turnstileVerified = false;
+let turnstileFailStreak = 0;   /* 后端校验连续失败计数：防"验证失败→自动重建"死循环 */
 let siteLockdown = false;
 let firstBootInfoOpen = false; /* 首次开屏点击进入后自动弹出"花街介绍"期间为 true */
 
@@ -1590,6 +1591,7 @@ async function isLockedDown(){
 
 function openCaptcha(pending){
   turnstilePending = pending;
+  turnstileFailStreak = 0;
   setMsg($("captchaMsg"), "");
   $("captchaOverlay").hidden = false;
   playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
@@ -1652,10 +1654,21 @@ async function onTurnstileSuccess(token){
   setMsg(msg, "验证中…");
   const verify = await callWorker({ action: "verify_turnstile", token });
   if(!verify || !verify.ok){
+    turnstileFailStreak++;
+    /* Turnstile 小组件常常"自动通过"，如果失败了就无条件重建小组件，
+       会变成 通过→校验失败→重建→又自动通过→… 的无限循环；
+       而且每循环一次都占用 verify_turnstile 的限流额度（12 次/分钟），
+       限流一旦触发又会让校验必失败，循环自我锁死。
+       所以连续失败 2 次（或弹窗已被关闭）就停手，交给用户手动重试。 */
+    if(turnstileFailStreak >= 2 || $("captchaOverlay").hidden){
+      setMsg(msg, "验证服务暂时不可用，请稍后重新打开验证窗口再试");
+      return;
+    }
     setMsg(msg, "验证未通过，请重新完成一次");
     renderTurnstile();
     return;
   }
+  turnstileFailStreak = 0;
 
   $("captchaOverlay").hidden = true;
   if(window.turnstile && turnstileWidgetId !== null){
@@ -2420,6 +2433,10 @@ document.addEventListener("click", (e) => {
 </script>
 
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
+sights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
