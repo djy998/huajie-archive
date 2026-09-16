@@ -103,6 +103,44 @@ body.day-mode .hj-clock{color:#6b4a24;}
 body.day-mode .hj-clock-time{color:#4a3018;}
 body.day-mode .hj-clock-sep{background:rgba(90,60,20,.28);}
 body.day-mode .hj-clock-cell.is-night .hj-clock-time{color:#5b3610;}
+/* ---------- 高脚孤丘天气（在时间条第二行） ---------- */
+.hj-weather{
+  flex-basis:100%;display:flex;justify-content:center;align-items:center;
+  flex-wrap:wrap;gap:4px 6px;margin-top:6px;
+  font-size:.78rem;letter-spacing:.06em;color:var(--text-mute);
+}
+.hj-weather[hidden]{display:none !important;}
+.hj-weather-label{
+  font-size:.7rem;opacity:.9;letter-spacing:.12em;white-space:nowrap;
+}
+.hj-weather-seq{
+  display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 2px;
+  color:var(--text-soft);
+}
+.hj-wx{
+  display:inline-flex;align-items:center;gap:3px;
+  white-space:nowrap;font-size:.78rem;
+}
+.hj-wx img{
+  width:18px;height:18px;object-fit:contain;vertical-align:middle;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.18));
+}
+.hj-wx-name{letter-spacing:.04em;}
+.hj-wx.is-current .hj-wx-name{font-weight:700;}
+.hj-wx-current-prefix{
+  font-size:.72rem;opacity:.85;margin-right:1px;letter-spacing:.08em;
+}
+.hj-weather-arrow{
+  display:inline-flex;align-items:center;
+  margin:0 1px;opacity:.55;font-size:.82rem;user-select:none;
+}
+body.day-mode .hj-weather{color:#6b4a24;}
+body.day-mode .hj-weather-seq{color:#4a3018;}
+body.day-mode .hj-weather-arrow{opacity:.6;}
+@media (max-width:640px){
+  .hj-weather{margin-top:5px;gap:3px 4px;font-size:.72rem;}
+  .hj-wx img{width:16px;height:16px;}
+}
 
 #fxClickLayer{position:fixed;inset:0;z-index:500;pointer-events:none;overflow:hidden;}
 .fx-burst-petal{

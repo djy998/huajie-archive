@@ -26,7 +26,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 
@@ -82,6 +82,10 @@
     <span class="hj-clock-cell" id="hjClockEt">
       <span class="hj-clock-label">艾欧泽亚</span>
       <span class="hj-clock-time"><i class="hj-et-glyph" id="hjEtGlyph" aria-hidden="true">&#9728;</i><span id="hjTimeET">--:--</span></span>
+    </span>
+    <span class="hj-weather" id="hjWeather" aria-label="高脚孤丘天气">
+      <span class="hj-weather-label">高脚孤丘</span>
+      <span class="hj-weather-seq" id="hjWeatherSeq">加载中…</span>
     </span>
   </p>
 </header>
@@ -2260,6 +2264,7 @@ function hjClockTick(){
   if(et) et.textContent = t.et;
   if(glyph) glyph.textContent = t.etNight ? "\u263E" : "\u2600";
   if(cell) cell.classList.toggle("is-night", t.etNight);
+  hjRenderWeather();
 }
 function initClock(){
   hjClockTick();
@@ -2285,6 +2290,71 @@ function initClockToggle(){
     if(!clock.classList.contains("is-hidden")) hjClockTick(); /* 切回显示时立即刷新到当前时间 */
   });
   sync();
+}
+
+/* =========================================================================
+   高脚孤丘天气（高脚孤丘 / The Goblet）
+   - 位置：时间条第二行，随时间条一同显隐
+   - 显示：当前 + 未来 5 档，共 6 档；图标与灰机 wiki 同源
+           格式  当前【碧空】→【晴朗】→…（→ 为分隔符，图标 18px）
+   - 天气分布：与游戏内 WeatherRate TheGoblet 一致
+           碧空 40 / 晴朗 20 / 阴云 25 / 薄雾 10 / 小雨 5
+           （详见 https://ff14.huijiwiki.com/wiki/天气预报 及灰机原始数据）
+   - 算法：与 https://asvel.github.io/ffxiv-weather / https://ffxiv.pf-n.co/skywatcher 完全一致
+           以 1970-01-01 00:00:00 UTC 为原点，ET 1小时=175现实秒，
+           按 ET 0/8/16 三档取样，seed = days*100 + timeChunk(8/16/0 对应 ET 0/8/16)，
+           step1=(seed<<11)^seed, step2=(step1>>>8)^step1, chance = step2%100
+           同 ET 0/8/16 档内结果稳定，ET 08:00 / 16:00 / 00:00 切换
+   ========================================================================= */
+const HJ_GOBLET_WEATHERS = [
+  { limit: 40, name: "碧空", icon: "https://huiji-public.huijistatic.com/ff14/uploads/f/f6/060201.png" },
+  { limit: 60, name: "晴朗", icon: "https://huiji-public.huijistatic.com/ff14/uploads/d/de/060202.png" },
+  { limit: 85, name: "阴云", icon: "https://huiji-public.huijistatic.com/ff14/uploads/3/33/060203.png" },
+  { limit: 95, name: "薄雾", icon: "https://huiji-public.huijistatic.com/ff14/uploads/6/63/060204.png" },
+  { limit: 100, name: "小雨", icon: "https://huiji-public.huijistatic.com/ff14/uploads/9/9a/060207.png" }
+];
+function hjGobletWeatherAt(unixSec){
+  const u = Math.floor(unixSec);
+  const eHours = Math.floor(u / 175);
+  const eDays = Math.floor(eHours / 24);
+  let tc = (eHours % 24) - (eHours % 8);
+  tc = (tc + 8) % 24; /* 0→8, 8→16, 16→0：把本地 8 小时窗规整到游戏内 0/8/16 */
+  const seed = eDays * 100 + tc;
+  const s1 = (seed << 11) ^ seed;
+  const s2 = (s1 >>> 8) ^ s1;
+  const chance = ((s2 % 100) + 100) % 100;
+  for(let i = 0; i < HJ_GOBLET_WEATHERS.length; i++){
+    if(chance < HJ_GOBLET_WEATHERS[i].limit) return { chance, idx: i, ...HJ_GOBLET_WEATHERS[i] };
+  }
+  return { chance, idx: HJ_GOBLET_WEATHERS.length - 1, ...HJ_GOBLET_WEATHERS[HJ_GOBLET_WEATHERS.length - 1] };
+}
+function hjGobletForecast(count){
+  const now = Date.now() / 1000;
+  const out = [];
+  for(let i = 0; i < count; i++){
+    const t = now + i * 8 * 175; /* 1 个 ET 窗(8h) = 现实 1400 秒 = 23分20秒 */
+    out.push(hjGobletWeatherAt(t));
+  }
+  return out;
+}
+let hjWeatherLastKey = "";
+function hjRenderWeather(){
+  const seqEl = $("hjWeatherSeq");
+  if(!seqEl) return;
+  const seq = hjGobletForecast(6);
+  const key = seq.map(s => s.name).join("|");
+  if(key === hjWeatherLastKey && seqEl.dataset.rendered) return;
+  hjWeatherLastKey = key;
+  const arrow = '<span class="hj-weather-arrow" aria-hidden="true">→</span>';
+  const parts = seq.map((w, i) => {
+    const cls = i === 0 ? "hj-wx is-current" : "hj-wx";
+    const icon = '<img src="' + w.icon + '" alt="' + w.name + '" loading="lazy" decoding="async" width="18" height="18">';
+    const name = '<span class="hj-wx-name">' + w.name + '</span>';
+    const prefix = i === 0 ? '<span class="hj-wx-current-prefix">当前</span>' : '';
+    return '<span class="' + cls + '" title="' + w.name + '">' + prefix + icon + name + '</span>';
+  });
+  seqEl.innerHTML = parts.join(arrow);
+  seqEl.dataset.rendered = "1";
 }
 
 renderHome();
