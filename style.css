@@ -786,9 +786,9 @@ body.boot-pending #bootOverlay{
 /* ---------- 头部圆形开关：🌙 昼夜 / ✨ 动效 / 🔇 声音 ---------- */
 .daynight-toggle{
   background:
-    linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
-    rgba(26,21,46,.34);
-  border:1px solid rgba(255,255,255,.2);
+    linear-gradient(158deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 46%, rgba(255,255,255,.08) 100%),
+    rgba(26,21,46,.24);
+  border:1px solid rgba(255,255,255,.17);
   box-shadow:
     0 4px 10px rgba(10,7,22,.26),
     inset 0 1px 0 rgba(255,255,255,.22),
@@ -813,9 +813,9 @@ body.boot-pending #bootOverlay{
 }
 body.day-mode .daynight-toggle{
   background:
-    linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
-    rgba(255,249,235,.4);
-  border-color:rgba(255,255,255,.6);
+    linear-gradient(158deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.11) 46%, rgba(255,255,255,.2) 100%),
+    rgba(255,249,235,.3);
+  border-color:rgba(255,255,255,.5);
   box-shadow:
     0 4px 10px rgba(96,64,16,.15),
     inset 0 1px 0 rgba(255,255,255,.72),
@@ -1148,55 +1148,58 @@ body.day-mode .announcement-delete-btn:hover{border-color:#a33c2f;}
 }
 .announcement-image-preview button:active{transform:scale(.92);}
 
-/* ---------- 分享本站按钮 ---------- */
+/* ---------- 分享本站按钮：与右上角开关等其它小按钮同一套磨砂玻璃 ---------- */
 .share-site-btn{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
-    var(--accent);
-  border:1px solid rgba(255,255,255,.3);
-  color:var(--accent-ink);
+    linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
+    rgba(26,21,46,.34);
+  border:1px solid rgba(255,255,255,.2);
+  color:var(--cream);
   box-shadow:
-    0 4px 12px rgba(10,7,22,.22),
-    inset 0 1px 0 rgba(255,255,255,.36),
-    inset 0 -5px 10px rgba(70,42,8,.14);
-  -webkit-backdrop-filter:blur(5px) saturate(1.1);
-  backdrop-filter:blur(5px) saturate(1.1);
-  transition:background .2s, border-color .2s, box-shadow .25s, transform .2s, filter .2s;
+    0 4px 10px rgba(10,7,22,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 9px rgba(12,9,26,.18);
+  -webkit-backdrop-filter:blur(9px) saturate(1.22);
+  backdrop-filter:blur(9px) saturate(1.22);
+  transition:background .2s, border-color .2s, box-shadow .25s, transform .2s;
 }
 .share-site-btn:hover{
+  border-color:var(--accent);
   transform:translateY(-1px);
-  filter:brightness(1.04);
   box-shadow:
-    0 7px 16px rgba(10,7,22,.28),
-    inset 0 1px 0 rgba(255,255,255,.42),
-    inset 0 -5px 10px rgba(70,42,8,.14);
+    0 6px 14px rgba(10,7,22,.32),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -4px 9px rgba(12,9,26,.18);
 }
 .share-site-btn:active{
   transform:translateY(.5px) scale(.985);
-  filter:brightness(.98);
-  box-shadow:0 2px 6px rgba(10,7,22,.2), inset 0 2px 7px rgba(58,34,6,.22);
+  box-shadow:0 2px 5px rgba(10,7,22,.3), inset 0 2px 6px rgba(9,6,20,.32);
 }
 body.day-mode .share-site-btn{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 42%, rgba(150,100,20,.03) 76%, rgba(150,100,20,.09) 100%),
-    #fff8e8;
+    linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
+    rgba(255,249,235,.4);
   color:#5b3610;
-  border:1.5px solid #8a5a1c;
+  border-color:rgba(255,255,255,.6);
   box-shadow:
-    0 4px 12px rgba(96,60,10,.18),
-    inset 0 1px 0 rgba(255,255,255,.8),
-    inset 0 -5px 10px rgba(150,100,20,.1);
+    0 4px 10px rgba(96,64,16,.15),
+    inset 0 1px 0 rgba(255,255,255,.72),
+    inset 0 -4px 9px rgba(140,95,25,.09);
 }
 body.day-mode .share-site-btn:hover{
   background:
-    linear-gradient(168deg, rgba(255,255,255,.66) 0%, rgba(255,255,255,.24) 42%, rgba(150,100,20,.04) 76%, rgba(150,100,20,.1) 100%),
-    #ffe9b8;
-  border-color:#6b4310;
+    linear-gradient(158deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.18) 46%, rgba(255,255,255,.3) 100%),
+    rgba(255,249,235,.46);
+  border-color:var(--accent);
+  box-shadow:
+    0 6px 14px rgba(96,64,16,.2),
+    inset 0 1px 0 rgba(255,255,255,.8),
+    inset 0 -4px 9px rgba(140,95,25,.09);
 }
 body.day-mode .share-site-btn:active{
-  box-shadow:0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
+  box-shadow:0 2px 5px rgba(96,64,16,.18), inset 0 2px 6px rgba(120,80,20,.2);
 }
-body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.3);}
+body:not(.day-mode) .share-site-btn{border-color:rgba(255,255,255,.2);}
 
 /* ---------- 大图弹窗关闭按钮 ---------- */
 .lightbox-close{
@@ -1328,3 +1331,54 @@ body.day-mode .review-photo{
     inset 0 0 0 1px rgba(255,255,255,.12),
     inset 0 1px 0 rgba(255,255,255,.24);
 }
+
+/* ==========================================================================
+   第四轮微调
+   1) 「验证中…」等表单提示文字：白天模式换成与其它文字一致的棕色
+   2) 验证弹窗右上角 ×：它在 .gate-card 里，被 .gate-card button（0,1,1）和
+      body.day-mode .gate-card button:not(#…)（1,2,2）盖掉玻璃样式，
+      这里用双 ID 选择器（2,x,x）压回来，恢复统一的玻璃圆片
+   3) 花街介绍-相册页的说明文字（摄影致谢 + 双击设背景提示）
+   ========================================================================== */
+body.day-mode .form-msg{color:#6b4a24;}
+
+#captchaOverlay #captchaClose{
+  width:36px;height:36px;border-radius:50%;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
+    rgba(20,16,36,.22);
+  border:1px solid var(--line);
+  color:var(--text-mute);
+  font-size:1.3rem;font-weight:400;line-height:1;
+  box-shadow:0 2px 8px rgba(8,6,18,.2), inset 0 1px 0 rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(7px) saturate(1.15);
+  backdrop-filter:blur(7px) saturate(1.15);
+  transition:color .2s, border-color .2s, background .25s, box-shadow .25s, transform .2s;
+}
+#captchaOverlay #captchaClose:hover{
+  color:var(--cream);
+  border-color:var(--accent);
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(8,6,18,.26), inset 0 1px 0 rgba(255,255,255,.2);
+}
+#captchaOverlay #captchaClose:active{transform:scale(.93);}
+body.day-mode #captchaOverlay #captchaClose{
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
+    rgba(255,250,238,.35);
+  border-color:rgba(138,90,28,.32);
+  color:#6b4a24;
+  box-shadow:0 2px 8px rgba(96,60,10,.14), inset 0 1px 0 rgba(255,255,255,.65);
+}
+body.day-mode #captchaOverlay #captchaClose:hover{color:#3a2508;border-color:var(--accent);}
+@media (prefers-reduced-motion:reduce){
+  #captchaOverlay #captchaClose:hover,
+  #captchaOverlay #captchaClose:active{transform:none;}
+}
+
+.gallery-credit{
+  margin:2px 0 16px;text-align:center;
+  font-size:.86rem;line-height:2;color:var(--text-mute);
+}
+body.day-mode .gallery-credit{color:#6b4a24;}
