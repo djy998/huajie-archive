@@ -1492,3 +1492,10 @@ body.day-mode .hj-like-chip{
 @media (prefers-reduced-motion:reduce){
   .hj-like-btn:hover,.hj-like-btn:active{transform:none;}
 }
+
+/* ---------- 活动群弹窗：「分享网站」「复制群号」并排，放在二维码图片上方 ---------- */
+.group-btn-row{
+  display:flex;gap:12px;justify-content:center;align-items:center;
+  flex-wrap:wrap;margin:0 0 18px;
+}
+.group-btn-row .share-site-btn{margin:0;}
