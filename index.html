@@ -26,7 +26,8 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
+<script>window.HJ_LIKE_API="/mock-worker";</script>
 </head>
 <body>
 
@@ -53,11 +54,19 @@
 <div id="fxClickLayer" aria-hidden="true"></div>
 
 <header class="site-header">
-  <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">🌙</button>
-  <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">✨</button>
+  <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">
+    <svg class="ico ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    <svg class="ico ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  </button>
+  <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+  </button>
   <button class="daynight-toggle sound-toggle" id="soundToggle" type="button"
           aria-label="开启声音" aria-pressed="false" title="开启声音">
-    <span class="hj-sound-icon" aria-hidden="true">🔇</span>
+    <span class="hj-sound-icon" aria-hidden="true">
+      <svg class="ico ico-vol-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+      <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+    </span>
   </button>
   <h1 class="brand">花舞之街<button type="button" class="brand-dot" id="clockToggle" aria-pressed="false" aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条"><span aria-hidden="true">·</span></button> 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
@@ -149,6 +158,10 @@
     <div class="detail-hero" id="detailHero">
       <h2 id="detailTitle"></h2>
       <p id="detailMeta"></p>
+      <button type="button" class="hj-like-btn hj-like-detail" id="detailLikeBtn" aria-pressed="false" aria-label="点赞" title="点赞" hidden>
+        <svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        <span>点赞</span><span class="hj-like-count">0</span>
+      </button>
       <a class="ticket-badge-inline" id="detailTicket" href="#" target="_blank" rel="noopener" hidden>购票 / 报名</a>
     </div>
     <div class="tabs">
@@ -689,6 +702,7 @@ function openDetail(data){
   $("detailHero").style.backgroundImage = data.cover ? `url('${data.cover}')` : "";
   $("detailTitle").textContent = data.title;
   $("detailMeta").textContent = [data.dateLabel, data.location].filter(Boolean).join(" · ");
+  setupDetailLike(data);
 
   const ticket = $("detailTicket");
   if(data.ticketUrl){
@@ -1178,7 +1192,6 @@ function initDayNight(){
   setSky(isDay);
   if(isDay){
     document.body.classList.add("day-mode");
-    btn.textContent = "☀️";
   }
   applyTileBackgrounds(isDay);
   let dayNightLocked = false;
@@ -1192,7 +1205,6 @@ function initDayNight(){
     if(!fxEnabled){
       document.body.classList.remove("fx-crossfading");
       document.body.classList.toggle("day-mode");
-      btn.textContent = willBeDay ? "☀️" : "🌙";
       setSky(willBeDay);
       $("skyFade").style.backgroundImage = "";
       document.body.classList.remove("custom-bg");   /* 回到默认天空，标题区毛玻璃一并撤掉 */
@@ -1204,7 +1216,6 @@ function initDayNight(){
     const duration = 900;
     document.body.classList.add("fx-crossfading");
     document.body.classList.toggle("day-mode", willBeDay);
-    btn.textContent = willBeDay ? "☀️" : "🌙";
     crossfadeSky(willBeDay, duration);
     crossfadeTileBackgrounds(willBeDay, duration);
     applyFx();
@@ -1227,9 +1238,13 @@ function renderInfoGallery(){
   infoGalleryRendered = true;
   const grid = $("infoGalleryGrid");
   if(!grid) return;
-  grid.innerHTML = INFO_GALLERY.map(src =>
-    `<img src="${src}" loading="lazy" onclick="openGalleryLightbox(this)">`
-  ).join("");
+  grid.innerHTML = INFO_GALLERY.map(src => `
+    <div class="gallery-cell">
+      <img src="${src}" loading="lazy" onclick="openGalleryLightbox(this)">
+      ${likeBtnHtml(likeKeyFromSrc("info", src))}
+    </div>
+  `).join("");
+  refreshLikes(grid);
 }
 function switchInfoTab(tab){
   document.querySelectorAll(".info-tabs .tab-btn").forEach(btn => {
@@ -1683,9 +1698,11 @@ function openMiniReview(){
         <button type="button" class="review-photo" onclick="openLightboxSrc('${item.image}')">
           <img src="${item.image}" alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
         </button>
+        ${likeBtnHtml(likeKeyFromSrc("mini", item.image))}
         ${item.caption ? `<p class="review-caption">${item.caption}</p>` : ""}
       </div>
     `).join("");
+    refreshLikes(grid);
   }
   showView("view-mini-review");
   playViewEnterStagger("view-mini-review", "miniReviewGrid");
@@ -2159,8 +2176,7 @@ const hjMusic = {
     btn.setAttribute("aria-pressed", on ? "true" : "false");
     btn.setAttribute("aria-label", on ? "关闭声音" : "开启声音");
     btn.title = on ? "关闭声音" : "开启声音";
-    const icon = btn.querySelector(".hj-sound-icon");
-    if(icon) icon.textContent = on ? "🔊" : "🔇";
+    /* 图标显隐由 CSS 按 .is-on 类切换（两个线性 SVG），不再替换文字 */
   }
 };
 /* 留一个口子，方便以后从控制台或从 Worker 那边喂歌单 */
@@ -2275,6 +2291,133 @@ initPasswordToggle("internalPassword", "internalPasswordShow");
 initSound();
 initClock();
 initClockToggle();
+</script>
+
+<script>
+/* =========================================================================
+   点赞系统（配合 Worker 的 get_likes / add_like 接口）
+   - 目标：活动详情页 act:<id>、小型回顾图片 mini:<文件名>、花街相册图片 info:<文件名>
+   - 显示：心形玻璃按钮 + 计数；点过赞后心形实心
+   - 限制：服务器强制每人每日（UTC+8）最多新增 10 次点赞，同一目标只能赞一次，
+     前端只做预检和提示
+   - Worker 不可用或点赞接口未部署时：按钮保持隐藏，不影响其它任何功能
+   ========================================================================= */
+const LIKE_DAILY_LIMIT = 10;
+const hjLikeState = {
+  counts: {},                       /* key -> 总数 */
+  liked: new Set(),                 /* 本访客已点过赞的 key */
+  remaining: LIKE_DAILY_LIMIT,      /* 今日剩余可点赞次数 */
+  available: false,                 /* Worker 点赞接口是否可用 */
+};
+
+function likeApiUrl(){
+  return window.HJ_LIKE_API || (typeof WORKER_URL === "string" ? WORKER_URL : "") || "";
+}
+async function likeApi(payload){
+  const url = likeApiUrl();
+  if(!url) return null;
+  try{
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  }catch(e){
+    return null;
+  }
+}
+function likeKeyFromSrc(prefix, src){
+  const name = String(src).split("/").pop().split("?")[0];
+  return prefix + ":" + name;
+}
+const LIKE_HEART_SVG = '<svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
+function likeBtnHtml(key){
+  return `<button type="button" class="hj-like-btn hj-like-chip" data-like-key="${key}" aria-pressed="false" aria-label="\u70b9\u8d5e" title="\u70b9\u8d5e" hidden>${LIKE_HEART_SVG}<span class="hj-like-count">0</span></button>`;
+}
+function hjLikeButtons(root){
+  root = root || document;
+  const list = [...root.querySelectorAll(".hj-like-btn[data-like-key]")];
+  if(root.matches && root.matches(".hj-like-btn[data-like-key]")) list.push(root);
+  return list;
+}
+function paintLikes(){
+  if(!hjLikeState.available) return;
+  hjLikeButtons(document).forEach(btn => {
+    const key = btn.dataset.likeKey;
+    if(!key) return;
+    btn.hidden = false;
+    const liked = hjLikeState.liked.has(key);
+    btn.classList.toggle("is-liked", liked);
+    btn.setAttribute("aria-pressed", liked ? "true" : "false");
+    const c = btn.querySelector(".hj-like-count");
+    if(c) c.textContent = String(hjLikeState.counts[key] || 0);
+  });
+}
+async function refreshLikes(root){
+  const keys = [...new Set(hjLikeButtons(root).map(b => b.dataset.likeKey).filter(Boolean))];
+  if(!keys.length) return;
+  const data = await likeApi({ action: "get_likes", keys });
+  if(!data || !data.ok) return;   /* 接口不可用：按钮保持隐藏 */
+  hjLikeState.available = true;
+  Object.assign(hjLikeState.counts, data.counts || {});
+  (data.liked || []).forEach(k => hjLikeState.liked.add(k));
+  if(typeof data.remaining === "number") hjLikeState.remaining = data.remaining;
+  paintLikes();
+}
+function setupDetailLike(data){
+  const btn = $("detailLikeBtn");
+  if(!btn || !data) return;
+  btn.dataset.likeKey = "act:" + (data.id || "latest");
+  /* 切换活动时先清掉上一届的状态，避免短暂显示旧数字 */
+  btn.classList.remove("is-liked");
+  const c = btn.querySelector(".hj-like-count");
+  if(c) c.textContent = "0";
+  refreshLikes(btn);
+}
+async function onLikeBtnClick(btn){
+  const key = btn.dataset.likeKey;
+  if(!key) return;
+  if(hjLikeState.liked.has(key)){
+    showToast("\u5df2\u7ecf\u70b9\u8fc7\u8d5e\u5566");
+    return;
+  }
+  if(hjLikeState.remaining <= 0){
+    showToast("\u4eca\u5929 10 \u6b21\u70b9\u8d5e\u5df2\u7528\u5b8c\uff0c\u660e\u5929\u518d\u6765\u5427");
+    return;
+  }
+  btn.disabled = true;
+  const data = await likeApi({ action: "add_like", key });
+  btn.disabled = false;
+  if(data && data.ok){
+    hjLikeState.liked.add(key);
+    hjLikeState.counts[key] = data.count;
+    if(typeof data.remaining === "number") hjLikeState.remaining = data.remaining;
+    paintLikes();
+    showToast("\u70b9\u8d5e\u6210\u529f\uff0c\u4eca\u5929\u8fd8\u5269 " + hjLikeState.remaining + " \u6b21");
+    return;
+  }
+  if(data && data.error === "already_liked"){
+    hjLikeState.liked.add(key);
+    if(typeof data.count === "number") hjLikeState.counts[key] = data.count;
+    paintLikes();
+    showToast("\u5df2\u7ecf\u70b9\u8fc7\u8d5e\u5566");
+    return;
+  }
+  if(data && data.error === "daily_limit"){
+    hjLikeState.remaining = 0;
+    showToast("\u4eca\u5929 10 \u6b21\u70b9\u8d5e\u5df2\u7528\u5b8c\uff0c\u660e\u5929\u518d\u6765\u5427");
+    return;
+  }
+  showToast("\u70b9\u8d5e\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5");
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".hj-like-btn");
+  if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  onLikeBtnClick(btn);
+}, true);
 </script>
 
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>

@@ -1382,3 +1382,113 @@ body.day-mode #captchaOverlay #captchaClose:hover{color:#3a2508;border-color:var
   font-size:.86rem;line-height:2;color:var(--text-mute);
 }
 body.day-mode .gallery-credit{color:#6b4a24;}
+
+/* ==========================================================================
+   统一线性图标（替换右上角三个 emoji 按钮）
+   同一套画法：24 网格、1.8 描边、圆角端点、currentColor 跟随文字色
+   ========================================================================== */
+.daynight-toggle{color:var(--cream);}
+.daynight-toggle .ico{
+  width:20px;height:20px;display:block;
+  fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+body.day-mode .daynight-toggle{color:#5b3610;}
+/* 昼夜开关：白天显示太阳、夜晚显示月亮（跟随 body.day-mode 自动切换） */
+#dayNightToggle .ico-sun{display:none;}
+body.day-mode #dayNightToggle .ico-moon{display:none;}
+body.day-mode #dayNightToggle .ico-sun{display:block;}
+/* 特效开启 / 声音开启：图标染成金色强调 */
+.fx-toggle.is-active{color:var(--accent);}
+.sound-toggle.is-on{color:var(--accent);}
+.hj-sound-icon{display:flex;align-items:center;justify-content:center;}
+.sound-toggle .ico-vol-on{display:none;}
+.sound-toggle.is-on .ico-vol-off{display:none;}
+.sound-toggle.is-on .ico-vol-on{display:block;}
+
+/* ==========================================================================
+   点赞按钮：与其它小按钮同一族玻璃胶囊
+   .hj-like-detail = 活动详情页横幅里的大号版
+   .hj-like-chip   = 浮在图片右上角的小号角标版（小型回顾 / 花街相册）
+   ========================================================================== */
+.hj-like-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 16px;border-radius:999px;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
+    rgba(26,21,46,.34);
+  border:1px solid rgba(255,255,255,.2);
+  color:var(--cream);
+  font-family:inherit;font-size:.85rem;line-height:1;
+  cursor:pointer;
+  box-shadow:
+    0 4px 10px rgba(10,7,22,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 9px rgba(12,9,26,.18);
+  -webkit-backdrop-filter:blur(9px) saturate(1.22);
+  backdrop-filter:blur(9px) saturate(1.22);
+  transition:transform .2s, box-shadow .25s, border-color .2s, color .2s;
+}
+.hj-like-btn[hidden]{display:none;}
+.hj-like-btn:hover{
+  border-color:var(--accent);
+  transform:translateY(-1px);
+  box-shadow:
+    0 6px 14px rgba(10,7,22,.32),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -4px 9px rgba(12,9,26,.18);
+}
+.hj-like-btn:active{transform:translateY(.5px) scale(.97);}
+.hj-like-btn:disabled{opacity:.7;cursor:default;}
+.hj-like-btn .ico-heart{
+  width:15px;height:15px;display:block;
+  fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;
+  transition:fill .2s, transform .2s;
+}
+.hj-like-btn.is-liked{color:#ff9d8a;border-color:rgba(255,157,138,.45);}
+.hj-like-btn.is-liked .ico-heart{fill:currentColor;transform:scale(1.1);}
+.hj-like-count{font-variant-numeric:tabular-nums;}
+/* 详情页横幅：独占一行，跟购票链接错开 */
+.hj-like-detail{display:flex;width:fit-content;margin-top:14px;padding:8px 20px;font-size:.9rem;}
+.hj-like-detail .ico-heart{width:16px;height:16px;}
+/* 角标版：浮在图片右上角 */
+.review-item,.gallery-cell{position:relative;}
+.hj-like-chip{
+  position:absolute;top:8px;right:8px;z-index:3;
+  gap:5px;padding:5px 11px;font-size:.78rem;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
+    rgba(18,14,32,.55);
+  -webkit-backdrop-filter:blur(7px) saturate(1.2);
+  backdrop-filter:blur(7px) saturate(1.2);
+}
+.hj-like-chip .ico-heart{width:13px;height:13px;}
+/* 白天模式 */
+body.day-mode .hj-like-btn{
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
+    rgba(255,249,235,.4);
+  border-color:rgba(255,255,255,.6);
+  color:#5b3610;
+  box-shadow:
+    0 4px 10px rgba(96,64,16,.15),
+    inset 0 1px 0 rgba(255,255,255,.72),
+    inset 0 -4px 9px rgba(140,95,25,.09);
+}
+body.day-mode .hj-like-btn:hover{
+  border-color:var(--accent);
+  box-shadow:
+    0 6px 14px rgba(96,64,16,.2),
+    inset 0 1px 0 rgba(255,255,255,.8),
+    inset 0 -4px 9px rgba(140,95,25,.09);
+}
+body.day-mode .hj-like-btn.is-liked{color:#b3402a;border-color:rgba(179,64,42,.45);}
+body.day-mode .hj-like-chip{
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.16) 50%, rgba(255,255,255,.28) 100%),
+    rgba(255,249,235,.55);
+}
+@media (prefers-reduced-motion:reduce){
+  .hj-like-btn:hover,.hj-like-btn:active{transform:none;}
+}
