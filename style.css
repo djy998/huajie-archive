@@ -2492,27 +2492,6 @@ body.day-mode .gate-card button#ticketCaptchaSwitch { color: var(--day-brown-sof
   margin: 4px auto 28px;
 }
 .admin-pills[hidden] { display: none; }
-.admin-pills button {
-  padding: 9px 22px;
-  border-radius: 999px;
-  font-size: .9rem;
-  font-weight: 600;
-  color: var(--cream);
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.08) 100%),
-    rgba(42,35,68,.5);
-  border: 1px solid rgba(233,224,255,.24);
-  box-shadow:
-    0 3px 10px rgba(8,6,18,.24),
-    inset 0 1px 0 rgba(255,255,255,.18),
-    inset 0 -4px 8px rgba(10,8,22,.16);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
-  transition: border-color .2s, color .2s, box-shadow .25s, transform .2s;
-}
-.admin-pills button:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent-soft); }
-.admin-pills button:active { transform: translateY(.5px) scale(.985); }
-
 #adminModalOverlay { z-index: 210; }
 .admin-modal {
   position: relative;
@@ -2536,15 +2515,6 @@ body.day-mode .admin-modal { background: #e8b563; }
 body.day-mode .admin-modal .gate-card { background: none; }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
-body.day-mode .admin-pills button {
-  color: var(--day-brown);
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 50%, rgba(255,255,255,.3) 100%),
-    #fff8e8;
-  border: 1.5px solid #8a5a1c;
-  box-shadow: 0 3px 10px rgba(96,60,10,.18), inset 0 1px 0 rgba(255,255,255,.8);
-}
-
 /* 区服下拉的大区分组 */
 .ticket-card select optgroup { font-style: normal; font-weight: 600; color: var(--text-mute); background: var(--ink-2); }
 .ticket-card select option { font-weight: 400; color: var(--cream); background: var(--ink-2); }
@@ -2554,5 +2524,5 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
 @media (max-width: 640px) {
   .admin-modal { max-height: 88vh; }
   .admin-modal .gate-card { padding: 30px 16px 24px; }
-  .admin-pills button { padding: 8px 16px; font-size: .84rem; }
+  .admin-pills .tab-btn { padding: 8px 14px; font-size: .82rem; }
 }

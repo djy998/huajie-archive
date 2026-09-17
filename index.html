@@ -456,7 +456,8 @@
         <h3 id="ticketResultTitle">登记成功</h3>
         <p class="ticket-result-note" id="ticketResultNote"></p>
         <dl class="ticket-result-list" id="ticketResultList"></dl>
-        <button type="button" id="ticketAgainBtn">继续登记</button>
+        <button type="button" id="ticketSaveImgBtn">截图保存</button>
+        <button type="button" id="ticketAgainBtn" hidden>继续登记</button>
       </div>
     </div>
 
@@ -490,10 +491,10 @@
 
     <div id="internalBoard" hidden>
       <div class="admin-pills" id="adminPills" hidden>
-        <button type="button" data-admin-panel="lockdownPanel">分享功能开关</button>
-        <button type="button" data-admin-panel="starlightPanel">星芒节</button>
-        <button type="button" data-admin-panel="ticketAdminPanel">购票管理</button>
-        <button type="button" data-admin-panel="postAnnouncementPanel">发布公告</button>
+        <button type="button" class="tab-btn" data-admin-panel="lockdownPanel">分享功能开关</button>
+        <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
+        <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
+        <button type="button" class="tab-btn" data-admin-panel="postAnnouncementPanel">发布公告</button>
       </div>
       <!-- 管理面板平时收在这里（隐藏），点上方胶囊按钮时搬进弹窗 -->
       <div id="adminPanelStash" hidden>
@@ -2097,7 +2098,7 @@ async function openTicketView() {
   showView("view-ticket");
   $("ticketTitle").textContent = TICKET_TITLE + (TICKET_TEST_MODE ? "（测试）" : "");
   document.title = `${TICKET_TITLE}${TICKET_TEST_MODE ? "（测试）" : ""} · 花舞之街`;
-  if ($("ticketResult").hidden === false) return;   // 刚提交完，保留结果页
+  if (!$("ticketResult").hidden) clearTicketForm();   // 再次进入购票页 → 回到空白表单
 
   setTicketMode("blocked", "正在读取购票状态…");
   const st = await callWorker({ action: "get_ticket_status" });
@@ -2263,10 +2264,11 @@ async function submitTicket(e) {
 }
 
 function showTicketResult(p, data) {
-  $("ticketResultTitle").textContent = `登记成功 · ${Number(data.day.slice(5, 7))}月${Number(data.day.slice(8, 10))}日 第 ${data.seq} 号`;
+  const dayLabel = `${Number(data.day.slice(5, 7))}月${Number(data.day.slice(8, 10))}日`;
+  $("ticketResultTitle").textContent = `登记成功 · ${dayLabel}`;
   $("ticketResultNote").textContent = data.overLimit
-    ? "提交时今日票额已满，本单为超额登记，需等待工作人员确认，请留意联系方式的消息。"
-    : "请截图保存本页，付款与取票请留意活动群通知或工作人员联系。";
+    ? `提交时今日票额已满，本单为超额登记，需等待工作人员确认。请截图保存本页，并留意活动群${GROUP_QQ}。`
+    : `请截图保存本页，付款与取票请留意活动群${GROUP_QQ}。`;
   $("ticketResultNote").classList.toggle("is-warn", !!data.overLimit);
   const rows = [
     ["联系方式", p.contact],
@@ -2274,20 +2276,170 @@ function showTicketResult(p, data) {
     ...p.holders.map((h, i) => [`持票人 ${i + 1}`, formatHolder(h)]),
   ];
   if (p.message) rows.push(["留言", `${p.message}（${p.anonymous ? "匿名" : "实名"}）`]);
+  ticketResultSnapshot = { rows, dayLabel, note: $("ticketResultNote").textContent };
   $("ticketResultList").innerHTML = rows
     .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
   setTicketMode("result");
   $("ticketResult").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-function resetTicketForm() {
+function clearTicketForm() {
   $("ticketForm").reset();
   $("ticketAnonymous").checked = true;
   $("ticketHolders").innerHTML = "";
   setMsg($("ticketMsg"), "");
   setTicketQty(1);
   $("ticketResult").hidden = true;
+}
+
+function resetTicketForm() {
+  clearTicketForm();
   openTicketView();
+}
+
+/* 截图保存 ----------------------------------------------------------------------
+   用 canvas 自己画一张登记凭证图（不依赖外部库，国内也能用），右下角带水印 */
+let ticketResultSnapshot = null;
+
+const TICKET_IMG = {
+  width: 760,
+  pad: 44,
+  bg: "#241d3c",
+  card: "#2a2344",
+  line: "rgba(233,224,255,.16)",
+  cream: "#f7f0e2",
+  gold: "#ffd699",
+  soft: "#c9bfe0",
+  mute: "#948aad",
+  serif: '"Noto Serif SC", "Songti SC", "Source Han Serif SC", serif',
+};
+
+/* 按最大宽度折行，返回行数组 */
+function wrapCanvasText(ctx, text, maxWidth) {
+  const lines = [];
+  for (const paragraph of String(text).split("\n")) {
+    let line = "";
+    for (const ch of paragraph) {
+      if (ctx.measureText(line + ch).width > maxWidth && line) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line += ch;
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawTicketImage(snap) {
+  const S = TICKET_IMG;
+  const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+  const labelW = 110;
+  const valueW = S.width - S.pad * 2 - labelW - 16;
+  const measure = document.createElement("canvas").getContext("2d");
+
+  // 先量高度：标题 + 副标题 + 说明（可能折行） + 每行信息 + 水印
+  measure.font = `16px ${S.serif}`;
+  const noteLines = wrapCanvasText(measure, snap.note, S.width - S.pad * 2);
+  const rowLines = snap.rows.map(([k, v]) => ({ k, lines: wrapCanvasText(measure, v, valueW) }));
+  const rowsHeight = rowLines.reduce((n, r) => n + Math.max(1, r.lines.length) * 28 + 10, 0);
+  const height = Math.round(S.pad + 46 + 40 + noteLines.length * 26 + 22 + rowsHeight + 18 + 22 + S.pad);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = S.width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.textBaseline = "top";
+
+  ctx.fillStyle = S.bg;
+  ctx.fillRect(0, 0, S.width, height);
+  roundRect(ctx, 14, 14, S.width - 28, height - 28, 22);
+  ctx.fillStyle = S.card;
+  ctx.fill();
+  ctx.strokeStyle = S.line;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  let y = S.pad;
+  ctx.textAlign = "center";
+  ctx.fillStyle = S.gold;
+  ctx.font = `bold 30px ${S.serif}`;
+  ctx.fillText(TICKET_TITLE + (TICKET_TEST_MODE ? "（测试）" : ""), S.width / 2, y);
+  y += 46;
+  ctx.fillStyle = S.cream;
+  ctx.font = `bold 22px ${S.serif}`;
+  ctx.fillText(`登记成功 · ${snap.dayLabel}`, S.width / 2, y);
+  y += 40;
+  ctx.fillStyle = S.soft;
+  ctx.font = `15px ${S.serif}`;
+  noteLines.forEach((line) => {
+    ctx.fillText(line, S.width / 2, y);
+    y += 26;
+  });
+  y += 22;
+
+  ctx.textAlign = "left";
+  rowLines.forEach(({ k, lines }) => {
+    ctx.fillStyle = S.mute;
+    ctx.font = `15px ${S.serif}`;
+    ctx.fillText(k, S.pad, y + 2);
+    ctx.fillStyle = S.cream;
+    ctx.font = `17px ${S.serif}`;
+    lines.forEach((line, i) => ctx.fillText(line, S.pad + labelW + 16, y + i * 28));
+    y += Math.max(1, lines.length) * 28 + 10;
+  });
+
+  // 水印：右下角
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255,214,153,.55)";
+  ctx.font = `14px ${S.serif}`;
+  ctx.fillText(`花舞之街·薰风花语町，${snap.dayLabel}`, S.width - S.pad, height - S.pad - 14);
+
+  return canvas;
+}
+
+function saveTicketImage() {
+  if (!ticketResultSnapshot) return;
+  const canvas = drawTicketImage(ticketResultSnapshot);
+  const download = (url, revoke) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `花街购票登记_${ticketResultSnapshot.dayLabel}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("图片已保存到下载目录");
+    if (revoke) setTimeout(() => URL.revokeObjectURL(url), 20000);
+  };
+  if (canvas.toBlob) {
+    canvas.toBlob((blob) => blob ? download(URL.createObjectURL(blob), true) : openTicketImageFallback(canvas), "image/png");
+  } else {
+    openTicketImageFallback(canvas);
+  }
+}
+
+/* 个别浏览器（老版本 iOS Safari）不支持直接下载：新窗口打开让用户长按保存 */
+function openTicketImageFallback(canvas) {
+  const url = canvas.toDataURL("image/png");
+  const w = window.open();
+  if (w) {
+    w.document.write(`<title>购票登记</title><img src="${url}" style="max-width:100%">`);
+    showToast("长按图片即可保存");
+  } else {
+    showToast("浏览器拦截了新窗口，请直接截屏保存");
+  }
 }
 
 /* 查询 -------------------------------------------------------------------------- */
@@ -2326,6 +2478,7 @@ function initTicket() {
   $("ticketQtyPlus").addEventListener("click", () => setTicketQty(ticketState.qty + 1));
   $("ticketForm").addEventListener("submit", submitTicket);
   $("ticketAgainBtn").addEventListener("click", resetTicketForm);
+  $("ticketSaveImgBtn").addEventListener("click", saveTicketImage);
   $("ticketNoticeClose").addEventListener("click", closeTicketNotice);
   $("ticketNoticeOverlay").addEventListener("click", (e) => {
     if (e.target === e.currentTarget) closeTicketNotice();
