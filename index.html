@@ -12,7 +12,10 @@
        ④ 管理员模式新增「星芒节时间覆盖」：所设时段内所有天气档显示为「小雪」
        ⑤ 声音（音乐）按钮暂时隐藏，原位改为时钟按钮：时间条与天气的显隐开关
          从标题「·」移到该按钮上，「·」还原为纯文本
-       ⑥ 开屏图更换为新版莫古力徽章（boot-moguri-v2.webp，800×800 透明 WebP） -->
+       ⑥ 开屏图更换为新版莫古力徽章（boot-moguri-v2.webp，800×800 透明 WebP）
+       ⑦ 声音按钮回归为「音量」入口：点开竖条音量弹层，0 即静音，不显示数值
+       ⑧ 最右新增「更多」按钮（三横线图标），下拉闹铃/日历等占位功能（点击提示开发中）；
+         右上角按钮排槽顺次左移：更多/昼夜/特效/时钟/音量 -->
 
   <!-- 分享卡片：og-image.jpg 放在站点根目录，1200x630 -->
   <meta property="og:type" content="website">
@@ -34,7 +37,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 
@@ -61,26 +64,43 @@
 <div id="fxClickLayer" aria-hidden="true"></div>
 
 <header class="site-header">
-  <button class="daynight-toggle" id="dayNightToggle" aria-label="切换白天黑夜">
+  <!-- 右上角圆形按钮排槽（从右往左）：更多 / 昼夜 / 特效 / 时钟 / 音量，槽位由 .hb-slot-N 决定 -->
+  <button class="daynight-toggle more-toggle hb-slot-1" id="moreToggle" type="button"
+          aria-haspopup="true" aria-expanded="false" aria-label="更多功能" title="更多功能">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <button class="daynight-toggle hb-slot-2" id="dayNightToggle" aria-label="切换白天黑夜">
     <svg class="ico ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
     <svg class="ico ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
   </button>
-  <button class="daynight-toggle fx-toggle" id="fxToggle" aria-label="切换动态效果">
+  <button class="daynight-toggle fx-toggle hb-slot-3" id="fxToggle" aria-label="切换动态效果">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
   </button>
   <!-- 时钟按钮：切换时间条（国服/艾欧泽亚时间与高脚孤丘天气）显隐；此功能原挂在标题的「·」上 -->
-  <button class="daynight-toggle clock-toggle" id="clockToggle" type="button" aria-pressed="false"
+  <button class="daynight-toggle clock-toggle hb-slot-4" id="clockToggle" type="button" aria-pressed="false"
           aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
   </button>
-  <!-- 背景音乐暂未接入：声音按钮先隐藏（代码保留，去掉 hidden 属性即可恢复显示） -->
-  <button class="daynight-toggle sound-toggle" id="soundToggle" type="button" hidden
-          aria-label="开启声音" aria-pressed="false" title="开启声音">
+  <!-- 音量按钮：点开是竖条音量弹层（0 即静音）；此按钮早前是播放开关，现改为调音量 -->
+  <button class="daynight-toggle sound-toggle hb-slot-5" id="soundToggle" type="button"
+          aria-haspopup="true" aria-expanded="false" aria-label="音量（未静音）" title="音量（未静音）">
     <span class="hj-sound-icon" aria-hidden="true">
       <svg class="ico ico-vol-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
       <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
     </span>
   </button>
+
+  <!-- 音量弹层：只有一根竖条，不显示任何音量数值（数值仅通过 aria 传给读屏） -->
+  <div class="vol-panel" id="volPanel" hidden>
+    <div class="vol-track" id="volTrack" tabindex="0" role="slider"
+         aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
+      <div class="vol-fill" id="volFill"></div>
+      <div class="vol-thumb" id="volThumb"></div>
+    </div>
+  </div>
+
+  <!-- 「更多」下拉：占位功能入口，点击统一提示「功能正在开发中~」（条目在 JS 的 HJ_MORE_FEATURES 里加） -->
+  <div class="more-panel" id="morePanel" aria-label="更多功能" hidden></div>
   <h1 class="brand">花舞之街 · 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
@@ -391,6 +411,7 @@ const MUSIC_TRACKS = [
 ];
 const MUSIC_FADE_MS = 700;   /* 淡入淡出时长 */
 const MUSIC_VOLUME  = 0.55;  /* 目标音量 0~1，默认不开满，免得吓到访客 */
+const HJ_VOLUME_KEY = "hj_volume";   /* 音量百分比 0~100，0 = 静音；竖条弹层的持久化键 */
 
 const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";
 const GROUP_QQ = "453278026";
@@ -2271,6 +2292,8 @@ const hjMusic = {
   setVolume(v){
     this.vol = Math.max(0, Math.min(1, Number(v) || 0));
     if(this.audio && this.playing) this.audio.volume = this.vol;
+    try{ localStorage.setItem(HJ_VOLUME_KEY, String(Math.round(this.vol * 100))); }catch(e){}
+    this.sync();
   },
   remember(){ try{ localStorage.setItem("hj_sound_on", this.wantPlay ? "1" : "0"); }catch(e){} },
   load(list){
@@ -2281,15 +2304,14 @@ const hjMusic = {
     if(this.wantPlay && this.hasTracks()) this.play();
   },
   sync(){
-    /* 简单的全局声音开关：按钮只反映"用户想不想开声音"（wantPlay），
-       不区分有没有音源、有没有正在淡入淡出这些内部细节。 */
+    /* 按钮状态现在表示"是否静音"：音量 0 = 静音（变暗 + 静音图标），
+       非 0 = 正常（亮 + 喇叭图标）；图标显隐仍由 CSS 按 .is-on 类切换。 */
     const btn = this.btn();
     if(!btn) return;
-    const on = this.wantPlay;
+    const on = this.vol > 0;
     btn.classList.toggle("is-on", on);
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-    btn.setAttribute("aria-label", on ? "关闭声音" : "开启声音");
-    btn.title = on ? "关闭声音" : "开启声音";
+    btn.setAttribute("aria-label", on ? "音量（未静音）" : "音量（静音）");
+    btn.title = on ? "音量（未静音）" : "音量（静音）";
     /* 图标显隐由 CSS 按 .is-on 类切换（两个线性 SVG），不再替换文字 */
   }
 };
@@ -2305,12 +2327,17 @@ window.HJ_MUSIC = {
 function initSound(){
   const btn = hjMusic.btn();
   if(!btn) return;
-  btn.addEventListener("click", () => hjMusic.toggle());
+  /* 恢复上次保存的音量百分比（默认 MUSIC_VOLUME）；0 = 静音。
+     注意 getItem 无值时返回 null，Number(null)=0，必须先判 null 再转数，否则首次访问会变静音 */
+  let saved = NaN;
+  try{ const raw = localStorage.getItem(HJ_VOLUME_KEY); if(raw !== null) saved = Number(raw); }catch(e){}
+  hjMusic.setVolume(Number.isFinite(saved) ? saved / 100 : MUSIC_VOLUME);
+  /* 按钮现在是音量弹层入口（不再是播放开关） */
+  btn.addEventListener("click", () => toggleVolPanel());
   hjMusic.sync();
-  let saved = null;
-  try{ saved = localStorage.getItem("hj_sound_on"); }catch(e){}
-  /* 默认关闭；上次开着的话，等第一次真实交互再放——浏览器的自动播放限制只能这样绕。 */
-  if(saved === "1" && hjMusic.hasTracks()){
+  initVolSlider();
+  /* 自动播放限制兜底：将来接入音源后，音量非零就在第一次真实交互时开始播放 */
+  if(hjMusic.vol > 0 && hjMusic.hasTracks()){
     const kick = () => {
       document.removeEventListener("pointerdown", kick);
       document.removeEventListener("keydown", kick);
@@ -2319,6 +2346,127 @@ function initSound(){
     document.addEventListener("pointerdown", kick);
     document.addEventListener("keydown", kick);
   }
+}
+
+/* =========================================================================
+   音量弹层（右上角声音按钮 = 音量入口）
+   - 点声音按钮不再直接切换播放/暂停，而是打开一个带竖条的小弹层
+   - 竖条可拖拽 / 点轨道跳变 / 键盘方向键微调；0 = 静音（按钮切静音图标并变暗）
+   - 按要求弹层只显示竖条，不显示任何音量数值（数值只通过 aria 传给读屏）
+   - 音量百分比存 localStorage hj_volume；将来接入音源后自动作用到播放器
+   ========================================================================= */
+function openVolPanel(open){
+  const panel = $("volPanel");
+  const btn = $("soundToggle");
+  if(!panel || !btn) return;
+  panel.hidden = !open;
+  btn.setAttribute("aria-expanded", String(!!open));
+}
+function toggleVolPanel(){
+  openVolPanel($("volPanel").hidden);
+  openMorePanel(false);   /* 两个弹层互斥 */
+}
+/* 画竖条：填充高度 + 滑块位置 + aria（数值唯一出现的地方，且不可见） */
+function paintVolSlider(p){
+  const track = $("volTrack");
+  if(!track) return;
+  const fill = $("volFill");
+  const thumb = $("volThumb");
+  if(fill) fill.style.height = p + "%";
+  if(thumb) thumb.style.bottom = "calc(" + p + "% - 8px)";
+  track.setAttribute("aria-valuenow", String(p));
+  track.setAttribute("aria-valuetext", p === 0 ? "静音" : "音量 " + p);
+}
+function setVolumePercent(p){
+  hjMusic.setVolume(Math.max(0, Math.min(100, Math.round(p))) / 100);  /* setVolume 内部会持久化并同步按钮状态 */
+  paintVolSlider(Math.round(hjMusic.vol * 100));
+}
+function initVolSlider(){
+  const track = $("volTrack");
+  if(!track) return;
+  paintVolSlider(Math.round(hjMusic.vol * 100));
+  const valueFromPointer = (e) => {
+    const rect = track.getBoundingClientRect();
+    if(!rect.height) return Math.round(hjMusic.vol * 100);
+    return (1 - (e.clientY - rect.top) / rect.height) * 100;
+  };
+  let dragging = false;
+  track.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    try{ track.setPointerCapture(e.pointerId); }catch(err){}
+    setVolumePercent(valueFromPointer(e));
+    e.preventDefault();
+  });
+  track.addEventListener("pointermove", (e) => { if(dragging) setVolumePercent(valueFromPointer(e)); });
+  track.addEventListener("pointerup", () => { dragging = false; });
+  track.addEventListener("pointercancel", () => { dragging = false; });
+  /* 键盘可达：方向键 ±5，Home 静音，End 最大 */
+  track.addEventListener("keydown", (e) => {
+    const cur = Math.round(hjMusic.vol * 100);
+    let next = null;
+    if(e.key === "ArrowUp" || e.key === "ArrowRight") next = cur + 5;
+    else if(e.key === "ArrowDown" || e.key === "ArrowLeft") next = cur - 5;
+    else if(e.key === "Home") next = 0;
+    else if(e.key === "End") next = 100;
+    if(next === null) return;
+    e.preventDefault();
+    setVolumePercent(next);
+  });
+}
+
+/* =========================================================================
+   「更多」下拉：将来功能的占位入口
+   - 按钮在右上角按钮排槽最右（三横线图标），点开下拉列表
+   - 目前所有功能都是占位：点击统一提示「功能正在开发中~」
+   - 将来新增功能只需往 HJ_MORE_FEATURES 里加一条 { id, label, icon }
+   ========================================================================= */
+const HJ_MORE_FEATURES = [
+  { id: "alarm",    label: "闹铃", icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
+  { id: "calendar", label: "日历", icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
+  { id: "notes",    label: "备忘", icon: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9.5h6M9 13.5h6M9 17.5h4"/>' },
+  { id: "lottery",  label: "抽奖", icon: '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.2" fill="currentColor" stroke="none"/>' },
+];
+function renderMorePanel(){
+  const panel = $("morePanel");
+  if(!panel) return;
+  panel.innerHTML = HJ_MORE_FEATURES.map(f =>
+    '<button type="button" class="more-item" data-more-id="' + f.id + '">' +
+    '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + f.icon + '</svg>' +
+    '<span>' + f.label + '</span></button>'
+  ).join("");
+  panel.querySelectorAll(".more-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showToast("功能正在开发中~");
+      openMorePanel(false);
+    });
+  });
+}
+function openMorePanel(open){
+  const panel = $("morePanel");
+  const btn = $("moreToggle");
+  if(!panel || !btn) return;
+  panel.hidden = !open;
+  btn.classList.toggle("is-active", !!open);
+  btn.setAttribute("aria-expanded", String(!!open));
+}
+function initMorePanel(){
+  renderMorePanel();
+  $("moreToggle").addEventListener("click", () => {
+    openMorePanel($("morePanel").hidden);
+    openVolPanel(false);   /* 两个弹层互斥 */
+  });
+}
+
+/* 点空白处或按 Esc 收起头部两个弹层（点弹层内部/自身按钮不算） */
+function initHeaderPanels(){
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if(!(t.closest && t.closest("#volPanel, #soundToggle"))) openVolPanel(false);
+    if(!(t.closest && t.closest("#morePanel, #moreToggle"))) openMorePanel(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape"){ openVolPanel(false); openMorePanel(false); }
+  });
 }
 
 /* =========================================================================
@@ -2641,6 +2789,8 @@ initA11yTiles();
 initA11yModals();
 initPasswordToggle("internalPassword", "internalPasswordShow");
 initSound();
+initMorePanel();
+initHeaderPanels();
 initClock();
 initClockToggle();
 /* 异步拉取星芒节覆盖时段（Worker 未部署接口时自动退回 localStorage 缓存），

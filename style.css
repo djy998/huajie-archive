@@ -68,18 +68,22 @@ a{color:inherit;}
   user-select:none;-webkit-user-select:none;
 }
 .daynight-toggle:hover{border-color:var(--accent);}
-.fx-toggle{right:70px;opacity:.4;}
+.fx-toggle{opacity:.4;}
 .fx-toggle.is-active{opacity:1;}
+/* 右上角按钮排槽：从右往左 1=更多 2=昼夜 3=特效 4=时钟 5=音量，按钮间距 8px */
+.hb-slot-1{right:18px;}
+.hb-slot-2{right:70px;}
+.hb-slot-3{right:122px;}
+.hb-slot-4{right:174px;}
+.hb-slot-5{right:226px;}
 
 /* ---------- 声音开关（简单全局静音/取消静音，默认关闭） ---------- */
-.sound-toggle{right:122px;opacity:.55;}
+.sound-toggle{opacity:.55;}   /* 暗 = 静音；.is-on（非 0 音量）时变亮 */
 .sound-toggle.is-on{opacity:1;border-color:var(--accent);}
 .hj-sound-icon{line-height:1;font-size:1.05rem;}
-/* 背景音乐暂未接入：声音按钮暂时隐藏；恢复时删掉 HTML 里的 hidden 属性即可，本条规则随之自动失效 */
-#soundToggle[hidden]{display:none;}
 
 /* ---------- 时钟按钮：切换时间条显隐（2026-09 从标题「·」移到右上角，占声音按钮原位） ---------- */
-.clock-toggle{right:122px;opacity:.4;}
+.clock-toggle{opacity:.4;}
 .clock-toggle.is-active{opacity:1;color:var(--accent);}
 
 /* ---------- 时间条：国服 UTC+8 + 艾欧泽亚时间 ---------- */
@@ -706,9 +710,11 @@ footer{text-align:center;padding:30px 24px 50px;color:var(--text-mute);font-size
 @media (max-width:640px){
   .tile-grid, .tile-grid.tile-grid-3{grid-template-columns:1fr;}
   .daynight-toggle{width:40px;height:40px;top:14px;}
-  .fx-toggle{right:64px;}
-  .sound-toggle{right:118px;top:14px;}
-  .clock-toggle{right:118px;top:14px;}
+  .hb-slot-1{right:12px;}
+  .hb-slot-2{right:58px;}
+  .hb-slot-3{right:104px;}
+  .hb-slot-4{right:150px;}
+  .hb-slot-5{right:196px;}
   .hj-clock{margin-top:14px;gap:4px 9px;font-size:.74rem;padding:0 4px;}
   .info-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
   .tile-hero{aspect-ratio:1399/1374;}
@@ -1563,3 +1569,59 @@ body.day-mode .starlight-sep{color:#6b4a24;}
 #starlightClearBtn:hover{color:var(--text);border-color:var(--text-soft);}
 body.day-mode #starlightClearBtn{background:rgba(255,251,238,.45);color:#5b3610;border-color:#8a5a1c;}
 body.day-mode #starlightClearBtn:hover{background:rgba(255,251,238,.75);}
+
+
+/* ---------- 头部弹层：音量竖条 + 「更多」下拉（2026-09 新增） ---------- */
+.vol-panel,
+.more-panel{
+  position:absolute;top:66px;z-index:50;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 46%, rgba(255,255,255,.08) 100%),
+    rgba(26,21,46,.78);
+  border:1px solid rgba(255,255,255,.17);border-radius:18px;
+  box-shadow:0 8px 22px rgba(10,7,22,.35), inset 0 1px 0 rgba(255,255,255,.22);
+  -webkit-backdrop-filter:blur(10px) saturate(1.2);
+  backdrop-filter:blur(10px) saturate(1.2);
+}
+.vol-panel{right:226px;display:flex;justify-content:center;padding:16px 12px;}
+.vol-panel[hidden],.more-panel[hidden]{display:none;}
+/* 竖条：8px 圆轨道 + 主题色填充 + 圆形滑块；touch-action:none 保证手机上能拖 */
+.vol-track{
+  position:relative;width:8px;height:132px;border-radius:999px;
+  background:rgba(255,255,255,.16);cursor:pointer;touch-action:none;
+}
+.vol-fill{position:absolute;left:0;bottom:0;width:100%;border-radius:inherit;background:var(--accent);}
+.vol-thumb{
+  position:absolute;left:50%;bottom:calc(55% - 8px);width:16px;height:16px;
+  transform:translateX(-50%);border-radius:50%;
+  background:var(--cream);border:2px solid var(--accent);
+  box-shadow:0 2px 6px rgba(10,7,22,.4);pointer-events:none;
+}
+.more-panel{right:18px;display:flex;flex-direction:column;gap:2px;min-width:148px;padding:8px;}
+.more-item{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;border-radius:12px;
+  background:none;color:var(--text-soft);font-family:inherit;font-size:.88rem;text-align:left;cursor:pointer;
+}
+.more-item:hover{background:rgba(255,255,255,.08);color:var(--accent-soft);}
+.more-panel .ico{
+  width:18px;height:18px;flex:none;
+  fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+/* 「更多」按钮打开下拉时的高亮，与其它开关的 is-active 同族 */
+.more-toggle.is-active{color:var(--accent);border-color:var(--accent);}
+/* 白天模式：弹层换暖色玻璃变体 */
+body.day-mode .vol-panel,
+body.day-mode .more-panel{
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.32) 100%),
+    rgba(255,249,235,.9);
+  border-color:rgba(255,255,255,.55);
+  box-shadow:0 8px 22px rgba(96,64,16,.2), inset 0 1px 0 rgba(255,255,255,.75);
+}
+body.day-mode .vol-track{background:rgba(90,60,20,.18);}
+body.day-mode .more-item{color:#5b4326;}
+body.day-mode .more-item:hover{background:rgba(122,84,32,.1);color:#3a2508;}
+@media (max-width:640px){
+  .vol-panel{right:196px;top:58px;}
+  .more-panel{right:12px;top:58px;}
+}
