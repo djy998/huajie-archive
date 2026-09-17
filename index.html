@@ -489,8 +489,17 @@
     </div>
 
     <div id="internalBoard" hidden>
+      <div class="admin-pills" id="adminPills" hidden>
+        <button type="button" data-admin-panel="lockdownPanel">分享功能开关</button>
+        <button type="button" data-admin-panel="starlightPanel">星芒节</button>
+        <button type="button" data-admin-panel="ticketAdminPanel">购票管理</button>
+        <button type="button" data-admin-panel="postAnnouncementPanel">发布公告</button>
+      </div>
+      <!-- 管理面板平时收在这里（隐藏），点上方胶囊按钮时搬进弹窗 -->
+      <div id="adminPanelStash" hidden>
       <div class="gate-card admin-card" id="lockdownPanel" hidden>
-        <h2>站点开关</h2>
+        <h2>分享功能开关</h2>
+        <p class="hint">关闭后网页变成纯静态展示：复制花街介绍不再附联系方式，活动群、场地使用登记、点赞都会提示「功能未开放」。</p>
         <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
         <button id="lockdownToggleBtn">切换</button>
         <p class="form-msg" id="lockdownMsg" hidden></p>
@@ -577,6 +586,7 @@
         <button id="cancelEditAnnouncementBtn" type="button" class="cancel-edit-btn" hidden>取消编辑</button>
         <p class="form-msg" id="postAnnouncementMsg" hidden></p>
       </div>
+      </div>
       <h2 class="section-title">公告板</h2>
       <div id="announcementList"></div>
     </div>
@@ -602,6 +612,13 @@
     <div class="math-captcha" id="captchaMath" hidden></div>
     <button type="button" class="captcha-switch" id="captchaSwitch">验证加载不出来？改用算术题</button>
     <p class="form-msg" id="captchaMsg" hidden></p>
+  </div>
+</div>
+
+<div class="info-overlay" id="adminModalOverlay" role="dialog" aria-modal="true" aria-label="管理功能" hidden>
+  <div class="admin-modal">
+    <button class="info-close" id="adminModalClose" aria-label="关闭">×</button>
+    <div id="adminModalHost"></div>
   </div>
 </div>
 
@@ -1051,9 +1068,27 @@ async function callWorker(payload) {
   }
 }
 
+/* 分享功能开关：siteLockdown = true 表示分享功能已关闭（纯静态展示） */
+const STATIC_MODE_MSG = "功能未开放，敬请谅解~";
+
 async function isLockedDown() {
   const data = await callWorker({ action: "get_lockdown" });
-  return data ? !!data.value : false;
+  if (data) siteLockdown = !!data.value;
+  return data ? !!data.value : siteLockdown;
+}
+
+/* 需要联网互动的功能在静态模式下一律拦掉；顺手刷新一次开关状态 */
+async function blockedByStaticMode() {
+  if (siteLockdown) {
+    showToast(STATIC_MODE_MSG);
+    isLockedDown();   // 后台再确认一次，管理员刚开启时下次点击即恢复
+    return true;
+  }
+  if (await isLockedDown()) {
+    showToast(STATIC_MODE_MSG);
+    return true;
+  }
+  return false;
 }
 
 const isDayMode = () => document.body.classList.contains("day-mode");
@@ -1418,12 +1453,12 @@ function initNav() {
   $("archiveTile").addEventListener("click", openArchiveList);
   $("venueTile").addEventListener("click", openMiniReview);
   $("infoTile").addEventListener("click", () => requestCaptcha("info"));
-  $("internalTile").addEventListener("click", () => window.open(VENUE_URL, "_blank", "noopener"));
+  $("internalTile").addEventListener("click", async () => {
+    if (await blockedByStaticMode()) return;
+    window.open(VENUE_URL, "_blank", "noopener");
+  });
   $("groupTile").addEventListener("click", async () => {
-    if (await isLockedDown()) {
-      showToast("当前活动群暂不开放，敬请谅解");
-      return;
-    }
+    if (await blockedByStaticMode()) return;
     requestCaptcha("group");
   });
   document.querySelectorAll("[data-back]").forEach((btn) => btn.addEventListener("click", goHome));
@@ -1495,15 +1530,48 @@ async function checkInternalPassword() {
   $("internalBoard").hidden = false;
   renderAnnouncements(data.items, data.isAdmin);
 
-  ["lockdownPanel", "postAnnouncementPanel", "starlightPanel", "ticketAdminPanel"].forEach((id) => {
-    $(id).hidden = !data.isAdmin;
+  // 管理面板都收进弹窗里，通过上方的胶囊按钮打开
+  $("adminPills").hidden = !data.isAdmin;
+  if (data.isAdmin) internalAdminPassword = input.value;
+}
+
+/* 管理功能弹窗：把面板节点搬进弹窗，打开时刷新它自己的数据 */
+const ADMIN_PANEL_REFRESH = {
+  lockdownPanel: () => refreshLockdownStatus(),
+  starlightPanel: () => syncStarlightPanel(),
+  ticketAdminPanel: () => refreshTicketAdmin(),
+};
+
+/* 关掉 / 切换面板时把节点搬回 stash，避免被下一个面板顶掉 */
+function stashAdminPanels() {
+  [...$("adminModalHost").children].forEach((el) => {
+    el.hidden = true;
+    $("adminPanelStash").appendChild(el);
   });
-  if (data.isAdmin) {
-    internalAdminPassword = input.value;
-    refreshLockdownStatus();
-    syncStarlightPanel();
-    refreshTicketAdmin();
-  }
+}
+
+function openAdminPanel(id) {
+  const panel = $(id);
+  if (!panel) return;
+  stashAdminPanels();
+  $("adminModalHost").appendChild(panel);
+  panel.hidden = false;
+  $("adminModalOverlay").hidden = false;
+  playEnterAnim(document.querySelector("#adminModalOverlay .admin-modal"));
+  ADMIN_PANEL_REFRESH[id]?.();
+}
+
+function closeAdminPanel() {
+  $("adminModalOverlay").hidden = true;
+  stashAdminPanels();
+}
+
+function initAdminPanels() {
+  $("adminPills").querySelectorAll("[data-admin-panel]").forEach((btn) => {
+    btn.addEventListener("click", () => openAdminPanel(btn.dataset.adminPanel));
+  });
+  $("adminModalClose").addEventListener("click", closeAdminPanel);
+  closeOnBackdrop($("adminModalOverlay"), closeAdminPanel);
 }
 
 function renderAnnouncements(items, isAdmin) {
@@ -1634,6 +1702,7 @@ function initAnnouncementImageUpload() {
 /* 发布 / 编辑 / 删除 --------------------------------------------------------- */
 
 function startEditAnnouncement(item) {
+  openAdminPanel("postAnnouncementPanel");
   editingAnnouncementId = item.id;
   $("announcementText").value = item.body;
   $("announceShowA").checked = !!item.show_a;
@@ -1642,7 +1711,7 @@ function startEditAnnouncement(item) {
   showAnnouncementImagePreview(pendingAnnouncementImageUrl);
   $("postAnnouncementBtn").textContent = "保存修改";
   $("cancelEditAnnouncementBtn").hidden = false;
-  $("announcementText").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("announcementText").focus({ preventScroll: true });
 }
 
 function cancelEditAnnouncement() {
@@ -1697,6 +1766,7 @@ async function submitAnnouncement() {
     return;
   }
   cancelEditAnnouncement();
+  closeAdminPanel();
   showToast(isEditing ? "公告已更新" : "公告已发布");
   refreshAnnouncements();
 }
@@ -1711,7 +1781,8 @@ function initPostAnnouncement() {
    6. 管理员：站点开关、星芒节时间覆盖
    ============================================================================= */
 
-/* 站点开关（lockdown）：开启后复制花街介绍不附联系方式，活动群提示暂不开放 */
+/* 分享功能开关：数据库里存的仍是 lockdown（1 = 分享功能关闭），
+   界面按「分享功能」正向表述：开启 = 正常，关闭 = 纯静态展示 */
 async function refreshLockdownStatus() {
   const status = $("lockdownStatus");
   status.textContent = "当前状态：读取中…";
@@ -1720,9 +1791,11 @@ async function refreshLockdownStatus() {
     status.textContent = "当前状态：读取失败";
     return;
   }
+  siteLockdown = !!data.value;
   status.textContent = data.value
-    ? "当前状态：已开启（复制不加联系方式，活动群提示暂不开放）"
-    : "当前状态：关闭（正常运行）";
+    ? "当前状态：已关闭（纯静态展示，联系方式 / 活动群 / 场地登记 / 点赞都不可用）"
+    : "当前状态：已开启（正常运行）";
+  $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
   $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
 }
 
@@ -1742,6 +1815,8 @@ function initLockdownToggle() {
       setMsg(msg, "切换失败，请重新登录内部入口后再试");
       return;
     }
+    siteLockdown = !!data.value;
+    showToast(data.value ? "分享功能已关闭（纯静态展示）" : "分享功能已开启");
     refreshLockdownStatus();
   });
 }
@@ -1888,12 +1963,14 @@ function initStarlightPanel() {
    ============================================================================= */
 
 const TICKET_MAX_QTY = 5;
-const TICKET_SERVERS = [
-  "拉诺西亚", "幻影群岛", "神意之地", "萌芽池", "红玉海", "宇宙和音", "沃仙曦染",
-  "晨曦王座", "潮风亭", "神拳痕", "白银乡", "白金幻象", "旅人栈桥", "拂晓之间",
-  "龙巢神殿", "梦羽宝境", "紫水栈桥", "延夏", "静语庄园", "摩杜纳", "海猫茶屋",
-  "柔风海湾", "琥珀原", "水晶塔", "银泪湖", "太阳海岸", "伊修加德", "红茶川",
+/* 区服按大区分组：下拉里用分组标题显示【大区】，存进表格的仍是服务器名（与往年表格一致） */
+const TICKET_SERVER_GROUPS = [
+  { dc: "陆行鸟", servers: ["拉诺西亚", "幻影群岛", "神意之地", "萌芽池", "红玉海", "宇宙和音", "沃仙曦染", "晨曦王座"] },
+  { dc: "莫古力", servers: ["潮风亭", "神拳痕", "白银乡", "白金幻象", "旅人栈桥", "拂晓之间", "龙巢神殿", "梦羽宝境"] },
+  { dc: "猫小胖", servers: ["紫水栈桥", "延夏", "静语庄园", "摩杜纳", "海猫茶屋", "柔风海湾", "琥珀原"] },
+  { dc: "豆豆柴", servers: ["水晶塔", "银泪湖", "太阳海岸", "伊修加德", "红茶川"] },
 ];
+const TICKET_SERVERS = TICKET_SERVER_GROUPS.flatMap((g) => g.servers);
 const TICKET_MSG_SOLD_OUT = "今日活动票已售罄，可留意后续放票！";
 const TICKET_MSG_CLOSED = "购票暂未开放，请留意活动群通知";
 const TICKET_ERRORS = {
@@ -1904,6 +1981,7 @@ const TICKET_ERRORS = {
   bad_holder_name: "请填写每位持票人的 id",
   bad_holder_server: "请为每位持票人选择区服",
   pending_not_allowed: "当前不支持 id 待定，请填写完整的持票人信息",
+  first_holder_required: "第一位持票玩家的 id 和区服必须填写，不能待定",
   captcha: "人机验证未通过，请重新验证后再提交",
   rate_limited: "提交太频繁了，请稍后再试",
 };
@@ -1938,17 +2016,18 @@ function renderTicketHolders() {
     server: row.querySelector(".th-server").value,
     pending: !!row.querySelector(".th-pending")?.checked,
   }));
-  const options = `<option value="">选择区服</option>` +
-    TICKET_SERVERS.map((s) => `<option value="${s}">${s}</option>`).join("");
+  const options = `<option value="">选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
+    `<optgroup label="【${g.dc}】">${g.servers.map((s) => `<option value="${s}">${s}</option>`).join("")}</optgroup>`
+  ).join("");
 
   wrap.innerHTML = Array.from({ length: ticketState.qty }, (_, i) => `
     <div class="ticket-field ticket-holder" data-index="${i}">
       <span class="ticket-label is-required">${ticketHolderLabel(i)}</span>
-      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境" : `购买 ${i + 1} 张票时填写`}</p>
+      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境（必填，不能待定）" : `购买 ${i + 1} 张票时填写`}</p>
       <div class="ticket-holder-row">
         <input type="text" class="th-name" maxlength="30" placeholder="角色名" aria-label="${ticketHolderLabel(i)}：角色名">
         <select class="th-server" aria-label="${ticketHolderLabel(i)}：服务器">${options}</select>
-        ${ticketState.allowPending ? `
+        ${(ticketState.allowPending && i > 0) ? `
         <label class="audience-opt th-pending-opt">
           <input type="checkbox" class="th-pending"><span>id 待定</span>
         </label>` : ""}
@@ -4258,6 +4337,7 @@ function paintLikes() {
 }
 
 async function refreshLikes(root) {
+  if (siteLockdown) return;   // 静态模式：点赞按钮保持隐藏
   const keys = [...new Set(likeButtonsIn(root).map((b) => b.dataset.likeKey).filter(Boolean))];
   if (!keys.length) return;
   const data = await callWorker({ action: "get_likes", keys });
@@ -4281,6 +4361,7 @@ function setupDetailLike(data) {
 async function onLikeBtnClick(btn) {
   const key = btn.dataset.likeKey;
   if (!key) return;
+  if (await blockedByStaticMode()) return;
   if (hjLikeState.remaining <= 0) {
     showToast(LIKE_LIMIT_MSG);
     return;
@@ -4349,6 +4430,7 @@ const A11Y_MODALS = [
   { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
   { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
   { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: closeTicketNotice },
+  { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: closeAdminPanel },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
 
@@ -4384,6 +4466,7 @@ function initApp() {
   initCaptcha();
   initLockdownToggle();
   initStarlightPanel();
+  initAdminPanels();
   initTicket();
   initTicketAdmin();
   initPostAnnouncement();
@@ -4398,6 +4481,7 @@ function initApp() {
   initClock();
   initClockToggle();
   initHashRoute();
+  isLockedDown();    // 异步：读到"分享功能已关闭"后，点赞等互动功能自动收起
   loadStarlight();   // 异步：拿到结果后天气条自动刷新
 
   // 通知开屏脚本：主程序已就绪。新访客点击开屏图后自动弹出花街介绍
