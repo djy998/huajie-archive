@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 42;
+      var CSS_VERSION = 43;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -265,7 +265,7 @@
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg>
       </button>
       <div class="cal-grid-wrap">
-        <div class="cal-week" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div class="cal-week" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
         <div class="cal-grid" id="calGrid"></div>
       </div>
       <button class="cal-nav cal-next" id="calNext" type="button" aria-label="下个月" title="下个月">
@@ -4128,14 +4128,46 @@ function initHeaderPanels() {
    - 打开后常驻页面（点外面、按 Esc 不关闭），只能用 × 关闭
    - 月份范围：2021-01 ~ 当前月 + 12
    - 开合、缩放、月份、拖动位置均保存在本地
-   - 事件标注：在 HJ_CAL_EVENTS 中添加，例如
-       "2026-09-26": [{ label: "xx周年", tone: "rose" }],
+   - 事件标注：写在 HJ_CAL_ITEMS 里，单日只写 date，跨日写 start + end
+       { date: "2026-09-25", label: "xx庆典", tone: "rose" }
+       { start: "2026-09-24", end: "2026-10-13", label: "xx联动", tone: "blue" }
      tone 可选 rose / gold / teal / wisteria / blue / orange
-   - 控制台调试：HJ_CAL.events["2026-09-26"] = [{ label: "测试" }]; HJ_CAL.refresh() */
+   - HJ_CAL_EVENTS 是按天展开后的索引（日格横条用它），由 HJ_CAL_ITEMS 自动生成
+   - 控制台调试：HJ_CAL.items.push({ date: "2026-09-26", label: "测试" }); HJ_CAL.refresh() */
 const HJ_CAL_MIN = { y: 2021, m: 1 };
-const HJ_CAL_EVENTS = {
-  // "2026-09-26": [{ label: "xx周年庆典", tone: "rose" }],
-};
+
+const HJ_CAL_ITEMS = [
+  { date: "2023-08-20", label: "海之心3周年 & 新生庆典游园会", tone: "rose" },
+  { date: "2024-08-27", label: "海之心4周年 & 红莲夏日祭", tone: "rose" },
+  { start: "2024-12-31", end: "2025-01-01", label: "2025 花语町·花舞之街莫古力跨年盛典", tone: "gold" },
+  { date: "2025-09-21", label: "金秋新生庆典游园会", tone: "orange" },
+  { start: "2026-01-01", end: "2026-01-02", label: "2026 莫古力跨年盛典", tone: "gold" },
+  { date: "2026-09-25", label: "2026 莫古力中秋月轮祭", tone: "orange" },
+  { start: "2026-09-24", end: "2026-10-13", label: "FFXV 联动", tone: "blue" },
+  { start: "2026-08-04", end: "2026-10-05", label: "妖怪手表联动", tone: "teal" },
+];
+
+/* 按天展开：key = YYYY-MM-DD，值为当天的事件数组（含所属 item，便于取区间） */
+const HJ_CAL_EVENTS = {};
+
+function calItemStart(item) { return item.start || item.date; }
+function calItemEnd(item) { return item.end || item.date; }
+
+function calEachDay(item, fn) {
+  const [sy, sm, sd] = calItemStart(item).split("-").map(Number);
+  const [ey, em, ed] = calItemEnd(item).split("-").map(Number);
+  const end = new Date(ey, em - 1, ed);
+  for (const d = new Date(sy, sm - 1, sd); d <= end; d.setDate(d.getDate() + 1)) fn(calKey(d));
+}
+
+function buildCalEvents() {
+  Object.keys(HJ_CAL_EVENTS).forEach((k) => delete HJ_CAL_EVENTS[k]);
+  HJ_CAL_ITEMS.forEach((item) => {
+    calEachDay(item, (key) => {
+      (HJ_CAL_EVENTS[key] ||= []).push({ label: item.label, tone: item.tone, item });
+    });
+  });
+}
 const HJ_CAL_TONES = ["rose", "gold", "teal", "wisteria", "blue", "orange"];
 const HJ_CAL_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];
 const CAL_EDGE = 8;         // 拖动时距视口边缘的最小距离
@@ -4162,11 +4194,11 @@ function calGoTo(y, m) {
 
 function renderCalGrid() {
   const { y, m } = calState;
-  const firstWeekday = new Date(y, m - 1, 1).getDay();
+  const firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7;   // 0 = 周一
   const todayKey = calKey(new Date());
   const cells = [];
 
-  // 固定 6 行 × 7 列，从本月第一周的周日开始
+  // 固定 6 行 × 7 列，从本月第一周的周一开始
   for (let i = 0; i < 42; i++) {
     const d = new Date(y, m - 1, 1 - firstWeekday + i);
     const key = calKey(d);
@@ -4192,23 +4224,34 @@ function renderCalGrid() {
   });
 }
 
-/* 本月事件胶囊，按日期排序 */
+/* 本月事件胶囊：与本月有交集的活动各出现一次，跨日的显示日期区间 */
+const calMd = (key) => {
+  const [, mm, dd] = key.split("-").map(Number);
+  return `${mm}/${dd}`;
+};
+
 function renderCalEvents() {
   const { y, m } = calState;
-  const list = Object.keys(HJ_CAL_EVENTS)
-    .map((key) => ({ key, p: key.split("-").map(Number) }))
-    .filter(({ p }) => p.length === 3 && p[0] === y && p[1] === m)
-    .sort((a, b) => a.p[2] - b.p[2]);
+  const monthStart = `${y}-${pad2(m)}-01`;
+  const monthEnd = `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+  const list = HJ_CAL_ITEMS
+    .filter((item) => calItemStart(item) <= monthEnd && calItemEnd(item) >= monthStart)
+    .sort((a, b) => calItemStart(a).localeCompare(calItemStart(b)));
 
   const box = $("calEvents");
   if (!list.length) {
     box.innerHTML = '<p class="cal-empty">本月暂无活动标注</p>';
     return;
   }
-  box.innerHTML = list.map(({ key, p }) => HJ_CAL_EVENTS[key].map((ev) =>
-    `<button type="button" class="cal-chip tone-${calTone(ev)}" data-date="${key}">`
-    + `<span>${ev.label}</span><span class="cal-chip-day">${p[1]}/${p[2]}</span></button>`
-  ).join("")).join("");
+  box.innerHTML = list.map((item) => {
+    const start = calItemStart(item);
+    const end = calItemEnd(item);
+    const when = start === end ? calMd(start) : `${calMd(start)}–${calMd(end)}`;
+    // 跨月的活动点击后跳到它在本月的第一天，不会把日历翻走
+    const jump = start >= monthStart ? start : monthStart;
+    return `<button type="button" class="cal-chip tone-${calTone(item)}" data-date="${jump}">`
+      + `<span>${escapeHtml(item.label)}</span><span class="cal-chip-day">${when}</span></button>`;
+  }).join("");
   box.querySelectorAll(".cal-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       const [cy, cm] = chip.dataset.date.split("-").map(Number);
@@ -4332,13 +4375,18 @@ function initCalWidget() {
 
   initCalDrag();
   renderCal();
+  buildCalEvents();
   if (storage.get(STORE.calOpen) === "1") openCalWidget(true);
 }
 
 /* 控制台 / 将来接入 Worker 数据的入口 */
 window.HJ_CAL = {
+  items: HJ_CAL_ITEMS,
   events: HJ_CAL_EVENTS,
-  refresh: () => renderCal(),
+  refresh: () => {
+    buildCalEvents();
+    renderCal();
+  },
   open: () => openCalWidget(true),
   close: () => openCalWidget(false),
   go: (y, m) => {
