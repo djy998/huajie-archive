@@ -15,7 +15,13 @@
        ⑥ 开屏图更换为新版莫古力徽章（boot-moguri-v2.webp，800×800 透明 WebP）
        ⑦ 声音按钮回归为「音量」入口：点开竖条音量弹层，0 即静音，不显示数值
        ⑧ 最右新增「更多」按钮（三横线图标），下拉闹铃/日历等占位功能（点击提示开发中）；
-         右上角按钮排槽顺次左移：更多/昼夜/特效/时钟/音量 -->
+         右上角按钮排槽顺次左移：更多/昼夜/特效/时钟/音量
+       ⑨ 「更多」下拉改为与右上角同款的圆形图标按钮（仅保留闹铃、日历两项）
+       ⑩ 「更多」下拉去掉玻璃面板：圆钮在按钮正下方竖排落下（同列对齐），带下拉/收起动画
+       ⑪ 日历功能上线：玻璃风月历小组件（2021-01 起、左右翻月、可长期贴页、缩放/关闭、
+         事件标注在 HJ_CAL_EVENTS 配置）；下拉首钮与更多按钮间距对齐横排钮间距
+       ⑫ 日历组件可拖拽移动（标题栏拖动、双击复位、位置记忆）；背景改更透的毛玻璃，
+         文字加粗提亮加投影保证清晰 -->
 
   <!-- 分享卡片：og-image.jpg 放在站点根目录，1200x630 -->
   <meta property="og:type" content="website">
@@ -37,7 +43,7 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
   <!-- 改过 style.css 就把 v= 的序号 +1，否则老访客会命中缓存里的旧样式 -->
-  <link rel="stylesheet" href="style.css?v=33">
+  <link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 
@@ -99,8 +105,40 @@
     </div>
   </div>
 
-  <!-- 「更多」下拉：占位功能入口，点击统一提示「功能正在开发中~」（条目在 JS 的 HJ_MORE_FEATURES 里加） -->
-  <div class="more-panel" id="morePanel" aria-label="更多功能" hidden></div>
+  <!-- 「更多」下拉：无面板背景，圆形图标按钮竖排出现在更多按钮正下方（占位功能），点击统一提示「功能正在开发中~」；条目在 JS 的 HJ_MORE_FEATURES 里加 -->
+  <div class="more-panel" id="morePanel" aria-label="更多功能"></div>
+
+  <!-- 日历小组件：玻璃风月历 + 事件标注；可长期贴在网页上（点外面不关），× 才关闭；
+       开合/缩放/月份存 localStorage（hj_cal_open / hj_cal_zoom / hj_cal_ym） -->
+  <div class="cal-widget" id="calWidget" hidden>
+    <div class="cal-head" title="拖动移动 · 双击回默认位置">
+      <span class="cal-title" id="calTitle">----</span>
+      <span class="cal-tools">
+        <button class="cal-tool" id="calZoomOut" type="button" aria-label="缩小日历" title="缩小">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+        <button class="cal-tool" id="calZoomIn" type="button" aria-label="放大日历" title="放大">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="cal-tool" id="calClose" type="button" aria-label="关闭日历" title="关闭">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="cal-body">
+      <button class="cal-nav cal-prev" id="calPrev" type="button" aria-label="上个月" title="上个月">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cal-grid-wrap">
+        <div class="cal-week" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <button class="cal-nav cal-next" id="calNext" type="button" aria-label="下个月" title="下个月">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div class="cal-events" id="calEvents"></div>
+  </div>
   <h1 class="brand">花舞之街 · 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
@@ -2416,27 +2454,31 @@ function initVolSlider(){
 
 /* =========================================================================
    「更多」下拉：将来功能的占位入口
-   - 按钮在右上角按钮排槽最右（三横线图标），点开下拉列表
+   - 按钮在右上角按钮排槽最右（三横线图标）；点开后圆形按钮在按钮
+     正下方竖排逐个落下（无面板背景、同列对齐、带下拉/收起动画；
+     当前：闹铃、日历）
    - 目前所有功能都是占位：点击统一提示「功能正在开发中~」
    - 将来新增功能只需往 HJ_MORE_FEATURES 里加一条 { id, label, icon }
    ========================================================================= */
 const HJ_MORE_FEATURES = [
   { id: "alarm",    label: "闹铃", icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
-  { id: "calendar", label: "日历", icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
-  { id: "notes",    label: "备忘", icon: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9.5h6M9 13.5h6M9 17.5h4"/>' },
-  { id: "lottery",  label: "抽奖", icon: '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.2" fill="currentColor" stroke="none"/>' },
+  { id: "calendar", label: "日历", dev: false, icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
 ];
 function renderMorePanel(){
   const panel = $("morePanel");
   if(!panel) return;
+  /* 每项渲染成与右上角头部按钮同款的圆形玻璃按钮：只有图标没有文字，
+     名字通过 aria-label / title 提示；点击仍是占位 toast */
   panel.innerHTML = HJ_MORE_FEATURES.map(f =>
-    '<button type="button" class="more-item" data-more-id="' + f.id + '">' +
-    '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + f.icon + '</svg>' +
-    '<span>' + f.label + '</span></button>'
+    '<button type="button" class="more-item" data-more-id="' + f.id + '" ' +
+    'aria-label="' + f.label + '" title="' + f.label + (f.dev === false ? "" : "（开发中）") + '">' +
+    '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + f.icon + '</svg></button>'
   ).join("");
   panel.querySelectorAll(".more-item").forEach(btn => {
     btn.addEventListener("click", () => {
-      showToast("功能正在开发中~");
+      /* 日历是真功能：打开可长期贴页的日历小组件；其余仍是占位 toast */
+      if(btn.dataset.moreId === "calendar") openCalWidget(true);
+      else showToast("功能正在开发中~");
       openMorePanel(false);
     });
   });
@@ -2445,14 +2487,16 @@ function openMorePanel(open){
   const panel = $("morePanel");
   const btn = $("moreToggle");
   if(!panel || !btn) return;
-  panel.hidden = !open;
+  /* 面板显隐不用 hidden（会掐掉收起动画），改用 is-open 类 + CSS visibility 过渡；
+     关闭态 visibility:hidden，按钮不可聚焦、读屏不可见 */
+  panel.classList.toggle("is-open", !!open);
   btn.classList.toggle("is-active", !!open);
   btn.setAttribute("aria-expanded", String(!!open));
 }
 function initMorePanel(){
   renderMorePanel();
   $("moreToggle").addEventListener("click", () => {
-    openMorePanel($("morePanel").hidden);
+    openMorePanel(!$("morePanel").classList.contains("is-open"));
     openVolPanel(false);   /* 两个弹层互斥 */
   });
 }
@@ -2468,6 +2512,196 @@ function initHeaderPanels(){
     if(e.key === "Escape"){ openVolPanel(false); openMorePanel(false); }
   });
 }
+
+/* =========================================================================
+   日历小组件（玻璃风月历 + 事件标注）
+   - 从「更多」下拉的日历圆钮打开；打开后长期贴页：点外面、按 Esc 都不关，
+     只有组件右上角的 × 关；开合 / 缩放 / 停留月份都存 localStorage，刷新还在
+   - 月份范围 2021-01 ~ 当前月+12，左右箭头翻页，到边界箭头禁用
+   - 事件标注：在 HJ_CAL_EVENTS 里加一行即可，例如
+       "2026-09-26": [{ label: "xx周年", tone: "rose" }],
+     标注日在格子里显示彩色横条（同一天可多条），面板下方列活动胶囊；
+     tone 可选 rose / gold / teal / wisteria / blue / orange
+   - 缩放：右上 − / + 整体缩放 0.8~1.2（transform: scale，锚右上角）
+   - 控制台临时试玩：HJ_CAL.events["2026-09-26"]=[{label:"测试"}]; HJ_CAL.refresh()
+   ========================================================================= */
+const HJ_CAL_MIN = { y: 2021, m: 1 };                 /* 日期从 2021 年 1 月开始 */
+const HJ_CAL_EVENTS = {
+  /* 例："2026-09-26": [{ label: "xx周年庆典", tone: "rose" }], */
+};
+const HJ_CAL_TONES = ["rose", "gold", "teal", "wisteria", "blue", "orange"];
+const HJ_CAL_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];
+const calState = { y: 0, m: 0, pick: "", zoom: 1 };
+
+function calIdx(y, m){ return y * 12 + (m - 1); }
+function calFromIdx(i){ return { y: Math.floor(i / 12), m: i % 12 + 1 }; }
+function calMaxIdx(){ const d = new Date(); return calIdx(d.getFullYear(), d.getMonth() + 1) + 12; }
+function calClampIdx(i){ return Math.max(calIdx(HJ_CAL_MIN.y, HJ_CAL_MIN.m), Math.min(calMaxIdx(), i)); }
+function calKey(d){ const p = n => (n < 10 ? "0" + n : "" + n); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }   /* 补零，与 HJ_CAL_EVENTS 的 "2026-09-26" 写法一致 */
+
+function renderCal(){
+  const grid = $("calGrid");
+  if(!grid) return;
+  const y = calState.y, m = calState.m;
+  $("calTitle").textContent = y + "年" + m + "月";
+  const start = new Date(y, m - 1, 1 - new Date(y, m - 1, 1).getDay());
+  const todayKey = calKey(new Date());
+  const cells = [];
+  for(let i = 0; i < 42; i++){
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const key = calKey(d);
+    const evs = HJ_CAL_EVENTS[key] || [];
+    const cls = ["cal-day"];
+    if(d.getMonth() !== m - 1) cls.push("is-out");
+    if(key === todayKey) cls.push("is-today");
+    if(key === calState.pick) cls.push("is-pick");
+    const bars = evs.slice(0, 3).map(ev =>
+      '<i class="cal-bar tone-' + (HJ_CAL_TONES.includes(ev.tone) ? ev.tone : "rose") + '"></i>').join("");
+    cells.push('<button type="button" tabindex="-1" class="' + cls.join(" ") + '" data-date="' + key + '">' +
+      '<span class="cal-num">' + d.getDate() + '</span>' +
+      (bars ? '<span class="cal-bars">' + bars + '</span>' : "") + '</button>');
+  }
+  grid.innerHTML = cells.join("");
+  grid.querySelectorAll(".cal-day").forEach(btn => {
+    btn.addEventListener("click", () => { calState.pick = btn.dataset.date; renderCal(); });
+  });
+  /* 本月事件 → 胶囊列表（按日期排序） */
+  const list = [];
+  for(const key of Object.keys(HJ_CAL_EVENTS)){
+    const p = key.split("-").map(Number);
+    if(p.length === 3 && p[0] === y && p[1] === m) list.push({ key, p, evs: HJ_CAL_EVENTS[key] });
+  }
+  list.sort((a, b) => a.p[2] - b.p[2]);
+  const box = $("calEvents");
+  if(!list.length){
+    box.innerHTML = '<p class="cal-empty">本月暂无活动标注</p>';
+  }else{
+    box.innerHTML = list.map(it => it.evs.map(ev =>
+      '<button type="button" class="cal-chip tone-' + (HJ_CAL_TONES.includes(ev.tone) ? ev.tone : "rose") +
+      '" data-date="' + it.key + '"><span>' + ev.label + '</span><span class="cal-chip-day">' +
+      it.p[1] + "/" + it.p[2] + '</span></button>').join("")).join("");
+    box.querySelectorAll(".cal-chip").forEach(ch => {
+      ch.addEventListener("click", () => {
+        const p = ch.dataset.date.split("-").map(Number);
+        calState.y = p[0]; calState.m = p[1]; calState.pick = ch.dataset.date;
+        renderCal();
+      });
+    });
+  }
+  const idx = calIdx(y, m);
+  $("calPrev").disabled = idx <= calIdx(HJ_CAL_MIN.y, HJ_CAL_MIN.m);
+  $("calNext").disabled = idx >= calMaxIdx();
+}
+
+function calShift(dir){
+  const ym = calFromIdx(calClampIdx(calIdx(calState.y, calState.m) + dir));
+  calState.y = ym.y; calState.m = ym.m;
+  try{ localStorage.setItem("hj_cal_ym", ym.y + "-" + ym.m); }catch(e){}
+  renderCal();
+}
+function setCalZoom(z){
+  calState.zoom = z;
+  $("calWidget").style.setProperty("--cal-zoom", String(z));
+  $("calZoomIn").disabled = z >= HJ_CAL_ZOOMS[HJ_CAL_ZOOMS.length - 1];
+  $("calZoomOut").disabled = z <= HJ_CAL_ZOOMS[0];
+  try{ localStorage.setItem("hj_cal_zoom", String(z)); }catch(e){}
+}
+function calZoomStep(dir){
+  const i = HJ_CAL_ZOOMS.indexOf(calState.zoom);
+  return HJ_CAL_ZOOMS[Math.max(0, Math.min(HJ_CAL_ZOOMS.length - 1, (i === -1 ? 2 : i) + dir))];
+}
+function openCalWidget(open){
+  const w = $("calWidget");
+  if(!w) return;
+  w.hidden = !open;
+  try{ localStorage.setItem("hj_cal_open", open ? "1" : "0"); }catch(e){}
+}
+function initCalWidget(){
+  const w = $("calWidget");
+  if(!w) return;
+  const now = new Date();
+  calState.y = now.getFullYear(); calState.m = now.getMonth() + 1;
+  let ym = [];
+  try{ ym = (localStorage.getItem("hj_cal_ym") || "").split("-").map(Number); }catch(e){}
+  if(ym.length === 2 && Number.isFinite(ym[0]) && Number.isFinite(ym[1])){
+    const c = calFromIdx(calClampIdx(calIdx(ym[0], ym[1])));
+    calState.y = c.y; calState.m = c.m;
+  }
+  let z = NaN;
+  try{ z = Number(localStorage.getItem("hj_cal_zoom")); }catch(e){}
+  setCalZoom(HJ_CAL_ZOOMS.includes(z) ? z : 1);
+  $("calPrev").addEventListener("click", () => calShift(-1));
+  $("calNext").addEventListener("click", () => calShift(1));
+  $("calZoomIn").addEventListener("click", () => setCalZoom(calZoomStep(1)));
+  $("calZoomOut").addEventListener("click", () => setCalZoom(calZoomStep(-1)));
+  $("calClose").addEventListener("click", () => openCalWidget(false));
+  /* 恢复拖拽记忆的位置（right,top）；越界值 clamp 回视口内 */
+  let xy = [];
+  try{ xy = (localStorage.getItem("hj_cal_xy") || "").split(",").map(Number); }catch(e){}
+  if(xy.length === 2 && Number.isFinite(xy[0]) && Number.isFinite(xy[1])){
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    setCalPos(Math.max(8, Math.min(vw - 60, xy[0])), Math.max(8, Math.min(vh - 60, xy[1])));
+  }
+  initCalDrag();
+  renderCal();
+  let flag = "0";
+  try{ flag = localStorage.getItem("hj_cal_open") || "0"; }catch(e){}
+  if(flag === "1") openCalWidget(true);   /* 长期贴页：刷新后保持打开 */
+}
+function setCalPos(right, top){
+  const w = $("calWidget");
+  /* 用 right/top 定位（不用 left）：缩放锚点是右上角，right 定位与 transform-origin 一致 */
+  w.style.right = right + "px";
+  w.style.top = top + "px";
+  try{ localStorage.setItem("hj_cal_xy", right + "," + top); }catch(e){}
+}
+/* 标题栏 = 拖拽把手：pointer 事件统一鼠标/触屏；工具按钮区域不触发拖拽；双击复位 */
+function initCalDrag(){
+  const w = $("calWidget");
+  const head = w.querySelector(".cal-head");
+  let drag = null;
+  head.addEventListener("pointerdown", (e) => {
+    if(e.pointerType === "mouse" && e.button !== 0) return;
+    if(e.target.closest(".cal-tool")) return;
+    const r = w.getBoundingClientRect();
+    drag = {
+      ox: e.clientX - r.left, oy: e.clientY - r.top,
+      w: r.width, h: r.height,
+      vw: window.innerWidth || document.documentElement.clientWidth,
+      vh: window.innerHeight || document.documentElement.clientHeight,
+    };
+    try{ head.setPointerCapture(e.pointerId); }catch(err){}
+    w.classList.add("is-drag");
+    e.preventDefault();
+  });
+  head.addEventListener("pointermove", (e) => {
+    if(!drag) return;
+    const left = e.clientX - drag.ox;
+    let top = e.clientY - drag.oy;
+    let right = drag.vw - (left + drag.w);
+    if(drag.w) right = Math.max(8, Math.min(drag.vw - 60, right));   /* 至少留 60px 在视口内 */
+    if(drag.h) top = Math.max(8, Math.min(drag.vh - 60, top));
+    setCalPos(Math.round(right), Math.round(top));
+  });
+  const end = () => { drag = null; w.classList.remove("is-drag"); };
+  head.addEventListener("pointerup", end);
+  head.addEventListener("pointercancel", end);
+  head.addEventListener("dblclick", (e) => {
+    if(e.target.closest(".cal-tool")) return;
+    w.style.right = ""; w.style.top = "";
+    try{ localStorage.removeItem("hj_cal_xy"); }catch(err){}
+  });
+}
+
+/* 留口子：控制台或以后接 Worker 数据时可以直接喂事件 */
+window.HJ_CAL = {
+  events: HJ_CAL_EVENTS,
+  refresh: () => renderCal(),
+  open: () => openCalWidget(true),
+  close: () => openCalWidget(false),
+  go: (y, m) => { const c = calFromIdx(calClampIdx(calIdx(y, m))); calState.y = c.y; calState.m = c.m; renderCal(); },
+};
 
 /* =========================================================================
    时间条（预铺）：国服时间固定 UTC+8，不跟着访客手机时区跑；
@@ -2791,6 +3025,7 @@ initPasswordToggle("internalPassword", "internalPasswordShow");
 initSound();
 initMorePanel();
 initHeaderPanels();
+initCalWidget();
 initClock();
 initClockToggle();
 /* 异步拉取星芒节覆盖时段（Worker 未部署接口时自动退回 localStorage 缓存），
