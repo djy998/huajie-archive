@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 41;
+      var CSS_VERSION = 42;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -454,7 +454,10 @@
 
         <div class="ticket-captcha" id="ticketTurnstile"></div>
         <div class="math-captcha" id="ticketMath" hidden></div>
-        <div class="captcha-switch-row"><button type="button" class="captcha-switch" id="ticketCaptchaSwitch">验证加载不出来？改用算术题</button></div>
+        <div class="captcha-switch-row">
+          <button type="button" class="captcha-switch" id="ticketCaptchaSwitch">验证加载不出来？改用算术题</button>
+          <button type="button" class="captcha-switch" id="ticketCaptchaSwitchBack" hidden>切回 Cloudflare 验证</button>
+        </div>
         <div class="ticket-submit-row">
           <button type="submit" id="ticketSubmitBtn">提交</button>
         </div>
@@ -621,6 +624,7 @@
     <div id="turnstileWidget"></div>
     <div class="math-captcha" id="captchaMath" hidden></div>
     <button type="button" class="captcha-switch" id="captchaSwitch">验证加载不出来？改用算术题</button>
+    <button type="button" class="captcha-switch" id="captchaSwitchBack" hidden>切回 Cloudflare 验证</button>
     <p class="form-msg" id="captchaMsg" hidden></p>
   </div>
 </div>
@@ -770,7 +774,7 @@ const LATEST_VIDEO = {
    字符串，或 { text, images: [...], link: { url, label } } 对象；
    feedback（反馈与建议）只在最新活动中显示。 */
 const LATEST_EVENT = {
-  title: "",
+  title: "2026莫古力花舞之街月轮祭",
   dateLabel: "",
   location: "",
   ticketUrl: "",   // 购票链接，留空则不显示购票按钮
@@ -2145,7 +2149,8 @@ function useTicketMath(reason = "") {
   ticketState.token = null;
   $("ticketTurnstile").innerHTML = "";
   $("ticketTurnstile").hidden = true;
-  $("ticketCaptchaSwitch").parentElement.hidden = true;
+  $("ticketCaptchaSwitch").hidden = true;
+  $("ticketCaptchaSwitchBack").hidden = false;
   ticketMath.show();
   if (reason) setMsg($("ticketMsg"), reason);
   rememberMathCaptcha();
@@ -2495,6 +2500,15 @@ function initTicket() {
   $("ticketLookupBtn").addEventListener("click", lookupTicket);
   ticketMath = new MathCaptcha($("ticketMath"));
   $("ticketCaptchaSwitch").addEventListener("click", () => useTicketMath());
+  $("ticketCaptchaSwitchBack").addEventListener("click", () => {
+    forgetMathCaptcha();
+    ticketMath.hide();
+    $("ticketCaptchaSwitch").hidden = false;
+    $("ticketCaptchaSwitchBack").hidden = true;
+    $("ticketTurnstile").hidden = false;
+    setMsg($("ticketMsg"), "");
+    renderTicketCaptcha();
+  });
   $("ticketLookupName").addEventListener("keydown", (e) => {
     if (e.key === "Enter") lookupTicket();
   });
@@ -3154,7 +3168,7 @@ function initLightbox() {
 /* =============================================================================
    9. 人机验证（Turnstile，备用：算术题）
    - Turnstile 在国内经常加载失败：出错或 6 秒内没加载出来就自动切换为算术题，
-     用户也可以手动点「改用算术题」；切换后 24 小时内默认直接用算术题
+     用户也可以手动点「改用算术题」；切换后 6 小时内默认直接用算术题
    - 算术题由 Worker 出题并校验（每题只能提交一次），答案不会下发到前端
    - 通过后 5 分钟内免验证（时间戳存本地，刷新仍有效），
      「活动群」「花街介绍」「复制附联系方式」共用此窗口
@@ -3164,10 +3178,11 @@ function initLightbox() {
 
 const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
 const TURNSTILE_WAIT_MS = 6000;             // 超过这个时间还没加载出来就改用算术题
-const MATH_MODE_KEEP_MS = 24 * 3600 * 1000;
+const MATH_MODE_KEEP_MS = 6 * 3600 * 1000;
 
 const prefersMathCaptcha = () => Date.now() - (Number(storage.get(STORE.captchaMathAt)) || 0) < MATH_MODE_KEEP_MS;
 const rememberMathCaptcha = () => storage.set(STORE.captchaMathAt, Date.now());
+const forgetMathCaptcha = () => storage.remove(STORE.captchaMathAt);
 
 /* 算术题组件：挂到一个空 div 上；value() 返回 { challenge, answer } 或 null */
 class MathCaptcha {
@@ -3309,6 +3324,7 @@ function useMathInOverlay(reason = "") {
   $("turnstileWidget").innerHTML = "";
   $("turnstileWidget").hidden = true;
   $("captchaSwitch").hidden = true;
+  $("captchaSwitchBack").hidden = false;
   captchaMath.show();
   captchaMath.focus();
   setMsg($("captchaMsg"), reason);
@@ -3326,6 +3342,7 @@ async function renderTurnstile() {
   el.hidden = false;
   captchaMath.hide();
   $("captchaSwitch").hidden = false;
+  $("captchaSwitchBack").hidden = true;
 
   if (!window.turnstile) setMsg(msg, "验证组件加载中，请稍候…");
   const ready = await waitForTurnstile(TURNSTILE_WAIT_MS);
@@ -3428,6 +3445,11 @@ function runCaptchaPending(pending) {
 function initCaptcha() {
   captchaMath = new MathCaptcha($("captchaMath"), { onSubmit: submitCaptchaMath });
   $("captchaSwitch").addEventListener("click", () => useMathInOverlay());
+  $("captchaSwitchBack").addEventListener("click", () => {
+    forgetMathCaptcha();          // 不再默认用算术题
+    captchaMath.hide();
+    renderTurnstile();
+  });
   $("captchaClose").addEventListener("click", closeCaptcha);
   closeOnBackdrop($("captchaOverlay"), closeCaptcha);
 }

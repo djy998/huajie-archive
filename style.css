@@ -2459,7 +2459,7 @@ body.day-mode .math-status.is-error { color: #a83a2e; }
 .gate-card .math-row .math-refresh { color: var(--text-soft); background: none; border: 1px solid var(--line); box-shadow: none; }
 .ticket-card .math-captcha { margin-bottom: 16px; }
 
-.captcha-switch-row { display: flex; justify-content: center; margin: -8px 0 14px; }
+.captcha-switch-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; margin: -8px 0 14px; }
 .gate-card button.captcha-switch {
   margin-top: 10px;
   padding: 4px 8px;
