@@ -30,6 +30,14 @@
   <style>
     body { margin: 0; background: #1c1830; }
     html.css-wait body { visibility: hidden; }
+    /* 活动海报的兜底样式：万一 style.css 是旧缓存，海报也不会以原始尺寸溢出卡片 */
+    .tile-poster {
+      position: absolute; inset: 0; z-index: 3;
+      width: 100%; height: 100%;
+      object-fit: contain; object-position: center;
+      pointer-events: none;
+    }
+    .tile.has-poster .tile-overlay { display: none; }
     html.boot-pending body > header,
     html.boot-pending body > main,
     html.boot-pending body > footer { display: none; }
@@ -97,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 40;
+      var CSS_VERSION = 41;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
