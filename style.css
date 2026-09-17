@@ -2526,3 +2526,24 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
   .admin-modal .gate-card { padding: 30px 16px 24px; }
   .admin-pills .tab-btn { padding: 8px 14px; font-size: .82rem; }
 }
+
+/* 最新活动卡片上的活动海报：完整显示（不裁切），卡片原有背景图作为衬底 */
+.tile-poster {
+  position: absolute; inset: 0; z-index: 3;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;   /* 点击仍由卡片处理（进活动详情） */
+  filter: drop-shadow(0 6px 18px rgba(8,6,18,.45));
+}
+/* 海报本身已有活动名，卡片左下角的文字遮罩就不再叠上去 */
+.tile.has-poster .tile-overlay { display: none; }
+/* 播放视频 / 购票徽章要压在海报上面 */
+.tile.has-poster .hero-play { z-index: 5; }
+.tile.has-poster .ticket-badge { z-index: 5; }
+
+@media (max-width: 640px) {
+  /* 单列时海报占满宽度、上下留黑边，「播放视频」按钮收到下方黑边里，不压住海报文字 */
+  .tile.has-poster .hero-play { bottom: 3px; padding: 7px 14px 7px 11px; font-size: .8rem; gap: 6px; }
+  .tile.has-poster .hero-play svg { width: 18px; height: 18px; }
+}
