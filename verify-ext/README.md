@@ -29,7 +29,7 @@ huajie-verify-update/
 ├── verify.js                    ← 新增，放仓库根目录（和 index.html 同级）
 └── verify-ext/
     ├── worker-verify.js         ← 整段粘贴进 Worker
-    ├── worker-插入示例.js        ← 「插到哪儿」的示意图（不用上传，看的）
+    ├── worker-insert-example.js        ← 「插到哪儿」的示意图（不用上传，看的）
     ├── verify-tables.sql        ← D1 建表语句（控制台执行）
     ├── selftest.js              ← 本地自测：node verify-ext/selftest.js
     └── apply-index-patch.py     ← 我改文件用的补丁脚本（归档用，不必执行）
@@ -83,7 +83,7 @@ git push
 ## 三、Cloudflare Worker 改动（5 处，全是「只加不删」）
 
 打开 Cloudflare 控制台 → **Workers & Pages → 选中你的 Worker → 编辑代码**。
-动手前可以先看 `verify-ext/worker-插入示例.js`，里面把 5 处插入点画在了常见的 worker.js 结构里。
+动手前可以先看 `verify-ext/worker-insert-example.js`，里面把 5 处插入点画在了常见的 worker.js 结构里。
 
 **怎么找位置：** 在你的 worker.js 里搜 `OPTIONS`（插入点 1）、搜 `action`（插入点 2）、
 搜 `siteverify` / `submit_ticket` / `verify_turnstile`（插入点 3、4），插入点 5 就是文件末尾。
