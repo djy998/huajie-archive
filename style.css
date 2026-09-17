@@ -2164,9 +2164,11 @@ body.day-mode footer { color: var(--day-title); }
   .hero-play { right: 18px; bottom: 18px; padding: 10px 18px 10px 14px; font-size: .88rem; }
   .tile-hero.has-ticket .hero-play { right: 124px; }
   .video-hero { border-radius: var(--radius-sm); }
-  /* 手机单列时封面接近正方形，视频区不跟随封面比例，保持 16:9 */
-  .video-block { aspect-ratio: auto; }
-  .video-hero { flex: none; aspect-ratio: 16/9; }
+  /* 手机单列时封面接近正方形：视频区仍与封面等高（收起/展开时下方卡片不位移），
+     视频保持 16:9，多出的高度留给按钮区，按钮在剩余空间里垂直居中 */
+  .video-block { aspect-ratio: 1399/1374; }
+  .video-hero { flex: none; aspect-ratio: 16/9; margin-bottom: 0; }
+  .video-actions { flex: 1 1 auto; align-items: center; align-content: center; min-height: 0; }
 
   .shop-item { grid-template-columns: 32px 1fr; }
   .shop-item .price { grid-column: 2; text-align: left; padding-top: 4px; }
@@ -2202,3 +2204,276 @@ body.day-mode footer { color: var(--day-title); }
   #captchaOverlay #captchaClose:hover,
   #captchaOverlay #captchaClose:active { transform: none; }
 }
+
+
+/* =============================================================================
+   活动购票（访客表单 / 管理员面板）
+   ============================================================================= */
+.gate-card.ticket-card { max-width: 600px; text-align: left; }
+.ticket-card h2 { text-align: center; }
+.ticket-card > .hint { text-align: center; }
+.ticket-card .ticket-h-sm { font-size: 1.35rem; }
+
+.ticket-stock {
+  margin: -8px auto 24px;
+  width: fit-content;
+  padding: 6px 18px;
+  border-radius: 999px;
+  font-size: .9rem;
+  color: var(--text-soft);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.ticket-stock b { margin: 0 3px; font-size: 1.15rem; color: var(--lantern-soft); }
+.ticket-stock.is-empty b { color: #e08e84; }
+.ticket-blocked { margin: 8px 0 4px; text-align: center; font-size: .95rem; color: var(--lantern-soft); }
+.ticket-blocked[hidden], #ticketForm[hidden], .ticket-result[hidden] { display: none; }
+
+.ticket-field { margin-bottom: 22px; }
+.ticket-label { display: block; font-size: .95rem; font-weight: 600; color: var(--cream); }
+.ticket-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
+.ticket-sub { margin: 3px 0 9px; font-size: .8rem; color: var(--text-mute); }
+.ticket-warn { margin-top: 8px; font-size: .8rem; color: var(--lantern-soft); }
+.ticket-warn[hidden] { display: none; }
+
+/* 与 .gate-card input 特指度相同，靠书写顺序覆盖：表单里输入框左对齐、不留下边距 */
+.ticket-card input:not([type="checkbox"]) { text-align: left; }
+.ticket-card .ticket-field input:not([type="checkbox"]) { margin-bottom: 0; }
+.ticket-card textarea { min-height: 84px; margin-bottom: 10px; }
+.ticket-card input:disabled,
+.ticket-card select:disabled { opacity: .45; cursor: not-allowed; }
+
+.ticket-holder-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ticket-holder-row .th-name { flex: 1 1 180px; width: auto; }
+.ticket-card select,
+.ticket-admin select {
+  flex: 0 0 140px;
+  padding: 11px 34px 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--serif);
+  font-size: .92rem;
+  color: var(--cream);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 14px center,
+    var(--ink-2);
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  cursor: pointer;
+}
+.ticket-card select:focus,
+.ticket-admin select:focus { outline: none; border-color: var(--accent); }
+.th-pending-opt { flex: none; }
+.ticket-anon { margin-left: 4px; }
+
+.ticket-stepper {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--ink-2);
+}
+.gate-card .ticket-stepper button {
+  width: 46px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  box-shadow: none;
+  transform: none;
+}
+.gate-card .ticket-stepper button:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+.ticket-stepper output {
+  min-width: 58px;
+  display: grid; place-content: center;
+  font-size: 1.05rem;
+  color: var(--cream);
+}
+
+.ticket-captcha { display: flex; justify-content: center; min-height: 65px; margin: 6px 0 16px; }
+.ticket-submit-row { display: flex; justify-content: center; }
+.ticket-card .form-msg { text-align: center; }
+.gate-card button:disabled { opacity: .6; cursor: not-allowed; }
+
+.ticket-result { text-align: center; }
+.ticket-result h3 { margin-bottom: 8px; font-size: 1.2rem; color: var(--lantern-soft); }
+.ticket-result-note { margin-bottom: 16px; font-size: .85rem; color: var(--text-soft); }
+.ticket-result-note.is-warn { color: #e08e84; }
+.ticket-result-list {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0 0 22px;
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: .9rem;
+  background: var(--panel-soft);
+}
+.ticket-result-list dt { color: var(--text-mute); white-space: nowrap; }
+.ticket-result-list dd { margin: 0; color: var(--cream); word-break: break-all; white-space: pre-wrap; }
+
+#ticketLookupList { margin-top: 14px; }
+.ticket-lookup-item {
+  margin-top: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  font-size: .88rem;
+}
+.tli-head { margin-bottom: 4px; color: var(--lantern-soft); }
+.ticket-lookup-item.is-over .tli-head { color: #e08e84; }
+.tli-body { color: var(--text-soft); word-break: break-all; }
+
+/* 售罄 / 未开放提示弹窗 */
+.gate-card.ticket-notice { width: 100%; max-width: 380px; margin: 0; }
+.ticket-notice p { margin-bottom: 22px; font-size: 1.05rem; line-height: 1.7; color: var(--cream); }
+
+/* 管理员面板 */
+.gate-card.ticket-admin { max-width: 860px; }
+.ticket-admin .hint { margin-bottom: 12px; }
+.ticket-admin-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.tas-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.tas-item span { display: block; font-size: .74rem; color: var(--text-mute); }
+.tas-item b { font-size: 1rem; font-weight: 600; color: var(--cream); }
+.ticket-admin-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 8px 16px;
+  max-width: 520px;
+  margin: 0 auto 12px;
+  text-align: left;
+}
+.ticket-admin-key { font-size: .9rem; color: var(--text-soft); }
+.gate-card .ticket-switch {
+  min-width: 190px;
+  color: var(--text-soft);
+  background: none;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.gate-card .ticket-switch.is-on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
+.gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
+.ticket-admin-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 6px; }
+.gate-card .ticket-btn-ghost { color: var(--text-soft); background: none; border: 1px solid var(--line); box-shadow: none; }
+.gate-card .ticket-btn-danger { color: #fff; background: #b8473f; border-color: rgba(255,255,255,.2); }
+
+.ticket-admin-list-head {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 26px 0 10px;
+  font-size: .9rem;
+  color: var(--text-soft);
+  text-align: left;
+}
+.ticket-admin-list-head select { flex: 0 1 auto; padding-top: 8px; padding-bottom: 8px; }
+.ticket-legend { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--text-mute); }
+.ticket-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ticket-legend .lg-over { background: #e05a4f; }
+.ticket-legend .lg-dup { margin-left: 8px; background: #ed7d31; }
+
+.ticket-table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.ticket-table { width: 100%; border-collapse: collapse; font-size: .84rem; text-align: left; }
+.ticket-table th, .ticket-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ticket-table th { font-weight: 600; color: var(--text-mute); white-space: nowrap; background: var(--panel-soft); }
+.ticket-table td { color: var(--text-soft); }
+.ticket-table tbody tr:last-child td { border-bottom: 0; }
+.ticket-table td:nth-child(2), .ticket-table td:nth-child(4) { word-break: break-all; min-width: 110px; }
+.ticket-table .tt-msg { min-width: 160px; white-space: pre-wrap; }
+.ticket-table .tt-msg small { display: block; margin-top: 2px; font-size: .72rem; color: var(--text-mute); }
+.ticket-table .tt-empty { text-align: center; color: var(--text-mute); padding: 18px; }
+.ticket-table tr.is-over td { color: #ff7a6e; }
+.ticket-table .is-dup { color: #ffa257; font-weight: 600; }
+
+/* 白天模式 */
+body.day-mode .ticket-label { color: var(--day-ink); }
+body.day-mode .ticket-sub,
+body.day-mode .ticket-admin-key,
+body.day-mode .ticket-legend,
+body.day-mode .ticket-admin-list-head,
+body.day-mode .tas-item span,
+body.day-mode .ticket-result-list dt { color: var(--day-brown-soft); }
+body.day-mode .ticket-stock,
+body.day-mode .tas-item,
+body.day-mode .ticket-result-list,
+body.day-mode .ticket-lookup-item { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-text); }
+body.day-mode .ticket-stock b,
+body.day-mode .ticket-blocked,
+body.day-mode .ticket-result h3,
+body.day-mode .tli-head,
+body.day-mode .ticket-warn { color: var(--day-brown); }
+body.day-mode .tas-item b,
+body.day-mode .ticket-result-list dd,
+body.day-mode .ticket-notice p,
+body.day-mode .ticket-stepper output,
+body.day-mode .ticket-result-note,
+body.day-mode .tli-body { color: var(--day-ink); }
+body.day-mode .ticket-card select,
+body.day-mode .ticket-admin select,
+body.day-mode .ticket-stepper { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
+body.day-mode .ticket-table-wrap { border-color: #c98f3a; background: rgba(255,252,240,.4); }
+body.day-mode .ticket-table th { background: rgba(255,252,240,.5); color: var(--day-brown-soft); }
+body.day-mode .ticket-table th, body.day-mode .ticket-table td { border-color: rgba(138,90,28,.3); }
+body.day-mode .ticket-table td { color: var(--day-text); }
+body.day-mode .ticket-table tr.is-over td { color: #b0261b; }
+body.day-mode .ticket-table .is-dup { color: #b85a00; }
+body.day-mode .gate-card .ticket-switch:not(.is-on),
+body.day-mode .gate-card .ticket-btn-ghost { background: rgba(255,251,238,.45); }
+body.day-mode .gate-card .ticket-btn-danger { color: #fff; background: #a83a2e; border-color: #7a2418; }
+
+@media (max-width: 640px) {
+  .gate-card.ticket-card, .gate-card.ticket-admin { padding: 28px 18px; }
+  .ticket-card h2 { font-size: 1.45rem; }
+  .ticket-card select { flex: 1 1 120px; }
+  .ticket-admin-row { justify-content: center; text-align: center; }
+  .ticket-legend { margin-left: 0; }
+}
+/* 白天模式通用按钮规则带 :not(#id) 特指度较高，这里用同等特指度 + 书写顺序覆盖 */
+body.day-mode .gate-card button#ticketClearBtn { color: #fff; background: #a83a2e; border-color: #7a2418; }
+body.day-mode .gate-card button#ticketOpenBtn.is-on,
+body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
+
+/* 算术题验证（Turnstile 加载不了时的备用方案） */
+.math-captcha { margin: 4px auto 6px; max-width: 360px; text-align: center; }
+.math-captcha[hidden], .captcha-switch[hidden], .captcha-switch-row[hidden], #turnstileWidget[hidden], .ticket-captcha[hidden] { display: none; }
+.math-q { margin-bottom: 12px; font-size: .95rem; color: var(--text-soft); }
+.math-expr { margin: 0 4px; font-size: 1.35rem; letter-spacing: .06em; color: var(--lantern-soft); }
+.math-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; }
+.gate-card .math-row .math-input { flex: 1 1 110px; width: auto; max-width: 150px; margin: 0; text-align: center; }
+.gate-card .math-row button { padding: 10px 18px; }
+.gate-card .math-row .math-refresh { color: var(--text-soft); background: none; border: 1px solid var(--line); box-shadow: none; }
+.ticket-card .math-captcha { margin-bottom: 16px; }
+
+.captcha-switch-row { display: flex; justify-content: center; margin: -8px 0 14px; }
+.gate-card button.captcha-switch {
+  margin-top: 10px;
+  padding: 4px 8px;
+  font-size: .8rem;
+  font-weight: 400;
+  color: var(--text-mute);
+  background: none;
+  border: 0;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.gate-card button.captcha-switch:hover { color: var(--text-soft); transform: none; }
+
+body.day-mode .math-q { color: var(--day-text); }
+body.day-mode .math-expr { color: var(--day-brown); }
+body.day-mode .gate-card button.math-refresh { background: rgba(255,251,238,.45); }
+body.day-mode .gate-card button.captcha-switch { color: var(--day-brown-soft); background: none; border: 0; box-shadow: none; }
+body.day-mode .gate-card button#captchaSwitch,
+body.day-mode .gate-card button#ticketCaptchaSwitch { color: var(--day-brown-soft); background: none; border: 0; box-shadow: none; }

@@ -407,6 +407,70 @@
     <div class="album-grid" id="albumGrid"></div>
   </section>
 
+  <!-- ============ 活动购票（暂无首页入口，仅通过 TICKET_HASH 访问） ============ -->
+  <section id="view-ticket" class="view" hidden>
+    <div class="gate-card ticket-card">
+      <h2 id="ticketTitle">活动购票</h2>
+      <p class="hint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
+      <div class="ticket-stock" id="ticketStock">今日余票 <b id="ticketRemaining">--</b> 张</div>
+
+      <form id="ticketForm" novalidate autocomplete="off">
+        <div class="ticket-field">
+          <label class="ticket-label is-required" for="ticketContact">联系方式</label>
+          <p class="ticket-sub">一般填 QQ 号，也可以填其他联系方式</p>
+          <input type="text" id="ticketContact" maxlength="40" placeholder="例：123456789">
+        </div>
+
+        <div class="ticket-field">
+          <span class="ticket-label is-required" id="ticketQtyLabel">购票数量</span>
+          <p class="ticket-sub">每名游客限购 5 张</p>
+          <div class="ticket-stepper" role="group" aria-labelledby="ticketQtyLabel">
+            <button type="button" id="ticketQtyMinus" aria-label="减少一张">−</button>
+            <output id="ticketQty" aria-live="polite">1</output>
+            <button type="button" id="ticketQtyPlus" aria-label="增加一张">+</button>
+          </div>
+          <p class="ticket-warn" id="ticketQtyWarn" hidden></p>
+        </div>
+
+        <div id="ticketHolders"></div>
+
+        <div class="ticket-field">
+          <label class="ticket-label" for="ticketMessage">愿意的话，为活动或者你的艾欧泽亚之旅留一句想说的话吧~</label>
+          <p class="ticket-sub">我们可能在活动中抽选部分留言进行喊话</p>
+          <textarea id="ticketMessage" maxlength="200" placeholder="选填"></textarea>
+          <label class="audience-opt ticket-anon" for="ticketAnonymous">
+            <input type="checkbox" id="ticketAnonymous" checked><span>匿名留言</span>
+          </label>
+        </div>
+
+        <div class="ticket-captcha" id="ticketTurnstile"></div>
+        <div class="math-captcha" id="ticketMath" hidden></div>
+        <div class="captcha-switch-row"><button type="button" class="captcha-switch" id="ticketCaptchaSwitch">验证加载不出来？改用算术题</button></div>
+        <div class="ticket-submit-row">
+          <button type="submit" id="ticketSubmitBtn">提交</button>
+        </div>
+        <p class="form-msg" id="ticketMsg" hidden></p>
+      </form>
+
+      <div class="ticket-result" id="ticketResult" hidden>
+        <h3 id="ticketResultTitle">登记成功</h3>
+        <p class="ticket-result-note" id="ticketResultNote"></p>
+        <dl class="ticket-result-list" id="ticketResultList"></dl>
+        <button type="button" id="ticketAgainBtn">继续登记</button>
+      </div>
+    </div>
+
+    <div class="gate-card ticket-card">
+      <h2 class="ticket-h-sm">查询我的登记</h2>
+      <p class="hint">填写登记时的联系方式和第一位持票人 id（第一位为待定时填「待定」）</p>
+      <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式">
+      <input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id（不含区服）">
+      <div class="ticket-submit-row"><button type="button" id="ticketLookupBtn">查询</button></div>
+      <p class="form-msg" id="ticketLookupMsg" hidden></p>
+      <div id="ticketLookupList"></div>
+    </div>
+  </section>
+
   <!-- ============ 内部入口 ============ -->
   <section id="view-internal" class="view" hidden>
 
@@ -451,6 +515,43 @@
           <button id="starlightClearBtn" type="button">清除覆盖</button>
         </div>
         <p class="form-msg" id="starlightMsg" hidden></p>
+      </div>
+      <div class="gate-card admin-card ticket-admin" id="ticketAdminPanel" hidden>
+        <h2>活动购票管理</h2>
+        <p class="hint" id="ticketAdminStatus">读取中…</p>
+        <div class="ticket-admin-stats" id="ticketAdminStats"></div>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">购票开放</span>
+          <button type="button" class="ticket-switch" id="ticketOpenBtn" aria-pressed="false">—</button>
+        </div>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">持票 id 可待定</span>
+          <button type="button" class="ticket-switch" id="ticketPendingBtn" aria-pressed="false">—</button>
+        </div>
+        <div class="ticket-admin-row">
+          <label class="ticket-admin-key" for="ticketLimitInput">每日限额（张）</label>
+          <span class="ticket-limit-edit">
+            <input type="number" id="ticketLimitInput" min="0" max="100000" step="1" inputmode="numeric">
+            <button type="button" id="ticketLimitSaveBtn">保存</button>
+          </span>
+        </div>
+        <div class="ticket-admin-actions">
+          <button type="button" id="ticketExportBtn">导出 Excel</button>
+          <button type="button" id="ticketRefreshBtn" class="ticket-btn-ghost">刷新</button>
+          <button type="button" id="ticketClearBtn" class="ticket-btn-danger">清空购票数据</button>
+        </div>
+        <p class="form-msg" id="ticketAdminMsg" hidden></p>
+        <div class="ticket-admin-list-head">
+          <label for="ticketDaySelect">订单</label>
+          <select id="ticketDaySelect"></select>
+          <span class="ticket-legend"><i class="lg-over"></i>超额 <i class="lg-dup"></i>重复</span>
+        </div>
+        <div class="ticket-table-wrap">
+          <table class="ticket-table">
+            <thead><tr><th>序号</th><th>联系方式</th><th>数量</th><th>持票人</th><th>留言</th><th>时间</th></tr></thead>
+            <tbody id="ticketAdminTbody"></tbody>
+          </table>
+        </div>
       </div>
       <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
         <h2>发布公告</h2>
@@ -498,7 +599,16 @@
     <h2>先验证一下</h2>
     <p class="hint">确认不是机器人</p>
     <div id="turnstileWidget"></div>
+    <div class="math-captcha" id="captchaMath" hidden></div>
+    <button type="button" class="captcha-switch" id="captchaSwitch">验证加载不出来？改用算术题</button>
     <p class="form-msg" id="captchaMsg" hidden></p>
+  </div>
+</div>
+
+<div class="info-overlay" id="ticketNoticeOverlay" role="alertdialog" aria-modal="true" aria-labelledby="ticketNoticeText" hidden>
+  <div class="gate-card ticket-notice">
+    <p id="ticketNoticeText"></p>
+    <button type="button" id="ticketNoticeClose">知道了</button>
   </div>
 </div>
 
@@ -545,10 +655,11 @@
    目录
      1. 站点配置与内容数据        7. 花街介绍 / 活动群弹窗
      2. 通用工具                  8. 大图预览（Lightbox）
-     3. 视图切换与路由            9. 人机验证（Turnstile）
+     3. 视图切换与路由            9. 人机验证（Turnstile / 算术题）
      4. 首页 / 活动详情 / 相册    10. 视觉特效（昼夜、落叶、点击爆花）
      5. 内部入口与公告板          11. 头部工具：音量、更多、日历、时间条、天气
      6. 管理员：站点开关、星芒节   12. 点赞
+     6b. 活动购票
                                   13. 无障碍 & 启动
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
    ============================================================================= */
@@ -563,6 +674,10 @@ const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";   // 场地使用登记（金数据）
 const GROUP_QQ = "453278026";
 const CONTACT_QQ = "1316816234";                             // 复制花街介绍时附带的合作联系方式
+/* 活动购票：暂不在首页放入口，仅通过下面这个 hash 访问（内测用） */
+const TICKET_HASH = "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
+const TICKET_TITLE = "莫古力中秋月轮祭 · 购票";
+const TICKET_TEST_MODE = true;   // 内测期间标题带「（测试）」；公开前改为 false 并在管理页清空测试数据
 const SHARE_TEXT = "ff14莫古力区梦羽花街网站试运行中！https://swayingsussurrusstreet.dpdns.org/";
 
 /* 花街介绍弹窗的背景图 */
@@ -834,6 +949,7 @@ const STORE = {
   volume:      "hj_volume",        // 音量百分比 0~100，0 = 静音
   soundOn:     "hj_sound_on",
   captchaOkAt: "hj_captcha_ok_at",
+  captchaMathAt: "hj_captcha_math_at",   // 最近一次改用算术题的时间
   pwFails:     "hj_pw_fail_count",
   starlight:   "hj_starlight",
   calOpen:     "hj_cal_open",
@@ -991,7 +1107,9 @@ function hideColdEntryBack() {
   if (btn) btn.style.display = "none";
 }
 
+const BASE_DOC_TITLE = document.title;
 function showView(id) {
+  if (id !== "view-ticket") document.title = BASE_DOC_TITLE;
   if (id !== "view-home" && homeVideoOpen) setHomeVideoOpen(false);
   // 回到首页时，若用户没有手动收起过，恢复默认展开（不自动播放）
   if (id === "view-home" && !homeVideoOpen && !homeVideoUserClosed && hasHomeVideo()) setHomeVideoOpen(true);
@@ -1016,6 +1134,8 @@ function routeFromHash() {
   const hash = location.hash;
   if (hash === "#internal") {
     showView("view-internal");
+  } else if (hash === TICKET_HASH) {
+    openTicketView();
   } else if (hash === "#latest") {
     openLatestEvent();
   } else if (hash === "#previous") {
@@ -1342,13 +1462,14 @@ async function checkInternalPassword() {
   $("internalBoard").hidden = false;
   renderAnnouncements(data.items, data.isAdmin);
 
-  ["lockdownPanel", "postAnnouncementPanel", "starlightPanel"].forEach((id) => {
+  ["lockdownPanel", "postAnnouncementPanel", "starlightPanel", "ticketAdminPanel"].forEach((id) => {
     $(id).hidden = !data.isAdmin;
   });
   if (data.isAdmin) {
     internalAdminPassword = input.value;
     refreshLockdownStatus();
     syncStarlightPanel();
+    refreshTicketAdmin();
   }
 }
 
@@ -1726,6 +1847,726 @@ function initStarlightPanel() {
 
 
 /* =============================================================================
+   6b. 活动购票（访客表单 / 查询 / 管理员面板 / Excel 导出）
+   - 首页暂无入口，仅通过 TICKET_HASH 进入
+   - 「日」按国服时间 0 点切换，由 Worker 统一计算
+   - 进入页面时已售罄或未开放 → 弹窗提示并隐藏表单；
+     填表过程中额度被买满 → 仍可提交，Worker 将整单标记为超额（导出标红）
+   ============================================================================= */
+
+const TICKET_MAX_QTY = 5;
+const TICKET_SERVERS = [
+  "拉诺西亚", "幻影群岛", "神意之地", "萌芽池", "红玉海", "宇宙和音", "沃仙曦染",
+  "晨曦王座", "潮风亭", "神拳痕", "白银乡", "白金幻象", "旅人栈桥", "拂晓之间",
+  "龙巢神殿", "梦羽宝境", "紫水栈桥", "延夏", "静语庄园", "摩杜纳", "海猫茶屋",
+  "柔风海湾", "琥珀原", "水晶塔", "银泪湖", "太阳海岸", "伊修加德", "红茶川",
+];
+const TICKET_MSG_SOLD_OUT = "今日活动票已售罄，可留意后续放票！";
+const TICKET_MSG_CLOSED = "购票暂未开放，请留意活动群通知";
+const TICKET_ERRORS = {
+  closed: TICKET_MSG_CLOSED,
+  bad_contact: "请填写联系方式",
+  bad_qty: "购票数量需在 1–5 张之间",
+  bad_holders: "持票人信息不完整，请检查",
+  bad_holder_name: "请填写每位持票人的 id",
+  bad_holder_server: "请为每位持票人选择区服",
+  pending_not_allowed: "当前不支持 id 待定，请填写完整的持票人信息",
+  captcha: "人机验证未通过，请重新验证后再提交",
+  rate_limited: "提交太频繁了，请稍后再试",
+};
+
+const ticketState = {
+  qty: 1,
+  allowPending: false,
+  remaining: null,
+  widgetId: null,
+  token: null,
+  submitting: false,
+};
+
+const ticketHolderLabel = (i) => i === 0 ? "持票玩家 id 和服务器" : `第${"二三四五"[i - 1]}位持票玩家 id 和服务器`;
+const formatHolder = (h) => (!h || h.pending) ? "待定" : `${h.name}@${h.server}`;
+
+/* 弹窗 ------------------------------------------------------------------------ */
+function openTicketNotice(text) {
+  $("ticketNoticeText").textContent = text;
+  $("ticketNoticeOverlay").hidden = false;
+}
+function closeTicketNotice() {
+  $("ticketNoticeOverlay").hidden = true;
+}
+
+/* 持票人输入行 ------------------------------------------------------------------ */
+function renderTicketHolders() {
+  const wrap = $("ticketHolders");
+  // 保留已填内容，数量变化时不丢
+  const prev = Array.from(wrap.querySelectorAll(".ticket-holder")).map((row) => ({
+    name: row.querySelector(".th-name").value,
+    server: row.querySelector(".th-server").value,
+    pending: !!row.querySelector(".th-pending")?.checked,
+  }));
+  const options = `<option value="">选择区服</option>` +
+    TICKET_SERVERS.map((s) => `<option value="${s}">${s}</option>`).join("");
+
+  wrap.innerHTML = Array.from({ length: ticketState.qty }, (_, i) => `
+    <div class="ticket-field ticket-holder" data-index="${i}">
+      <span class="ticket-label is-required">${ticketHolderLabel(i)}</span>
+      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境" : `购买 ${i + 1} 张票时填写`}</p>
+      <div class="ticket-holder-row">
+        <input type="text" class="th-name" maxlength="30" placeholder="角色名" aria-label="${ticketHolderLabel(i)}：角色名">
+        <select class="th-server" aria-label="${ticketHolderLabel(i)}：服务器">${options}</select>
+        ${ticketState.allowPending ? `
+        <label class="audience-opt th-pending-opt">
+          <input type="checkbox" class="th-pending"><span>id 待定</span>
+        </label>` : ""}
+      </div>
+    </div>`).join("");
+
+  wrap.querySelectorAll(".ticket-holder").forEach((row, i) => {
+    const name = row.querySelector(".th-name");
+    const server = row.querySelector(".th-server");
+    const pending = row.querySelector(".th-pending");
+    if (prev[i]) {
+      name.value = prev[i].name;
+      server.value = prev[i].server;
+      if (pending) pending.checked = prev[i].pending;
+    }
+    const sync = () => {
+      const on = !!pending?.checked;
+      name.disabled = on;
+      server.disabled = on;
+      row.classList.toggle("is-pending", on);
+    };
+    pending?.addEventListener("change", sync);
+    sync();
+  });
+}
+
+function setTicketQty(n) {
+  ticketState.qty = Math.min(TICKET_MAX_QTY, Math.max(1, n));
+  $("ticketQty").textContent = String(ticketState.qty);
+  $("ticketQtyMinus").disabled = ticketState.qty <= 1;
+  $("ticketQtyPlus").disabled = ticketState.qty >= TICKET_MAX_QTY;
+  updateTicketQtyWarn();
+  renderTicketHolders();
+}
+
+function updateTicketQtyWarn() {
+  const r = ticketState.remaining;
+  const over = r !== null && r > 0 && ticketState.qty > r;
+  $("ticketQtyWarn").hidden = !over;
+  if (over) $("ticketQtyWarn").textContent = `今日仅剩 ${r} 张，超出部分需等待工作人员确认`;
+}
+
+function renderTicketStock(remaining) {
+  ticketState.remaining = remaining;
+  $("ticketRemaining").textContent = remaining === null ? "--" : String(remaining);
+  $("ticketStock").classList.toggle("is-empty", remaining === 0);
+  updateTicketQtyWarn();
+}
+
+/* 页面状态：form（可填写）/ blocked（未开放或售罄）/ result（提交成功） */
+function setTicketMode(mode, blockedText = "") {
+  $("ticketForm").hidden = mode !== "form";
+  $("ticketResult").hidden = mode !== "result";
+  let blocked = $("ticketBlocked");
+  if (!blocked) {
+    blocked = document.createElement("p");
+    blocked.id = "ticketBlocked";
+    blocked.className = "ticket-blocked";
+    $("ticketForm").before(blocked);
+  }
+  blocked.hidden = mode !== "blocked";
+  blocked.textContent = blockedText;
+}
+
+/* 进入购票页 --------------------------------------------------------------------- */
+async function openTicketView() {
+  showView("view-ticket");
+  $("ticketTitle").textContent = TICKET_TITLE + (TICKET_TEST_MODE ? "（测试）" : "");
+  document.title = `${TICKET_TITLE}${TICKET_TEST_MODE ? "（测试）" : ""} · 花舞之街`;
+  if ($("ticketResult").hidden === false) return;   // 刚提交完，保留结果页
+
+  setTicketMode("blocked", "正在读取购票状态…");
+  const st = await callWorker({ action: "get_ticket_status" });
+  if (!st || !st.ok) {
+    renderTicketStock(null);
+    setTicketMode("blocked", "购票状态读取失败，检查一下网络后刷新页面再试");
+    return;
+  }
+  renderTicketStock(st.remaining);
+  if (!st.open) {
+    setTicketMode("blocked", TICKET_MSG_CLOSED);
+    openTicketNotice(TICKET_MSG_CLOSED);
+    return;
+  }
+  if (st.remaining <= 0) {
+    setTicketMode("blocked", TICKET_MSG_SOLD_OUT);
+    openTicketNotice(TICKET_MSG_SOLD_OUT);
+    return;
+  }
+  if (ticketState.allowPending !== !!st.allowPending || !$("ticketHolders").children.length) {
+    ticketState.allowPending = !!st.allowPending;
+    renderTicketHolders();
+  }
+  setTicketMode("form");
+  renderTicketCaptcha();
+}
+
+/* 表单内的人机验证：默认 Turnstile（token 随提交发给 Worker 校验，一次性）；
+   加载失败 / 超时 / 用户手动切换时改用算术题 */
+let ticketMath = null;
+
+function useTicketMath(reason = "") {
+  if (window.turnstile && ticketState.widgetId !== null) window.turnstile.remove(ticketState.widgetId);
+  ticketState.widgetId = null;
+  ticketState.token = null;
+  $("ticketTurnstile").innerHTML = "";
+  $("ticketTurnstile").hidden = true;
+  $("ticketCaptchaSwitch").parentElement.hidden = true;
+  ticketMath.show();
+  if (reason) setMsg($("ticketMsg"), reason);
+  rememberMathCaptcha();
+}
+
+async function renderTicketCaptcha() {
+  if (ticketMath.active || ticketState.widgetId !== null || ticketState.captchaLoading) return;
+  if (prefersMathCaptcha()) {
+    useTicketMath();
+    return;
+  }
+  ticketState.captchaLoading = true;
+  const ready = await waitForTurnstile(TURNSTILE_WAIT_MS);
+  ticketState.captchaLoading = false;
+  if (ticketMath.active) return;
+  if (!ready) {
+    useTicketMath("人机验证组件加载不出来，已改用算术题");
+    return;
+  }
+  ticketState.widgetId = window.turnstile.render($("ticketTurnstile"), {
+    sitekey: TURNSTILE_SITE_KEY,
+    callback: (t) => { ticketState.token = t; },
+    "expired-callback": () => { ticketState.token = null; },
+    "error-callback": () => {
+      if (!ticketMath.active) useTicketMath("人机验证组件加载失败，已改用算术题");
+      return true;
+    },
+  });
+}
+
+function resetTicketCaptcha() {
+  ticketState.token = null;
+  if (ticketMath.active) ticketMath.load();
+  else if (window.turnstile && ticketState.widgetId !== null) window.turnstile.reset(ticketState.widgetId);
+}
+
+function collectTicketForm() {
+  const contact = $("ticketContact").value.trim();
+  if (!contact) return { error: "请填写联系方式", focus: $("ticketContact") };
+
+  const holders = [];
+  for (const row of $("ticketHolders").querySelectorAll(".ticket-holder")) {
+    const i = Number(row.dataset.index);
+    if (row.querySelector(".th-pending")?.checked) {
+      holders.push({ pending: true });
+      continue;
+    }
+    const name = row.querySelector(".th-name");
+    const server = row.querySelector(".th-server");
+    if (!name.value.trim()) return { error: `请填写${ticketHolderLabel(i).replace(" 和服务器", "")}`, focus: name };
+    if (/[@＠]/.test(name.value)) return { error: "角色名里不用写 @ 和服务器，服务器在右边选择", focus: name };
+    if (!server.value) return { error: `请为${i === 0 ? "持票玩家" : `第${"二三四五"[i - 1]}位持票玩家`}选择服务器`, focus: server };
+    holders.push({ name: name.value.trim(), server: server.value });
+  }
+  return {
+    payload: {
+      contact,
+      qty: ticketState.qty,
+      holders,
+      message: $("ticketMessage").value.trim(),
+      anonymous: $("ticketAnonymous").checked,
+    },
+  };
+}
+
+async function submitTicket(e) {
+  e.preventDefault();
+  if (ticketState.submitting) return;
+  const msg = $("ticketMsg");
+  const form = collectTicketForm();
+  if (form.error) {
+    setMsg(msg, form.error);
+    form.focus?.focus();
+    return;
+  }
+  let proof;
+  if (ticketMath.active) {
+    const math = ticketMath.value();
+    if (!math) {
+      setMsg(msg, "请先填写下方算术题的答案（数字）");
+      ticketMath.focus();
+      return;
+    }
+    proof = { math };
+  } else if (ticketState.token) {
+    proof = { token: ticketState.token };
+  } else {
+    setMsg(msg, "请先完成下方的人机验证（加载不出来可以点「改用算术题」）");
+    return;
+  }
+
+  setMsg(msg, "");
+  ticketState.submitting = true;
+  const btn = $("ticketSubmitBtn");
+  btn.disabled = true;
+  btn.textContent = "提交中…";
+  const usedMath = !!proof.math;
+  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof });
+  ticketState.submitting = false;
+  btn.disabled = false;
+  btn.textContent = "提交";
+  resetTicketCaptcha();
+
+  if (!data) {
+    setMsg(msg, "连接失败，检查一下网络后再试（本次未登记成功）");
+    return;
+  }
+  if (!data.ok) {
+    if (data.error === "closed") {
+      setTicketMode("blocked", TICKET_MSG_CLOSED);
+      openTicketNotice(TICKET_MSG_CLOSED);
+      return;
+    }
+    if (data.error === "captcha" && usedMath) {
+      setMsg(msg, "算术题答案不对，已换一道题，请重新计算后提交");
+      ticketMath.focus();
+      return;
+    }
+    setMsg(msg, TICKET_ERRORS[data.error] || "提交失败，请稍后再试");
+    return;
+  }
+
+  renderTicketStock(data.remaining);
+  showTicketResult(form.payload, data);
+}
+
+function showTicketResult(p, data) {
+  $("ticketResultTitle").textContent = `登记成功 · ${Number(data.day.slice(5, 7))}月${Number(data.day.slice(8, 10))}日 第 ${data.seq} 号`;
+  $("ticketResultNote").textContent = data.overLimit
+    ? "提交时今日票额已满，本单为超额登记，需等待工作人员确认，请留意联系方式的消息。"
+    : "请截图保存本页，付款与取票请留意活动群通知或工作人员联系。";
+  $("ticketResultNote").classList.toggle("is-warn", !!data.overLimit);
+  const rows = [
+    ["联系方式", p.contact],
+    ["购票数量", `${p.qty} 张`],
+    ...p.holders.map((h, i) => [`持票人 ${i + 1}`, formatHolder(h)]),
+  ];
+  if (p.message) rows.push(["留言", `${p.message}（${p.anonymous ? "匿名" : "实名"}）`]);
+  $("ticketResultList").innerHTML = rows
+    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+  setTicketMode("result");
+  $("ticketResult").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function resetTicketForm() {
+  $("ticketForm").reset();
+  $("ticketAnonymous").checked = true;
+  $("ticketHolders").innerHTML = "";
+  setMsg($("ticketMsg"), "");
+  setTicketQty(1);
+  $("ticketResult").hidden = true;
+  openTicketView();
+}
+
+/* 查询 -------------------------------------------------------------------------- */
+async function lookupTicket() {
+  const msg = $("ticketLookupMsg");
+  const list = $("ticketLookupList");
+  const contact = $("ticketLookupContact").value.trim();
+  const firstName = $("ticketLookupName").value.trim();
+  list.innerHTML = "";
+  if (!contact || !firstName) {
+    setMsg(msg, "联系方式和第一位持票人 id 都要填写");
+    return;
+  }
+  setMsg(msg, "");
+  const btn = $("ticketLookupBtn");
+  btn.disabled = true;
+  const data = await callWorker({ action: "lookup_ticket", contact, firstName });
+  btn.disabled = false;
+  if (!data || !data.ok) {
+    setMsg(msg, data?.error === "rate_limited" ? "查询太频繁了，请稍后再试" : "查询失败，请稍后再试");
+    return;
+  }
+  if (!data.items.length) {
+    setMsg(msg, "没有找到对应的登记记录，检查一下填写是否与登记时完全一致");
+    return;
+  }
+  list.innerHTML = data.items.map((o) => `
+    <div class="ticket-lookup-item${o.overLimit ? " is-over" : ""}">
+      <div class="tli-head">${escapeHtml(o.day)} · 第 ${o.seq} 号 · ${o.qty} 张${o.overLimit ? " · 超额登记，待确认" : ""}</div>
+      <div class="tli-body">${o.holders.map((h) => escapeHtml(formatHolder(h))).join("、")}</div>
+    </div>`).join("");
+}
+
+function initTicket() {
+  $("ticketQtyMinus").addEventListener("click", () => setTicketQty(ticketState.qty - 1));
+  $("ticketQtyPlus").addEventListener("click", () => setTicketQty(ticketState.qty + 1));
+  $("ticketForm").addEventListener("submit", submitTicket);
+  $("ticketAgainBtn").addEventListener("click", resetTicketForm);
+  $("ticketNoticeClose").addEventListener("click", closeTicketNotice);
+  $("ticketNoticeOverlay").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeTicketNotice();
+  });
+  $("ticketLookupBtn").addEventListener("click", lookupTicket);
+  ticketMath = new MathCaptcha($("ticketMath"));
+  $("ticketCaptchaSwitch").addEventListener("click", () => useTicketMath());
+  $("ticketLookupName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") lookupTicket();
+  });
+  setTicketQty(1);
+}
+
+/* 管理员面板 ---------------------------------------------------------------------- */
+const ticketAdmin = { status: null, orders: [], day: "" };
+
+/* 重复标记：同一联系方式出现在多单；同一 id@区服 出现多次（待定除外） */
+function computeTicketDuplicates(orders) {
+  const normContact = (c) => String(c).replace(/\s+/g, "").toLowerCase();
+  const normHolder = (h) => `${h.name.replace(/\s+/g, "").toLowerCase()}@${h.server}`;
+  const contactCount = new Map();
+  const holderCount = new Map();
+  orders.forEach((o) => {
+    const c = normContact(o.contact);
+    contactCount.set(c, (contactCount.get(c) || 0) + 1);
+    o.holders.forEach((h) => {
+      if (h.pending) return;
+      const k = normHolder(h);
+      holderCount.set(k, (holderCount.get(k) || 0) + 1);
+    });
+  });
+  return new Map(orders.map((o) => [o.id, {
+    contact: contactCount.get(normContact(o.contact)) > 1,
+    holders: o.holders.map((h) => !h.pending && holderCount.get(normHolder(h)) > 1),
+  }]));
+}
+
+function setTicketSwitch(btn, on, onText, offText) {
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("is-on", on);
+  btn.textContent = on ? onText : offText;
+}
+
+function renderTicketAdmin() {
+  const st = ticketAdmin.status;
+  if (!st) return;
+  const orders = ticketAdmin.orders;
+  const todayOrders = orders.filter((o) => o.day === st.day);
+  const overToday = todayOrders.filter((o) => o.overLimit).reduce((n, o) => n + o.qty, 0);
+
+  $("ticketAdminStatus").textContent = `今日（国服 ${st.day}）`;
+  $("ticketAdminStats").innerHTML = [
+    ["已售", `${st.sold} 张`],
+    ["今日限额", `${st.limit} 张`],
+    ["今日余票", `${st.remaining} 张`],
+    ["今日订单", `${todayOrders.length} 单${overToday ? `（超额 ${overToday} 张）` : ""}`],
+    ["累计", `${orders.length} 单 / ${orders.reduce((n, o) => n + o.qty, 0)} 张`],
+  ].map(([k, v]) => `<div class="tas-item"><span>${k}</span><b>${v}</b></div>`).join("");
+
+  setTicketSwitch($("ticketOpenBtn"), st.open, "已开放（点击关闭）", "已关闭（点击开放）");
+  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许待定（点击关闭）", "不允许待定（点击开启）");
+  if (document.activeElement !== $("ticketLimitInput")) $("ticketLimitInput").value = String(st.limit);
+
+  // 日期下拉：所有有订单的日期 + 今天
+  const days = [...new Set([...orders.map((o) => o.day), st.day])].sort().reverse();
+  if (!days.includes(ticketAdmin.day)) ticketAdmin.day = st.day;
+  $("ticketDaySelect").innerHTML = days.map((d) => {
+    const list = orders.filter((o) => o.day === d);
+    const qty = list.reduce((n, o) => n + o.qty, 0);
+    return `<option value="${d}"${d === ticketAdmin.day ? " selected" : ""}>${d}（${list.length} 单 / ${qty} 张）</option>`;
+  }).join("");
+
+  const dup = computeTicketDuplicates(orders);
+  const rows = orders.filter((o) => o.day === ticketAdmin.day);
+  $("ticketAdminTbody").innerHTML = rows.length ? rows.map((o) => {
+    const d = dup.get(o.id);
+    const holders = o.holders.map((h, i) =>
+      `<span class="${d.holders[i] ? "is-dup" : ""}">${escapeHtml(formatHolder(h))}</span>`).join("<br>");
+    const msgText = o.message ? `${escapeHtml(o.message)}<small>${o.anonymous ? "匿名" : "实名"}</small>` : "";
+    const time = new Date(o.createdAt).toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+    return `<tr class="${o.overLimit ? "is-over" : ""}">
+      <td>${o.seq}</td>
+      <td class="${d.contact ? "is-dup" : ""}">${escapeHtml(o.contact)}</td>
+      <td>${o.qty}</td>
+      <td>${holders}</td>
+      <td class="tt-msg">${msgText}</td>
+      <td>${time}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="6" class="tt-empty">这一天还没有订单</td></tr>`;
+}
+
+async function refreshTicketAdmin() {
+  const data = await callWorker({ action: "ticket_admin_get", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    $("ticketAdminStatus").textContent = "读取失败（若未建 ticket_orders 表，请先执行 schema.sql）";
+    return false;
+  }
+  ticketAdmin.status = data.status;
+  ticketAdmin.orders = data.orders;
+  renderTicketAdmin();
+  return true;
+}
+
+async function ticketAdminSet(patch, okMsg) {
+  const msg = $("ticketAdminMsg");
+  setMsg(msg, "");
+  const data = await callWorker({ action: "ticket_admin_set", password: internalAdminPassword, ...patch });
+  if (!data || !data.ok) {
+    setMsg(msg, data?.error === "bad_limit" ? "限额需为 0 以上的整数" : "保存失败，请重新登录内部入口后再试");
+    return;
+  }
+  ticketAdmin.status = data.status;
+  renderTicketAdmin();
+  showToast(okMsg);
+}
+
+/* Excel 导出（ExcelJS 按需加载） --------------------------------------------------- */
+let excelJsPromise = null;
+function loadExcelJs() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  const urls = [
+    "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
+    "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
+  ];
+  const load = (i) => new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = urls[i];
+    s.onload = () => (window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error("no ExcelJS")));
+    s.onerror = () => {
+      s.remove();
+      if (i + 1 < urls.length) load(i + 1).then(resolve, reject);
+      else reject(new Error("load failed"));
+    };
+    document.head.appendChild(s);
+  });
+  excelJsPromise ??= load(0).catch((e) => { excelJsPromise = null; throw e; });
+  return excelJsPromise;
+}
+
+const XL_RED = "FFE02020";
+const XL_ORANGE = "FFED7D31";
+const XL_GREEN = "FF92D050";
+
+async function buildTicketWorkbook(orders) {
+  const ExcelJS = await loadExcelJs();
+  const wb = new ExcelJS.Workbook();
+  const center = { horizontal: "center", vertical: "middle" };
+  const dup = computeTicketDuplicates(orders);
+  const days = [...new Set(orders.map((o) => o.day))].sort();
+
+  /* 第一页：预售票。每天一栏（10 列 + 1 列空隔）：
+     联系方式 / 序号 / 购票数量 / 购票id（1–5） / 是否取票 */
+  const ws = wb.addWorksheet("预售票");
+  const BLOCK = 11;
+  const header = ["联系方式", "序号", "购票数量", "购票id（1）", "购票id（2）", "购票id（3）", "购票id（4）", "购票id（5）", "是否取票"];
+  const totalRefs = [];
+  days.forEach((day, di) => {
+    const c0 = di * BLOCK + 1;
+    const list = orders.filter((o) => o.day === day);
+    const lastRow = Math.max(3, list.length + 2);
+    const [y, m, d] = day.split("-").map(Number);
+
+    ws.mergeCells(1, c0, 1, c0 + 6);
+    const dateCell = ws.getCell(1, c0);
+    dateCell.value = new Date(Date.UTC(y, m - 1, d));
+    dateCell.numFmt = "yyyy/m/d";
+    dateCell.alignment = center;
+    dateCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_GREEN } };
+    ws.getCell(1, c0 + 7).value = "售出票数：";
+    ws.getCell(1, c0 + 7).alignment = center;
+    const qtyCol = ws.getColumn(c0 + 2).letter;
+    const sum = list.reduce((n, o) => n + o.qty, 0);
+    ws.getCell(1, c0 + 8).value = { formula: `SUM(${qtyCol}3:${qtyCol}${lastRow})`, result: sum };
+    ws.getCell(1, c0 + 8).alignment = center;
+    totalRefs.push(`预售票!${ws.getColumn(c0 + 8).letter}1`);
+
+    header.forEach((h, i) => {
+      const cell = ws.getCell(2, c0 + i);
+      cell.value = h;
+      cell.alignment = center;
+      cell.font = { bold: true };
+    });
+
+    list.forEach((o, ri) => {
+      const r = ri + 3;
+      const flags = dup.get(o.id);
+      const values = [o.contact, o.seq, o.qty, ...Array.from({ length: 5 }, (_, k) => o.holders[k] ? formatHolder(o.holders[k]) : null), null];
+      values.forEach((v, i) => {
+        const cell = ws.getCell(r, c0 + i);
+        cell.value = v;
+        cell.alignment = center;
+        let color = o.overLimit ? XL_RED : null;
+        if (i === 0 && flags.contact) color = XL_ORANGE;
+        if (i >= 3 && i <= 7 && flags.holders[i - 3]) color = XL_ORANGE;
+        if (color) cell.font = { color: { argb: color }, bold: o.overLimit };
+      });
+    });
+
+    ws.getColumn(c0).width = 16;
+    for (let i = 3; i <= 7; i++) ws.getColumn(c0 + i).width = 22;
+    ws.getColumn(c0 + 1).width = 6;
+    ws.getColumn(c0 + 2).width = 9;
+    ws.getColumn(c0 + 8).width = 10;
+    ws.getColumn(c0 + 10).width = 4;
+  });
+
+  // 图例放在所有日期栏右侧
+  const lc = Math.max(1, days.length) * BLOCK + 1;
+  ws.getCell(1, lc).value = "标注说明";
+  ws.getCell(1, lc).font = { bold: true };
+  ws.getCell(2, lc).value = "红字：提交时当日票额已满（超额登记，整单标红）";
+  ws.getCell(2, lc).font = { color: { argb: XL_RED } };
+  ws.getCell(3, lc).value = "橙字：联系方式或持票 id 与其他订单重复";
+  ws.getCell(3, lc).font = { color: { argb: XL_ORANGE } };
+  ws.getColumn(lc).width = 44;
+  ws.views = [{ state: "frozen", ySplit: 2 }];
+
+  /* 其余工作表保持模板结构，内容留空 */
+  const group = wb.addWorksheet("团购票");
+  group.addRow(["id", "票数", "是否取票", "总计"]);
+  group.getCell("D2").value = { formula: "SUM(B2:B2207)", result: 0 };
+  group.getColumn(1).width = 15;
+
+  const inner = wb.addWorksheet("内部票");
+  inner.addRow(["店家/个人", "票数", "票价", "是否取票"]);
+  inner.getCell("F5").value = "总计";
+  inner.getCell("F6").value = { formula: "SUM(B2:B365)", result: 0 };
+  inner.getColumn(1).width = 26;
+
+  wb.addWorksheet("现场票");
+
+  const stat = wb.addWorksheet("票务统计");
+  stat.addRow(["票型", "单价（wgil）", "售票量", "收入"]);
+  const presaleTotal = orders.reduce((n, o) => n + o.qty, 0);
+  stat.addRow(["预售票", 98, { formula: totalRefs.length ? totalRefs.join("+") : "0", result: presaleTotal }, null]);
+  stat.addRow(["团购票", 98, { formula: "团购票!D2", result: 0 }, null]);
+  stat.addRow(["内部票①", 50, { formula: "内部票!F6", result: 0 }, null]);
+  stat.addRow(["内部票②", 0, null, null]);
+  stat.addRow(["现场票", 118, null, null]);
+  stat.columns.forEach((c) => { c.width = 12; });
+
+  /* 留言 */
+  const msgWs = wb.addWorksheet("留言");
+  msgWs.addRow(["日期", "序号", "联系方式", "第一位持票人", "留言", "是否匿名"]);
+  msgWs.getRow(1).font = { bold: true };
+  orders.filter((o) => o.message).forEach((o) => {
+    msgWs.addRow([o.day, o.seq, o.contact, formatHolder(o.holders[0]), o.message, o.anonymous ? "是" : "否"]);
+  });
+  [12, 6, 16, 22, 60, 10].forEach((w, i) => { msgWs.getColumn(i + 1).width = w; });
+  msgWs.getColumn(5).alignment = { wrapText: true, vertical: "top" };
+
+  return wb;
+}
+
+async function exportTicketExcel() {
+  const orders = ticketAdmin.orders;
+  const wb = await buildTicketWorkbook(orders);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const stamp = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `花街购票信息${TICKET_TEST_MODE ? "（测试）" : ""}_${stamp}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+async function withAdminBusy(btn, fn) {
+  const msg = $("ticketAdminMsg");
+  setMsg(msg, "");
+  btn.disabled = true;
+  try {
+    await fn(msg);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initTicketAdmin() {
+  $("ticketOpenBtn").addEventListener("click", () => {
+    const next = !ticketAdmin.status?.open;
+    ticketAdminSet({ open: next }, next ? "购票已开放" : "购票已关闭");
+  });
+  $("ticketPendingBtn").addEventListener("click", () => {
+    const next = !ticketAdmin.status?.allowPending;
+    ticketAdminSet({ allowPending: next }, next ? "已允许持票 id 待定" : "已关闭持票 id 待定");
+  });
+  const saveLimit = () => {
+    const raw = $("ticketLimitInput").value.trim();
+    const n = Number(raw);
+    if (raw === "" || !Number.isInteger(n) || n < 0) {
+      setMsg($("ticketAdminMsg"), "限额需为 0 以上的整数");
+      return;
+    }
+    $("ticketLimitInput").blur();
+    ticketAdminSet({ limit: n }, `每日限额已设为 ${n} 张`);
+  };
+  $("ticketLimitSaveBtn").addEventListener("click", saveLimit);
+  $("ticketLimitInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveLimit();
+  });
+  $("ticketDaySelect").addEventListener("change", (e) => {
+    ticketAdmin.day = e.target.value;
+    renderTicketAdmin();
+  });
+
+  $("ticketRefreshBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async () => {
+    if (await refreshTicketAdmin()) showToast("已刷新");
+  }));
+
+  $("ticketExportBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
+    if (!(await refreshTicketAdmin())) {
+      setMsg(msg, "读取购票数据失败，未导出");
+      return;
+    }
+    try {
+      await exportTicketExcel();
+    } catch (err) {
+      console.error(err);
+      setMsg(msg, "导出失败：表格组件加载不出来，检查一下网络后再试");
+    }
+  }));
+
+  $("ticketClearBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
+    if (!(await refreshTicketAdmin())) {
+      setMsg(msg, "读取购票数据失败，未执行清空");
+      return;
+    }
+    const n = ticketAdmin.orders.length;
+    if (!confirm(`确定要清空全部购票数据吗？（共 ${n} 单）\n\n清空前会先自动下载一份 Excel 备份，清空后无法恢复。`)) return;
+    if (n) {
+      try {
+        await exportTicketExcel();
+      } catch (err) {
+        console.error(err);
+        setMsg(msg, "备份导出失败，已取消清空。检查网络后再试");
+        return;
+      }
+    }
+    const data = await callWorker({ action: "ticket_admin_clear", password: internalAdminPassword, confirm: "CLEAR" });
+    if (!data || !data.ok) {
+      setMsg(msg, "清空失败，请重新登录内部入口后再试");
+      return;
+    }
+    await refreshTicketAdmin();
+    showToast(n ? "已备份并清空购票数据" : "购票数据已清空");
+  }));
+}
+
+
+/* =============================================================================
    7. 花街介绍 / 活动群弹窗
    ============================================================================= */
 
@@ -2037,7 +2878,10 @@ function initLightbox() {
 
 
 /* =============================================================================
-   9. 人机验证（Turnstile）
+   9. 人机验证（Turnstile，备用：算术题）
+   - Turnstile 在国内经常加载失败：出错或 6 秒内没加载出来就自动切换为算术题，
+     用户也可以手动点「改用算术题」；切换后 24 小时内默认直接用算术题
+   - 算术题由 Worker 出题并校验（每题只能提交一次），答案不会下发到前端
    - 通过后 5 分钟内免验证（时间戳存本地，刷新仍有效），
      「活动群」「花街介绍」「复制附联系方式」共用此窗口
    - 密码连错触发的验证不享受免验证窗口
@@ -2045,6 +2889,84 @@ function initLightbox() {
    ============================================================================= */
 
 const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
+const TURNSTILE_WAIT_MS = 6000;             // 超过这个时间还没加载出来就改用算术题
+const MATH_MODE_KEEP_MS = 24 * 3600 * 1000;
+
+const prefersMathCaptcha = () => Date.now() - (Number(storage.get(STORE.captchaMathAt)) || 0) < MATH_MODE_KEEP_MS;
+const rememberMathCaptcha = () => storage.set(STORE.captchaMathAt, Date.now());
+
+/* 算术题组件：挂到一个空 div 上；value() 返回 { challenge, answer } 或 null */
+class MathCaptcha {
+  constructor(root, { onSubmit } = {}) {
+    this.root = root;
+    this.challenge = null;
+    this.loading = null;
+    root.innerHTML = `
+      <p class="math-q">请计算：<b class="math-expr">…</b> = ?</p>
+      <div class="math-row">
+        <input type="text" class="math-input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="填写答案" aria-label="算术题答案">
+        <button type="button" class="math-refresh">换一题</button>
+        ${onSubmit ? `<button type="button" class="math-ok">确认</button>` : ""}
+      </div>`;
+    this.expr = root.querySelector(".math-expr");
+    this.input = root.querySelector(".math-input");
+    root.querySelector(".math-refresh").addEventListener("click", () => this.load());
+    if (onSubmit) {
+      root.querySelector(".math-ok").addEventListener("click", onSubmit);
+      this.input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+      });
+    }
+  }
+
+  get active() { return !this.root.hidden; }
+
+  show() {
+    this.root.hidden = false;
+    if (!this.challenge && !this.loading) this.load();
+  }
+
+  hide() { this.root.hidden = true; }
+
+  load() {
+    this.challenge = null;
+    this.input.value = "";
+    this.expr.textContent = "出题中…";
+    const req = callWorker({ action: "get_math_challenge" }).then((data) => {
+      if (this.loading !== req) return;
+      this.loading = null;
+      if (!data || !data.ok) {
+        this.expr.textContent = data?.error === "rate_limited" ? "换题太快了，稍等再点「换一题」" : "出题失败，点「换一题」重试";
+        return;
+      }
+      this.challenge = data.challenge;
+      this.expr.textContent = data.question;
+    });
+    this.loading = req;
+    return req;
+  }
+
+  /* 取答案；还没出题或没填数字时返回 null。交给 Worker 后这道题就作废，需要 load() 换题 */
+  value() {
+    const v = this.input.value.trim().replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+    if (!this.challenge || !/^-?\d{1,6}$/.test(v)) return null;
+    return { challenge: this.challenge, answer: Number(v) };
+  }
+
+  focus() { this.input.focus({ preventScroll: true }); }
+}
+
+/* 等待 Turnstile 脚本加载；超时返回 false */
+function waitForTurnstile(timeoutMs) {
+  if (window.turnstile) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const t = setInterval(() => {
+      if (window.turnstile) { clearInterval(t); resolve(true); }
+      else if (Date.now() - start >= timeoutMs) { clearInterval(t); resolve(false); }
+    }, 300);
+  });
+}
 
 let turnstilePending = null;    // 验证通过后要执行的动作
 let turnstileWidgetId = null;
@@ -2060,17 +2982,22 @@ function requestCaptcha(pending) {
   else openCaptcha(pending);
 }
 
+let captchaMath = null;       // 弹窗里的算术题组件
+let captchaSession = 0;       // 每次打开 / 关闭弹窗 +1，用来丢弃过期的异步回调
+
 function openCaptcha(pending) {
   turnstilePending = pending;
   turnstileFailStreak = 0;
+  captchaSession++;
   setMsg($("captchaMsg"), "");
   $("captchaOverlay").hidden = false;
   playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
-  renderTurnstile();
+  if (prefersMathCaptcha()) useMathInOverlay();
+  else renderTurnstile();
 }
 
 function stopTurnstileRetry() {
-  clearInterval(turnstileRetryTimer);
+  clearTimeout(turnstileRetryTimer);
   turnstileRetryTimer = null;
 }
 
@@ -2081,61 +3008,99 @@ function removeTurnstileWidget() {
   }
 }
 
-/* 渲染组件；api.js 为异步加载，未就绪时每 0.5 秒重试，最多 10 秒 */
-function renderTurnstile() {
+/* 弹窗切换为算术题；reason 为提示语（手动切换时为空） */
+function useMathInOverlay(reason = "") {
+  stopTurnstileRetry();
+  removeTurnstileWidget();
+  $("turnstileWidget").innerHTML = "";
+  $("turnstileWidget").hidden = true;
+  $("captchaSwitch").hidden = true;
+  captchaMath.show();
+  captchaMath.focus();
+  setMsg($("captchaMsg"), reason);
+  rememberMathCaptcha();
+}
+
+/* 渲染 Turnstile；出错或 TURNSTILE_WAIT_MS 内脚本没加载出来，自动改用算术题 */
+async function renderTurnstile() {
   const el = $("turnstileWidget");
   const msg = $("captchaMsg");
-  el.innerHTML = "";
+  const session = captchaSession;
   stopTurnstileRetry();
+  removeTurnstileWidget();
+  el.innerHTML = "";
+  el.hidden = false;
+  captchaMath.hide();
+  $("captchaSwitch").hidden = false;
 
-  const doRender = () => {
-    setMsg(msg, "");
-    turnstileWidgetId = window.turnstile.render(el, {
-      sitekey: TURNSTILE_SITE_KEY,
-      callback: onTurnstileSuccess,
-      "error-callback": () => setMsg(msg, "验证组件加载失败，检查一下网络后重新打开试试"),
-    });
-  };
-
-  if (window.turnstile) {
-    doRender();
+  if (!window.turnstile) setMsg(msg, "验证组件加载中，请稍候…");
+  const ready = await waitForTurnstile(TURNSTILE_WAIT_MS);
+  if (session !== captchaSession || captchaMath.active) return;
+  if (!ready) {
+    useMathInOverlay("验证组件加载不出来，已改用算术题");
     return;
   }
 
-  setMsg(msg, "验证组件加载中，请稍候…");
-  let tries = 0;
-  turnstileRetryTimer = setInterval(() => {
-    tries++;
-    if (window.turnstile) {
-      stopTurnstileRetry();
-      doRender();
-    } else if (tries >= 20) {
-      stopTurnstileRetry();
-      setMsg(msg, "验证组件加载超时，可能是网络问题，刷新页面后再试一次");
+  setMsg(msg, "");
+  let passed = false;
+  turnstileWidgetId = window.turnstile.render(el, {
+    sitekey: TURNSTILE_SITE_KEY,
+    callback: (token) => { passed = true; finishCaptcha({ token }); },
+    "error-callback": () => {
+      if (session === captchaSession && !captchaMath.active) useMathInOverlay("验证组件加载失败，已改用算术题");
+      return true;   // 已自行处理，不让组件自己反复重试
+    },
+  });
+  // 组件出现了但一直卡着不通过（网络受限时常见）：给个提示
+  turnstileRetryTimer = setTimeout(() => {
+    if (!passed && session === captchaSession && !captchaMath.active) {
+      setMsg(msg, "一直转圈的话，可以点「改用算术题」");
     }
-  }, 500);
+  }, 12000);
 }
 
 function closeCaptcha() {
   $("captchaOverlay").hidden = true;
+  captchaSession++;
   stopTurnstileRetry();
   removeTurnstileWidget();
   turnstilePending = null;
 }
 
-async function onTurnstileSuccess(token) {
+function submitCaptchaMath() {
+  const math = captchaMath.value();
+  if (!math) {
+    setMsg($("captchaMsg"), "请先填写算术题的答案（数字）");
+    captchaMath.focus();
+    return;
+  }
+  finishCaptcha({ math });
+}
+
+/* 把 Turnstile token 或算术题答案交给 Worker 确认 */
+async function finishCaptcha(proof) {
   const pending = turnstilePending;
   const msg = $("captchaMsg");
+  const session = captchaSession;
 
   setMsg(msg, "验证中…");
-  const verify = await callWorker({ action: "verify_turnstile", token });
+  const verify = await callWorker({ action: "verify_turnstile", ...proof });
+  if (session !== captchaSession) return;
 
   if (!verify || !verify.ok) {
+    if (proof.math) {
+      setMsg(msg, !verify ? "连接失败，检查一下网络后再试"
+        : verify.error === "rate_limited" ? "尝试太频繁了，请稍等一会儿再试"
+        : "答案不对，已换一道题，再试试");
+      captchaMath.load();
+      captchaMath.focus();
+      return;
+    }
     /* 组件常会自动通过；若失败后无条件重建，会陷入"通过→失败→重建"的循环并耗尽限流额度。
-       因此连续失败 2 次（或弹窗已关闭）就停止，交给用户手动重试。 */
+       因此连续失败 2 次就改用算术题。 */
     turnstileFailStreak++;
-    if (turnstileFailStreak >= 2 || $("captchaOverlay").hidden) {
-      setMsg(msg, "验证服务暂时不可用，请稍后重新打开验证窗口再试");
+    if (turnstileFailStreak >= 2) {
+      useMathInOverlay("验证服务暂时不可用，已改用算术题");
       return;
     }
     setMsg(msg, "验证未通过，请重新完成一次");
@@ -2167,6 +3132,8 @@ function runCaptchaPending(pending) {
 }
 
 function initCaptcha() {
+  captchaMath = new MathCaptcha($("captchaMath"), { onSubmit: submitCaptchaMath });
+  $("captchaSwitch").addEventListener("click", () => useMathInOverlay());
   $("captchaClose").addEventListener("click", closeCaptcha);
   closeOnBackdrop($("captchaOverlay"), closeCaptcha);
 }
@@ -3328,6 +4295,7 @@ const A11Y_MODALS = [
   { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
   { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
   { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
+  { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: closeTicketNotice },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
 
@@ -3363,6 +4331,8 @@ function initApp() {
   initCaptcha();
   initLockdownToggle();
   initStarlightPanel();
+  initTicket();
+  initTicketAdmin();
   initPostAnnouncement();
   initAnnouncementImageUpload();
   initClickBurst();
