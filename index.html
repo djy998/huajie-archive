@@ -668,7 +668,19 @@
    1. 站点配置与内容数据
    ============================================================================= */
 
-const WORKER_URL = "https://huayu-api.1316816234.workers.dev/";
+/* 后端地址。注意：*.workers.dev 在中国大陆被 DNS 污染，国内访客连不上，
+   会表现为"出题失败""公告读取失败""购票提交失败"。解决办法是把 Worker 挂到自己的域名上，
+   然后把下面这行改掉（三种写法都支持）：
+     1) 自定义域：  "https://api.你的域名/"
+     2) 同域路由：  "/api/"            （Worker 路由设为 你的域名/api/*，同源、免 CORS）
+     3) workers.dev："https://xxx.workers.dev/"（国内访客不可用，仅自己测试时用）
+   换域名后，公告里旧的配图地址仍指向 workers.dev，由 workerImageUrl() 自动改写到新地址。
+
+   本站的域名已经托管在 Cloudflare（NS 指向 Cloudflare，走橙云代理），
+   所以推荐做法：给 Worker 加一条路由 swayingsussurrusstreet.dpdns.org/api/*，
+   然后把下面两行的注释位置对调 —— 顺序是「先在 Cloudflare 加好路由，再上传本文件」。 */
+const WORKER_URL = "/api/";                                        // 当前：同域路由，国内可访问
+// const WORKER_URL = "https://huayu-api.1316816234.workers.dev/";  // 备用：workers.dev，国内访客连不上
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 
 const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";   // 场地使用登记（金数据）
@@ -1003,17 +1015,38 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-/* 调用 Worker；网络错误或返回非 JSON 时得到 null */
+/* Worker 的绝对地址（WORKER_URL 允许写成 "/api/" 这样的同源相对路径） */
+const workerBase = () => new URL(WORKER_URL, location.href).href;
+
+/* 公告配图地址：把任何来源的 /image/announcements/xxx 改写到当前 WORKER_URL 上，
+   这样换过后端域名后，D1 里旧的 workers.dev 配图地址依然能显示 */
+function workerImageUrl(url) {
+  const m = /\/image\/(announcements\/[\w-]+\.(?:webp|jpg|png))$/.exec(url || "");
+  return m ? new URL(`image/${m[1]}`, workerBase()).href : url;
+}
+
+/* 调用 Worker；网络错误或返回非 JSON 时得到 null，
+   具体原因记在 lastWorkerIssue 里（排查用：network = 根本没连上，多半是域名被墙或 CORS） */
+let lastWorkerIssue = "";
+
 async function callWorker(payload) {
   if (!WORKER_URL) return null;
   try {
-    const res = await fetch(WORKER_URL, {
+    const res = await fetch(workerBase(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return await res.json();
+    try {
+      const data = await res.json();
+      lastWorkerIssue = res.ok ? "" : `http_${res.status}`;
+      return data;
+    } catch (e) {
+      lastWorkerIssue = `http_${res.status}`;
+      return null;
+    }
   } catch (e) {
+    lastWorkerIssue = "network";
     return null;
   }
 }
@@ -1493,7 +1526,7 @@ function renderAnnouncements(items, isAdmin) {
         </div>`;
     }
     const imageHtml = a.image_url
-      ? `<img src="${escapeHtml(a.image_url)}" loading="lazy" class="announcement-image" data-lightbox>`
+      ? `<img src="${escapeHtml(workerImageUrl(a.image_url))}" loading="lazy" class="announcement-image" data-lightbox>`
       : "";
     return `
       <div class="announcement">
@@ -1588,7 +1621,7 @@ function initAnnouncementImageUpload() {
         content_type: contentType,
       });
       if (!data || !data.ok) throw new Error((data && data.error) || "upload failed");
-      pendingAnnouncementImageUrl = `${WORKER_URL}image/${data.key}`;
+      pendingAnnouncementImageUrl = new URL(`image/${data.key}`, workerBase()).href;
       showAnnouncementImagePreview(pendingAnnouncementImageUrl);
       setMsg(status, "");
     } catch (e) {
@@ -2903,12 +2936,15 @@ class MathCaptcha {
     this.loading = null;
     root.innerHTML = `
       <p class="math-q">请计算：<b class="math-expr">…</b> = ?</p>
+      <p class="math-status" hidden></p>
       <div class="math-row">
         <input type="text" class="math-input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="填写答案" aria-label="算术题答案">
         <button type="button" class="math-refresh">换一题</button>
         ${onSubmit ? `<button type="button" class="math-ok">确认</button>` : ""}
       </div>`;
     this.expr = root.querySelector(".math-expr");
+    this.q = root.querySelector(".math-q");
+    this.status = root.querySelector(".math-status");
     this.input = root.querySelector(".math-input");
     root.querySelector(".math-refresh").addEventListener("click", () => this.load());
     if (onSubmit) {
@@ -2921,6 +2957,14 @@ class MathCaptcha {
 
   get active() { return !this.root.hidden; }
 
+  /* 出题中 / 出题失败时隐藏算式，只显示状态文字 */
+  setStatus(text, isError = false) {
+    this.status.textContent = text;
+    this.status.hidden = !text;
+    this.status.classList.toggle("is-error", isError);
+    this.q.hidden = !!text;
+  }
+
   show() {
     this.root.hidden = false;
     if (!this.challenge && !this.loading) this.load();
@@ -2931,16 +2975,25 @@ class MathCaptcha {
   load() {
     this.challenge = null;
     this.input.value = "";
-    this.expr.textContent = "出题中…";
+    this.expr.textContent = "…";
+    this.setStatus("出题中…");
     const req = callWorker({ action: "get_math_challenge" }).then((data) => {
       if (this.loading !== req) return;
       this.loading = null;
       if (!data || !data.ok) {
-        this.expr.textContent = data?.error === "rate_limited" ? "换题太快了，稍等再点「换一题」" : "出题失败，点「换一题」重试";
+        // 区分原因，方便排查：连不上 / 后端未更新 / 后端出错 / 限流
+        const reason = !data ? (lastWorkerIssue === "network"
+            ? "连不上验证服务器：这个后端地址访问不到（workers.dev 在国内会被墙），请联系管理员换域名"
+            : `连不上验证服务器（${lastWorkerIssue || "未知"}），点「换一题」重试`)
+          : data.error === "unknown action" ? "出题失败：后端（Worker）还是旧版本，请联系管理员"
+          : data.error === "rate_limited" ? "换题太快了，稍等一会儿再点「换一题」"
+          : `出题失败（${data.error || "未知错误"}），点「换一题」重试`;
+        this.setStatus(reason, true);
         return;
       }
       this.challenge = data.challenge;
       this.expr.textContent = data.question;
+      this.setStatus("");
     });
     this.loading = req;
     return req;

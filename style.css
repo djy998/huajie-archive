@@ -2447,6 +2447,11 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; backgro
 .math-captcha { margin: 4px auto 6px; max-width: 360px; text-align: center; }
 .math-captcha[hidden], .captcha-switch[hidden], .captcha-switch-row[hidden], #turnstileWidget[hidden], .ticket-captcha[hidden] { display: none; }
 .math-q { margin-bottom: 12px; font-size: .95rem; color: var(--text-soft); }
+.math-q[hidden], .math-status[hidden] { display: none; }
+.math-status { margin-bottom: 12px; font-size: .88rem; line-height: 1.6; color: var(--text-mute); }
+.math-status.is-error { color: #e08e84; }
+body.day-mode .math-status { color: var(--day-brown-soft); }
+body.day-mode .math-status.is-error { color: #a83a2e; }
 .math-expr { margin: 0 4px; font-size: 1.35rem; letter-spacing: .06em; color: var(--lantern-soft); }
 .math-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; }
 .gate-card .math-row .math-input { flex: 1 1 110px; width: auto; max-width: 150px; margin: 0; text-align: center; }
