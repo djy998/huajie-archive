@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 52;
+      var CSS_VERSION = 53;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -274,6 +274,10 @@
     </div>
     <div class="cal-events" id="calEvents"></div>
   </div>
+
+  <!-- 闹铃 / 倒计时小组件层：每个已添加的项目生成一个可拖动、可缩放的小组件（脚本生成） -->
+  <div id="alarmWidgetLayer" aria-label="闹铃与倒计时小组件"></div>
+
   <h1 class="brand">花舞之街 · 薰风花语町</h1>
   <p class="tagline">莫古力区 · 梦羽宝境<br>
     花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
@@ -654,6 +658,112 @@
   </div>
 </div>
 
+<!-- 闹铃 / 倒计时面板：全部数据保存在本地（localStorage），不经过 Worker -->
+<div class="info-overlay" id="alarmOverlay" role="dialog" aria-modal="true" aria-label="闹铃与倒计时" hidden>
+  <div class="gate-card alarm-card">
+    <button class="info-close" id="alarmClose" aria-label="关闭">×</button>
+    <h2>闹铃铃</h2>
+    <p class="hint">闹铃与倒计时保存在本机浏览器里，页面开着才会响铃</p>
+
+    <div class="tabs alarm-tabs">
+      <button class="tab-btn is-active" type="button" data-alarm-tab="alarm">闹铃</button>
+      <button class="tab-btn" type="button" data-alarm-tab="countdown">倒计时</button>
+    </div>
+
+    <!-- 子类型一：闹铃（到点响铃） -->
+    <div class="tab-panel alarm-panel" id="alarmPanelAlarm">
+      <div class="alarm-field">
+        <label class="alarm-label" for="almName">名字（可不填）</label>
+        <input id="almName" type="text" maxlength="12" placeholder="例如：理符领取">
+      </div>
+      <div class="alarm-field">
+        <span class="alarm-label">时间类型</span>
+        <div class="alarm-seg" id="almZoneSeg">
+          <label class="is-active"><input type="radio" name="almZone" value="cn" checked><span>国服时间</span></label>
+          <label><input type="radio" name="almZone" value="et"><span>艾欧泽亚时间</span></label>
+        </div>
+        <p class="alarm-hint" id="almNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
+      </div>
+      <div class="alarm-field">
+        <label class="alarm-label" for="almTime">响铃时间</label>
+        <input id="almTime" type="time" value="20:00">
+        <label class="alarm-check" for="almRepeat">
+          <input type="checkbox" id="almRepeat">
+          <span id="almRepeatText">每小时重复</span>
+        </label>
+        <p class="alarm-hint" id="almRepeatHint"></p>
+      </div>
+      <div class="alarm-field alarm-row2">
+        <div>
+          <label class="alarm-label" for="almSound">铃声</label>
+          <select id="almSound"></select>
+        </div>
+        <div>
+          <label class="alarm-label" for="almPlaySec">播放时长</label>
+          <select id="almPlaySec"></select>
+        </div>
+        <button type="button" id="almPreview">试听</button>
+      </div>
+      <button type="button" class="alarm-add" id="almAddAlarm">添加闹铃</button>
+      <div class="alarm-list-head">已添加的闹铃</div>
+      <div class="alarm-list" id="almListAlarm"></div>
+    </div>
+
+    <!-- 子类型二：倒计时（倒数结束响铃） -->
+    <div class="tab-panel alarm-panel" id="alarmPanelCountdown" hidden>
+      <div class="alarm-field">
+        <label class="alarm-label" for="cdName">名字（可不填）</label>
+        <input id="cdName" type="text" maxlength="12" placeholder="例如：部队buff">
+      </div>
+      <div class="alarm-field">
+        <span class="alarm-label">时间类型</span>
+        <div class="alarm-seg" id="cdZoneSeg">
+          <label class="is-active"><input type="radio" name="cdZone" value="cn" checked><span>国服时间</span></label>
+          <label><input type="radio" name="cdZone" value="et"><span>艾欧泽亚时间</span></label>
+        </div>
+        <p class="alarm-hint" id="cdNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
+      </div>
+      <div class="alarm-field" id="cdCnWrap">
+        <span class="alarm-label">倒计时时长（国服时间，最短 30 秒）</span>
+        <div class="alarm-dur-row">
+          <input type="number" id="cdCnH" min="0" max="99" step="1" value="0" aria-label="时"><span>时</span>
+          <input type="number" id="cdCnM" min="0" max="59" step="1" value="5" aria-label="分"><span>分</span>
+          <input type="number" id="cdCnS" min="0" max="59" step="1" value="0" aria-label="秒"><span>秒</span>
+        </div>
+        <p class="alarm-hint" id="cdCnHint"></p>
+      </div>
+      <div class="alarm-field" id="cdEtWrap" hidden>
+        <span class="alarm-label">倒计时时长（艾欧泽亚时间，最短 5 分钟）</span>
+        <div class="alarm-dur-row">
+          <input type="number" id="cdEtH" min="0" max="23" step="1" value="0" aria-label="艾欧泽亚时"><span>时</span>
+          <input type="number" id="cdEtM" min="0" max="59" step="1" value="20" aria-label="艾欧泽亚分"><span>分</span>
+        </div>
+        <p class="alarm-hint" id="cdEtHint"></p>
+      </div>
+      <label class="alarm-check" for="cdLoop">
+        <input type="checkbox" id="cdLoop">
+        <span>倒计时结束后自动循环</span>
+      </label>
+      <div class="alarm-field alarm-row2 alarm-row2-gap">
+        <div>
+          <label class="alarm-label" for="cdSound">铃声</label>
+          <select id="cdSound"></select>
+        </div>
+        <div>
+          <label class="alarm-label" for="cdPlaySec">播放时长</label>
+          <select id="cdPlaySec"></select>
+        </div>
+        <button type="button" id="cdPreview">试听</button>
+      </div>
+      <button type="button" class="alarm-add" id="cdAdd">添加倒计时</button>
+      <div class="alarm-list-head">已添加的倒计时</div>
+      <div class="alarm-list" id="almListCountdown"></div>
+    </div>
+
+    <p class="form-msg" id="alarmMsg" hidden></p>
+  </div>
+</div>
+
 <div class="info-overlay" id="infoOverlay" role="dialog" aria-modal="true" aria-label="花街介绍" hidden>
   <div class="info-box" id="infoBox">
     <button class="info-close" id="infoClose" aria-label="关闭">×</button>
@@ -692,7 +802,7 @@
      4. 首页 / 活动详情 / 相册    10. 视觉特效（昼夜、落叶、点击爆花）
      5. 内部入口与公告板          11. 头部工具：音量、更多、日历、时间条、天气
      6. 管理员：站点开关、星芒节   12. 点赞
-     6b. 活动购票
+     6b. 活动购票                 12b. 闹铃与倒计时（纯本地）
                                   13. 无障碍 & 启动
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
    验证：界面在 verify.js（HJVerify，新增文件），题目与判卷在 Worker（见 verify-ext/）。
@@ -1002,6 +1112,7 @@ const STORE = {
   calZoom:     "hj_cal_zoom",
   calYm:       "hj_cal_ym",
   calXy:       "hj_cal_xy",
+  alarmItems:  "hj_alarm_items",   // 闹铃 / 倒计时（纯本地，见 12b 节）
 };
 
 
@@ -3981,12 +4092,13 @@ function initVolSlider() {
    圆形图标按钮在「更多」下方竖排展开。新增功能：在 HJ_MORE_FEATURES 加一项，
    并在 onMoreItemClick 里处理；dev 不为 false 的项视为开发中。 */
 const HJ_MORE_FEATURES = [
-  { id: "alarm",    label: "闹铃",             icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
+  { id: "alarm",    label: "闹铃",   dev: false, icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
   { id: "calendar", label: "日历", dev: false, icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
 ];
 
 function onMoreItemClick(id) {
   if (id === "calendar") openCalWidget(true);
+  else if (id === "alarm") openAlarmModal(true);
   else showToast("功能正在开发中~");
   openMorePanel(false);
 }
@@ -4538,6 +4650,784 @@ function initLikes() {
 
 
 /* =============================================================================
+   12b. 闹铃与倒计时（纯本地，不经过 Worker）
+   - 入口：右上角「更多」→「闹铃」，弹窗内分两个子类型：闹铃 / 倒计时
+   - 闹铃：到指定时刻响铃。时间可按 国服时间（UTC+8）或 艾欧泽亚时间 设置；
+     国服时间可勾「每小时重复」（每小时的第 MM 分响，忽略小时），
+     艾欧泽亚时间可勾「每日重复」（1 艾欧泽亚日 ≈ 现实 70 分钟）
+   - 倒计时：倒数结束响铃。国服最短 30 秒；艾欧泽亚最短 5 分钟（游戏内时间）；
+     可勾「倒计时结束后自动循环」
+   - 铃声取自仓库 music/<名称>.ogg（名称见 ALARM_SOUNDS，与文件名一致），
+     默认播放 30 秒，结尾慢慢减弱（淡出）
+   - 添加后在页面上生成小组件：标题栏可拖动、双击回默认位置、± 缩放、× 收起
+   - 所有数据（含组件位置 / 缩放）保存在 localStorage（STORE.alarmItems）
+   - 控制台调试：HJ_ALARM.list() / HJ_ALARM.ringNow(id) / HJ_ALARM.open() / HJ_ALARM.clear()
+   ============================================================================= */
+
+/* 音源列表：与 music/ 目录里的文件名（不带扩展名）一致。
+   新增铃声：把 .ogg 放进 music/，再在这个数组里加上文件名即可。 */
+const ALARM_SOUNDS = ["基本闹铃", "闹铃1", "闹铃2", "闹铃3", "哄睡曲1", "哄睡曲2", "哄睡曲3"];
+const ALARM_SOUND_DIR = "music/";
+const ALARM_PLAY_DEFAULT = 30;                  // 默认播放时长（秒）
+const ALARM_PLAY_OPTIONS = [15, 30, 60, 120];   // 可选播放时长（秒），结尾都会渐弱
+const ALARM_FADE_SEC = 4;                       // 结尾渐弱（淡出）时长（秒）
+const ALARM_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];    // 小组件缩放档位（与日历一致）
+const ALARM_CN_MIN_SEC = 30;                    // 国服倒计时最短秒数
+const ALARM_ET_MIN_MIN = 5;                     // 艾欧泽亚倒计时最短分钟数（游戏内时间）
+
+const hjAlarms = {
+  items: [],           // 全部闹铃 / 倒计时（含运行时字段，保存时会一并写入本地）
+  ringing: new Map(),  // id → 播放会话 { stop }
+};
+const hjAlarmWidgets = new Map();   // id → { el, big, status, actions, sig }
+let hjAlarmPreview = null;          // 试听会话
+
+const alarmSoundSrc = (name) => ALARM_SOUND_DIR + encodeURIComponent(name) + ".ogg";
+const alarmById = (id) => hjAlarms.items.find((it) => it.id === id);
+const alarmZoneShort = (it) => (it.zone === "cn" ? "国服" : "艾欧泽亚");
+
+/* 剩余时长 → HH:MM:SS（不足 1 小时则 MM:SS） */
+function alarmFmtDur(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? `${pad2(h)}:${pad2(m)}:${pad2(sec)}` : `${pad2(m)}:${pad2(sec)}`;
+}
+
+/* 某时刻的国服钟面（UTC+8，无夏令时，可直接偏移计算） */
+function alarmCnClockAt(ms) {
+  const d = new Date(ms + CN_TZ_OFFSET_MS);
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
+}
+
+/* 时/分/秒 → 人话（0 的部分省略） */
+function alarmHumanDur(h, m, s) {
+  if (h > 0) return `${h}小时${m > 0 ? `${m}分` : ""}${s > 0 ? `${s}秒` : ""}`;
+  if (m > 0) return `${m}分${s > 0 ? `${s}秒` : ""}`;
+  return `${s}秒`;
+}
+
+/* 下一次响铃时刻（epoch 毫秒） -------------------------------------------------- */
+function alarmNextFire(it, now) {
+  if (it.zone === "cn") {
+    const d = new Date(now + CN_TZ_OFFSET_MS);
+    if (it.repeat) {                       // 每小时重复：只看「分」
+      d.setUTCMinutes(it.mm, 0, 0);
+      let t = d.getTime() - CN_TZ_OFFSET_MS;
+      if (t <= now) t += 3600 * 1000;
+      return t;
+    }
+    d.setUTCHours(it.hh, it.mm, 0, 0);     // 仅一次：下一个 HH:MM
+    let t = d.getTime() - CN_TZ_OFFSET_MS;
+    if (t <= now) t += 24 * 3600 * 1000;
+    return t;
+  }
+  // 艾欧泽亚：时间流速 144/7，ET 钟面每天（现实约 70 分钟）扫过全部 24 小时
+  const target = it.hh * 3600 + it.mm * 60;
+  const etSec = (now / 1000) * EORZEA_RATE;
+  const tod = ((etSec % 86400) + 86400) % 86400;
+  if (Math.floor(tod / 60) === Math.floor(target / 60)) return now;   // 正处在目标分钟内：立即响
+  const delta = (target - tod + 86400) % 86400;
+  return now + (delta / EORZEA_RATE) * 1000;
+}
+
+/* 铃声播放：从 0 快速渐入 → 平播 → 最后 ALARM_FADE_SEC 秒慢慢减弱到 0。
+   音量始终乘上全站音量条（hjMusic.vol），拖音量条即时生效。 */
+function alarmPlayCore(name, playSec, onEnd) {
+  const audio = new Audio(alarmSoundSrc(name));
+  audio.preload = "auto";
+  const totalMs = Math.max(1, Number(playSec) || ALARM_PLAY_DEFAULT) * 1000;
+  const fadeMs = Math.min(ALARM_FADE_SEC * 1000, totalMs * 0.6);
+  const t0 = performance.now();
+  let timer = 0;
+  let stopped = false;
+
+  const paint = () => {
+    const t = performance.now() - t0;
+    let f = 1;
+    if (t < 500) f = Math.max(0.02, t / 500);              // 开头小渐入，防爆音
+    const left = totalMs - t;
+    if (left <= fadeMs) f = Math.max(0, left / fadeMs);    // 结尾慢慢减弱
+    try { audio.volume = clamp(hjMusic.vol * f, 0, 1); } catch (e) {}
+  };
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    try { audio.pause(); } catch (e) {}
+    if (onEnd) onEnd();
+  };
+
+  audio.addEventListener("ended", stop);   // 音频文件本身比播放时长短
+  audio.addEventListener("error", () => {
+    showToast(`铃声加载失败：${ALARM_SOUND_DIR}${name}.ogg`);
+    stop();
+  });
+  paint();
+  const p = audio.play();
+  if (p && p.catch) p.catch((err) => {
+    if (err && err.name === "NotAllowedError") showToast("浏览器拦截了铃声，点击一下页面任意处即可出声");
+    stop();
+  });
+  // 用定时器同时负责音量包络和到点停止（后台标签页里 rAF 会停，定时器不会）
+  timer = setInterval(() => {
+    paint();
+    if (performance.now() - t0 >= totalMs) stop();
+  }, 100);
+  return { stop, audio };
+}
+
+function alarmRing(it) {
+  if (hjAlarms.ringing.has(it.id)) return;   // 同一个不在响铃中重复触发
+  const sess = alarmPlayCore(it.sound, it.playSec, () => {
+    hjAlarms.ringing.delete(it.id);
+    alarmPaintWidget(it);
+    alarmRenderLists();
+  });
+  hjAlarms.ringing.set(it.id, sess);
+  alarmPaintWidget(it);
+  alarmRenderLists();
+}
+
+function alarmStopRing(id) {
+  const sess = hjAlarms.ringing.get(id);
+  if (sess) sess.stop();
+}
+
+/* 本地存取 -------------------------------------------------------------------- */
+function alarmSave() {
+  storage.set(STORE.alarmItems, JSON.stringify(hjAlarms.items));
+}
+
+/* 补齐默认值 + 清洗非法数据；返回 null 表示该条作废 */
+function alarmNormalize(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const kind = raw.kind === "countdown" ? "countdown" : "alarm";
+  const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const it = {
+    id: String(raw.id || `alm${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`),
+    kind,
+    zone: raw.zone === "et" ? "et" : "cn",
+    name: String(raw.name || "").slice(0, 12),
+    sound: ALARM_SOUNDS.includes(raw.sound) ? raw.sound : ALARM_SOUNDS[0],
+    playSec: ALARM_PLAY_OPTIONS.includes(Number(raw.playSec)) ? Number(raw.playSec) : ALARM_PLAY_DEFAULT,
+    enabled: raw.enabled !== false,
+    done: !!raw.done,          // 一次性闹铃已响过 / 不循环的倒计时已走完
+    hidden: !!raw.hidden,      // 小组件被 × 收起
+    zoom: ALARM_ZOOMS.includes(Number(raw.zoom)) ? Number(raw.zoom) : 1,
+    x: num(raw.x), y: num(raw.y),          // 组件位置（right / top 像素）
+    hh: clamp(Math.floor(Number(raw.hh) || 0), 0, 23),
+    mm: clamp(Math.floor(Number(raw.mm) || 0), 0, 59),
+    repeat: !!raw.repeat,      // 闹铃：cn = 每小时重复，et = 每日重复
+    durMs: Number(raw.durMs) > 0 ? Number(raw.durMs) : 0,   // 倒计时时长（现实毫秒）
+    durLabel: String(raw.durLabel || ""),
+    loop: !!raw.loop,
+    paused: !!raw.paused,
+    remainMs: Number(raw.remainMs) > 0 ? Number(raw.remainMs) : 0,
+    endAt: Number(raw.endAt) > 0 ? Number(raw.endAt) : 0,
+    nextFireAt: Number(raw.nextFireAt) > 0 ? Number(raw.nextFireAt) : 0,
+  };
+  if (it.kind === "countdown" && it.durMs < 1000) return null;
+  return it;
+}
+
+/* 刷新页面后恢复排程：离开期间错过的响铃不补响 */
+function alarmRevive(it) {
+  const now = Date.now();
+  if (it.kind === "alarm") {
+    if (!it.enabled || it.done) { it.nextFireAt = 0; return; }
+    if (!it.nextFireAt || it.nextFireAt <= now) {
+      if (it.repeat) it.nextFireAt = alarmNextFire(it, now);
+      else { it.done = true; it.nextFireAt = 0; }   // 一次性闹铃错过了 → 标记已完成
+    }
+    return;
+  }
+  if (!it.enabled || it.done) { it.endAt = 0; return; }
+  if (it.paused) return;                             // 暂停中：保留 remainMs
+  if (!it.endAt || it.endAt <= now) {
+    if (it.loop) {                                   // 循环倒计时：从现在起继续循环，不补响
+      let end = it.endAt || now;
+      let guard = 0;
+      while (end <= now && guard++ < 100000) end += it.durMs;
+      it.endAt = end;
+    } else { it.done = true; it.endAt = 0; it.remainMs = 0; }
+  }
+}
+
+/* 每秒心跳：判定响铃、推进状态、刷新组件与面板 -------------------------------- */
+function alarmTick() {
+  const now = Date.now();
+  let dirty = false;
+  hjAlarms.items.forEach((it) => {
+    if (!it.enabled || it.done) return;
+    if (it.kind === "alarm") {
+      if (it.nextFireAt && now >= it.nextFireAt) {
+        alarmRing(it);
+        if (it.repeat) it.nextFireAt = alarmNextFire(it, now + 500);
+        else { it.done = true; it.nextFireAt = 0; }
+        dirty = true;
+      }
+    } else if (!it.paused && it.endAt && now >= it.endAt) {
+      alarmRing(it);
+      if (it.loop) {
+        let end = it.endAt;
+        let guard = 0;
+        while (end <= now && guard++ < 10000) end += it.durMs;   // 后台节流错过多轮时只补一轮
+        it.endAt = end;
+      } else { it.done = true; it.endAt = 0; it.remainMs = 0; }
+      dirty = true;
+    }
+  });
+  if (dirty) alarmSave();
+  hjAlarms.items.forEach(alarmPaintWidget);
+  alarmPaintListLive();
+  alarmPaintNowHints();
+}
+
+/* 状态操作（停用 / 启用 / 暂停 / 重置 / 重新启用） ---------------------------- */
+function alarmSetEnabled(it, on) {
+  it.enabled = !!on;
+  const now = Date.now();
+  if (it.kind === "alarm") {
+    if (it.enabled) { it.done = false; it.nextFireAt = alarmNextFire(it, now); }
+    else { it.nextFireAt = 0; alarmStopRing(it.id); }
+  } else if (it.enabled) {
+    it.done = false;
+    it.paused = false;
+    it.endAt = now + (it.remainMs > 0 ? it.remainMs : it.durMs);
+    it.remainMs = 0;
+  } else {
+    if (!it.paused && it.endAt) it.remainMs = Math.max(1000, it.endAt - now);
+    it.paused = true;
+    it.endAt = 0;
+    alarmStopRing(it.id);
+  }
+  alarmSave();
+  alarmAfterChange();
+}
+
+function alarmTogglePause(it) {
+  if (it.done || !it.enabled) return;
+  const now = Date.now();
+  if (it.paused) {
+    it.paused = false;
+    it.endAt = now + (it.remainMs > 0 ? it.remainMs : it.durMs);
+    it.remainMs = 0;
+  } else {
+    it.remainMs = Math.max(1000, (it.endAt || now) - now);
+    it.paused = true;
+    it.endAt = 0;
+  }
+  alarmSave();
+  alarmAfterChange();
+}
+
+function alarmRestart(it) {   // 倒计时：从头开始
+  it.enabled = true;
+  it.done = false;
+  it.paused = false;
+  it.remainMs = 0;
+  it.endAt = Date.now() + it.durMs;
+  alarmSave();
+  alarmAfterChange();
+}
+
+function alarmRearm(it) {     // 一次性闹铃响过后重新启用
+  it.enabled = true;
+  it.done = false;
+  it.nextFireAt = alarmNextFire(it, Date.now());
+  alarmSave();
+  alarmAfterChange();
+}
+
+function alarmRemove(it) {
+  alarmStopRing(it.id);
+  hjAlarms.items = hjAlarms.items.filter((x) => x !== it);
+  alarmSave();
+  alarmAfterChange();
+  showToast(`已删除「${it.name}」`);
+}
+
+function alarmAfterChange() {
+  alarmRenderAllWidgets();
+  alarmRenderLists();
+}
+
+/* 小组件 ---------------------------------------------------------------------- */
+function alarmSubText(it) {
+  if (it.kind === "alarm") {
+    const rep = it.repeat ? (it.zone === "cn" ? "每小时重复" : "每日重复") : "仅一次";
+    return `${alarmZoneShort(it)}时间 · ${rep}`;
+  }
+  return `${alarmZoneShort(it)}倒计时 · ${it.durLabel}${it.loop ? " · 自动循环" : ""}`;
+}
+
+function alarmWidgetActionsHtml(it) {
+  const b = [];
+  if (hjAlarms.ringing.has(it.id)) b.push('<button type="button" class="alm-btn is-hot" data-w="stopring">停止响铃</button>');
+  if (it.kind === "alarm") {
+    if (it.done) b.push('<button type="button" class="alm-btn" data-w="rearm">重新启用</button>');
+    else b.push(`<button type="button" class="alm-btn" data-w="toggle">${it.enabled ? "停用" : "启用"}</button>`);
+  } else if (it.done) {
+    b.push('<button type="button" class="alm-btn" data-w="restart">重新开始</button>');
+  } else if (it.enabled) {
+    b.push(`<button type="button" class="alm-btn" data-w="pause">${it.paused ? "继续" : "暂停"}</button>`);
+    b.push('<button type="button" class="alm-btn" data-w="restart">重置</button>');
+  } else {
+    b.push('<button type="button" class="alm-btn" data-w="toggle">启用</button>');
+  }
+  return b.join("");
+}
+
+/* 新组件的默认落点：按可见顺序往右下阶梯排开，保证每个的标题栏和正文都露在外面 */
+function alarmInitPos(it) {
+  const visible = hjAlarms.items.filter((x) => !x.hidden);
+  const n = Math.max(0, visible.indexOf(it));
+  const { vw, vh } = viewportSize();
+  it.x = clamp(16 + (n % 4) * 30, CAL_EDGE, Math.max(CAL_EDGE, vw - CAL_KEEP_VISIBLE));
+  it.y = clamp(112 + (n % 6) * 92, CAL_EDGE, Math.max(CAL_EDGE, vh - CAL_KEEP_VISIBLE));
+}
+
+function alarmSetPos(it, el, right, top) {
+  it.x = right;
+  it.y = top;
+  el.style.right = right + "px";
+  el.style.top = top + "px";
+  alarmSave();
+}
+
+function alarmSyncZoomBtns(it, el) {
+  el.querySelector('[data-w="zoomin"]').disabled = it.zoom >= ALARM_ZOOMS[ALARM_ZOOMS.length - 1];
+  el.querySelector('[data-w="zoomout"]').disabled = it.zoom <= ALARM_ZOOMS[0];
+}
+
+function alarmBuildWidget(it) {
+  const el = document.createElement("div");
+  el.className = "alm-widget";
+  el.dataset.id = it.id;
+  el.innerHTML = `
+    <div class="alm-head" title="拖动移动 · 双击回默认位置">
+      <span class="alm-name">${escapeHtml(it.name)}</span>
+      <span class="alm-tools">
+        <button type="button" class="alm-tool" data-w="zoomout" aria-label="缩小组件" title="缩小">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+        <button type="button" class="alm-tool" data-w="zoomin" aria-label="放大组件" title="放大">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button type="button" class="alm-tool" data-w="hide" aria-label="收起组件" title="收起（可在闹铃面板重新显示）">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="alm-big" data-r="big">--:--</div>
+    <div class="alm-sub" data-r="sub">${escapeHtml(alarmSubText(it))}</div>
+    <div class="alm-status" data-r="status"></div>
+    <div class="alm-actions" data-r="actions"></div>
+    <div class="alm-meta">♪ ${escapeHtml(it.sound)} · 播 ${it.playSec} 秒后渐弱</div>`;
+  el.style.setProperty("--alm-zoom", String(it.zoom));
+  if (it.x === null || it.y === null) alarmInitPos(it);
+  el.style.right = it.x + "px";
+  el.style.top = it.y + "px";
+
+  /* 标题栏拖动（鼠标 / 触屏通用），逻辑与日历小组件一致 */
+  const head = el.querySelector(".alm-head");
+  let drag = null;
+  head.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest(".alm-tool")) return;
+    const r = el.getBoundingClientRect();
+    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, ...viewportSize() };
+    try { head.setPointerCapture(e.pointerId); } catch (err) {}
+    el.classList.add("is-drag");
+    e.preventDefault();
+  });
+  head.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const left = e.clientX - drag.ox;
+    let top = e.clientY - drag.oy;
+    let right = drag.vw - (left + drag.w);
+    if (drag.w) right = clamp(right, CAL_EDGE, drag.vw - CAL_KEEP_VISIBLE);
+    if (drag.h) top = clamp(top, CAL_EDGE, drag.vh - CAL_KEEP_VISIBLE);
+    alarmSetPos(it, el, Math.round(right), Math.round(top));
+  });
+  const endDrag = () => { drag = null; el.classList.remove("is-drag"); };
+  head.addEventListener("pointerup", endDrag);
+  head.addEventListener("pointercancel", endDrag);
+  head.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".alm-tool")) return;
+    alarmInitPos(it);
+    el.style.right = it.x + "px";
+    el.style.top = it.y + "px";
+    alarmSave();
+  });
+
+  /* 工具按钮与操作按钮（事件委托） */
+  el.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-w]");
+    if (!btn || btn.disabled) return;
+    const act = btn.dataset.w;
+    if (act === "zoomin" || act === "zoomout") {
+      const i = ALARM_ZOOMS.indexOf(it.zoom);
+      const z = ALARM_ZOOMS[clamp((i === -1 ? 2 : i) + (act === "zoomin" ? 1 : -1), 0, ALARM_ZOOMS.length - 1)];
+      it.zoom = z;
+      el.style.setProperty("--alm-zoom", String(z));
+      alarmSyncZoomBtns(it, el);
+      alarmSave();
+    } else if (act === "hide") {
+      it.hidden = true;
+      alarmSave();
+      alarmAfterChange();
+      showToast("组件已收起，可在「闹铃」面板里重新显示");
+    } else if (act === "toggle") alarmSetEnabled(it, !it.enabled);
+    else if (act === "pause") alarmTogglePause(it);
+    else if (act === "restart") alarmRestart(it);
+    else if (act === "rearm") alarmRearm(it);
+    else if (act === "stopring") alarmStopRing(it.id);
+  });
+  return el;
+}
+
+function alarmRenderAllWidgets() {
+  const layer = $("alarmWidgetLayer");
+  layer.innerHTML = "";
+  hjAlarmWidgets.clear();
+  hjAlarms.items.forEach((it) => {
+    if (it.hidden) return;
+    const el = alarmBuildWidget(it);
+    layer.appendChild(el);
+    hjAlarmWidgets.set(it.id, {
+      el,
+      big: el.querySelector('[data-r="big"]'),
+      status: el.querySelector('[data-r="status"]'),
+      actions: el.querySelector('[data-r="actions"]'),
+      sig: "",
+    });
+    alarmSyncZoomBtns(it, el);
+    alarmPaintWidget(it);
+  });
+}
+
+function alarmPaintWidget(it) {
+  const w = hjAlarmWidgets.get(it.id);
+  if (!w) return;
+  const now = Date.now();
+  const ringing = hjAlarms.ringing.has(it.id);
+  let big, status;
+  if (it.kind === "alarm") {
+    big = `${pad2(it.hh)}:${pad2(it.mm)}`;
+    status = ringing ? (hjMusic.vol <= 0 ? "响铃中（站内已静音）" : "响铃中…")
+      : !it.enabled ? "已停用"
+      : it.done ? "已完成（一次性）"
+      : `距下次响铃 ${alarmFmtDur(it.nextFireAt - now)}`;
+  } else {
+    const remain = it.paused ? it.remainMs : Math.max(0, (it.endAt || now) - now);
+    big = it.done ? "00:00" : alarmFmtDur(remain);
+    status = ringing ? (hjMusic.vol <= 0 ? "时间到，响铃中（站内已静音）" : "时间到，响铃中…")
+      : !it.enabled ? "已停用"
+      : it.done ? "时间到！"
+      : it.paused ? "已暂停"
+      : it.zone === "et" ? `≈ 艾欧泽亚剩 ${Math.max(1, Math.ceil((remain / 1000) * EORZEA_RATE / 60))} 分钟`
+      : `至 国服 ${alarmCnClockAt(it.endAt)}`;
+  }
+  w.big.textContent = big;
+  w.status.textContent = status;
+  w.el.classList.toggle("is-ringing", ringing);
+  w.el.classList.toggle("is-off", !it.enabled || it.done);
+  const sig = [it.enabled, it.done, it.paused, ringing].join("|");
+  if (sig !== w.sig) {
+    w.sig = sig;
+    w.actions.innerHTML = alarmWidgetActionsHtml(it);
+  }
+}
+
+/* 弹窗：表单 ------------------------------------------------------------------ */
+function alarmFillFormSelects() {
+  const snd = ALARM_SOUNDS.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  const dur = ALARM_PLAY_OPTIONS.map((s) => `<option value="${s}"${s === ALARM_PLAY_DEFAULT ? " selected" : ""}>${s} 秒</option>`).join("");
+  $("almSound").innerHTML = snd;
+  $("cdSound").innerHTML = snd;
+  $("almPlaySec").innerHTML = dur;
+  $("cdPlaySec").innerHTML = dur;
+}
+
+const alarmFormZone = (group) => (document.querySelector(`input[name="${group}"]:checked`) || { value: "cn" }).value;
+
+function alarmNum(id) {
+  const el = $(id);
+  return clamp(Math.floor(Number(el.value) || 0), Number(el.min) || 0, Number(el.max) || 99);
+}
+
+function alarmSegSync(segId) {
+  $(segId).querySelectorAll("label").forEach((lb) => {
+    lb.classList.toggle("is-active", lb.querySelector("input").checked);
+  });
+}
+
+/* 表单联动提示：重复方式说明 / 倒计时换算 */
+function alarmSyncZoneUi(kind) {
+  if (kind === "alarm") {
+    const zone = alarmFormZone("almZone");
+    const rep = $("almRepeat").checked;
+    $("almRepeatText").textContent = zone === "cn" ? "每小时重复" : "每日重复";
+    const tv = $("almTime").value || "--:--";
+    const mm = tv.slice(3);
+    $("almRepeatHint").textContent = zone === "cn"
+      ? (rep ? `每小时的第 ${mm} 分都会响（忽略「时」）` : `到下一个国服 ${tv} 响一次`)
+      : (rep ? `每个艾欧泽亚日的 ${tv} 都响（1 艾欧泽亚日 ≈ 现实 70 分钟）` : `到下一个艾欧泽亚 ${tv} 响一次（最多等 ≈ 现实 70 分钟）`);
+  } else {
+    const zone = alarmFormZone("cdZone");
+    $("cdCnWrap").hidden = zone !== "cn";
+    $("cdEtWrap").hidden = zone !== "et";
+    const h = alarmNum("cdCnH"), m = alarmNum("cdCnM"), s = alarmNum("cdCnS");
+    const total = h * 3600 + m * 60 + s;
+    $("cdCnHint").textContent = total > 0 ? `共 ${alarmHumanDur(h, m, s)}${total < ALARM_CN_MIN_SEC ? `，最短 ${ALARM_CN_MIN_SEC} 秒` : ""}` : "";
+    const eh = alarmNum("cdEtH"), em = alarmNum("cdEtM");
+    const etTotal = eh * 60 + em;
+    const realSec = (etTotal * 60) / EORZEA_RATE;
+    $("cdEtHint").textContent = etTotal > 0
+      ? `≈ 现实 ${realSec >= 60 ? `${Math.floor(realSec / 60)} 分 ${Math.round(realSec % 60)} 秒` : `${Math.round(realSec)} 秒`}${etTotal < ALARM_ET_MIN_MIN ? `，最短 ${ALARM_ET_MIN_MIN} 分钟` : ""}`
+      : "";
+  }
+}
+
+function alarmPaintNowHints() {
+  if ($("alarmOverlay").hidden) return;
+  const t = hjReadClocks();
+  const text = `现在：国服 ${t.cn} · 艾欧泽亚 ${t.et} ${t.etNight ? "☾" : "☀"}`;
+  $("almNowHint").textContent = text;
+  $("cdNowHint").textContent = text;
+}
+
+/* 试听：再点一次停止；两个页签共用一个试听会话 */
+function alarmPreview() {
+  const setLabel = (on) => { $("almPreview").textContent = on ? "停止试听" : "试听"; $("cdPreview").textContent = on ? "停止试听" : "试听"; };
+  if (hjAlarmPreview) {
+    hjAlarmPreview.stop();
+    hjAlarmPreview = null;
+    return;   // onEnd 会把按钮文字复原
+  }
+  const tab = $("alarmPanelCountdown").hidden ? "alm" : "cd";
+  const sound = $(`${tab}Sound`).value;
+  const sec = Number($(`${tab}PlaySec`).value) || ALARM_PLAY_DEFAULT;
+  setLabel(true);
+  hjAlarmPreview = alarmPlayCore(sound, sec, () => { hjAlarmPreview = null; setLabel(false); });
+}
+
+const alarmMsg = (text) => setMsg($("alarmMsg"), text);
+
+function alarmSubmitAlarm() {
+  const zone = alarmFormZone("almZone");
+  const m = /^(\d{1,2}):(\d{2})$/.exec($("almTime").value || "");
+  if (!m) { alarmMsg("请先选择响铃时间"); return; }
+  const it = alarmNormalize({
+    kind: "alarm", zone,
+    hh: Number(m[1]), mm: Number(m[2]),
+    repeat: $("almRepeat").checked,
+    name: $("almName").value.trim(),
+    sound: $("almSound").value,
+    playSec: Number($("almPlaySec").value) || ALARM_PLAY_DEFAULT,
+  });
+  if (!it.name) it.name = `闹铃${hjAlarms.items.filter((x) => x.kind === "alarm").length + 1}`;
+  it.nextFireAt = alarmNextFire(it, Date.now());
+  hjAlarms.items.push(it);
+  alarmSave();
+  alarmAfterChange();
+  alarmMsg("");
+  $("almName").value = "";
+  showToast(`闹铃「${it.name}」已添加，组件已放到页面上`);
+}
+
+function alarmSubmitCountdown() {
+  const zone = alarmFormZone("cdZone");
+  let durMs = 0;
+  let durLabel = "";
+  if (zone === "cn") {
+    const h = alarmNum("cdCnH"), m = alarmNum("cdCnM"), s = alarmNum("cdCnS");
+    const total = h * 3600 + m * 60 + s;
+    if (total < ALARM_CN_MIN_SEC) { alarmMsg(`国服倒计时最短 ${ALARM_CN_MIN_SEC} 秒`); return; }
+    durMs = total * 1000;
+    durLabel = alarmHumanDur(h, m, s);
+  } else {
+    const h = alarmNum("cdEtH"), m = alarmNum("cdEtM");
+    const total = h * 60 + m;
+    if (total < ALARM_ET_MIN_MIN) { alarmMsg(`艾欧泽亚倒计时最短 ${ALARM_ET_MIN_MIN} 分钟`); return; }
+    durMs = (total * 60 / EORZEA_RATE) * 1000;
+    durLabel = (h > 0 ? `${h}小时` : "") + `${m}分`;
+  }
+  const it = alarmNormalize({
+    kind: "countdown", zone, durMs, durLabel,
+    loop: $("cdLoop").checked,
+    name: $("cdName").value.trim(),
+    sound: $("cdSound").value,
+    playSec: Number($("cdPlaySec").value) || ALARM_PLAY_DEFAULT,
+  });
+  if (!it.name) it.name = `倒计时${hjAlarms.items.filter((x) => x.kind === "countdown").length + 1}`;
+  it.endAt = Date.now() + durMs;
+  hjAlarms.items.push(it);
+  alarmSave();
+  alarmAfterChange();
+  alarmMsg("");
+  $("cdName").value = "";
+  showToast(`倒计时「${it.name}」已开始`);
+}
+
+/* 弹窗：已添加列表 ------------------------------------------------------------ */
+function alarmListLiveText(it) {
+  const now = Date.now();
+  if (hjAlarms.ringing.has(it.id)) return "响铃中…";
+  if (!it.enabled) return "已停用";
+  if (it.kind === "alarm") {
+    if (it.done) return "已完成（一次性）";
+    return `距响铃 ${alarmFmtDur(it.nextFireAt - now)}`;
+  }
+  if (it.done) return "已结束";
+  if (it.paused) return `已暂停（剩 ${alarmFmtDur(it.remainMs)}）`;
+  return `剩余 ${alarmFmtDur(it.endAt - now)}`;
+}
+
+function alarmListRowHtml(it) {
+  const ringing = hjAlarms.ringing.has(it.id);
+  const btns = [];
+  if (ringing) btns.push('<button type="button" data-act="stop">停止响铃</button>');
+  if (it.kind === "alarm") {
+    if (it.done) btns.push('<button type="button" data-act="rearm">重新启用</button>');
+    else btns.push(`<button type="button" data-act="toggle">${it.enabled ? "停用" : "启用"}</button>`);
+  } else if (it.done) {
+    btns.push('<button type="button" data-act="restart">重新开始</button>');
+  } else {
+    btns.push(`<button type="button" data-act="toggle">${it.enabled ? "停用" : "启用"}</button>`);
+    if (it.enabled) btns.push(`<button type="button" data-act="pause">${it.paused ? "继续" : "暂停"}</button>`);
+    btns.push('<button type="button" data-act="restart">重置</button>');
+  }
+  btns.push(`<button type="button" data-act="widget">${it.hidden ? "显示组件" : "隐藏组件"}</button>`);
+  btns.push('<button type="button" class="is-danger" data-act="del">删除</button>');
+  return `<div class="alarm-item" data-id="${it.id}">`
+    + `<div class="alarm-item-top"><span class="alarm-item-name">${escapeHtml(it.name)}</span>`
+    + `<span class="alarm-item-live" data-live="${it.id}"></span></div>`
+    + `<div class="alarm-item-sub">${escapeHtml(alarmSubText(it))} · ♪${escapeHtml(it.sound)} · 播 ${it.playSec} 秒后渐弱</div>`
+    + `<div class="alarm-item-btns">${btns.join("")}</div></div>`;
+}
+
+function alarmRenderList(box, kind) {
+  const list = hjAlarms.items.filter((it) => it.kind === kind);
+  box.innerHTML = list.length
+    ? list.map(alarmListRowHtml).join("")
+    : '<p class="alarm-empty">还没有添加，先在上方设置一个吧</p>';
+}
+
+function alarmRenderLists() {
+  if ($("alarmOverlay").hidden) return;
+  alarmRenderList($("almListAlarm"), "alarm");
+  alarmRenderList($("almListCountdown"), "countdown");
+  alarmPaintListLive();
+}
+
+function alarmPaintListLive() {
+  if ($("alarmOverlay").hidden) return;
+  document.querySelectorAll("#alarmOverlay .alarm-item-live").forEach((el) => {
+    const it = alarmById(el.dataset.live);
+    if (it) el.textContent = alarmListLiveText(it);
+  });
+}
+
+function alarmListClick(e) {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const row = btn.closest(".alarm-item");
+  const it = row ? alarmById(row.dataset.id) : null;
+  if (!it) return;
+  const act = btn.dataset.act;
+  if (act === "toggle") alarmSetEnabled(it, !it.enabled);
+  else if (act === "pause") alarmTogglePause(it);
+  else if (act === "restart") alarmRestart(it);
+  else if (act === "rearm") alarmRearm(it);
+  else if (act === "stop") alarmStopRing(it.id);
+  else if (act === "widget") {
+    it.hidden = !it.hidden;
+    alarmSave();
+    alarmAfterChange();
+  } else if (act === "del") alarmRemove(it);
+  alarmRenderLists();
+}
+
+/* 弹窗：开合与页签 ------------------------------------------------------------ */
+function alarmSwitchTab(name) {
+  document.querySelectorAll("#alarmOverlay [data-alarm-tab]").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.alarmTab === name);
+  });
+  $("alarmPanelAlarm").hidden = name !== "alarm";
+  $("alarmPanelCountdown").hidden = name !== "countdown";
+}
+
+function openAlarmModal(open) {
+  $("alarmOverlay").hidden = !open;
+  if (open) {
+    alarmRenderLists();
+    alarmPaintNowHints();
+    playFadeOnly($("alarmOverlay").querySelector(".alarm-card"));
+  } else if (hjAlarmPreview) {
+    hjAlarmPreview.stop();   // 关窗即停试听（onEnd 会复原按钮文字）
+    hjAlarmPreview = null;
+  }
+}
+
+function closeAlarmModal() {
+  openAlarmModal(false);
+}
+
+function initAlarmModal() {
+  alarmFillFormSelects();
+  $("alarmClose").addEventListener("click", closeAlarmModal);
+  document.querySelectorAll("#alarmOverlay [data-alarm-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => alarmSwitchTab(btn.dataset.alarmTab));
+  });
+  $("almZoneSeg").addEventListener("change", () => { alarmSegSync("almZoneSeg"); alarmSyncZoneUi("alarm"); });
+  $("cdZoneSeg").addEventListener("change", () => { alarmSegSync("cdZoneSeg"); alarmSyncZoneUi("countdown"); });
+  $("almRepeat").addEventListener("change", () => alarmSyncZoneUi("alarm"));
+  $("almTime").addEventListener("input", () => alarmSyncZoneUi("alarm"));
+  ["cdCnH", "cdCnM", "cdCnS", "cdEtH", "cdEtM"].forEach((id) => {
+    $(id).addEventListener("input", () => alarmSyncZoneUi("countdown"));
+  });
+  $("almPreview").addEventListener("click", alarmPreview);
+  $("cdPreview").addEventListener("click", alarmPreview);
+  $("almAddAlarm").addEventListener("click", alarmSubmitAlarm);
+  $("cdAdd").addEventListener("click", alarmSubmitCountdown);
+  $("almListAlarm").addEventListener("click", alarmListClick);
+  $("almListCountdown").addEventListener("click", alarmListClick);
+  alarmSyncZoneUi("alarm");
+  alarmSyncZoneUi("countdown");
+}
+
+/* 启动：恢复本地数据 → 生成组件 → 每秒心跳 */
+function initAlarm() {
+  initAlarmModal();
+  try {
+    const arr = JSON.parse(storage.get(STORE.alarmItems) || "[]");
+    if (Array.isArray(arr)) hjAlarms.items = arr.map(alarmNormalize).filter(Boolean);
+  } catch (e) { hjAlarms.items = []; }
+  hjAlarms.items.forEach(alarmRevive);
+  alarmSave();
+  alarmRenderAllWidgets();
+  alarmTick();
+  setInterval(() => alarmTick(), 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) alarmTick(); });
+}
+
+/* 控制台调试入口 */
+window.HJ_ALARM = {
+  list: () => hjAlarms.items,
+  open: () => openAlarmModal(true),
+  ringNow: (id) => { const it = alarmById(id); if (it) alarmRing(it); },
+  clear: () => {
+    [...hjAlarms.ringing.keys()].forEach(alarmStopRing);
+    hjAlarms.items = [];
+    alarmSave();
+    alarmAfterChange();
+  },
+};
+
+
+/* =============================================================================
    13. 无障碍 & 启动
    ============================================================================= */
 
@@ -4571,6 +5461,7 @@ const A11Y_MODALS = [
   { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
   { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: closeTicketNotice },
   { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: closeAdminPanel },
+  { overlay: "alarmOverlay",    closeBtn: "alarmClose",    close: closeAlarmModal },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
 
@@ -4619,6 +5510,7 @@ function initApp() {
   initMorePanel();
   initHeaderPanels();
   initCalWidget();
+  initAlarm();
   initClock();
   initClockToggle();
   initHashRoute();
@@ -4637,6 +5529,7 @@ initApp();
 </script>
 
 <!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
