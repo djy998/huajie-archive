@@ -967,6 +967,9 @@ body.day-mode .video-block {
     inset 0 1px 0 rgba(255,255,255,.18);
 }
 .video-hero iframe { display: block; width: 100%; height: 100%; border: 0; }
+/* 自托管视频：和 iframe 一样铺满，contain 保证竖版 / 非 16:9 的片子不被裁掉 */
+.video-hero video { display: block; width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
+.video-hero iframe[hidden], .video-hero video[hidden] { display: none; }
 
 /* 视频下方的操作按钮 */
 .video-actions {
@@ -991,6 +994,9 @@ body.day-mode .video-block {
   backdrop-filter: blur(10px) saturate(1.2);
   transition: border-color .2s, color .2s, box-shadow .25s, transform .2s, filter .2s;
 }
+/* 「去 B 站看」是个 <a>，让它和旁边的按钮长得一样 */
+a.video-action { display: inline-flex; align-items: center; text-decoration: none; }
+a.video-action[hidden] { display: none; }
 .video-action:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent-soft); }
 .video-action:active { transform: translateY(.5px) scale(.985); }
 /* 主操作：同样是玻璃，靠强调色的描边和文字区分出主次 */

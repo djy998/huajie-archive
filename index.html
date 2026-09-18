@@ -325,10 +325,15 @@
     <div class="video-hero" id="latestVideo">
       <iframe id="latestVideoFrame" title="花街活动视频"
               scrolling="no" frameborder="0" allowfullscreen
-              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+              referrerpolicy="strict-origin-when-cross-origin"
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture" hidden></iframe>
+      <!-- 自托管视频（LATEST_VIDEO.src 非空时用这个，B 站外链播放器就不加载了） -->
+      <video id="latestVideoPlayer" controls playsinline preload="metadata"
+             controlslist="nodownload" hidden></video>
     </div>
     <div class="video-actions" id="latestVideoActions">
       <button type="button" class="video-action video-action-primary" id="videoDetailBtn">查看活动详情</button>
+      <a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener" hidden>看不了？去 B 站看</a>
       <button type="button" class="video-action" id="videoCloseBtn">收起视频</button>
     </div>
     </div>
@@ -872,11 +877,26 @@ const MUSIC_TRACKS = [
 const MUSIC_FADE_MS = 700;    // 淡入淡出时长
 const MUSIC_VOLUME = 0.55;    // 默认音量 0~1
 
-/* 最新活动视频（B 站外链播放器）：bvid 非空时，「最新活动」卡片中间出现播放按钮，
-   点击后卡片原位换成视频；留空则不显示播放按钮。
+/* 最新活动视频：src 或 bvid 非空时，「最新活动」卡片中间出现播放按钮，
+   点击后卡片原位换成视频；两个都留空则不显示播放按钮。
+
+   src —— 自托管视频（推荐）。填了就用站内的原生播放器播它，手机端电脑端都正常，
+          也不受 B 站对站外播放的限速。可以是 Worker + R2 的地址（如 "/api/video/moguri-2026.mp4"）
+          或任何能直链的 mp4。留空才回退到下面的 B 站外链播放器。
+
+   aid / cid —— 用 B 站外链播放器时强烈建议填上。只给 bvid 的话，播放器要先自己去查 cid，
+          这个查询带着本站域名做 referer，很容易被 B 站的站外风控挡掉，播放器就只好显示
+          「非常抱歉，本视频可能由于以下原因导致无法正常播放」。
+          取值：浏览器打开 https://api.bilibili.com/x/web-interface/view?bvid=BV15eeu66Eze
+          抄下 data.aid 和 data.cid（多 P 视频取 data.pages[第几P - 1].cid）。
+
    page：分 P 序号；start：从第几秒开始；danmaku：是否显示弹幕 */
 const LATEST_VIDEO = {
+  src: "",                          // 自托管视频地址，优先于 bvid
+  poster: "poster-moguri-2026.webp",// 自托管视频的封面图
   bvid: "BV15eeu66Eze",
+  aid: 117285691852006,                           // 0 表示没填
+  cid: 41971092695,
   page: 1,
   start: 0,
   danmaku: false,
@@ -1377,17 +1397,37 @@ function renderHome() {
 /* 生成 B 站外链播放器地址（参数中布尔值用 0 / 1 表示）。
    官方外链播放器只提供 muted 开关，没有 volume 参数，也没有 JS / postMessage 接口，
    所以站内音量条对它只能控制「静音 / 不静音」，具体音量要用播放器自带的音量条。 */
-function bilibiliPlayerUrl({ bvid, page = 1, start = 0, danmaku = false, autoplay = false, muted = false }) {
+/* 手机 / 平板？B 站的 player.html 是给 PC 用的，移动端 UA 下基本只会给一张
+   「非常抱歉…」的错误图，移动端得换 blackboard 那个 H5 播放器。 */
+function isMobileUA() {
+  const ua = navigator.userAgent || "";
+  if (/Android|iPhone|iPad|iPod|Mobile|HarmonyOS|MicroMessenger/i.test(ua)) return true;
+  return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;   // iPadOS 默认把自己报成 Mac
+}
+
+function bilibiliPlayerUrl({ bvid, aid = 0, cid = 0, page = 1, start = 0, danmaku = false, autoplay = false, muted = false }) {
   const params = new URLSearchParams({
     bvid,
-    p: String(page),
     autoplay: autoplay ? "1" : "0",
-    muted: muted ? "1" : "0",
     danmaku: danmaku ? "1" : "0",
-    high_quality: "1",      // 尽量使用较高画质（未登录时仍可能受 B 站限制）
-    poster: "1",
   });
+  /* aid + cid 一起给，播放器就不用自己再去查一次（那一次查询正是最容易被风控挡下的地方） */
+  if (aid) params.set("aid", String(aid));
+  if (cid) params.set("cid", String(cid));
   if (start > 0) params.set("t", String(Math.floor(start)));
+
+  if (isMobileUA()) {
+    params.set("page", String(page));
+    params.set("highQuality", "1");
+    params.set("as_wide", "1");     // 铺满容器，不留黑边
+    return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params}`;
+  }
+
+  params.set("isOutside", "true");  // 站外嵌入的标记，不带更容易被当成盗链
+  params.set("p", String(page));
+  params.set("muted", muted ? "1" : "0");
+  params.set("high_quality", "1");  // 尽量使用较高画质（未登录时仍可能受 B 站限制）
+  params.set("poster", "1");
   return `https://player.bilibili.com/player.html?${params}`;
 }
 
@@ -1396,7 +1436,9 @@ function bilibiliPlayerUrl({ bvid, page = 1, start = 0, danmaku = false, autopla
          视频下方两个按钮：查看活动详情 / 收起视频
    收起后：封面卡片，点卡片任意处进详情，点右下「播放视频」重新展开并自动播放
    离开首页时自动卸载播放器，避免视频在后台继续出声；回到首页时恢复默认展开 */
-const hasHomeVideo = () => /^BV[0-9A-Za-z]{10}$/.test(LATEST_VIDEO.bvid || "");
+const hasSelfHostedVideo = () => !!String(LATEST_VIDEO.src || "").trim();
+const hasBiliVideo = () => /^BV[0-9A-Za-z]{10}$/.test(LATEST_VIDEO.bvid || "");
+const hasHomeVideo = () => hasSelfHostedVideo() || hasBiliVideo();
 let homeVideoOpen = false;
 let homeVideoUserClosed = false;   // 用户手动收起过则不再自动展开
 let homeVideoAutoplay = false;     // 当前这次是以自动播放的方式加载的吗
@@ -1409,10 +1451,47 @@ function setHomeVideoOpen(open, autoplay = false) {
   homeVideoMuted = hjSound.muted;            // 跟着站内音量的静音状态加载
   $("latestTile").hidden = open;
   $("latestVideoBlock").hidden = !open;
-  // 收起时卸载播放器，停止播放和下载
-  $("latestVideoFrame").src = open
-    ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay, muted: homeVideoMuted })
-    : "about:blank";
+
+  const frame = $("latestVideoFrame");
+  const native = $("latestVideoPlayer");
+  const selfHosted = hasSelfHostedVideo();
+
+  frame.hidden = selfHosted;
+  native.hidden = !selfHosted;
+
+  if (selfHosted) {
+    frame.src = "about:blank";
+    if (open) {
+      if (LATEST_VIDEO.poster) native.poster = LATEST_VIDEO.poster;
+      if (native.dataset.src !== LATEST_VIDEO.src) {
+        native.src = LATEST_VIDEO.src;
+        native.dataset.src = LATEST_VIDEO.src;
+        if (LATEST_VIDEO.start > 0) {
+          native.addEventListener("loadedmetadata", () => {
+            try { native.currentTime = LATEST_VIDEO.start; } catch (e) {}
+          }, { once: true });
+        }
+      }
+      hjSound.attach(native);                      // 音量跟着右上角的音量条走
+      if (autoplay) native.play().catch(() => {}); // 浏览器拦了就让访客自己点一下
+    } else {
+      native.pause();
+      hjSound.detach(native);
+    }
+  } else {
+    // 收起时卸载播放器，停止播放和下载
+    frame.src = open
+      ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay, muted: homeVideoMuted })
+      : "about:blank";
+  }
+
+  /* 用 B 站外链播放器时常驻一个出口：播放器被风控挡掉也能点进 B 站看 */
+  const back = $("videoFallbackLink");
+  if (back) {
+    const showBack = open && !selfHosted && hasBiliVideo();
+    back.hidden = !showBack;
+    if (showBack) back.href = `https://www.bilibili.com/video/${LATEST_VIDEO.bvid}`;
+  }
 }
 
 /* 站内音量的静音状态变了 → 让外链播放器跟上。
@@ -1420,6 +1499,7 @@ function setHomeVideoOpen(open, autoplay = false) {
    - 只在「静音 ⇄ 不静音」真的翻转时才动，音量在 1~100 之间调不会碰播放器；
    - 拖动音量条会连着触发，等手停下来半秒再重载，避免视频反复重播。 */
 function syncExternalVideoMute() {
+  if (hasSelfHostedVideo()) return;   // 自托管视频由 hjSound 直接调音量，不用重载
   if (!homeVideoOpen) { homeVideoMuted = hjSound.muted; return; }
   if (hjSound.muted === homeVideoMuted) return;
   clearTimeout(homeVideoMuteTimer);
