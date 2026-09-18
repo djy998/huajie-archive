@@ -992,15 +992,24 @@ body.day-mode .video-block {
 }
 .video-action:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent-soft); }
 .video-action:active { transform: translateY(.5px) scale(.985); }
+/* 主操作：同样是玻璃，靠强调色的描边和文字区分出主次 */
 .video-action-primary {
   font-weight: 600;
-  color: var(--accent-ink);
+  color: var(--accent-soft);
   background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.08) 100%),
-    var(--accent);
-  border-color: rgba(255,255,255,.32);
+    linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.1) 100%),
+    rgba(22,17,40,.4);
+  border-color: var(--accent);
 }
-.video-action-primary:hover { color: var(--accent-ink); border-color: rgba(255,255,255,.5); filter: brightness(1.04); }
+.video-action-primary:hover { color: var(--accent-soft); border-color: var(--accent-soft); filter: none; }
+body.day-mode .video-action-primary {
+  color: var(--accent-soft);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.07) 50%, rgba(255,255,255,.15) 100%),
+    rgba(48,34,18,.34);
+  border-color: var(--accent);
+}
+body.day-mode .video-action-primary:hover { color: #fff6e0; border-color: var(--accent-soft); }
 body.day-mode .video-action:not(.video-action-primary) {
   color: var(--day-title);
   background:
@@ -1072,15 +1081,32 @@ body.day-mode .video-action:not(.video-action-primary) {
   display: flex; align-items: center; justify-content: center;
   font-size: 1rem;
   font-weight: 700;
-  color: #3a2508;
+  color: var(--accent-soft);
   text-decoration: none;
-  background: radial-gradient(circle at 35% 30%, var(--accent-soft), var(--accent));
-  border: 4px solid var(--ink);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
+    rgba(22,17,40,.44);
+  border: 1px solid var(--accent);
   box-shadow:
-    0 12px 28px rgba(240,181,98,.5),
-    inset 0 2px 6px rgba(255,255,255,.4),
-    inset 0 -8px 16px rgba(122,72,10,.26);
-  transition: transform .2s, box-shadow .25s;
+    0 0 0 3px rgba(20,16,36,.42),
+    0 8px 20px rgba(10,7,22,.4),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
+  transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
+}
+body.day-mode .ticket-badge {
+  color: #fff6e0;
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.12) 100%),
+    rgba(48,34,18,.46);
+  border-color: var(--accent-soft);
+  box-shadow:
+    0 0 0 3px rgba(60,40,14,.34),
+    0 8px 20px rgba(40,26,8,.32),
+    inset 0 1px 0 rgba(255,255,255,.34),
+    inset 0 -5px 10px rgba(40,26,8,.2);
 }
 .ticket-badge:hover { transform: scale(1.06); }
 .ticket-badge:active { transform: scale(.97); }
@@ -1212,30 +1238,43 @@ body.day-mode .detail-hero p { color: var(--day-title); }
   font-size: .85rem;
   font-weight: 600;
   text-decoration: none;
-  color: var(--accent-ink);
+  color: var(--accent-soft);
   background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.08) 100%),
-    var(--accent);
-  border: 1px solid rgba(255,255,255,.32);
+    linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
+    rgba(22,17,40,.38);
+  border: 1px solid var(--accent);
   box-shadow:
-    0 4px 12px rgba(10,7,22,.24),
-    inset 0 1px 0 rgba(255,255,255,.38),
-    inset 0 -5px 10px rgba(70,42,8,.15);
-  transition: transform .2s, box-shadow .25s, filter .2s;
+    0 3px 10px rgba(8,6,18,.24),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 8px rgba(10,8,22,.16);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
+  transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
 }
 .ticket-badge-inline:hover {
   transform: translateY(-1px);
-  filter: brightness(1.04);
+  border-color: var(--accent-soft);
   box-shadow:
-    0 6px 16px rgba(10,7,22,.3),
-    inset 0 1px 0 rgba(255,255,255,.44),
-    inset 0 -5px 10px rgba(70,42,8,.15);
+    0 5px 12px rgba(8,6,18,.28),
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -4px 8px rgba(10,8,22,.16);
 }
 .ticket-badge-inline:active {
   transform: translateY(.5px) scale(.985);
-  filter: brightness(.98);
-  box-shadow: 0 2px 6px rgba(10,7,22,.24), inset 0 2px 7px rgba(60,36,6,.22);
+  box-shadow: 0 2px 6px rgba(8,6,18,.24), inset 0 2px 7px rgba(8,6,18,.26);
 }
+body.day-mode .ticket-badge-inline {
+  color: #fff6e0;
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
+    rgba(48,34,18,.44);
+  border-color: var(--accent-soft);
+  box-shadow:
+    0 3px 10px rgba(40,26,8,.26),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -4px 8px rgba(40,26,8,.18);
+}
+body.day-mode .ticket-badge-inline:hover { color: #fff; border-color: #fff6e0; }
 .ticket-badge-inline[hidden] { display: none; }
 
 /* 标签页按钮（详情页与花街介绍弹窗共用） */
@@ -1502,56 +1541,61 @@ body.day-mode .audience-opt { color: var(--day-brown-soft); }
 body.day-mode .password-show-label:hover,
 body.day-mode .audience-opt:hover { color: var(--day-ink); }
 
-/* 主按钮（进入 / 切换 / 发布 / 保存 / 配图） */
+/* 主按钮（进入 / 切换 / 发布 / 保存 / 配图）——全站统一的透明玻璃质感。
+   卡片里的按钮都以这条为底，只有语义色按钮（红色危险、开启态）自己覆盖回实心。 */
 .gate-card button {
   padding: 10px 30px;
   border-radius: 999px;
   font-size: .92rem;
   font-weight: 600;
-  color: var(--accent-ink);
+  color: var(--cream);
   background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
-    var(--accent);
-  border: 1px solid rgba(255,255,255,.3);
+    linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
+    rgba(22,17,40,.34);
+  border: 1px solid rgba(233,224,255,.24);
   box-shadow:
-    0 4px 12px rgba(10,7,22,.24),
-    inset 0 1px 0 rgba(255,255,255,.36),
-    inset 0 -5px 10px rgba(70,42,8,.14);
-  -webkit-backdrop-filter: blur(5px) saturate(1.1);
-  backdrop-filter: blur(5px) saturate(1.1);
-  transition: background .2s, border-color .2s, box-shadow .25s, transform .18s, filter .2s;
+    0 3px 10px rgba(8,6,18,.22),
+    inset 0 1px 0 rgba(255,255,255,.2),
+    inset 0 -4px 8px rgba(10,8,22,.16);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
+  transition: background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
 }
 .gate-card button:hover {
+  color: var(--accent-soft);
+  border-color: var(--accent);
   transform: translateY(-1px);
-  filter: brightness(1.04);
+  filter: none;
   box-shadow:
-    0 6px 16px rgba(10,7,22,.3),
-    inset 0 1px 0 rgba(255,255,255,.42),
-    inset 0 -5px 10px rgba(70,42,8,.14);
+    0 5px 12px rgba(8,6,18,.28),
+    inset 0 1px 0 rgba(255,255,255,.26),
+    inset 0 -4px 8px rgba(10,8,22,.16);
 }
 .gate-card button:active {
   transform: translateY(.5px) scale(.985);
-  filter: brightness(.98);
-  box-shadow: 0 2px 6px rgba(10,7,22,.22), inset 0 2px 7px rgba(58,34,6,.24);
+  filter: none;
+  box-shadow: 0 2px 6px rgba(8,6,18,.24), inset 0 2px 7px rgba(8,6,18,.26);
 }
-/* 白天：金色卡片上改用奶油色实心 + 棕色描边，避免按钮糊进背景。
+/* 白天：金色卡片上用暖色玻璃（原来是奶油色实心，和验证面板、公告小按钮统一成同一质感）。
    两个描边胶囊按钮（取消编辑、清除覆盖）除外，它们有自己的白天样式。 */
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn) {
   color: var(--day-brown);
   background:
-    linear-gradient(168deg, rgba(255,255,255,.6) 0%, rgba(255,255,255,.2) 42%, rgba(150,100,20,.03) 76%, rgba(150,100,20,.09) 100%),
-    #fff8e8;
-  border: 1.5px solid #8a5a1c;
+    linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
+    rgba(255,250,238,.3);
+  border: 1px solid rgba(138,90,28,.45);
   box-shadow:
-    0 4px 12px rgba(96,60,10,.18),
-    inset 0 1px 0 rgba(255,255,255,.8),
-    inset 0 -5px 10px rgba(150,100,20,.1);
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.66),
+    inset 0 -4px 8px rgba(140,95,25,.08);
 }
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn):hover {
-  background:
-    linear-gradient(168deg, rgba(255,255,255,.66) 0%, rgba(255,255,255,.24) 42%, rgba(150,100,20,.04) 76%, rgba(150,100,20,.1) 100%),
-    #ffe9b8;
-  border-color: #6b4310;
+  color: var(--day-ink);
+  border-color: #8a5a1c;
+  box-shadow:
+    0 5px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.72),
+    inset 0 -4px 8px rgba(140,95,25,.08);
 }
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn):active {
   box-shadow: 0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
@@ -1593,32 +1637,33 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
 body.day-mode #cancelEditAnnouncementBtn {
   color: var(--day-brown);
   background:
-    linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
-    rgba(255,251,238,.4);
-  border-color: #8a5a1c;
+    linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
+    rgba(255,250,238,.3);
+  border-color: rgba(138,90,28,.45);
   box-shadow:
     0 3px 10px rgba(96,60,10,.14),
     inset 0 1px 0 rgba(255,255,255,.65),
     inset 0 -4px 8px rgba(140,95,25,.08);
 }
 
-/* 描边胶囊按钮：清除星芒节覆盖 */
+/* 玻璃胶囊按钮：清除星芒节覆盖（只调尺寸，材质继承 .gate-card button） */
 #starlightClearBtn {
   padding: 10px 22px;
-  border-radius: 999px;
   font-size: .88rem;
   color: var(--text-soft);
-  background: none;
-  border: 1px solid var(--line);
 }
-#starlightClearBtn:hover { color: var(--text); border-color: var(--text-soft); }
 body.day-mode #starlightClearBtn {
   color: var(--day-brown);
-  background: rgba(255,251,238,.45);
-  border-color: #8a5a1c;
-  box-shadow: 0 3px 10px rgba(96,60,10,.14), inset 0 1px 0 rgba(255,255,255,.65);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
+    rgba(255,250,238,.3);
+  border-color: rgba(138,90,28,.45);
+  box-shadow:
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.66),
+    inset 0 -4px 8px rgba(140,95,25,.08);
 }
-body.day-mode #starlightClearBtn:hover { background: rgba(255,251,238,.75); }
+body.day-mode #starlightClearBtn:hover { color: var(--day-ink); border-color: #8a5a1c; }
 
 /* 表单提示 */
 .form-msg { margin-top: 14px; font-size: .85rem; color: #e08e84; }
@@ -1720,11 +1765,8 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 .announcement-image-field { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .pill-btn-outline {
   padding: 8px 20px;
-  border-radius: 999px;
   font-size: .85rem;
   color: var(--text-soft);
-  background: none;
-  border: 1px solid var(--line);
 }
 .announcement-image-preview { position: relative; display: inline-block; }
 .announcement-image-preview[hidden] { display: none; }
@@ -2423,19 +2465,22 @@ body.day-mode footer { color: var(--day-title); }
   text-align: left;
 }
 .ticket-admin-key { font-size: .9rem; color: var(--text-soft); }
-.gate-card .ticket-switch {
-  min-width: 190px;
-  color: var(--text-soft);
-  background: none;
-  border: 1px solid var(--line);
-  box-shadow: none;
+/* 开关的关闭态和「刷新」只调尺寸/文字色，材质继承 .gate-card button 的玻璃 */
+.gate-card .ticket-switch { min-width: 190px; color: var(--text-soft); }
+/* 开启态保持实心强调色：这是状态标识，做成玻璃就看不出开没开 */
+.gate-card .ticket-switch.is-on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
 }
-.gate-card .ticket-switch.is-on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.gate-card .ticket-switch.is-on:hover { color: var(--accent-ink); border-color: var(--accent-soft); }
 .ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
 .gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
 .ticket-admin-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 6px; }
-.gate-card .ticket-btn-ghost { color: var(--text-soft); background: none; border: 1px solid var(--line); box-shadow: none; }
+.gate-card .ticket-btn-ghost { color: var(--text-soft); }
+/* 红色危险按钮保持实心 */
 .gate-card .ticket-btn-danger { color: #fff; background: #b8473f; border-color: rgba(255,255,255,.2); }
+.gate-card .ticket-btn-danger:hover { color: #fff; border-color: rgba(255,255,255,.45); }
 
 .ticket-admin-list-head {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -2511,9 +2556,8 @@ body.day-mode .ticket-table th, body.day-mode .ticket-table td { border-color: r
 body.day-mode .ticket-table td { color: var(--day-text); }
 body.day-mode .ticket-table tr.is-over td { color: #b0261b; }
 body.day-mode .ticket-table .is-dup { color: #b85a00; }
-body.day-mode .gate-card .ticket-switch:not(.is-on),
-body.day-mode .gate-card .ticket-btn-ghost { background: rgba(255,251,238,.45); }
 body.day-mode .gate-card .ticket-btn-danger { color: #fff; background: #a83a2e; border-color: #7a2418; }
+body.day-mode .gate-card .ticket-btn-danger:hover { color: #fff; border-color: #5e1a10; }
 
 @media (max-width: 640px) {
   .gate-card.ticket-card, .gate-card.ticket-admin { padding: 28px 18px; }
@@ -2524,8 +2568,11 @@ body.day-mode .gate-card .ticket-btn-danger { color: #fff; background: #a83a2e; 
 }
 /* 白天模式通用按钮规则带 :not(#id) 特指度较高，这里用同等特指度 + 书写顺序覆盖 */
 body.day-mode .gate-card button#ticketClearBtn { color: #fff; background: #a83a2e; border-color: #7a2418; }
+body.day-mode .gate-card button#ticketClearBtn:hover { color: #fff; border-color: #5e1a10; }
 body.day-mode .gate-card button#ticketOpenBtn.is-on,
 body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
+body.day-mode .gate-card button#ticketOpenBtn.is-on:hover,
+body.day-mode .gate-card button#ticketPendingBtn.is-on:hover { color: #fff6e0; border-color: #6b4310; }
 
 /* =============================================================================
    人机验证：自动验证（Cloudflare Turnstile）+ 手动验证（狒科生 / 文科生 / 理科生）
