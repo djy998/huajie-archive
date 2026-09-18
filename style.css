@@ -2442,6 +2442,9 @@ body.day-mode footer { color: var(--day-title); }
 }
 .tli-head { margin-bottom: 4px; color: var(--lantern-soft); }
 .ticket-lookup-item.is-over .tli-head { color: #e08e84; }
+.ticket-lookup-item.is-void { opacity: .7; }
+.ticket-lookup-item.is-void .tli-head { color: var(--text-mute); }
+.ticket-lookup-item.is-void .tli-body { text-decoration: line-through; }
 .tli-body { color: var(--text-soft); word-break: break-all; }
 
 /* 售罄 / 未开放提示弹窗 */
@@ -2483,6 +2486,20 @@ body.day-mode footer { color: var(--day-title); }
 .gate-card .ticket-switch.is-on:hover { color: var(--accent-ink); border-color: var(--accent-soft); }
 .ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
 .gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
+
+/* 定时开关：两个时间框 + 保存/清除，窄屏时整体换行 */
+.ticket-sched-row { align-items: flex-start; }
+.ticket-sched-edit { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ticket-sched-edit label { font-size: .8rem; color: var(--text-mute); }
+.gate-card .ticket-sched-edit input { width: 200px; margin: 0; padding: 9px 12px; }
+.gate-card .ticket-sched-edit button { padding: 9px 16px; font-size: .84rem; }
+.ticket-sched-note {
+  max-width: 520px;
+  margin: -4px auto 14px;
+  font-size: .8rem;
+  color: var(--accent-soft);
+  text-align: left;
+}
 .ticket-admin-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 6px; }
 .gate-card .ticket-btn-ghost { color: var(--text-soft); }
 /* 红色危险按钮保持实心 */
@@ -2502,6 +2519,7 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .ticket-legend .lg-over { background: #e05a4f; }
 .ticket-legend .lg-dup { margin-left: 8px; background: #ed7d31; }
+.ticket-legend .lg-void { margin-left: 8px; background: #7d8496; }
 
 .ticket-table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--line); }
 .ticket-table { width: 100%; border-collapse: collapse; font-size: .84rem; text-align: left; }
@@ -2515,6 +2533,26 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-table .tt-empty { text-align: center; color: var(--text-mute); padding: 18px; }
 .ticket-table tr.is-over td { color: #ff7a6e; }
 .ticket-table .is-dup { color: #ffa257; font-weight: 600; }
+
+/* 已作废：整行划掉并压暗，一眼能和正常单区分开；操作列不划线，否则按钮不好认 */
+.ticket-table tr.is-void td { color: var(--text-mute); text-decoration: line-through; opacity: .72; }
+.ticket-table tr.is-void td.tt-actions { text-decoration: none; opacity: 1; }
+.ticket-table .tt-actions { white-space: nowrap; }
+.ticket-table .tt-act {
+  padding: 4px 12px;
+  font-size: .78rem;
+  line-height: 1.5;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color .18s, color .18s, opacity .18s;
+}
+.ticket-table .tt-act:disabled { opacity: .5; cursor: default; }
+.ticket-table .tt-act.is-void { color: #ff7a6e; }
+.ticket-table .tt-act.is-void:hover:not(:disabled) { background: rgba(255,122,110,.16); }
+.ticket-table .tt-act.is-restore { color: #6fd08c; }
+.ticket-table .tt-act.is-restore:hover:not(:disabled) { background: rgba(111,208,140,.16); }
 
 /* 白天模式 */
 body.day-mode .ticket-label { color: var(--day-ink); }
@@ -2562,6 +2600,9 @@ body.day-mode .ticket-table th { background: rgba(255,252,240,.5); color: var(--
 body.day-mode .ticket-table th, body.day-mode .ticket-table td { border-color: rgba(138,90,28,.3); }
 body.day-mode .ticket-table td { color: var(--day-text); }
 body.day-mode .ticket-table tr.is-over td { color: #b0261b; }
+body.day-mode .ticket-table tr.is-void td { color: #7a6a52; }
+body.day-mode .ticket-table .tt-act.is-void { color: #b0261b; }
+body.day-mode .ticket-table .tt-act.is-restore { color: #2f7d4a; }
 body.day-mode .ticket-table .is-dup { color: #b85a00; }
 body.day-mode .gate-card .ticket-btn-danger { color: #fff; background: #a83a2e; border-color: #7a2418; }
 body.day-mode .gate-card .ticket-btn-danger:hover { color: #fff; border-color: #5e1a10; }
