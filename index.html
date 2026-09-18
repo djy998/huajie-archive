@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 43;
+      var CSS_VERSION = 44;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -426,13 +426,11 @@
       <form id="ticketForm" novalidate autocomplete="off">
         <div class="ticket-field">
           <label class="ticket-label is-required" for="ticketContact">联系方式</label>
-          <p class="ticket-sub">一般填 QQ 号，也可以填其他联系方式</p>
           <input type="text" id="ticketContact" maxlength="40" placeholder="例：123456789">
         </div>
 
         <div class="ticket-field">
           <span class="ticket-label is-required" id="ticketQtyLabel">购票数量</span>
-          <p class="ticket-sub">每名游客限购 5 张</p>
           <div class="ticket-stepper" role="group" aria-labelledby="ticketQtyLabel">
             <button type="button" id="ticketQtyMinus" aria-label="减少一张">−</button>
             <output id="ticketQty" aria-live="polite">1</output>
@@ -452,12 +450,7 @@
           </label>
         </div>
 
-        <div class="ticket-captcha" id="ticketTurnstile"></div>
-        <div class="math-captcha" id="ticketMath" hidden></div>
-        <div class="captcha-switch-row">
-          <button type="button" class="captcha-switch" id="ticketCaptchaSwitch">验证加载不出来？改用算术题</button>
-          <button type="button" class="captcha-switch" id="ticketCaptchaSwitchBack" hidden>切回 Cloudflare 验证</button>
-        </div>
+        <div class="verify-host ticket-verify" id="ticketVerify"></div>
         <div class="ticket-submit-row">
           <button type="submit" id="ticketSubmitBtn">提交</button>
         </div>
@@ -607,7 +600,7 @@
 
 </main>
 
-<footer>花街档案 · 非官方玩家自制内容 · 内容以活动群公告为准</footer>
+<footer>花街档案 · 玩家个人站 · 内容以活动群公告为准</footer>
 
 <div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
   <button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
@@ -621,10 +614,8 @@
     <button class="info-close" id="captchaClose" aria-label="关闭">×</button>
     <h2>先验证一下</h2>
     <p class="hint">确认不是机器人</p>
-    <div id="turnstileWidget"></div>
-    <div class="math-captcha" id="captchaMath" hidden></div>
-    <button type="button" class="captcha-switch" id="captchaSwitch">验证加载不出来？改用算术题</button>
-    <button type="button" class="captcha-switch" id="captchaSwitchBack" hidden>切回 Cloudflare 验证</button>
+    <!-- 验证组件挂载点：Cloudflare / 狒科生 / 文科生 / 理科生 四种方式由 verify.js 渲染 -->
+    <div class="verify-host" id="captchaVerify"></div>
     <p class="form-msg" id="captchaMsg" hidden></p>
   </div>
 </div>
@@ -679,6 +670,9 @@
 </div>
 
 
+<!-- 人机验证组件（Cloudflare Turnstile + 狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
+<script src="verify.js?v=1"></script>
+
 <script>
 /* =============================================================================
    花舞之街 · 薰风花语町 —— 页面脚本
@@ -686,13 +680,14 @@
    目录
      1. 站点配置与内容数据        7. 花街介绍 / 活动群弹窗
      2. 通用工具                  8. 大图预览（Lightbox）
-     3. 视图切换与路由            9. 人机验证（Turnstile / 算术题）
+     3. 视图切换与路由            9. 人机验证（Cloudflare/狒科生/文科生/理科生）
      4. 首页 / 活动详情 / 相册    10. 视觉特效（昼夜、落叶、点击爆花）
      5. 内部入口与公告板          11. 头部工具：音量、更多、日历、时间条、天气
      6. 管理员：站点开关、星芒节   12. 点赞
      6b. 活动购票
                                   13. 无障碍 & 启动
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
+   验证：界面在 verify.js（HJVerify，新增文件），题目与判卷在 Worker（见 verify-ext/）。
    ============================================================================= */
 
 /* =============================================================================
@@ -992,7 +987,7 @@ const STORE = {
   volume:      "hj_volume",        // 音量百分比 0~100，0 = 静音
   soundOn:     "hj_sound_on",
   captchaOkAt: "hj_captcha_ok_at",
-  captchaMathAt: "hj_captcha_math_at",   // 最近一次改用算术题的时间
+  // 手动验证偏好（方式 / 时间）由 verify.js 自己用 hj_captcha_mode、hj_captcha_manual_at 记录
   pwFails:     "hj_pw_fail_count",
   starlight:   "hj_starlight",
   calOpen:     "hj_cal_open",
@@ -2004,8 +1999,7 @@ const ticketState = {
   qty: 1,
   allowPending: false,
   remaining: null,
-  widgetId: null,
-  token: null,
+  proof: null,        // 人机验证凭证：{ token }（Cloudflare）或 { verifyPass }（手动验证）
   submitting: false,
 };
 
@@ -2037,7 +2031,7 @@ function renderTicketHolders() {
   wrap.innerHTML = Array.from({ length: ticketState.qty }, (_, i) => `
     <div class="ticket-field ticket-holder" data-index="${i}">
       <span class="ticket-label is-required">${ticketHolderLabel(i)}</span>
-      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境（必填，不能待定）" : `购买 ${i + 1} 张票时填写`}</p>
+      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境" : `购买 ${i + 1} 张票时填写`}</p>
       <div class="ticket-holder-row">
         <input type="text" class="th-name" maxlength="30" placeholder="角色名" aria-label="${ticketHolderLabel(i)}：角色名">
         <select class="th-server" aria-label="${ticketHolderLabel(i)}：服务器">${options}</select>
@@ -2136,55 +2130,30 @@ async function openTicketView() {
     renderTicketHolders();
   }
   setTicketMode("form");
-  renderTicketCaptcha();
+  if (ticketGate) ticketGate.open();
 }
 
-/* 表单内的人机验证：默认 Turnstile（token 随提交发给 Worker 校验，一次性）；
-   加载失败 / 超时 / 用户手动切换时改用算术题 */
-let ticketMath = null;
+/* 表单内的人机验证：和弹窗共用 verify.js 的同一套组件
+   （Cloudflare / 狒科生 / 文科生 / 理科生，完成任意一种即可）。
+   通过后凭证挂在 ticketState.proof 上，随表单一起交给 Worker 校验并消费。 */
+let ticketGate = null;
 
-function useTicketMath(reason = "") {
-  if (window.turnstile && ticketState.widgetId !== null) window.turnstile.remove(ticketState.widgetId);
-  ticketState.widgetId = null;
-  ticketState.token = null;
-  $("ticketTurnstile").innerHTML = "";
-  $("ticketTurnstile").hidden = true;
-  $("ticketCaptchaSwitch").hidden = true;
-  $("ticketCaptchaSwitchBack").hidden = false;
-  ticketMath.show();
-  if (reason) setMsg($("ticketMsg"), reason);
-  rememberMathCaptcha();
-}
-
-async function renderTicketCaptcha() {
-  if (ticketMath.active || ticketState.widgetId !== null || ticketState.captchaLoading) return;
-  if (prefersMathCaptcha()) {
-    useTicketMath();
-    return;
-  }
-  ticketState.captchaLoading = true;
-  const ready = await waitForTurnstile(TURNSTILE_WAIT_MS);
-  ticketState.captchaLoading = false;
-  if (ticketMath.active) return;
-  if (!ready) {
-    useTicketMath("人机验证组件加载不出来，已改用算术题");
-    return;
-  }
-  ticketState.widgetId = window.turnstile.render($("ticketTurnstile"), {
-    sitekey: TURNSTILE_SITE_KEY,
-    callback: (t) => { ticketState.token = t; },
-    "expired-callback": () => { ticketState.token = null; },
-    "error-callback": () => {
-      if (!ticketMath.active) useTicketMath("人机验证组件加载失败，已改用算术题");
-      return true;
+function initTicketCaptcha() {
+  if (!window.HJVerify) { console.error("[验证] verify.js 没有加载成功，购票表单的人机验证不可用"); return; }
+  ticketGate = HJVerify.createGate($("ticketVerify"), {
+    post: callWorker,
+    turnstileSiteKey: TURNSTILE_SITE_KEY,
+    onPass: (proof) => {
+      ticketState.proof = proof;
+      setMsg($("ticketMsg"), "");
     },
   });
 }
 
+/* 提交后重新出题（凭证是一次性的，用过就得重新验证） */
 function resetTicketCaptcha() {
-  ticketState.token = null;
-  if (ticketMath.active) ticketMath.load();
-  else if (window.turnstile && ticketState.widgetId !== null) window.turnstile.reset(ticketState.widgetId);
+  ticketState.proof = null;
+  if (ticketGate) ticketGate.refresh();
 }
 
 function collectTicketForm() {
@@ -2226,19 +2195,11 @@ async function submitTicket(e) {
     form.focus?.focus();
     return;
   }
-  let proof;
-  if (ticketMath.active) {
-    const math = ticketMath.value();
-    if (!math) {
-      setMsg(msg, "请先填写下方算术题的答案（数字）");
-      ticketMath.focus();
-      return;
-    }
-    proof = { math };
-  } else if (ticketState.token) {
-    proof = { token: ticketState.token };
-  } else {
-    setMsg(msg, "请先完成下方的人机验证（加载不出来可以点「改用算术题」）");
+  const proof = ticketState.proof;
+  if (!proof) {
+    setMsg(msg, ticketGate
+      ? "请先完成下方的人机验证（Cloudflare / 狒科生 / 文科生 / 理科生 任选一种）"
+      : "人机验证组件没加载出来，刷新页面再试一次（或联系管理员检查 verify.js）");
     return;
   }
 
@@ -2247,7 +2208,6 @@ async function submitTicket(e) {
   const btn = $("ticketSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const usedMath = !!proof.math;
   const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof });
   ticketState.submitting = false;
   btn.disabled = false;
@@ -2264,9 +2224,10 @@ async function submitTicket(e) {
       openTicketNotice(TICKET_MSG_CLOSED);
       return;
     }
-    if (data.error === "captcha" && usedMath) {
-      setMsg(msg, "算术题答案不对，已换一道题，请重新计算后提交");
-      ticketMath.focus();
+    if (data.error === "captcha") {
+      setMsg(msg, proof.verifyPass
+        ? "人机验证凭证已过期或用过，已换一题，请重新验证后提交"
+        : "人机验证未通过，已换一题，请重新验证后提交");
       return;
     }
     setMsg(msg, TICKET_ERRORS[data.error] || "提交失败，请稍后再试");
@@ -2498,17 +2459,7 @@ function initTicket() {
     if (e.target === e.currentTarget) closeTicketNotice();
   });
   $("ticketLookupBtn").addEventListener("click", lookupTicket);
-  ticketMath = new MathCaptcha($("ticketMath"));
-  $("ticketCaptchaSwitch").addEventListener("click", () => useTicketMath());
-  $("ticketCaptchaSwitchBack").addEventListener("click", () => {
-    forgetMathCaptcha();
-    ticketMath.hide();
-    $("ticketCaptchaSwitch").hidden = false;
-    $("ticketCaptchaSwitchBack").hidden = true;
-    $("ticketTurnstile").hidden = false;
-    setMsg($("ticketMsg"), "");
-    renderTicketCaptcha();
-  });
+  initTicketCaptcha();
   $("ticketLookupName").addEventListener("keydown", (e) => {
     if (e.key === "Enter") lookupTicket();
   });
@@ -3166,133 +3117,36 @@ function initLightbox() {
 
 
 /* =============================================================================
-   9. 人机验证（Turnstile，备用：算术题）
-   - Turnstile 在国内经常加载失败：出错或 6 秒内没加载出来就自动切换为算术题，
-     用户也可以手动点「改用算术题」；切换后 6 小时内默认直接用算术题
-   - 算术题由 Worker 出题并校验（每题只能提交一次），答案不会下发到前端
+   9. 人机验证（Cloudflare Turnstile + 三种手动验证：狒科生 / 文科生 / 理科生）
+   -----------------------------------------------------------------------------
+   界面与流程都在 verify.js（HJVerify）里，这里只负责和页面衔接：
+   - 弹出验证：通过后把凭证交给 Worker 二次确认（verify_turnstile），再执行排队中的动作
+     （打开活动群 / 花街介绍、复制附联系方式、密码连错后的再验证）
    - 通过后 5 分钟内免验证（时间戳存本地，刷新仍有效），
-     「活动群」「花街介绍」「复制附联系方式」共用此窗口
-   - 密码连错触发的验证不享受免验证窗口
-   - 前端组件通过后，token 必须交给 Worker 做 siteverify 二次确认
+     「活动群」「花街介绍」「复制附联系方式」共用此窗口；密码连错触发的验证不享受该窗口
+   - 手动验证的题目由 Worker 出题判卷，答案不下发到前端；答对后拿到一次性通行证 verifyPass，
+     弹窗里再交给 verify_turnstile 确认一次；购票表单则随 submit_ticket 一起交给 Worker 消费
+   - Turnstile 在国内经常加载失败：脚本出错或 6 秒内没加载出来会自动切到手动验证
+     （默认「狒科生」），用户也可以直接点上面的按钮换方式；换过之后 6 小时内默认走手动验证
    ============================================================================= */
 
 const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
-const TURNSTILE_WAIT_MS = 6000;             // 超过这个时间还没加载出来就改用算术题
-const MATH_MODE_KEEP_MS = 6 * 3600 * 1000;
-
-const prefersMathCaptcha = () => Date.now() - (Number(storage.get(STORE.captchaMathAt)) || 0) < MATH_MODE_KEEP_MS;
-const rememberMathCaptcha = () => storage.set(STORE.captchaMathAt, Date.now());
-const forgetMathCaptcha = () => storage.remove(STORE.captchaMathAt);
-
-/* 算术题组件：挂到一个空 div 上；value() 返回 { challenge, answer } 或 null */
-class MathCaptcha {
-  constructor(root, { onSubmit } = {}) {
-    this.root = root;
-    this.challenge = null;
-    this.loading = null;
-    root.innerHTML = `
-      <p class="math-q">请计算：<b class="math-expr">…</b> = ?</p>
-      <p class="math-status" hidden></p>
-      <div class="math-row">
-        <input type="text" class="math-input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="填写答案" aria-label="算术题答案">
-        <button type="button" class="math-refresh">换一题</button>
-        ${onSubmit ? `<button type="button" class="math-ok">确认</button>` : ""}
-      </div>`;
-    this.expr = root.querySelector(".math-expr");
-    this.q = root.querySelector(".math-q");
-    this.status = root.querySelector(".math-status");
-    this.input = root.querySelector(".math-input");
-    root.querySelector(".math-refresh").addEventListener("click", () => this.load());
-    if (onSubmit) {
-      root.querySelector(".math-ok").addEventListener("click", onSubmit);
-      this.input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
-      });
-    }
-  }
-
-  get active() { return !this.root.hidden; }
-
-  /* 出题中 / 出题失败时隐藏算式，只显示状态文字 */
-  setStatus(text, isError = false) {
-    this.status.textContent = text;
-    this.status.hidden = !text;
-    this.status.classList.toggle("is-error", isError);
-    this.q.hidden = !!text;
-  }
-
-  show() {
-    this.root.hidden = false;
-    if (!this.challenge && !this.loading) this.load();
-  }
-
-  hide() { this.root.hidden = true; }
-
-  load() {
-    this.challenge = null;
-    this.input.value = "";
-    this.expr.textContent = "…";
-    this.setStatus("出题中…");
-    const req = callWorker({ action: "get_math_challenge" }).then((data) => {
-      if (this.loading !== req) return;
-      this.loading = null;
-      if (!data || !data.ok) {
-        // 区分原因，方便排查：连不上 / 后端未更新 / 后端出错 / 限流
-        const reason = !data ? (lastWorkerIssue === "network"
-            ? "连不上验证服务器：这个后端地址访问不到（workers.dev 在国内会被墙），请联系管理员换域名"
-            : `连不上验证服务器（${lastWorkerIssue || "未知"}），点「换一题」重试`)
-          : data.error === "unknown action" ? "出题失败：后端（Worker）还是旧版本，请联系管理员"
-          : data.error === "rate_limited" ? "换题太快了，稍等一会儿再点「换一题」"
-          : `出题失败（${data.error || "未知错误"}），点「换一题」重试`;
-        this.setStatus(reason, true);
-        return;
-      }
-      this.challenge = data.challenge;
-      this.expr.textContent = data.question;
-      this.setStatus("");
-    });
-    this.loading = req;
-    return req;
-  }
-
-  /* 取答案；还没出题或没填数字时返回 null。交给 Worker 后这道题就作废，需要 load() 换题 */
-  value() {
-    const v = this.input.value.trim().replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
-    if (!this.challenge || !/^-?\d{1,6}$/.test(v)) return null;
-    return { challenge: this.challenge, answer: Number(v) };
-  }
-
-  focus() { this.input.focus({ preventScroll: true }); }
-}
-
-/* 等待 Turnstile 脚本加载；超时返回 false */
-function waitForTurnstile(timeoutMs) {
-  if (window.turnstile) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const start = Date.now();
-    const t = setInterval(() => {
-      if (window.turnstile) { clearInterval(t); resolve(true); }
-      else if (Date.now() - start >= timeoutMs) { clearInterval(t); resolve(false); }
-    }, 300);
-  });
-}
-
-let turnstilePending = null;    // 验证通过后要执行的动作
-let turnstileWidgetId = null;
-let turnstileRetryTimer = null;
-let turnstileFailStreak = 0;    // 后端校验连续失败次数
 
 const isCaptchaFresh = () => Date.now() - (Number(storage.get(STORE.captchaOkAt)) || 0) < CAPTCHA_GRACE_MS;
 const markCaptchaOk = () => storage.set(STORE.captchaOkAt, Date.now());
 
+let captchaGate = null;         // 弹窗里的验证组件（verify.js）
+let turnstilePending = null;    // 验证通过后要执行的动作
+let turnstileFailStreak = 0;    // Turnstile 交给 Worker 校验时连续失败的次数
+let captchaSession = 0;         // 每次打开 / 关闭弹窗 +1，用来丢弃过期的异步回调
+
 /* 免验证窗口内直接执行，否则弹出验证 */
 function requestCaptcha(pending) {
-  if (isCaptchaFresh()) runCaptchaPending(pending);
-  else openCaptcha(pending);
+  if (isCaptchaFresh()) { runCaptchaPending(pending); return; }
+  /* verify.js 没加载成功（没上传 / 被缓存挡住）时给出明确提示，而不是静默失败 */
+  if (!captchaGate) { showToast("人机验证组件没加载出来，刷新页面再试一次"); return; }
+  openCaptcha(pending);
 }
-
-let captchaMath = null;       // 弹窗里的算术题组件
-let captchaSession = 0;       // 每次打开 / 关闭弹窗 +1，用来丢弃过期的异步回调
 
 function openCaptcha(pending) {
   turnstilePending = pending;
@@ -3301,94 +3155,17 @@ function openCaptcha(pending) {
   setMsg($("captchaMsg"), "");
   $("captchaOverlay").hidden = false;
   playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
-  if (prefersMathCaptcha()) useMathInOverlay();
-  else renderTurnstile();
-}
-
-function stopTurnstileRetry() {
-  clearTimeout(turnstileRetryTimer);
-  turnstileRetryTimer = null;
-}
-
-function removeTurnstileWidget() {
-  if (window.turnstile && turnstileWidgetId !== null) {
-    window.turnstile.remove(turnstileWidgetId);
-    turnstileWidgetId = null;
-  }
-}
-
-/* 弹窗切换为算术题；reason 为提示语（手动切换时为空） */
-function useMathInOverlay(reason = "") {
-  stopTurnstileRetry();
-  removeTurnstileWidget();
-  $("turnstileWidget").innerHTML = "";
-  $("turnstileWidget").hidden = true;
-  $("captchaSwitch").hidden = true;
-  $("captchaSwitchBack").hidden = false;
-  captchaMath.show();
-  captchaMath.focus();
-  setMsg($("captchaMsg"), reason);
-  rememberMathCaptcha();
-}
-
-/* 渲染 Turnstile；出错或 TURNSTILE_WAIT_MS 内脚本没加载出来，自动改用算术题 */
-async function renderTurnstile() {
-  const el = $("turnstileWidget");
-  const msg = $("captchaMsg");
-  const session = captchaSession;
-  stopTurnstileRetry();
-  removeTurnstileWidget();
-  el.innerHTML = "";
-  el.hidden = false;
-  captchaMath.hide();
-  $("captchaSwitch").hidden = false;
-  $("captchaSwitchBack").hidden = true;
-
-  if (!window.turnstile) setMsg(msg, "验证组件加载中，请稍候…");
-  const ready = await waitForTurnstile(TURNSTILE_WAIT_MS);
-  if (session !== captchaSession || captchaMath.active) return;
-  if (!ready) {
-    useMathInOverlay("验证组件加载不出来，已改用算术题");
-    return;
-  }
-
-  setMsg(msg, "");
-  let passed = false;
-  turnstileWidgetId = window.turnstile.render(el, {
-    sitekey: TURNSTILE_SITE_KEY,
-    callback: (token) => { passed = true; finishCaptcha({ token }); },
-    "error-callback": () => {
-      if (session === captchaSession && !captchaMath.active) useMathInOverlay("验证组件加载失败，已改用算术题");
-      return true;   // 已自行处理，不让组件自己反复重试
-    },
-  });
-  // 组件出现了但一直卡着不通过（网络受限时常见）：给个提示
-  turnstileRetryTimer = setTimeout(() => {
-    if (!passed && session === captchaSession && !captchaMath.active) {
-      setMsg(msg, "一直转圈的话，可以点「改用算术题」");
-    }
-  }, 12000);
+  captchaGate.open();
 }
 
 function closeCaptcha() {
   $("captchaOverlay").hidden = true;
   captchaSession++;
-  stopTurnstileRetry();
-  removeTurnstileWidget();
+  if (captchaGate) captchaGate.hide();
   turnstilePending = null;
 }
 
-function submitCaptchaMath() {
-  const math = captchaMath.value();
-  if (!math) {
-    setMsg($("captchaMsg"), "请先填写算术题的答案（数字）");
-    captchaMath.focus();
-    return;
-  }
-  finishCaptcha({ math });
-}
-
-/* 把 Turnstile token 或算术题答案交给 Worker 确认 */
+/* 把凭证交给 Worker 确认：Turnstile 走 siteverify，手动验证走一次性通行证 */
 async function finishCaptcha(proof) {
   const pending = turnstilePending;
   const msg = $("captchaMsg");
@@ -3399,23 +3176,22 @@ async function finishCaptcha(proof) {
   if (session !== captchaSession) return;
 
   if (!verify || !verify.ok) {
-    if (proof.math) {
-      setMsg(msg, !verify ? "连接失败，检查一下网络后再试"
-        : verify.error === "rate_limited" ? "尝试太频繁了，请稍等一会儿再试"
-        : "答案不对，已换一道题，再试试");
-      captchaMath.load();
-      captchaMath.focus();
+    /* Turnstile 组件常会自动通过；失败后无条件重建会陷入「通过→失败→重建」的循环并耗尽限流额度，
+       所以连续失败 2 次就直接改用手动验证 */
+    if (proof.token) {
+      turnstileFailStreak++;
+      if (turnstileFailStreak >= 2) {
+        captchaGate.useManual("验证服务暂时不可用，启用内置验证");
+        return;
+      }
+      setMsg(msg, "验证未通过，请重新完成一次");
+      captchaGate.refresh();
       return;
     }
-    /* 组件常会自动通过；若失败后无条件重建，会陷入"通过→失败→重建"的循环并耗尽限流额度。
-       因此连续失败 2 次就改用算术题。 */
-    turnstileFailStreak++;
-    if (turnstileFailStreak >= 2) {
-      useMathInOverlay("验证服务暂时不可用，已改用算术题");
-      return;
-    }
-    setMsg(msg, "验证未通过，请重新完成一次");
-    renderTurnstile();
+    setMsg(msg, !verify ? "连接失败，检查一下网络后再试"
+      : verify.error === "rate_limited" ? "尝试太频繁了，请稍等一会儿再试"
+      : "验证已过期，请重新完成一次");
+    captchaGate.clearProof();
     return;
   }
 
@@ -3433,22 +3209,21 @@ function runCaptchaPending(pending) {
       openInfoModal();
       break;
     case "copy_verify":
-      showToast("验证通过，5 分钟内复制会附上联系方式");
+      showToast("验证通过");
       break;
     case "internal":
-      showToast("验证通过，可以继续输入密码");
+      showToast("验证通过");
       $("internalPassword").focus();
       break;
   }
 }
 
 function initCaptcha() {
-  captchaMath = new MathCaptcha($("captchaMath"), { onSubmit: submitCaptchaMath });
-  $("captchaSwitch").addEventListener("click", () => useMathInOverlay());
-  $("captchaSwitchBack").addEventListener("click", () => {
-    forgetMathCaptcha();          // 不再默认用算术题
-    captchaMath.hide();
-    renderTurnstile();
+  if (!window.HJVerify) { console.error("[验证] verify.js 没有加载成功，人机验证不可用"); return; }
+  captchaGate = HJVerify.createGate($("captchaVerify"), {
+    post: callWorker,
+    turnstileSiteKey: TURNSTILE_SITE_KEY,
+    onPass: finishCaptcha,
   });
   $("captchaClose").addEventListener("click", closeCaptcha);
   closeOnBackdrop($("captchaOverlay"), closeCaptcha);
