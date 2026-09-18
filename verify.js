@@ -280,6 +280,19 @@
       else this.loadTask();
     }
 
+    /* 手动验证通过之后把题目撤掉，只留一行「验证通过」。
+       题目留在页面上会让人以为还要继续答；更要命的是「换一题」会把刚拿到的凭证清掉，
+       表单提交时就又变成「未通过人机验证」了。 */
+    renderPassed() {
+      this.task = null;
+      this.hint = null;
+      this.tabs.hidden = true;
+      this.note = "";
+      this.setTip("");
+      this.body.innerHTML = '<p class="verify-done"><span class="verify-done-mark" aria-hidden="true">✓</span>验证通过</p>';
+      this.renderSwitch();
+    }
+
     /* 底部的切换按钮。自动验证没通过时给一个「点击手动验证」的出口；手动验证时给「返回自动验证」 */
     renderSwitch() {
       const el = this.switchEl;
@@ -522,8 +535,7 @@
       }
 
       this.proof = { verifyPass: data.pass };
-      this.setTip("验证通过");
-      this.renderSwitch();
+      this.renderPassed();
       if (this.o.onPass) this.o.onPass(this.proof);
     }
 

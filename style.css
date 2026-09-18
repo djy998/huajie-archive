@@ -2649,17 +2649,19 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on:hover { color: #fff6e0; b
 }
 .verify-tabs-label::after { content: "："; }
 .verify-host button.verify-tab:not(#_) { padding: 7px 15px; font-size: .82rem; font-weight: 600; }
+/* 选中态保持实心：做成玻璃就分不出选的是哪一种 */
 .verify-host button.verify-tab.is-on:not(#_) {
-  color: var(--accent-soft);
+  color: var(--accent-ink);
   background:
-    linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
-    rgba(42,35,68,.44);
-  border-color: var(--accent);
+    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.36);
   box-shadow:
-    0 4px 12px rgba(8,6,18,.26),
-    inset 0 1px 0 rgba(255,255,255,.26),
-    inset 0 -4px 8px rgba(10,8,22,.14);
+    0 4px 12px rgba(8,6,18,.24),
+    inset 0 1px 0 rgba(255,255,255,.38),
+    inset 0 -5px 10px rgba(70,42,8,.16);
 }
+.verify-host button.verify-tab.is-on:not(#_):hover { color: var(--accent-ink); border-color: rgba(255,255,255,.5); }
 
 /* 状态提示：出题中 / 答错 / 组件加载失败… */
 .verify-tip { margin: 0 0 12px; font-size: .85rem; line-height: 1.6; color: var(--text-mute); text-align: center; }
@@ -2717,6 +2719,27 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on:hover { color: #fff6e0; b
   border-radius: 12px;
 }
 
+/* 通过之后题目撤掉，只留这一行 */
+.verify-done {
+  display: flex; align-items: center; justify-content: center;
+  gap: 9px;
+  min-height: 72px;
+  margin: 0;
+  font-size: .98rem;
+  font-weight: 600;
+  color: var(--accent-soft);
+}
+.verify-done-mark {
+  display: grid; place-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  font-size: .82rem;
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+}
+body.day-mode .verify-done { color: var(--day-brown); }
+
 /* 小按钮：换一题 / 提示 / 返回自动验证 */
 .verify-actions { margin-top: 12px; text-align: center; }
 .verify-host button.verify-mini:not(#_) {
@@ -2768,16 +2791,17 @@ body.day-mode .verify-host button.verify-mini:not(#_):hover {
 }
 body.day-mode .verify-host button.verify-mini:not(#_) { color: var(--day-brown-soft); }
 body.day-mode .verify-host button.verify-tab.is-on:not(#_) {
-  color: var(--day-ink);
+  color: var(--accent-ink);
   background:
-    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.16) 52%, rgba(255,255,255,.26) 100%),
-    rgba(255,250,238,.46);
-  border-color: #8a5a1c;
+    linear-gradient(168deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 42%, rgba(120,75,10,.04) 76%, rgba(120,75,10,.1) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.5);
   box-shadow:
     0 4px 12px rgba(96,60,10,.18),
-    inset 0 1px 0 rgba(255,255,255,.75),
-    inset 0 -4px 8px rgba(140,95,25,.1);
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -5px 10px rgba(140,90,15,.14);
 }
+body.day-mode .verify-host button.verify-tab.is-on:not(#_):hover { color: var(--accent-ink); border-color: rgba(255,255,255,.66); }
 body.day-mode .verify-host input.verify-input { text-align: center; }
 body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color: #c98f3a; }
 
@@ -2855,4 +2879,44 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
   /* 单列时海报占满宽度、上下留黑边，「播放视频」按钮收到下方黑边里，不压住海报文字 */
   .tile.has-poster .hero-play { bottom: 3px; padding: 7px 14px 7px 11px; font-size: .8rem; gap: 6px; }
   .tile.has-poster .hero-play svg { width: 18px; height: 18px; }
+}
+
+/* =============================================================================
+   按下反馈：玻璃按钮在 :active 时填成实心强调色
+   -----------------------------------------------------------------------------
+   写在文件最末尾，靠书写顺序压过前面的白天模式规则（不少白天规则带 :not(#id)，
+   特指度很高，单靠类选择器盖不住）。这里只改颜色，位移仍由各自原有的 :active 负责，
+   以免破坏「减弱动态效果」里对 transform 的关闭。
+   红色危险按钮和开关的开启态本来就是实心，排除在外，避免按一下变成强调色。
+   ============================================================================= */
+.gate-card button:not(.ticket-btn-danger, .ticket-switch.is-on):active,
+body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn, .ticket-btn-danger, .ticket-switch.is-on):active,
+.gate-card .ticket-stepper button:not(#_):active,
+body.day-mode .gate-card .ticket-stepper button:not(#_):active,
+.verify-host button.verify-tab:not(#_):active,
+.verify-host button.verify-opt:not(#_):active,
+.verify-host button.verify-ok:not(#_):active,
+.verify-host button.verify-switch-btn:not(#_):active,
+.verify-host button.verify-char:not(#_):active,
+.verify-host button.verify-mini:not(#_):active,
+body.day-mode .verify-host button.verify-tab:not(#_):active,
+body.day-mode .verify-host button.verify-opt:not(#_):active,
+body.day-mode .verify-host button.verify-ok:not(#_):active,
+body.day-mode .verify-host button.verify-switch-btn:not(#_):active,
+body.day-mode .verify-host button.verify-char:not(#_):active,
+body.day-mode .verify-host button.verify-mini:not(#_):active,
+.tab-btn:active,
+body.day-mode .tab-btn:active,
+.video-action:active,
+body.day-mode .video-action:active,
+.back-btn:active,
+body.day-mode .back-btn:active,
+.ticket-badge-inline:active,
+body.day-mode .ticket-badge-inline:active {
+  color: var(--accent-ink);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.07) 42%, rgba(0,0,0,.04) 76%, rgba(0,0,0,.1) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.4);
+  box-shadow: inset 0 2px 7px rgba(58,34,6,.26);
 }
