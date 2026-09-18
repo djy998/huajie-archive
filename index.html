@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 45;
+      var CSS_VERSION = 46;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -671,7 +671,7 @@
 
 
 <!-- 人机验证组件（自动验证 Cloudflare Turnstile + 手动验证：狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
-<script src="verify.js?v=2"></script>
+<script src="verify.js?v=3"></script>
 
 <script>
 /* =============================================================================
@@ -1255,12 +1255,15 @@ function renderHome() {
   $("latestTile").classList.toggle("has-ticket", !!LATEST_EVENT.ticketUrl);
 }
 
-/* 生成 B 站外链播放器地址（参数中布尔值用 0 / 1 表示） */
-function bilibiliPlayerUrl({ bvid, page = 1, start = 0, danmaku = false, autoplay = false }) {
+/* 生成 B 站外链播放器地址（参数中布尔值用 0 / 1 表示）。
+   官方外链播放器只提供 muted 开关，没有 volume 参数，也没有 JS / postMessage 接口，
+   所以站内音量条对它只能控制「静音 / 不静音」，具体音量要用播放器自带的音量条。 */
+function bilibiliPlayerUrl({ bvid, page = 1, start = 0, danmaku = false, autoplay = false, muted = false }) {
   const params = new URLSearchParams({
     bvid,
     p: String(page),
     autoplay: autoplay ? "1" : "0",
+    muted: muted ? "1" : "0",
     danmaku: danmaku ? "1" : "0",
     high_quality: "1",      // 尽量使用较高画质（未登录时仍可能受 B 站限制）
     poster: "1",
@@ -1277,19 +1280,69 @@ function bilibiliPlayerUrl({ bvid, page = 1, start = 0, danmaku = false, autopla
 const hasHomeVideo = () => /^BV[0-9A-Za-z]{10}$/.test(LATEST_VIDEO.bvid || "");
 let homeVideoOpen = false;
 let homeVideoUserClosed = false;   // 用户手动收起过则不再自动展开
+let homeVideoAutoplay = false;     // 当前这次是以自动播放的方式加载的吗
+let homeVideoMuted = false;        // 当前播放器是带着哪种 muted 参数加载的
+let homeVideoMuteTimer = 0;
 
 function setHomeVideoOpen(open, autoplay = false) {
   homeVideoOpen = open;
+  homeVideoAutoplay = open && autoplay;
+  homeVideoMuted = hjSound.muted;            // 跟着站内音量的静音状态加载
   $("latestTile").hidden = open;
   $("latestVideoBlock").hidden = !open;
   // 收起时卸载播放器，停止播放和下载
-  $("latestVideoFrame").src = open ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay }) : "about:blank";
+  $("latestVideoFrame").src = open
+    ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay, muted: homeVideoMuted })
+    : "about:blank";
 }
+
+/* 站内音量的静音状态变了 → 让外链播放器跟上。
+   跨域 iframe 只能靠重新加载来换 muted 参数，所以：
+   - 只在「静音 ⇄ 不静音」真的翻转时才动，音量在 1~100 之间调不会碰播放器；
+   - 拖动音量条会连着触发，等手停下来半秒再重载，避免视频反复重播。 */
+function syncExternalVideoMute() {
+  if (!homeVideoOpen) { homeVideoMuted = hjSound.muted; return; }
+  if (hjSound.muted === homeVideoMuted) return;
+  clearTimeout(homeVideoMuteTimer);
+  homeVideoMuteTimer = setTimeout(() => {
+    if (!homeVideoOpen || hjSound.muted === homeVideoMuted) return;
+    homeVideoMuted = hjSound.muted;
+    $("latestVideoFrame").src = bilibiliPlayerUrl({
+      ...LATEST_VIDEO, autoplay: homeVideoAutoplay, muted: homeVideoMuted,
+    });
+    showToast(homeVideoMuted ? "外链视频已跟随静音（播放器重新加载）" : "外链视频已取消静音（播放器重新加载）");
+  }, 500);
+}
+
+/* 站内音量总线 ------------------------------------------------------------------
+   右上角的音量条是全站唯一的音量入口，所有声音都从这里过：
+   - 背景音乐由 hjMusic 自己按 hjMusic.vol 调（还要配合淡入淡出，所以不进下面这个集合）；
+   - 页面里其它 <audio> / <video> 用 hjSound.attach(el) 登记一下，就会跟着音量条走；
+   - B 站外链播放器是跨域 iframe，只能跟随静音，见 syncExternalVideoMute()。 */
+const hjSound = {
+  media: new Set(),
+  get level() { return hjMusic.vol; },
+  get muted() { return hjMusic.vol <= 0; },
+  attach(el) {
+    if (!el) return el;
+    this.media.add(el);
+    try { el.volume = this.level; } catch (e) {}
+    return el;
+  },
+  detach(el) { this.media.delete(el); },
+  /* 音量变化后由 hjMusic.setVolume 调用，把新音量推给所有声音 */
+  apply() {
+    this.media.forEach((el) => { try { el.volume = this.level; } catch (e) {} });
+    syncExternalVideoMute();
+  },
+};
 
 function openHomeVideo() {
   if (hjMusic.playing) hjMusic.pause();   // 视频与背景音乐不同时响
   homeVideoUserClosed = false;
   setHomeVideoOpen(true, true);
+  // 站内是静音状态时视频也会静音加载，提一句免得以为视频坏了
+  if (hjSound.muted) showToast("站内已静音，视频也是静音的（右上角音量条可取消）");
   playEnterAnim($("latestVideoBlock"));
   $("videoCloseBtn").focus({ preventScroll: true });
 }
@@ -3720,6 +3773,7 @@ const hjMusic = {
     if (this.audio && this.playing) this.audio.volume = this.vol;
     storage.set(STORE.volume, Math.round(this.vol * 100));
     this.sync();
+    hjSound.apply();   // 背景音乐以外的声音（外链视频等）也跟着这根音量条走
   },
 
   remember() {
@@ -3783,7 +3837,8 @@ function initSound() {
 }
 
 /* 音量弹层 ---------------------------------------------------------------------
-   一根竖条：拖动 / 点击轨道 / 方向键调整；界面不显示数值，数值只通过 aria 提供给读屏。 */
+   一根竖条：拖动 / 点击轨道 / 方向键调整；界面不显示数值，数值只通过 aria 提供给读屏。
+   这根竖条是全站唯一的音量入口，调整结果经 hjMusic.setVolume → hjSound.apply() 分发给所有声音。 */
 function openVolPanel(open) {
   $("volPanel").hidden = !open;
   $("soundToggle").setAttribute("aria-expanded", String(!!open));

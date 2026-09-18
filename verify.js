@@ -443,7 +443,7 @@
         +   '<button type="button" class="verify-ok" data-act="submit">确认</button>'
         + "</div>"
         + '<div class="verify-hint-wrap">'
-        +   '<button type="button" class="verify-mini" data-act="hint">提示（20 个字）</button>'
+        +   '<button type="button" class="verify-mini" data-act="hint">提示</button>'
         +   hintNote + hintBox
         + "</div>"
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一个令字</button></div>';
@@ -476,7 +476,7 @@
         const chars = this.hint.chars.map((c) =>
           '<button type="button" class="verify-char" data-act="char" data-value="' + c + '">' + c + "</button>"
         ).join("");
-        wrap.innerHTML = '<button type="button" class="verify-mini" data-act="hint">提示（20 个字）</button>'
+        wrap.innerHTML = '<button type="button" class="verify-mini" data-act="hint">提示</button>'
           + '<p class="verify-hint-note">从下面这些字里拼一句就行（点字可以填进输入框）'
           + (this.hint.len ? "，答案共 " + this.hint.len + " 个字" : "") + "：</p>"
           + '<div class="verify-hint-chars">' + chars + "</div>";

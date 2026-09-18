@@ -2267,29 +2267,69 @@ body.day-mode footer { color: var(--day-title); }
 .th-pending-opt { flex: none; }
 .ticket-anon { margin-left: 4px; }
 
+/* 数量步进器：整体做成一颗玻璃胶囊，− / + 只是胶囊里的两块可点区域。
+   注意白天模式的 .gate-card button:not(#id) 规则特指度到 (1,2,1)，会把 border: 0 也覆盖掉
+   （两个按钮因此各自长出一圈描边、被容器圆角切得很难看），所以这里同样用 :not(#_) 抬特指度。 */
 .ticket-stepper {
   display: inline-flex; align-items: stretch;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(233,224,255,.2);
   border-radius: 999px;
   overflow: hidden;
-  background: var(--ink-2);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.02) 50%, rgba(255,255,255,.06) 100%),
+    rgba(22,17,40,.34);
+  box-shadow:
+    0 3px 10px rgba(8,6,18,.2),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 -4px 8px rgba(10,8,22,.14);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
 }
-.gate-card .ticket-stepper button {
+.gate-card .ticket-stepper button:not(#_) {
   width: 46px;
   padding: 8px 0;
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-soft);
+  background: none;
   border: 0;
   border-radius: 0;
-  font-size: 1.2rem;
-  line-height: 1;
   box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   transform: none;
+  filter: none;
+  transition: background .2s, color .2s;
 }
-.gate-card .ticket-stepper button:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+.gate-card .ticket-stepper button:not(#_):hover {
+  color: var(--accent-soft);
+  background: rgba(255,255,255,.09);
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+.gate-card .ticket-stepper button:not(#_):active {
+  background: rgba(255,255,255,.15);
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+.gate-card .ticket-stepper button:not(#_):disabled {
+  opacity: .32;
+  cursor: not-allowed;
+  color: var(--text-mute);
+  background: none;
+  filter: none;
+}
 .ticket-stepper output {
   min-width: 58px;
   display: grid; place-content: center;
   font-size: 1.05rem;
   color: var(--cream);
+  border-left: 1px solid rgba(233,224,255,.16);
+  border-right: 1px solid rgba(233,224,255,.16);
 }
 
 .ticket-verify { margin: 6px 0 16px; }
@@ -2419,8 +2459,23 @@ body.day-mode .ticket-stepper output,
 body.day-mode .ticket-result-note,
 body.day-mode .tli-body { color: var(--day-ink); }
 body.day-mode .ticket-card select,
-body.day-mode .ticket-admin select,
-body.day-mode .ticket-stepper { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
+body.day-mode .ticket-admin select { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
+body.day-mode .ticket-stepper {
+  color: var(--day-ink);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.1) 52%, rgba(255,255,255,.18) 100%),
+    rgba(255,250,238,.34);
+  border-color: rgba(138,90,28,.42);
+  box-shadow:
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.62),
+    inset 0 -4px 8px rgba(140,95,25,.08);
+}
+body.day-mode .ticket-stepper output { border-color: rgba(138,90,28,.28); }
+body.day-mode .gate-card .ticket-stepper button:not(#_) { color: var(--day-brown); background: none; border: 0; }
+body.day-mode .gate-card .ticket-stepper button:not(#_):hover { color: var(--day-ink); background: rgba(255,255,255,.38); }
+body.day-mode .gate-card .ticket-stepper button:not(#_):active { background: rgba(255,255,255,.52); }
+body.day-mode .gate-card .ticket-stepper button:not(#_):disabled { color: var(--day-brown-soft); background: none; }
 body.day-mode .ticket-table-wrap { border-color: #c98f3a; background: rgba(255,252,240,.4); }
 body.day-mode .ticket-table th { background: rgba(255,252,240,.5); color: var(--day-brown-soft); }
 body.day-mode .ticket-table th, body.day-mode .ticket-table td { border-color: rgba(138,90,28,.3); }
