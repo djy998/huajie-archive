@@ -22,7 +22,11 @@
 
    安全设计：
      · 手动验证的题目由 Worker 出题、Worker 判卷，正确答案不会下发到前端；
-     · 狒科生的职业图标走 Worker 代理（/api?jobicon=<题目 id>），地址里不含职业名，避免看地址就能作弊；
+     · 文科生的诗词判定在服务端：题库（必背 + 高中 / 大学 / 偏门）命中就直接通过，
+       题库没有但像一句诗词也会放行，只有「不含令字 / 太短 / 夹字母数字 / 口水话」才打回，
+       打回时会带上原因（data.why）；
+     · 狒科生的职业图标由 Worker 从站点 jobicon/ 取回、以 data URL 内联进题目，
+       地址里不含职业名，看源码也抄不到答案；
      · 答对后拿到一次性通行证 verifyPass（默认 10 分钟内有效、只能用一次），
        提交表单时随请求交给 Worker 消费；服务端未通过就一律按「人机验证未通过」处理。
    ============================================================================= */
@@ -108,6 +112,7 @@
       case "bad_mode": return "验证方式不对，请重新选择";
       case "unknown action": return "后端（Worker）还是旧版本，请联系管理员";
       case "no_db": return "后端没有连上数据库（D1），请联系管理员";
+      case "no_icon": return "职业图标暂时取不到，已换一种验证方式";
       default: return "验证服务出错了（" + (data.error || "未知错误") + "），请稍后再试";
     }
   }
@@ -343,6 +348,12 @@
       if (session !== this.session || mode !== this.mode) return;
 
       if (!data || !data.ok) {
+        /* 站点上的 jobicon/ 取不到图时别让访客卡在狒科生：直接换算术题 */
+        if (data && data.error === "no_icon" && mode === "ff14") {
+          rememberManual("math");
+          this.setMode("math", "职业图标暂时取不到，已改用「理科生」做算术题");
+          return;
+        }
         this.setTip(errText(data), true);
         this.body.innerHTML = '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">重试</button></div>';
         return;
@@ -367,7 +378,7 @@
 
     /* 狒科生：一张职业图标 + 三个职业名 */
     tplFf14(t) {
-      /* 图标地址由 Worker 给出：默认是 /api?jobicon=<题目 id> 的代理地址，地址里不含职业名 */
+      /* 图标由 Worker 以 data URL 下发（地址里不含职业名，看源码也抄不到答案） */
       const icon = t.iconData || t.icon;
       const img = icon
         ? '<img class="verify-job-icon" src="' + icon + '" alt="职业图标" width="72" height="72" loading="eager">'
@@ -464,7 +475,9 @@
       if (!data || !data.ok) {
         if (data && (data.error === "wrong")) {
           this.wrong++;
-          this.setTip("答案不对，再试一次（已答错 " + this.wrong + " 次）"
+          /* 服务端会给出具体原因（例如「这句里没有『春』字」），有就直接显示 */
+          this.setTip((data.why ? data.why + "。" : "答案不对，再试一次。")
+            + "（已答错 " + this.wrong + " 次）"
             + (this.mode === "poem" && !this.hint ? "，卡住了可以点下面的「提示」" : ""), true);
           if (this.mode === "poem" && this.wrong >= 2 && !this.hint) this.loadHint();
           else if (this.wrong >= 5) this.loadTask();
