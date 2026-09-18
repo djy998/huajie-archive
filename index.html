@@ -733,7 +733,7 @@
         <p class="alarm-hint" id="cdCnHint"></p>
       </div>
       <div class="alarm-field" id="cdEtWrap" hidden>
-        <span class="alarm-label">倒计时时长（艾欧泽亚时间，最短 5 分钟）</span>
+        <span class="alarm-label">倒计时时长（艾欧泽亚时间，最短 15 分钟）</span>
         <div class="alarm-dur-row">
           <input type="number" id="cdEtH" min="0" max="23" step="1" value="0" aria-label="艾欧泽亚时"><span>时</span>
           <input type="number" id="cdEtM" min="0" max="59" step="1" value="20" aria-label="艾欧泽亚分"><span>分</span>
@@ -4655,10 +4655,12 @@ function initLikes() {
    - 闹铃：到指定时刻响铃。时间可按 国服时间（UTC+8）或 艾欧泽亚时间 设置；
      国服时间可勾「每小时重复」（每小时的第 MM 分响，忽略小时），
      艾欧泽亚时间可勾「每日重复」（1 艾欧泽亚日 ≈ 现实 70 分钟）
-   - 倒计时：倒数结束响铃。国服最短 30 秒；艾欧泽亚最短 5 分钟（游戏内时间）；
+   - 倒计时：倒数结束响铃。国服最短 30 秒；艾欧泽亚最短 15 分钟（游戏内时间）；
      可勾「倒计时结束后自动循环」
    - 铃声取自仓库 music/<名称>.ogg（名称见 ALARM_SOUNDS，与文件名一致），
-     默认播放 30 秒，结尾慢慢减弱（淡出）
+     播放时长 30 / 45 秒两档（默认 30 秒），结尾慢慢减弱（淡出）
+   - 同一时刻只播一个铃声：新的闹铃/倒计时到点时，先停掉正在响的铃声再播新的
+   - 国服时间的闹铃同一时刻（时:分）只允许设置一个，重复添加会被拦下并提示
    - 添加后在页面上生成小组件：标题栏可拖动、双击回默认位置、± 缩放、× 收起
    - 所有数据（含组件位置 / 缩放）保存在 localStorage（STORE.alarmItems）
    - 控制台调试：HJ_ALARM.list() / HJ_ALARM.ringNow(id) / HJ_ALARM.open() / HJ_ALARM.clear()
@@ -4669,11 +4671,11 @@ function initLikes() {
 const ALARM_SOUNDS = ["基本闹铃", "闹铃1", "闹铃2", "闹铃3", "哄睡曲1", "哄睡曲2", "哄睡曲3"];
 const ALARM_SOUND_DIR = "music/";
 const ALARM_PLAY_DEFAULT = 30;                  // 默认播放时长（秒）
-const ALARM_PLAY_OPTIONS = [15, 30, 60, 120];   // 可选播放时长（秒），结尾都会渐弱
+const ALARM_PLAY_OPTIONS = [30, 45];            // 可选播放时长（秒）：30 / 45 两档，结尾都会渐弱
 const ALARM_FADE_SEC = 4;                       // 结尾渐弱（淡出）时长（秒）
 const ALARM_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];    // 小组件缩放档位（与日历一致）
 const ALARM_CN_MIN_SEC = 30;                    // 国服倒计时最短秒数
-const ALARM_ET_MIN_MIN = 5;                     // 艾欧泽亚倒计时最短分钟数（游戏内时间）
+const ALARM_ET_MIN_MIN = 15;                    // 艾欧泽亚倒计时最短分钟数（游戏内时间）
 
 const hjAlarms = {
   items: [],           // 全部闹铃 / 倒计时（含运行时字段，保存时会一并写入本地）
@@ -4778,6 +4780,8 @@ function alarmPlayCore(name, playSec, onEnd) {
 
 function alarmRing(it) {
   if (hjAlarms.ringing.has(it.id)) return;   // 同一个不在响铃中重复触发
+  // 同一时刻只播一个铃声：若还有别的闹铃/倒计时正在响，先停掉它再播新的
+  [...hjAlarms.ringing.keys()].forEach((id) => { if (id !== it.id) alarmStopRing(id); });
   const sess = alarmPlayCore(it.sound, it.playSec, () => {
     hjAlarms.ringing.delete(it.id);
     alarmPaintWidget(it);
@@ -5228,6 +5232,15 @@ function alarmSubmitAlarm() {
     playSec: Number($("almPlaySec").value) || ALARM_PLAY_DEFAULT,
   });
   if (!it.name) it.name = `闹铃${hjAlarms.items.filter((x) => x.kind === "alarm").length + 1}`;
+  // 国服时间的闹铃同一时刻只允许一个：已有同 时:分 的国服闹铃就拦下
+  if (zone === "cn") {
+    const dup = hjAlarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === it.hh && x.mm === it.mm);
+    if (dup) {
+      const t = `${String(it.hh).padStart(2, "0")}:${String(it.mm).padStart(2, "0")}`;
+      alarmMsg(`国服时间 ${t} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`);
+      return;
+    }
+  }
   it.nextFireAt = alarmNextFire(it, Date.now());
   hjAlarms.items.push(it);
   alarmSave();
@@ -5529,7 +5542,6 @@ initApp();
 </script>
 
 <!-- Cloudflare Web Analytics -->
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
