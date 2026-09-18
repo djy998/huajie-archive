@@ -2444,34 +2444,90 @@ body.day-mode .gate-card button#ticketOpenBtn.is-on,
 body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
 
 /* =============================================================================
-   人机验证：Cloudflare Turnstile + 三种手动验证（狒科生 / 文科生 / 理科生）
+   人机验证：自动验证（Cloudflare Turnstile）+ 手动验证（狒科生 / 文科生 / 理科生）
    结构与文案由 verify.js 生成；同一套样式在验证弹窗和购票表单里共用
+   -----------------------------------------------------------------------------
+   按钮一律走「透明玻璃」质感，和站内其他弹窗（标签页、返回、分享等）保持一致。
+   注意：白天模式的 .gate-card button 规则带 :not(#id)，特指度高到 (1,2,1)，
+   所以这里的按钮规则都加一个永不匹配的 :not(#_) 把特指度抬到同一量级再覆盖。
    ============================================================================= */
 .verify-host { margin: 14px 0 4px; }
 .verify-host[hidden] { display: none; }
 
-/* 四种方式并排的按钮：Cloudflare / 狒科生 / 文科生 / 理科生 */
-.verify-tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.verify-host button.verify-tab {
-  padding: 7px 15px;
-  font-size: .82rem;
-  font-weight: 600;
+/* --- 所有按钮共用的玻璃底 --- */
+.verify-host button.verify-tab:not(#_),
+.verify-host button.verify-opt:not(#_),
+.verify-host button.verify-ok:not(#_),
+.verify-host button.verify-switch-btn:not(#_),
+.verify-host button.verify-char:not(#_),
+.verify-host button.verify-mini:not(#_) {
+  font-family: inherit;
+  font-weight: 500;
   color: var(--text-soft);
-  background: rgba(255,255,255,.05);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.verify-host button.verify-tab:hover { color: var(--cream); border-color: var(--accent); transform: translateY(-1px); }
-.verify-host button.verify-tab.is-on {
-  color: var(--accent-ink);
   background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
-    var(--accent);
-  border-color: rgba(255,255,255,.3);
-  box-shadow: 0 3px 9px rgba(10,7,22,.22), inset 0 1px 0 rgba(255,255,255,.34);
+    linear-gradient(165deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 50%, rgba(255,255,255,.06) 100%),
+    rgba(42,35,68,.32);
+  border: 1px solid rgba(233,224,255,.18);
+  border-radius: 999px;
+  box-shadow:
+    0 3px 10px rgba(8,6,18,.2),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 -4px 8px rgba(10,8,22,.14);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
+  transition: background .25s, border-color .2s, color .2s, box-shadow .25s, transform .2s;
+}
+.verify-host button.verify-tab:not(#_):hover,
+.verify-host button.verify-opt:not(#_):hover,
+.verify-host button.verify-ok:not(#_):hover,
+.verify-host button.verify-switch-btn:not(#_):hover,
+.verify-host button.verify-char:not(#_):hover,
+.verify-host button.verify-mini:not(#_):hover {
+  color: var(--accent-soft);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  filter: none;
+  box-shadow:
+    0 5px 12px rgba(8,6,18,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -4px 8px rgba(10,8,22,.14);
+}
+.verify-host button.verify-tab:not(#_):active,
+.verify-host button.verify-opt:not(#_):active,
+.verify-host button.verify-ok:not(#_):active,
+.verify-host button.verify-switch-btn:not(#_):active,
+.verify-host button.verify-char:not(#_):active,
+.verify-host button.verify-mini:not(#_):active {
+  transform: translateY(.5px) scale(.98);
+  filter: none;
+  box-shadow: 0 2px 5px rgba(8,6,18,.22), inset 0 2px 6px rgba(8,6,18,.26);
+}
+
+/* --- 手动验证的三种方式（狒科生 / 文科生 / 理科生），归在「手动验证」下面 --- */
+.verify-tabs {
+  display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.verify-tabs[hidden] { display: none; }
+.verify-tabs-label {
+  margin-right: 2px;
+  font-size: .8rem;
+  color: var(--text-mute);
+  letter-spacing: .04em;
+}
+.verify-tabs-label::after { content: "："; }
+.verify-host button.verify-tab:not(#_) { padding: 7px 15px; font-size: .82rem; font-weight: 600; }
+.verify-host button.verify-tab.is-on:not(#_) {
+  color: var(--accent-soft);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
+    rgba(42,35,68,.44);
+  border-color: var(--accent);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.26),
+    inset 0 1px 0 rgba(255,255,255,.26),
+    inset 0 -4px 8px rgba(10,8,22,.14);
 }
 
 /* 状态提示：出题中 / 答错 / 组件加载失败… */
@@ -2487,6 +2543,11 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; backgro
 .verify-sub { display: block; margin-top: 4px; font-size: .78rem; color: var(--text-mute); }
 .verify-expr { margin: 0 4px; font-size: 1.35rem; letter-spacing: .06em; color: var(--lantern-soft); }
 
+/* --- 自动验证 ⇄ 手动验证的切换按钮（在验证区下方） --- */
+.verify-switch { margin-top: 14px; text-align: center; }
+.verify-switch[hidden] { display: none; }
+.verify-host button.verify-switch-btn:not(#_) { padding: 8px 20px; font-size: .82rem; font-weight: 600; }
+
 /* 狒科生：一个职业图标 + 三个职业名 */
 .verify-job { display: flex; justify-content: center; margin: 2px 0 12px; }
 .verify-job-icon {
@@ -2498,7 +2559,7 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; backgro
 }
 .verify-job-fallback { font-size: .82rem; color: var(--text-mute); }
 .verify-options { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
-.verify-host button.verify-opt { min-width: 104px; padding: 9px 18px; font-size: .88rem; }
+.verify-host button.verify-opt:not(#_) { min-width: 104px; padding: 9px 18px; font-size: .88rem; font-weight: 600; }
 
 /* 文科生 / 理科生：输入框 + 确认 */
 .verify-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -2510,41 +2571,31 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on { color: #fff6e0; backgro
   font-size: .9rem;
   text-align: center;
 }
-.verify-host button.verify-ok { padding: 10px 20px; }
+.verify-host button.verify-ok:not(#_) { padding: 10px 20px; font-size: .9rem; font-weight: 600; }
 
 /* 文科生的提示：20 个字，点一下填进输入框 */
 .verify-hint-wrap { margin-top: 12px; text-align: center; }
 .verify-hint-note { margin: 10px 0 0; font-size: .78rem; color: var(--text-mute); }
 .verify-hint-chars { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.verify-host button.verify-char {
+.verify-host button.verify-char:not(#_) {
   width: 34px; height: 34px;
   padding: 0;
   font-size: .95rem;
   font-weight: 500;
   color: var(--cream);
-  background: rgba(255,255,255,.06);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: none;
+  border-radius: 12px;
 }
-.verify-host button.verify-char:hover { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
 
-/* 小按钮：换一题 / 提示 */
+/* 小按钮：换一题 / 提示 / 返回自动验证 */
 .verify-actions { margin-top: 12px; text-align: center; }
-.verify-host button.verify-mini {
-  padding: 5px 12px;
+.verify-host button.verify-mini:not(#_) {
+  padding: 5px 14px;
   font-size: .78rem;
   font-weight: 400;
   color: var(--text-mute);
-  background: none;
-  border: 1px dashed var(--line);
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
-.verify-host button.verify-mini:hover { color: var(--text-soft); border-color: var(--accent); transform: none; }
 
-/* 白天模式 */
+/* 白天模式：金色卡片上用暖色玻璃，和公告的编辑 / 删除小按钮同一质感 */
 body.day-mode .verify-tip { color: var(--day-brown-soft); }
 body.day-mode .verify-tip.is-error { color: #a83a2e; }
 body.day-mode .verify-tip.is-note { color: var(--day-brown); }
@@ -2553,22 +2604,61 @@ body.day-mode .verify-key,
 body.day-mode .verify-expr { color: var(--day-brown); }
 body.day-mode .verify-sub,
 body.day-mode .verify-hint-note,
+body.day-mode .verify-tabs-label,
 body.day-mode .verify-job-fallback { color: var(--day-brown-soft); }
-body.day-mode .verify-host button.verify-tab { color: var(--day-brown-soft); background: rgba(255,251,238,.4); border-color: #c98f3a; }
-body.day-mode .verify-host button.verify-tab.is-on { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
-body.day-mode .verify-host button.verify-char { color: var(--day-ink); background: rgba(255,251,238,.5); border-color: #c98f3a; }
-body.day-mode .verify-host button.verify-char:hover { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
-body.day-mode .verify-host button.verify-mini { color: var(--day-brown-soft); border-color: #c98f3a; }
+body.day-mode .verify-host button.verify-tab:not(#_),
+body.day-mode .verify-host button.verify-opt:not(#_),
+body.day-mode .verify-host button.verify-ok:not(#_),
+body.day-mode .verify-host button.verify-switch-btn:not(#_),
+body.day-mode .verify-host button.verify-char:not(#_),
+body.day-mode .verify-host button.verify-mini:not(#_) {
+  color: var(--day-brown);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.1) 52%, rgba(255,255,255,.18) 100%),
+    rgba(255,250,238,.3);
+  border-color: rgba(138,90,28,.42);
+  box-shadow:
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.62),
+    inset 0 -4px 8px rgba(140,95,25,.08);
+}
+body.day-mode .verify-host button.verify-tab:not(#_):hover,
+body.day-mode .verify-host button.verify-opt:not(#_):hover,
+body.day-mode .verify-host button.verify-ok:not(#_):hover,
+body.day-mode .verify-host button.verify-switch-btn:not(#_):hover,
+body.day-mode .verify-host button.verify-char:not(#_):hover,
+body.day-mode .verify-host button.verify-mini:not(#_):hover {
+  color: var(--day-ink);
+  border-color: #8a5a1c;
+  box-shadow:
+    0 5px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.7),
+    inset 0 -4px 8px rgba(140,95,25,.08);
+}
+body.day-mode .verify-host button.verify-mini:not(#_) { color: var(--day-brown-soft); }
+body.day-mode .verify-host button.verify-tab.is-on:not(#_) {
+  color: var(--day-ink);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.16) 52%, rgba(255,255,255,.26) 100%),
+    rgba(255,250,238,.46);
+  border-color: #8a5a1c;
+  box-shadow:
+    0 4px 12px rgba(96,60,10,.18),
+    inset 0 1px 0 rgba(255,255,255,.75),
+    inset 0 -4px 8px rgba(140,95,25,.1);
+}
 body.day-mode .verify-host input.verify-input { text-align: center; }
 body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color: #c98f3a; }
 
 /* 窄屏：按钮换行、输入框占满一行 */
 @media (max-width: 560px) {
   .verify-tabs { gap: 6px; }
-  .verify-host button.verify-tab { padding: 6px 11px; font-size: .76rem; }
+  .verify-tabs-label { flex: 1 1 100%; text-align: center; margin-right: 0; }
+  .verify-host button.verify-tab:not(#_) { padding: 6px 11px; font-size: .76rem; }
   .verify-options { gap: 6px; }
-  .verify-host button.verify-opt { flex: 1 1 100%; }
+  .verify-host button.verify-opt:not(#_) { flex: 1 1 100%; }
   .verify-host input.verify-input { max-width: none; }
+  .verify-host button.verify-switch-btn:not(#_) { padding: 8px 16px; font-size: .78rem; }
 }
 
 /* =============================================================================

@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 44;
+      var CSS_VERSION = 45;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -614,7 +614,7 @@
     <button class="info-close" id="captchaClose" aria-label="关闭">×</button>
     <h2>先验证一下</h2>
     <p class="hint">确认不是机器人</p>
-    <!-- 验证组件挂载点：Cloudflare / 狒科生 / 文科生 / 理科生 四种方式由 verify.js 渲染 -->
+    <!-- 验证组件挂载点：自动验证（Cloudflare）+ 手动验证（狒科生 / 文科生 / 理科生）由 verify.js 渲染 -->
     <div class="verify-host" id="captchaVerify"></div>
     <p class="form-msg" id="captchaMsg" hidden></p>
   </div>
@@ -670,8 +670,8 @@
 </div>
 
 
-<!-- 人机验证组件（Cloudflare Turnstile + 狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
-<script src="verify.js?v=1"></script>
+<!-- 人机验证组件（自动验证 Cloudflare Turnstile + 手动验证：狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
+<script src="verify.js?v=2"></script>
 
 <script>
 /* =============================================================================
@@ -680,7 +680,7 @@
    目录
      1. 站点配置与内容数据        7. 花街介绍 / 活动群弹窗
      2. 通用工具                  8. 大图预览（Lightbox）
-     3. 视图切换与路由            9. 人机验证（Cloudflare/狒科生/文科生/理科生）
+     3. 视图切换与路由            9. 人机验证（自动验证 + 手动验证三选一）
      4. 首页 / 活动详情 / 相册    10. 视觉特效（昼夜、落叶、点击爆花）
      5. 内部入口与公告板          11. 头部工具：音量、更多、日历、时间条、天气
      6. 管理员：站点开关、星芒节   12. 点赞
@@ -2134,7 +2134,7 @@ async function openTicketView() {
 }
 
 /* 表单内的人机验证：和弹窗共用 verify.js 的同一套组件
-   （Cloudflare / 狒科生 / 文科生 / 理科生，完成任意一种即可）。
+   （自动验证 Cloudflare，或手动验证的狒科生 / 文科生 / 理科生，完成任意一种即可）。
    通过后凭证挂在 ticketState.proof 上，随表单一起交给 Worker 校验并消费。 */
 let ticketGate = null;
 
@@ -2198,7 +2198,7 @@ async function submitTicket(e) {
   const proof = ticketState.proof;
   if (!proof) {
     setMsg(msg, ticketGate
-      ? "请先完成下方的人机验证（Cloudflare / 狒科生 / 文科生 / 理科生 任选一种）"
+      ? "请先完成下方的人机验证（自动验证，或点「自动验证不成功？点击手动验证」换手动验证）"
       : "人机验证组件没加载出来，刷新页面再试一次（或联系管理员检查 verify.js）");
     return;
   }
@@ -3117,7 +3117,7 @@ function initLightbox() {
 
 
 /* =============================================================================
-   9. 人机验证（Cloudflare Turnstile + 三种手动验证：狒科生 / 文科生 / 理科生）
+   9. 人机验证（自动验证 Cloudflare Turnstile + 手动验证：狒科生 / 文科生 / 理科生）
    -----------------------------------------------------------------------------
    界面与流程都在 verify.js（HJVerify）里，这里只负责和页面衔接：
    - 弹出验证：通过后把凭证交给 Worker 二次确认（verify_turnstile），再执行排队中的动作
@@ -3126,8 +3126,10 @@ function initLightbox() {
      「活动群」「花街介绍」「复制附联系方式」共用此窗口；密码连错触发的验证不享受该窗口
    - 手动验证的题目由 Worker 出题判卷，答案不下发到前端；答对后拿到一次性通行证 verifyPass，
      弹窗里再交给 verify_turnstile 确认一次；购票表单则随 submit_ticket 一起交给 Worker 消费
-   - Turnstile 在国内经常加载失败：脚本出错或 6 秒内没加载出来会自动切到手动验证
-     （默认「狒科生」），用户也可以直接点上面的按钮换方式；换过之后 6 小时内默认走手动验证
+   - Turnstile 在国内经常加载失败：脚本出错或 6 秒内没加载出来会自动切到手动验证（默认「狒科生」）；
+     验证区下方常驻「自动验证不成功？点击手动验证」按钮，访客随时可以自己切过去，
+     切到手动验证后用上方的一排小标签在狒科生 / 文科生 / 理科生之间换，也可以点「返回自动验证」；
+     用过手动验证之后 6 小时内默认直接走手动验证
    ============================================================================= */
 
 const CAPTCHA_GRACE_MS = 5 * 60 * 1000;

@@ -14,11 +14,13 @@
         gate.useManual("原因文字");            // 强制切到手动验证
         gate.proof();                         // 当前凭证：{token} / {verifyPass} / null
 
-   四种验证方式（按钮并排，完成任意一种即可通过）：
-     · Cloudflare —— 默认方式；脚本加载失败 / 超时 / 报错时自动切到手动验证
-     · 狒科生      —— 看职业图标选职业（三选一），图标来自仓库 jobicon/ 文件夹
-     · 文科生      —— 飞花令：给一个常用汉字，写一句含该字的诗词；可点「提示」拿 20 个字来拼
-     · 理科生      —— 算术题
+   两大类验证方式（完成任意一种即可通过）：
+     · 自动验证（Cloudflare）—— 默认方式；脚本加载失败 / 超时 / 报错时自动转手动验证。
+       验证区下方常驻一个「自动验证不成功？点击手动验证」按钮，随时可以自己切过去。
+     · 手动验证 —— 下分三种，切到手动验证后用一排小标签互相切换，也可以点「返回自动验证」：
+         · 狒科生 —— 看职业图标选职业（三选一），图标来自仓库 jobicon/ 文件夹
+         · 文科生 —— 飞花令：给一个常用汉字，写一句含该字的诗词；可点「提示」拿 20 个字来拼
+         · 理科生 —— 算术题
 
    安全设计：
      · 手动验证的题目由 Worker 出题、Worker 判卷，正确答案不会下发到前端；
@@ -45,7 +47,7 @@
   const MANUAL_MODES = ["ff14", "poem", "math"];
 
   const MODES = [
-    { id: "cf", label: "Cloudflare", title: "Cloudflare 人机验证" },
+    { id: "cf", label: "自动验证", title: "自动验证（Cloudflare）" },
     { id: "ff14", label: "狒科生", title: "狒科生：看图标选职业" },
     { id: "poem", label: "文科生", title: "文科生：飞花令" },
     { id: "math", label: "理科生", title: "理科生：算术题" },
@@ -145,14 +147,18 @@
       host.innerHTML = "";
       host.classList.add("verify-host");
 
+      /* 手动验证的三种方式（狒科生 / 文科生 / 理科生）并排；只有切到手动验证时才出现 */
       this.tabs = document.createElement("div");
       this.tabs.className = "verify-tabs";
       this.tabs.setAttribute("role", "tablist");
-      this.tabs.setAttribute("aria-label", "选择验证方式");
-      this.tabs.innerHTML = MODES.map((m) =>
-        '<button type="button" class="verify-tab" role="tab" data-act="tab" data-mode="' + m.id + '"'
-        + ' title="' + m.title + '" aria-selected="false">' + m.label + "</button>"
-      ).join("");
+      this.tabs.setAttribute("aria-label", "选择手动验证方式");
+      this.tabs.hidden = true;
+      this.tabs.innerHTML = '<span class="verify-tabs-label">手动验证</span>'
+        + MANUAL_MODES.map((id) => {
+            const m = MODES.find((x) => x.id === id);
+            return '<button type="button" class="verify-tab" role="tab" data-act="tab" data-mode="' + m.id + '"'
+              + ' title="' + m.title + '" aria-selected="false">' + m.label + "</button>";
+          }).join("");
 
       this.tipEl = document.createElement("p");
       this.tipEl.className = "verify-tip";
@@ -163,7 +169,12 @@
       this.body = document.createElement("div");
       this.body.className = "verify-body";
 
-      host.append(this.tabs, this.tipEl, this.body);
+      /* 底部切换：自动验证下是「自动验证不成功？点击手动验证」，手动验证下是「返回自动验证」 */
+      this.switchEl = document.createElement("div");
+      this.switchEl.className = "verify-switch";
+      this.switchEl.hidden = true;
+
+      host.append(this.tabs, this.tipEl, this.body, this.switchEl);
 
       host.addEventListener("click", (e) => this.onClick(e));
       host.addEventListener("keydown", (e) => {
@@ -187,6 +198,8 @@
         this.setMode(mode);
         return;
       }
+      if (act === "manual") { this.useManual(""); return; }                 // 自动验证不成功 → 手动验证
+      if (act === "auto") { forgetManual(); this.setMode("cf"); return; }    // 手动验证 → 返回自动验证
       if (act === "opt") { this.submitAnswer(el.dataset.value); return; }   // 狒科生：点职业名
       if (act === "submit") {
         const input = this.body.querySelector(".verify-input");
@@ -221,11 +234,11 @@
       this.host.hidden = true;
     }
 
-    /* 强制切到手动验证（Cloudflare 不可用时由页面或组件自己调用） */
+    /* 切到手动验证：自动验证不可用时组件自己调用，访客点「点击手动验证」时也走这里 */
     useManual(reason) {
       const mode = defaultManualMode();
       rememberManual(mode);
-      this.setMode(mode, reason);
+      this.setMode(mode, reason ? reason + "（" + modeLabel(mode) + "）" : "");
     }
 
     /* 换一题 / 重开当前方式 */
@@ -250,6 +263,8 @@
       this.proof = null;
       this.removeWidget();
 
+      /* 方式标签只在手动验证时露出；自动验证时整排收起来 */
+      this.tabs.hidden = !isManualMode(mode);
       this.tabs.querySelectorAll(".verify-tab").forEach((btn) => {
         const on = btn.dataset.mode === mode;
         btn.classList.toggle("is-on", on);
@@ -258,10 +273,22 @@
 
       this.note = tip || "";      // 自动降级之类的原因要一直显示，别被「出题中…」顶掉
       this.setTip("");
+      this.renderSwitch();
       if (this.o.onModeChange) this.o.onModeChange(mode);
 
       if (mode === "cf") this.renderTurnstile();
       else this.loadTask();
+    }
+
+    /* 底部的切换按钮。自动验证没通过时给一个「点击手动验证」的出口；手动验证时给「返回自动验证」 */
+    renderSwitch() {
+      const el = this.switchEl;
+      if (!el) return;
+      if (this.proof) { el.innerHTML = ""; el.hidden = true; return; }
+      el.innerHTML = this.mode === "cf"
+        ? '<button type="button" class="verify-switch-btn" data-act="manual">自动验证不成功？点击手动验证</button>'
+        : '<button type="button" class="verify-mini" data-act="auto">返回自动验证</button>';
+      el.hidden = false;
     }
 
     /* 提示行：临时状态优先，没有临时状态时显示切换方式的说明（note） */
@@ -292,7 +319,7 @@
       if (session !== this.session || this.mode !== "cf") return;
 
       if (!ready) {
-        this.useManual("Cloudflare 验证组件加载不出来，已改用「" + modeLabel(defaultManualMode()) + "」");
+        this.useManual("自动验证（Cloudflare）加载不出来，已转到手动验证");
         return;
       }
 
@@ -306,28 +333,30 @@
             passed = true;
             this.proof = { token: token };
             this.setTip("验证通过");
+            this.renderSwitch();
             if (this.o.onPass) this.o.onPass(this.proof);
           },
           "expired-callback": () => {
             if (session !== this.session) return;
             this.proof = null;
+            this.renderSwitch();
           },
           "error-callback": () => {
             if (session === this.session) {
-              this.useManual("Cloudflare 验证组件加载失败，已改用「" + modeLabel(defaultManualMode()) + "」");
+              this.useManual("自动验证（Cloudflare）加载失败，已转到手动验证");
             }
             return true;   // 已自行处理，不让组件反复重试
           },
         });
       } catch (e) {
-        this.useManual("Cloudflare 验证组件初始化失败，已改用「" + modeLabel(defaultManualMode()) + "」");
+        this.useManual("自动验证（Cloudflare）初始化失败，已转到手动验证");
         return;
       }
 
       /* 组件出现了但一直卡着不通过（网络受限时常见）：给一句提示 */
       setTimeout(() => {
         if (!passed && session === this.session && this.mode === "cf" && !this.proof) {
-          this.setTip("一直转圈的话，可以点上方的「" + modeLabel(defaultManualMode()) + "」换一种验证方式");
+          this.setTip("一直转圈的话，可以点下面的「自动验证不成功？点击手动验证」");
         }
       }, this.o.turnstileSlowMs);
     }
@@ -351,7 +380,7 @@
         /* 站点上的 jobicon/ 取不到图时别让访客卡在狒科生：直接换算术题 */
         if (data && data.error === "no_icon" && mode === "ff14") {
           rememberManual("math");
-          this.setMode("math", "职业图标暂时取不到，转到其他验证方式");
+          this.setMode("math", "职业图标暂时取不到，已换成另一种手动验证");
           return;
         }
         this.setTip(errText(data), true);
@@ -494,6 +523,7 @@
 
       this.proof = { verifyPass: data.pass };
       this.setTip("验证通过");
+      this.renderSwitch();
       if (this.o.onPass) this.o.onPass(this.proof);
     }
 
