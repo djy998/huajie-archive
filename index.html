@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 50;
+      var CSS_VERSION = 51;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -497,6 +497,7 @@
     <div id="internalBoard" hidden>
       <div class="admin-pills" id="adminPills" hidden>
         <button type="button" class="tab-btn" data-admin-panel="lockdownPanel">分享功能开关</button>
+        <button type="button" class="tab-btn" data-admin-panel="captchaPanel">机器人验证</button>
         <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
         <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
         <button type="button" class="tab-btn" data-admin-panel="postAnnouncementPanel">发布公告</button>
@@ -509,6 +510,13 @@
         <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
         <button id="lockdownToggleBtn">切换</button>
         <p class="form-msg" id="lockdownMsg" hidden></p>
+      </div>
+      <div class="gate-card admin-card" id="captchaPanel" hidden>
+        <h2>机器人验证开关</h2>
+        <p class="hint">关闭后全站取消人机验证：活动群、花街介绍、复制联系方式、场地使用登记都不再弹验证，Worker 端也一律放行。<br>仅用于压力测试，测完记得开回来。</p>
+        <p class="hint" id="captchaStatus">当前状态：加载中…</p>
+        <button id="captchaToggleBtn">切换</button>
+        <p class="form-msg" id="captchaSwitchMsg" hidden></p>
       </div>
       <div class="gate-card admin-card" id="starlightPanel" hidden>
         <h2>星芒节时间覆盖</h2>
@@ -671,7 +679,7 @@
 
 
 <!-- 人机验证组件（自动验证 Cloudflare Turnstile + 手动验证：狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
-<script src="verify.js?v=4"></script>
+<script src="verify.js?v=5"></script>
 
 <script>
 /* =============================================================================
@@ -1600,6 +1608,7 @@ async function checkInternalPassword() {
 /* 管理功能弹窗：把面板节点搬进弹窗，打开时刷新它自己的数据 */
 const ADMIN_PANEL_REFRESH = {
   lockdownPanel: () => refreshLockdownStatus(),
+  captchaPanel: () => refreshCaptchaSwitch(),
   starlightPanel: () => syncStarlightPanel(),
   ticketAdminPanel: () => refreshTicketAdmin(),
 };
@@ -1880,6 +1889,71 @@ function initLockdownToggle() {
     siteLockdown = !!data.value;
     showToast(data.value ? "分享功能已关闭（纯静态展示）" : "分享功能已开启");
     refreshLockdownStatus();
+  });
+}
+
+/* 机器人验证总开关 ------------------------------------------------------------
+   captchaOn = false 时全站不弹人机验证，Worker 端 verifyHuman 也一律放行（压测用）。
+   状态存在 Worker 的 site_flags.captcha_off 里，没有这一行就是「开启」，所以默认开着。 */
+let captchaOn = true;
+
+function applyCaptchaEnabled(on) {
+  captchaOn = !!on;
+  const host = $("ticketVerify");
+  if (host) host.hidden = !captchaOn;
+  if (captchaOn) {
+    // 重新打开时把购票表单里的验证组件补上（管理员切换后不必刷新页面）
+    if (!ticketGate) initTicketCaptcha();
+    if (ticketGate && $("ticketForm") && !$("ticketForm").hidden) ticketGate.open();
+  } else {
+    ticketState.proof = null;
+    if (ticketGate) ticketGate.hide();
+    if (!$("captchaOverlay").hidden) closeCaptcha();
+  }
+}
+
+async function loadCaptchaFlag() {
+  const data = await callWorker({ action: "get_captcha" });
+  // 读不到就维持默认「开启」，不能因为网络问题把验证关掉
+  if (data && data.ok) applyCaptchaEnabled(!!data.enabled);
+  return captchaOn;
+}
+
+async function refreshCaptchaSwitch() {
+  const status = $("captchaStatus");
+  status.textContent = "当前状态：读取中…";
+  const data = await callWorker({ action: "get_captcha" });
+  if (!data || !data.ok) {
+    status.textContent = "当前状态：读取失败";
+    return;
+  }
+  applyCaptchaEnabled(!!data.enabled);
+  status.textContent = data.enabled
+    ? "当前状态：已开启（正常验证）"
+    : "当前状态：已关闭（全站不验证，任何人都能直接提交，请尽快开回来）";
+  $("captchaToggleBtn").textContent = data.enabled ? "关闭机器人验证" : "开启机器人验证";
+  $("captchaToggleBtn").dataset.current = data.enabled ? "1" : "0";
+}
+
+function initCaptchaSwitch() {
+  const btn = $("captchaToggleBtn");
+  btn.addEventListener("click", async () => {
+    const msg = $("captchaSwitchMsg");
+    setMsg(msg, "");
+    btn.disabled = true;
+    const data = await callWorker({
+      action: "set_captcha",
+      password: internalAdminPassword,
+      enabled: btn.dataset.current !== "1",
+    });
+    btn.disabled = false;
+    if (!data || !data.ok) {
+      setMsg(msg, "切换失败，请重新登录内部入口后再试");
+      return;
+    }
+    applyCaptchaEnabled(!!data.enabled);
+    showToast(data.enabled ? "机器人验证已开启" : "机器人验证已关闭（压测模式）");
+    refreshCaptchaSwitch();
   });
 }
 
@@ -2183,7 +2257,7 @@ async function openTicketView() {
     renderTicketHolders();
   }
   setTicketMode("form");
-  if (ticketGate) ticketGate.open();
+  if (captchaOn && ticketGate) ticketGate.open();
 }
 
 /* 表单内的人机验证：和弹窗共用 verify.js 的同一套组件
@@ -2192,6 +2266,7 @@ async function openTicketView() {
 let ticketGate = null;
 
 function initTicketCaptcha() {
+  if (!captchaOn) { $("ticketVerify").hidden = true; return; }   // 总开关关掉：不出题
   if (!window.HJVerify) { console.error("[验证] verify.js 没有加载成功，购票表单的人机验证不可用"); return; }
   ticketGate = HJVerify.createGate($("ticketVerify"), {
     post: callWorker,
@@ -2206,7 +2281,7 @@ function initTicketCaptcha() {
 /* 提交后重新出题（凭证是一次性的，用过就得重新验证） */
 function resetTicketCaptcha() {
   ticketState.proof = null;
-  if (ticketGate) ticketGate.refresh();
+  if (captchaOn && ticketGate) ticketGate.refresh();
 }
 
 function collectTicketForm() {
@@ -2249,7 +2324,7 @@ async function submitTicket(e) {
     return;
   }
   const proof = ticketState.proof;
-  if (!proof) {
+  if (captchaOn && !proof) {
     setMsg(msg, ticketGate
       ? "请先完成下方的人机验证（自动验证，或点「自动验证不成功？点击手动验证」换手动验证）"
       : "人机验证组件没加载出来，刷新页面再试一次（或联系管理员检查 verify.js）");
@@ -2261,7 +2336,7 @@ async function submitTicket(e) {
   const btn = $("ticketSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof });
+  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...(proof || {}) });
   ticketState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
@@ -2278,7 +2353,7 @@ async function submitTicket(e) {
       return;
     }
     if (data.error === "captcha") {
-      setMsg(msg, proof.verifyPass
+      setMsg(msg, proof && proof.verifyPass
         ? "人机验证凭证已过期或用过，已换一题，请重新验证后提交"
         : "人机验证未通过，已换一题，请重新验证后提交");
       return;
@@ -3197,6 +3272,7 @@ let captchaSession = 0;         // 每次打开 / 关闭弹窗 +1，用来丢弃
 
 /* 免验证窗口内直接执行，否则弹出验证 */
 function requestCaptcha(pending) {
+  if (!captchaOn) { runCaptchaPending(pending); return; }   // 总开关关掉：跳过验证直接执行
   if (isCaptchaFresh()) { runCaptchaPending(pending); return; }
   /* verify.js 没加载成功（没上传 / 被缓存挡住）时给出明确提示，而不是静默失败 */
   if (!captchaGate) { showToast("人机验证组件没加载出来，刷新页面再试一次"); return; }
@@ -4529,6 +4605,7 @@ function initApp() {
   initLightbox();
   initCaptcha();
   initLockdownToggle();
+  initCaptchaSwitch();
   initStarlightPanel();
   initAdminPanels();
   initTicket();
@@ -4546,6 +4623,7 @@ function initApp() {
   initClockToggle();
   initHashRoute();
   isLockedDown();    // 异步：读到"分享功能已关闭"后，点赞等互动功能自动收起
+  loadCaptchaFlag(); // 异步：读到"机器人验证已关闭"后，全站不再弹验证（压测用）
   loadStarlight();   // 异步：拿到结果后天气条自动刷新
 
   // 通知开屏脚本：主程序已就绪。新访客点击开屏图后自动弹出花街介绍

@@ -2582,8 +2582,26 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on:hover { color: #fff6e0; b
    注意：白天模式的 .gate-card button 规则带 :not(#id)，特指度高到 (1,2,1)，
    所以这里的按钮规则都加一个永不匹配的 :not(#_) 把特指度抬到同一量级再覆盖。
    ============================================================================= */
-.verify-host { margin: 14px 0 4px; }
+.verify-host {
+  margin: 14px 0 4px;
+  /* 题面画在 canvas 上时取这个色（昼夜各一套，verify.js 直接读这个变量） */
+  --verify-ink: var(--lantern-soft);
+  /* 验证界面里的文字一律不可选中：既防顺手复制题目，也少给脚本一条取文的路 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+body.day-mode .verify-host { --verify-ink: var(--day-brown); }
 .verify-host[hidden] { display: none; }
+/* 输入框本身要能选中 / 编辑 */
+.verify-host input.verify-input { user-select: text; -webkit-user-select: text; }
+/* 验证弹窗的标题和说明也一并禁止选中 */
+.captcha-card { user-select: none; -webkit-user-select: none; }
+
+/* 题面的 canvas：算式和飞花令的令字都画成图，DOM 里不留文字 */
+.verify-canvas { display: inline-block; vertical-align: middle; }
+.verify-key-canvas { margin: 0 1px; vertical-align: middle; }
+.verify-expr-wrap { margin: 2px 0 12px; text-align: center; }
 
 /* --- 所有按钮共用的玻璃底 --- */
 .verify-host button.verify-tab:not(#_),

@@ -82,6 +82,64 @@
     });
   }
 
+  /* ---------------------------------------------------------------------------
+     题面画进 canvas：DOM 里不留下可直接读取的题目文字，顺手加一点抖动和干扰线。
+     说明清楚它的边界：这挡的是「读页面文本」的脚本；直接打 Worker 接口的脚本
+     照样拿得到题面文字（接口返回的就是纯文本），真要防住得在服务端出图。
+     --------------------------------------------------------------------------- */
+  const FONT_STACK = '"Noto Serif SC","Songti SC",serif';
+
+  function paintChallenge(canvas, text, opts) {
+    if (!canvas || !text) return;
+    const ctx = canvas.getContext && canvas.getContext("2d");
+    if (!ctx) return;
+    const o = Object.assign({ size: 30, pad: 10, hFactor: 1.5 }, opts || {});
+    const ink = (getComputedStyle(canvas).getPropertyValue("--verify-ink") || "#ffd699").trim() || "#ffd699";
+    const chars = Array.from(String(text));
+    const dpr = Math.min(global.devicePixelRatio || 1, 3);
+    const font = o.size + "px " + FONT_STACK;
+
+    ctx.font = font;
+    const widths = chars.map((c) => ctx.measureText(c).width + o.size * 0.07);
+    const w = Math.ceil(widths.reduce((a, b) => a + b, 0) + o.pad * 2);
+    const h = Math.ceil(o.size * o.hFactor);
+    const jitter = Math.max(0, h - o.size) * 0.4;   // 抖动幅度不超过上下留白，免得把字裁掉
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.font = font;
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = ink;
+    let x = o.pad;
+    chars.forEach((c, i) => {
+      const cw = widths[i];
+      ctx.save();
+      ctx.translate(x + cw / 2, h / 2 + (Math.random() - 0.5) * jitter);
+      ctx.rotate((Math.random() - 0.5) * 0.16);
+      ctx.fillText(c, -cw / 2, 0);
+      ctx.restore();
+      x += cw;
+    });
+
+    /* 三条半透明曲线：人眼基本无感，OCR 会难受一点 */
+    ctx.strokeStyle = ink;
+    ctx.globalAlpha = 0.26;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * w, Math.random() * h);
+      ctx.bezierCurveTo(Math.random() * w, Math.random() * h, Math.random() * w, Math.random() * h,
+                        Math.random() * w, Math.random() * h);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   const isManualMode = (mode) => MANUAL_MODES.indexOf(mode) >= 0;
   const modeLabel = (mode) => (MODES.find((m) => m.id === mode) || MODES[1]).label;
 
@@ -410,7 +468,32 @@
       if (this.mode === "ff14") this.body.innerHTML = this.tplFf14(t);
       else if (this.mode === "poem") this.body.innerHTML = this.tplPoem(t);
       else this.body.innerHTML = this.tplMath(t);
+      this.paintTask();
+      this.watchTheme();
       this.focusFirst();
+    }
+
+    /* 题面文字只存在 JS 变量里，渲染完再画到 canvas 上 */
+    paintTask() {
+      const t = this.task;
+      if (!t) return;
+      const cv = this.body.querySelector(".verify-canvas");
+      if (!cv) return;
+      if (this.mode === "poem") paintChallenge(cv, t.keyword, { size: 26, pad: 3, hFactor: 1.2 });
+      else if (this.mode === "math") paintChallenge(cv, t.question + " = ?", { size: 32, pad: 12 });
+    }
+
+    /* canvas 是位图，昼夜一切换颜色就过时了，监听 body 的 class 重画一次 */
+    watchTheme() {
+      if (this.themeWatch || typeof MutationObserver !== "function") return;
+      this.themeWatch = new MutationObserver(() => {
+        const day = document.body.classList.contains("day-mode");
+        if (day === this.themeDay) return;
+        this.themeDay = day;
+        this.paintTask();
+      });
+      this.themeDay = document.body.classList.contains("day-mode");
+      this.themeWatch.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
 
     focusFirst() {
@@ -448,11 +531,13 @@
           + (this.hint.len ? "，答案共 " + this.hint.len + " 个字" : "") + "：</p>"
         : "";
       return ''
-        + '<p class="verify-q">飞花令：请写一句含有「<b class="verify-key">' + t.keyword + "</b>」字的诗词"
+        + '<p class="verify-q">飞花令：请写一句含有「'
+        +   '<canvas class="verify-canvas verify-key-canvas" role="img" aria-label="令字（图片）"></canvas>'
+        +   '」字的诗词'
         +   '<span class="verify-sub">（诗、词、曲都算，写其中一句即可）</span></p>'
         + '<div class="verify-row">'
         +   '<input type="text" class="verify-input" maxlength="40" autocomplete="off" spellcheck="false"'
-        +     ' aria-label="含有「' + t.keyword + '」字的诗句" placeholder="例：夜来风雨声，花落知多少">'
+        +     ' aria-label="含有指定字的诗句" placeholder="例：夜来风雨声，花落知多少">'
         +   '<button type="button" class="verify-ok" data-act="submit">确认</button>'
         + "</div>"
         + '<div class="verify-hint-wrap">'
@@ -465,7 +550,10 @@
     /* 理科生：算术题 */
     tplMath(t) {
       return ''
-        + '<p class="verify-q">请计算：<b class="verify-expr">' + t.question + "</b> = ?</p>"
+        + '<p class="verify-q">请计算：</p>'
+        + '<div class="verify-expr-wrap">'
+        +   '<canvas class="verify-canvas verify-expr-canvas" role="img" aria-label="算术题（图片）"></canvas>'
+        + "</div>"
         + '<div class="verify-row">'
         +   '<input type="text" class="verify-input" inputmode="numeric" maxlength="6" autocomplete="off"'
         +     ' aria-label="算术题答案" placeholder="填写答案">'
