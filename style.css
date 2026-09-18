@@ -2878,10 +2878,15 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
   .admin-pills .tab-btn { padding: 8px 14px; font-size: .82rem; }
 }
 
-/* 最新活动卡片上的活动海报：完整显示（不裁切），卡片原有背景图作为衬底 */
+/* 最新活动卡片上的活动海报：完整显示（不裁切）且四周留一圈余白，卡片原有背景图作为衬底。
+   留白用 padding 而不是 inset：img 是替换元素，padding 会先缩小内容盒，
+   object-fit: contain 再在这个更小的盒子里等比缩放，所以任何宽度下都不会被裁。
+   padding 的百分比一律按宽度解析，四边就都是同一个值；再用 clamp 卡住上下限，
+   窄屏不至于挤没、宽屏不至于留太多。 */
 .tile-poster {
   position: absolute; inset: 0; z-index: 3;
   width: 100%; height: 100%;
+  padding: clamp(8px, 2%, 22px);
   object-fit: contain;
   object-position: center;
   pointer-events: none;   /* 点击仍由卡片处理（进活动详情） */
@@ -2889,7 +2894,9 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
 }
 /* 海报本身已有活动名，卡片左下角的文字遮罩就不再叠上去 */
 .tile.has-poster .tile-overlay { display: none; }
-/* 播放视频 / 购票徽章要压在海报上面 */
+/* 悬停设计图要盖在海报上面（海报 z-index 3，设计图默认 2，这里抬到 4） */
+.tile.has-poster .tile-hover-fx { z-index: 4; }
+/* 播放视频 / 购票徽章再压在设计图上面 */
 .tile.has-poster .hero-play { z-index: 5; }
 .tile.has-poster .ticket-badge { z-index: 5; }
 
