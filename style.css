@@ -925,29 +925,30 @@ body.day-mode .hero-play:hover { border-color: var(--accent); }
   display: flex; flex-direction: column;
   aspect-ratio: 2926/1426;
   margin-bottom: 44px;
-  padding: 10px;
+  padding: 14px;
   border-radius: var(--radius);
   background:
-    linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 52%, rgba(255,255,255,.07) 100%),
-    rgba(22,17,40,.3);
+    linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 52%, rgba(255,255,255,.09) 100%),
+    rgba(22,17,40,.44);
   box-shadow:
-    0 3px 10px rgba(8,6,18,.22),
-    inset 0 0 0 1px rgba(233,224,255,.2),
-    inset 0 1px 0 rgba(255,255,255,.22),
-    inset 0 -4px 8px rgba(10,8,22,.16);
-  -webkit-backdrop-filter: blur(9px) saturate(1.18);
-  backdrop-filter: blur(9px) saturate(1.18);
+    0 3px 10px rgba(8,6,18,.24),
+    inset 0 0 0 1px rgba(233,224,255,.28),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -5px 10px rgba(10,8,22,.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
 }
 .video-block[hidden] { display: none; }
+/* 白天的天空很亮，用浅色打底等于隐形，所以跟下方两个按钮一样改用深棕透明底 + 白色高光 */
 body.day-mode .video-block {
   background:
-    linear-gradient(165deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 52%, rgba(255,255,255,.16) 100%),
-    rgba(255,250,238,.26);
+    linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 52%, rgba(255,255,255,.14) 100%),
+    rgba(48,34,18,.26);
   box-shadow:
-    0 3px 10px rgba(96,60,10,.16),
-    inset 0 0 0 1px rgba(138,90,28,.32),
-    inset 0 1px 0 rgba(255,255,255,.6),
-    inset 0 -4px 8px rgba(140,95,25,.1);
+    0 3px 10px rgba(40,26,8,.22),
+    inset 0 0 0 1px rgba(228,235,123,.4),
+    inset 0 1px 0 rgba(255,255,255,.34),
+    inset 0 -5px 10px rgba(40,26,8,.18);
 }
 /* 视频压在玻璃上：圆角收小一档跟外框同心，投影也收薄，免得盖住那圈玻璃边 */
 .video-hero {
@@ -960,10 +961,9 @@ body.day-mode .video-block {
   isolation: isolate;
   background: #000;
   box-shadow:
-    0 2px 8px rgba(8,6,18,.26),
-    0 10px 24px rgba(0,0,0,.32),
-    inset 0 0 0 1px rgba(255,255,255,.1),
-    inset 0 1px 0 rgba(255,255,255,.16);
+    0 3px 10px rgba(8,6,18,.34),
+    inset 0 0 0 1px rgba(255,255,255,.12),
+    inset 0 1px 0 rgba(255,255,255,.18);
 }
 .video-hero iframe { display: block; width: 100%; height: 100%; border: 0; }
 
@@ -2195,7 +2195,7 @@ body.day-mode footer { color: var(--day-title); }
   /* 手机单列时封面接近正方形：视频区仍与封面等高（收起/展开时下方卡片不位移），
      视频保持 16:9，多出的高度留给按钮区，按钮在剩余空间里垂直居中。
      底层毛玻璃仍与封面卡片同位置同大小同形状，只是四周那圈边收窄一点 */
-  .video-block { aspect-ratio: 1399/1374; padding: 8px; }
+  .video-block { aspect-ratio: 1399/1374; padding: 10px; }
   .video-hero { flex: none; aspect-ratio: 16/9; margin-bottom: 0; }
   .video-actions { flex: 1 1 auto; align-items: center; align-content: center; min-height: 0; }
 
