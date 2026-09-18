@@ -1,5 +1,5 @@
 --- /tmp/worker-original.js	2026-09-17 23:56:17.837404714 +0000
-+++ verify-ext/worker.js	2026-09-17 23:58:07.310162002 +0000
++++ verify-ext/worker.js	2026-09-18 00:04:08.852663046 +0000
 @@ -2,7 +2,8 @@
     花街档案 · Cloudflare Worker
     -----------------------------------------------------------------------------
@@ -41,7 +41,7 @@
    get_announcements:         { limit: 20, windowSec: 60 },
    upload_announcement_image: { limit: 10, windowSec: 3600 },
    post_announcement:         { limit: 30, windowSec: 3600 },
-@@ -370,14 +377,605 @@
+@@ -370,14 +377,610 @@
    return safeEqual(await mathSign(env, `${expStr}.${nonce}.${answer}`), sig);
  }
  
@@ -82,10 +82,11 @@
 +const HJV_TASK_TTL_MS = 10 * 60 * 1000;     // 一道题的有效期
 +const HJV_PASS_TTL_MS = 10 * 60 * 1000;     // 通行证有效期（一次性）
 +const HJV_HINT_CHARS = 20;                  // 提示给多少个字
-+const HJV_POEM_MIN = 5;                     // 判定：至少几个汉字（标点不算）
++const HJV_POEM_MIN = 5;                     // 宽松判定：库外的句子至少几个汉字（标点不算）
 +const HJV_POEM_MAX = 40;                    // 判定：最多几个汉字
 +const HJV_POEM_STRICT = false;              // true = 只认题库里的句子（默认宽松判定）
 +const HJV_ICON_CACHE_MAX = 48;
++const HJV_ICON_FAIL_TTL_MS = 60 * 1000;     // 取图失败只记 60 秒，站点恢复了就自动能取到
 +const HJV_DEFAULT_ORIGIN = "https://swayingsussurrusstreet.dpdns.org";
 +const HJV_USED_TASK = "verify_task_used";   // 「一道题只发一张通行证」
 +const HJV_USED_PASS = "verify_pass_used";   // 「通行证只能用一次」
@@ -406,19 +407,23 @@
 +}
 +
 +/* 飞花令判卷：
-+   1) 必须含令字，长度在 HJV_POEM_MIN ~ HJV_POEM_MAX 之间，不能夹字母数字；
-+   2) 命中题库（任何一句被完整包含，写上下两句也算）→ 直接通过；
-+   3) 题库没有 → 宽松判定：像一句诗词就放行（默认；HJV_POEM_STRICT = true 可关掉）。 */
++   1) 必须含令字、不能夹字母数字、长度不超过 HJV_POEM_MAX；
++   2) 命中题库（任何一句被完整包含，写上下两句也算）→ 直接通过（四字名句也算）；
++   3) 题库没有 → 宽松判定：像一句诗词（≥ HJV_POEM_MIN 个字）就放行
++      （默认；HJV_POEM_STRICT = true 可关掉）。 */
 +function hjPoemVerdict(raw, keyword) {
 +  const text = String(raw == null ? "" : raw);
 +  if (/[A-Za-z0-9]/.test(text)) return { ok: false, reason: "non_chinese" };
 +  const norm = hjPoemNorm(text);
 +  if (!norm) return { ok: false, reason: "empty" };
 +  if (norm.indexOf(keyword) < 0) return { ok: false, reason: "no_keyword" };
-+  if (norm.length < HJV_POEM_MIN) return { ok: false, reason: "too_short" };
++  if (norm.length < 4) return { ok: false, reason: "too_short" };
 +  if (norm.length > HJV_POEM_MAX) return { ok: false, reason: "too_long" };
++  // 命中题库就算数（「秋风萧瑟」这类四字名句也在库里）
 +  for (const line of HJV_POEM_JUDGE) if (norm.indexOf(line) >= 0) return { ok: true, bank: true };
 +  if (HJV_POEM_STRICT) return { ok: false, reason: "not_in_bank" };
++  // 题库外的句子走宽松判定，但要求至少 HJV_POEM_MIN 个字，免得「春天真美」也放行
++  if (norm.length < HJV_POEM_MIN) return { ok: false, reason: "too_short" };
 +  if (new Set(norm).size < 4) return { ok: false, reason: "junk" };
 +  if (HJV_JUNK_RE.test(norm)) return { ok: false, reason: "junk" };
 +  return { ok: true, bank: false };
@@ -521,7 +526,7 @@
 +
 +async function hjJobIcon(env, job) {
 +  const cached = hjIconCache.get(job);
-+  if (cached !== undefined) return cached;
++  if (cached && cached.until > Date.now()) return cached.data;   // 成功一直用；失败只记一分钟
 +  const origin = String(env.HJ_SITE_ORIGIN || HJV_DEFAULT_ORIGIN).replace(/\/+$/, "");
 +  let dataUrl = null;
 +  try {
@@ -536,7 +541,7 @@
 +    console.error("jobicon 取图失败", job, e);
 +  }
 +  if (hjIconCache.size >= HJV_ICON_CACHE_MAX) hjIconCache.clear();
-+  hjIconCache.set(job, dataUrl);
++  hjIconCache.set(job, { data: dataUrl, until: Date.now() + (dataUrl ? 24 * 3600 * 1000 : HJV_ICON_FAIL_TTL_MS) });
 +  return dataUrl;
 +}
 +
@@ -648,7 +653,7 @@
     点赞数据访问
     ----------------------------------------------------------------------------- */
  async function countLikesForKeys(env, keys) {
-@@ -569,6 +1167,40 @@
+@@ -569,6 +1172,40 @@
      return json({ ok: true, ...(await createMathChallenge(env)) });
    },
  
@@ -689,7 +694,7 @@
    /* ---------- 点赞 ---------- */
    // 批量返回：各目标总数、本访客赞过的目标、今日剩余次数
    async get_likes(ctx) {
-@@ -838,6 +1470,13 @@
+@@ -838,6 +1475,13 @@
          ok: true,
          version: WORKER_VERSION,
          features: WORKER_FEATURES,

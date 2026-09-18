@@ -30,7 +30,9 @@ huajie-verify-update/
     ├── worker-changes.diff    ← 与旧 worker.js 的差异（想核对时看这个，只是参考）
     ├── poem-bank.json         ← 飞花令题库（提示库 + 判定扩展库）
     ├── inline-poem-bank.py    ← 改完题库跑它，重新生成 worker.js 里的题库块
+    ├── merge-worker.py        ← 把「手动验证」整节并回一份新 worker.js 时用（平时不用）
     ├── selftest.js            ← 本地自测：node verify-ext/selftest.js
+    ├── tests/                 ← 页面级自测（需要 npm i jsdom，见第八节）
     └── apply-index-patch.py / apply-css-patch.py   ← 网页改动的补丁脚本（归档用，不必执行）
 ```
 
@@ -114,8 +116,15 @@ git push
 6. **本地自测**（可选，装好 Node 18+ 后）：
 
    ```bash
-   node verify-ext/selftest.js       # 完整 worker.js 的端到端自测（1251 项）
+   node verify-ext/selftest.js               # 完整 worker.js 的自测（1255 项：题库 + 出题判卷 + 购票 + 限流）
+   cd verify-ext/tests && npm i jsdom        # 页面级自测需要一次 jsdom
+   node ui-test.js                           # verify.js 界面（36 项）
+   node e2e-test.js                          # 真 verify.js ⇄ 真 worker.js（18 项）
+   node page-test.js                         # 真 index.html + 真 worker.js 全流程（26 项）
    ```
+
+   页面级自测会在本地起一个静态站 + 真 Worker（内存 D1），用 jsdom 打开真实 index.html，
+   模拟「Turnstile 被墙」的国内访客走完验证与购票（不需要 Cloudflare 账号）。
 
 ---
 
@@ -130,9 +139,9 @@ git push
 
 判定顺序（服务端）：
 
-1. 必须含令字、长度 5~40 个汉字、不能夹字母数字；
-2. 命中题库（常用 + 扩展，写上下两句也算命中）→ **通过**；
-3. 题库没有 → **宽松判定**：像一句诗词（不是口水话、不是同一字重复）就放行，
+1. 必须含令字、不能夹字母数字、长度不超过 40 个汉字；
+2. 命中题库（常用 + 扩展，写上下两句也算命中）→ **通过**（「秋风萧瑟」这类四字名句也在库里，照样算）；
+3. 题库没有 → **宽松判定**：像一句诗词（5 个字以上、不是口水话、不是同一字重复）就放行，
    只有「不含令字 / 太短 / 夹字母数字 / 口水话」才打回，打回时会写明原因（前端显示在提示行里）。
 
 > 之所以默认宽松：会背诗的人写一句冷门诗不该被拦。想改成「只认题库」，把 `worker.js` 里
@@ -169,7 +178,8 @@ python3 verify-ext/inline-poem-bank.py
 | `HJV_TASK_TTL_MS` | 10 分钟 | 一道题的有效期 |
 | `HJV_PASS_TTL_MS` | 10 分钟 | 通行证有效期（一次性） |
 | `HJV_HINT_CHARS` | 20 | 提示给多少个字 |
-| `HJV_POEM_MIN` / `HJV_POEM_MAX` | 5 / 40 | 判定时的字数范围（标点不算） |
+| `HJV_POEM_MIN` / `HJV_POEM_MAX` | 5 / 40 | 宽松判定的字数下限 / 统一上限（标点不算；命中题库不受下限限制） |
+| `HJV_ICON_FAIL_TTL_MS` | 60 秒 | 职业图标取图失败的记忆时间 |
 | `HJV_POEM_STRICT` | `false` | `true` = 只认题库里的句子 |
 | `HJV_DEFAULT_ORIGIN` | 本站域名 | 职业图标从哪个站点取（也可用变量 `HJ_SITE_ORIGIN`） |
 | `HJV_KEYWORDS` / `HJV_JOBS` | 20 令字 / 23 职业 | 出题范围 |

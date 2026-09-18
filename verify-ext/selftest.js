@@ -66,6 +66,9 @@ ok(api.hjPoemVerdict("春风又绿江南岸", "月").error === undefined, "…�
   ok(api.hjPoemWhy("no_keyword", "花").indexOf("花") >= 0, "提示语里带上令字");
 }
 ok(!api.hjPoemVerdict("春", "春").ok, "太短 → 不通过");
+ok(api.hjPoemVerdict("秋风萧瑟", "秋").ok, "四字名句（在题库里）也算过");
+ok(api.hjPoemVerdict("秋风萧瑟，洪波涌起", "秋").ok, "四字句带上下句也算过");
+ok(!api.hjPoemVerdict("秋天真美", "秋").ok, "库外的四字口水话仍然不通过");
 ok(api.hjPoemVerdict("春花春雪春雨春山春水", "春").ok, "宽松判定：库外但像诗词 → 通过");
 ok(!api.hjPoemVerdict("天上的花儿开了", "花").ok, "口水话 → 不通过");
 ok(!api.hjPoemVerdict("春天123", "春").ok, "夹数字 → 不通过");
@@ -160,7 +163,7 @@ api.HJV_KEYWORDS.forEach((kw) => {
     const task = await post({ action: "get_verify_task", mode: "poem" });
     const kw = task.keyword;
 
-    const bad = await post({ action: "verify_answer", id: task.id, answer: "春眠不觉晓" });
+    const bad = await post({ action: "verify_answer", id: task.id, answer: "两个黄鹂鸣翠柳" });   // 不含任何令字
     ok(bad.ok === false, "答非所问 → 不通过");
     const badReason = bad.why || "";
     ok(badReason.length > 0, "不通过时给出原因：" + badReason);
@@ -208,10 +211,16 @@ api.HJV_KEYWORDS.forEach((kw) => {
     const looseRes = await post({ action: "verify_answer", id: loose.id, answer: looseLine });
     ok(looseRes.ok === true, "库外的诗句走宽松判定放行：" + looseLine);
 
-    // 繁体输入
+    // 繁体输入：找一句含常用字的诗，把字换成繁体再交上去
+    const SIMP2TRAD = { "风": "風", "云": "雲", "红": "紅", "来": "來", "声": "聲", "时": "時", "见": "見",
+      "归": "歸", "万": "萬", "无": "無", "边": "邊", "处": "處", "过": "過", "还": "還", "头": "頭",
+      "楼": "樓", "叶": "葉", "树": "樹", "独": "獨", "飞": "飛", "鸟": "鳥", "马": "馬", "语": "語",
+      "诗": "詩", "灯": "燈", "门": "門", "关": "關", "国": "國", "尽": "盡", "与": "與", "为": "為",
+      "开": "開", "满": "滿", "问": "問", "谁": "誰", "黄": "黃", "绿": "綠", "蓝": "藍", "长": "長" };
     const tradTask = await post({ action: "get_verify_task", mode: "poem" });
-    const tradLine = "雲想衣裳花想容".includes(tradTask.keyword) ? "雲想衣裳花想容"
-      : api.HJV_POEM_COMMON[tradTask.keyword][0];
+    const tradPick = api.HJV_POEM_COMMON[tradTask.keyword].find((l) => [...l].some((ch) => SIMP2TRAD[ch]));
+    const tradLine = [...tradPick].map((ch) => SIMP2TRAD[ch] || ch).join("");
+    ok(tradLine !== tradPick, "繁体样例确实转成了繁体：" + tradLine);
     const tradRes = await post({ action: "verify_answer", id: tradTask.id, answer: tradLine });
     ok(tradRes.ok === true, "繁体输入也判得过：" + tradLine);
 
@@ -221,7 +230,14 @@ api.HJV_KEYWORDS.forEach((kw) => {
 
   /* ---- 狒科生 ---- */
   {
+    /* 先测「图标取不到」：这时候图标缓存还是空的，4 次重试必定全部 404 */
+    state.iconFail = true;
+    const broken = await post({ action: "get_verify_task", mode: "ff14" });
+    ok(broken.ok === false && broken.error === "no_icon", "图标取不到 → no_icon / 实际：" + JSON.stringify(broken));
+    state.iconFail = false;
+
     state.icons.length = 0;
+    state.calls.length = 0;
     const task = await post({ action: "get_verify_task", mode: "ff14" });
     ok(task.ok && task.mode === "ff14", "ff14 出题 ok");
     ok(Array.isArray(task.options) && task.options.length === 3, "三个职业选项");
@@ -242,11 +258,6 @@ api.HJV_KEYWORDS.forEach((kw) => {
     const right = await post({ action: "verify_answer", id: task.id, answer: state.icons[0] });
     ok(right.ok === true && typeof right.pass === "string", "选对职业 → 发通行证");
 
-    // 图标取不到 → no_icon（前端会切到理科生）
-    state.iconFail = true;
-    const broken = await post({ action: "get_verify_task", mode: "ff14" });
-    ok(broken.ok === false && broken.error === "no_icon", "图标取不到 → no_icon");
-    state.iconFail = false;
   }
 
   /* ---- 理科生 ---- */
