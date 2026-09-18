@@ -62,7 +62,10 @@ function makeD1() {
 }
 
 (async () => {
-  const mod = await import(pathToFileURL(path.join(os.tmpdir(), "hj-e2e-worker.mjs")).href || "");
+  /* 把真正的 worker.js 复制成 .mjs 再用 ESM 动态载入（worker.js 是 ESM 模块） */
+  const tmp = path.join(os.tmpdir(), "hj-e2e-worker.mjs");
+  fs.writeFileSync(tmp, WORKER_JS);
+  const mod = await import(pathToFileURL(tmp).href);
   const fetchedIcons = [];
   globalThis.fetch = async (input) => {
     const url = String(input);

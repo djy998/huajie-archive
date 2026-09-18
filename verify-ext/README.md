@@ -15,26 +15,29 @@
 
 ---
 
-## 一、这次交付的文件
+## 一、这次交付的文件（都是完整文件，整体替换即可）
 
 ```
 huajie-verify-update/
-├── 先读我-改动步骤.txt        ← 4 步速查
-├── README.md                  ← 本文件
-├── changes.patch              ← 网页改动的 git 补丁（index.html / style.css / verify.js）
-├── index.html                 ← 覆盖仓库根目录同名文件
-├── style.css                  ← 覆盖仓库根目录同名文件
-├── verify.js                  ← 新增到仓库根目录
-└── verify-ext/
-    ├── worker.js              ← 【完整 Worker】整份替换 Cloudflare 上的旧 worker.js
-    ├── worker-changes.diff    ← 与旧 worker.js 的差异（想核对时看这个，只是参考）
-    ├── poem-bank.json         ← 飞花令题库（提示库 + 判定扩展库）
-    ├── inline-poem-bank.py    ← 改完题库跑它，重新生成 worker.js 里的题库块
-    ├── merge-worker.py        ← 把「手动验证」整节并回一份新 worker.js 时用（平时不用）
-    ├── selftest.js            ← 本地自测：node verify-ext/selftest.js
-    ├── tests/                 ← 页面级自测（需要 npm i jsdom，见第八节）
-    └── apply-index-patch.py / apply-css-patch.py   ← 网页改动的补丁脚本（归档用，不必执行）
+├── 先读我-改动步骤.txt              ← 3 步速查，先看这个
+├── README.md                        ← 本文件
+├── 1-覆盖仓库里的同名文件/
+│   ├── index.html                   ← 覆盖仓库根目录里的同名文件
+│   └── style.css                    ← 覆盖仓库根目录里的同名文件
+├── 2-新增到仓库根目录/
+│   └── verify.js                    ← 新文件，传到仓库根目录
+├── 3-整段替换-Worker代码/
+│   └── worker.js                    ← 【完整 Worker】整段替换 Cloudflare 上的代码
+└── 9-参考-平时不用管/
+    ├── poem-bank.json               ← 飞花令题库（改句子用）
+    ├── inline-poem-bank.py          ← 改完题库跑它，重新生成 worker.js 里的题库
+    ├── selftest.js                  ← 本地自测：node selftest.js（1255 项）
+    ├── tests/                       ← 页面级自测（需要 npm i jsdom）
+    └── worker-changes.diff          ← 新旧 worker.js 的差异，仅供核对，不用它改代码
 ```
+
+> 四种验证方式：**Cloudflare（默认）/ 狒科生（看图标选职业，手动默认）/ 文科生（飞花令）/ 理科生（算术题）**，
+> 按钮并排，**完成任意一种即通过**；国内打不开 Cloudflare 时自动切手动验证并记住 6 小时。
 
 > ⚠️ **部署顺序：先 Worker，后网页。**
 > 新前端会调用新接口（`get_verify_task` 等），老 Worker 不认识就会提示「后端还是旧版本」；
@@ -122,6 +125,7 @@ git push
    node e2e-test.js                          # 真 verify.js ⇄ 真 worker.js（18 项）
    node page-test.js                         # 真 index.html + 真 worker.js 全流程（26 项）
    ```
+   （说明见 `verify-ext/tests/README.txt`。）
 
    页面级自测会在本地起一个静态站 + 真 Worker（内存 D1），用 jsdom 打开真实 index.html，
    模拟「Turnstile 被墙」的国内访客走完验证与购票（不需要 Cloudflare 账号）。
