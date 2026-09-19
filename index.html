@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 54;
+      var CSS_VERSION = 55;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -1588,11 +1588,13 @@ function setRoute(hash) {
 }
 
 function goHome() {
+  closeAllModals();
   setRoute("");
   showView("view-home");
 }
 
 function routeFromHash() {
+  closeAllModals();
   const hash = location.hash;
   if (hash === "#internal") {
     showView("view-internal");
@@ -6501,6 +6503,15 @@ const A11Y_MODALS = [
   { overlay: "alarmOverlay",    closeBtn: "alarmClose",    close: closeAlarmModal },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
+
+/* 切换页面（返回首页 / 换 hash 路由 / 浏览器前进后退）时，把所有还开着的弹窗都关掉。
+   之前只会切换页面本身，弹窗（比如购票须知）留着不关，导致下一个弹窗（比如验证）叠在它上面显示。 */
+function closeAllModals() {
+  A11Y_MODALS.forEach(({ overlay, close }) => {
+    const el = $(overlay);
+    if (el && !el.hidden) close();
+  });
+}
 
 function initA11yModals() {
   document.addEventListener("keydown", (e) => {
