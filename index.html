@@ -319,6 +319,11 @@
         <span>播放视频</span>
       </button>
       <a class="ticket-badge" id="ticketBadge" href="#" target="_blank" rel="noopener" hidden>购票</a>
+      <!-- 购票入口：购票已开放且管理页没勾「（测试）」时才出现（见 refreshTicketEntry）。
+           尺寸按卡片宽度的百分比算，永远落在海报旁边的空白里，不会压住海报 -->
+      <button type="button" class="ticket-entry-btn" id="tileTicketEntry" data-ticket-entry hidden aria-label="购票入口">
+        <img src="ticket.webp" alt="" width="360" height="360" loading="lazy" decoding="async" draggable="false">
+      </button>
     </div>
 
     <div class="video-block" id="latestVideoBlock" hidden>
@@ -335,6 +340,9 @@
       <button type="button" class="video-action video-action-primary" id="videoDetailBtn">查看活动详情</button>
       <a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener" hidden>看不了？去 B 站看</a>
       <button type="button" class="video-action" id="videoCloseBtn">收起视频</button>
+      <span class="video-ticket-slot" data-ticket-entry hidden>
+        <button type="button" class="video-action video-action-ticket" id="videoTicketEntry">进入购票</button>
+      </span>
     </div>
     </div>
 
@@ -425,11 +433,15 @@
     <div class="album-grid" id="albumGrid"></div>
   </section>
 
-  <!-- ============ 活动购票（暂无首页入口，仅通过 TICKET_HASH 访问） ============ -->
+  <!-- ============ 活动购票（首页入口在购票开放且非测试时出现；也可直接访问 TICKET_HASH） ============ -->
   <section id="view-ticket" class="view" hidden>
+    <button class="back-btn" data-back>← 返回</button>
     <div class="gate-card ticket-card">
       <h2 id="ticketTitle">活动购票</h2>
       <p class="hint" id="ticketLimitHint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
+      <div class="ticket-guide-row">
+        <button type="button" class="ticket-guide-btn" id="ticketGuideReopenBtn">购票须知</button>
+      </div>
       <div class="ticket-stock" id="ticketStock">今日余票 <b id="ticketRemaining">--</b> 张<small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
 
       <form id="ticketForm" novalidate autocomplete="off">
@@ -797,6 +809,91 @@
   </div>
 </div>
 
+<!-- 购票须知：点首页购票入口时先弹出，确认后进入购票页；购票页右上的「购票须知」可随时再打开 -->
+<div class="info-overlay" id="ticketGuideOverlay" role="dialog" aria-modal="true" aria-labelledby="ticketGuideTitle" hidden>
+  <div class="info-box guide-box" id="ticketGuideBox">
+    <button class="info-close" id="ticketGuideClose" aria-label="关闭">×</button>
+    <div class="guide-scroll" id="ticketGuideScroll" tabindex="-1">
+      <p class="guide-eyebrow">2026莫古力中秋月轮祭</p>
+      <h2 class="info-title guide-title" id="ticketGuideTitle">售票方案</h2>
+
+      <h3 class="guide-h">1. 票价</h3>
+      <div class="guide-prices">
+        <div class="guide-price">
+          <span class="guide-price-name">预售票</span>
+          <b class="guide-price-num">110w<small>/人</small></b>
+          <span class="guide-price-label">预售时间</span>
+          <span class="guide-price-time">2026年9月20日 12:00 – 2026年9月26日 12:00</span>
+        </div>
+        <div class="guide-price">
+          <span class="guide-price-name">现场票</span>
+          <b class="guide-price-num">140w<small>/人</small></b>
+          <span class="guide-price-label">活动时间</span>
+          <span class="guide-price-time">2026年9月26日 20:30 – 23:30</span>
+        </div>
+      </div>
+
+      <h3 class="guide-h">2. 购票方式</h3>
+      <div class="guide-ways">
+        <div class="guide-way">
+          <h4>预售票</h4>
+          <ol class="guide-steps">
+            <li>登录花街网站 swayingsussurrusstreet.dpdns.org</li>
+            <li>预售开启后，网站首页将显示购票入口，在购票页面内根据提示填写登记信息并提交，保存登记信息截图</li>
+            <li>等待活动群（群号 453278026）发布取票通知，届时可前往取票地点交易取票</li>
+          </ol>
+        </div>
+        <div class="guide-way">
+          <h4>现场票</h4>
+          <p>预售时间结束后，我们将统计购票情况和大家的需求，视情况在活动期间发放一定数量的现场票。</p>
+          <p>购票方式和现场售票员位置等信息届时请关注游戏内喊话频道。</p>
+        </div>
+      </div>
+
+      <h3 class="guide-h">3. 购票说明 Q&amp;A</h3>
+      <dl class="guide-qa">
+        <dt>Q1：购买活动票可以参与哪些项目，所有项目都可以凭票直接游玩吗？</dt>
+        <dd>
+          <p>现场的活动项目分为免费活动，通票活动，额外付费活动和自营活动等。</p>
+          <p><u>其中通票活动占活动项目的多数</u>，客人凭活动票可直接参与该活动项目。但是活动现场也会存在凭票只享受一定优惠的额外付费项目，以及活动当天店家或个人在现场自行营业的收费活动。</p>
+          <p>具体活动类型，活动事项详见后续发布的游园手册。</p>
+        </dd>
+        <dt>Q2：活动票是否会限额限购？</dt>
+        <dd>
+          <p>很抱歉由于游戏地图的玩家容载量和店家的客人接待能力有限，本次活动票将限额发放。</p>
+          <p>限额方式分为当日放票限额和单次登记购票限额，若当日放票达到限额，翌日限额刷新后可以继续购票。想要多次购票的客人在前次购票登记提交后，<u>需等待一段时间</u>才能再次购票。</p>
+        </dd>
+        <dt>Q3：我需要购买大量活动票 / 团队购票应该怎么做？</dt>
+        <dd>
+          <p>需要购票 10 张以上的客人，请在<u>9月22日左右</u>在活动群（群号 453278026）私聊群主沟通购票事宜。</p>
+          <p>由于存在上述放票限额，根据实时购票情况，团体票的数量和价格等方面可能无法让老板满意，对此深感抱歉。但我们保证在可行的范围内，尽全力满足每一位客人的需求。</p>
+        </dd>
+        <dt>Q4：网站崩了 / 我连不上网站无法购票 / 购票后查不到我的登记怎么办？</dt>
+        <dd>
+          <p>以上情况需要购票的客人，还请私聊群主进行沟通。为了提高沟通效率，麻烦您尽量提供您所持有的购票材料（网站错误信息 / 填写内容截图等），我们将及时为您处理。</p>
+          <p>若网站出现故障，我们将尽量整理已有的信息，并在第一时间启动备用方案。感谢您对活动的理解和支持。</p>
+        </dd>
+        <dt>Q5：提交购票登记后我随时都可以去取票吗？</dt>
+        <dd>
+          <p>请加入活动群（群号 453278026），我们整理登记信息后将立即在群内发布购票名单，名单上显示的玩家即可在售票员上线时前往取票。</p>
+          <p>为保证售票员正常工作，希望购票客人在名单公布后尽快前去取票。活动开始后再取票的客人，视现场工作繁忙程度可能会收取一定数额的取票手续费。</p>
+        </dd>
+        <dt>Q6：填写后是否可以取消登记 / 取票后是否可以退票？</dt>
+        <dd>
+          <p>请加入活动群（群号 453278026）私聊群主协商相关售后事宜，原则上退票受理时间截止到活动开始。</p>
+        </dd>
+      </dl>
+
+      <p class="guide-end">其他购票相关的问题请前往活动群（群号 453278026）私聊群主，感谢您对活动的支持！</p>
+      <p class="guide-sign">花舞之街·薰风花语町</p>
+    </div>
+    <div class="guide-actions">
+      <button type="button" class="share-site-btn guide-copy-btn" id="ticketGuideCopyBtn">复制群号</button>
+      <button type="button" class="share-site-btn guide-ok-btn" id="ticketGuideOkBtn">我已阅读，进入购票</button>
+    </div>
+  </div>
+</div>
+
 <div class="info-overlay" id="groupOverlay" role="dialog" aria-modal="true" aria-label="加入活动群" hidden>
   <div class="info-box group-box">
     <button class="info-close" id="groupClose" aria-label="关闭">×</button>
@@ -980,8 +1077,11 @@ const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";   // 场地使用登记（金数据）
 const GROUP_QQ = "453278026";
 const CONTACT_QQ = "1316816234";                             // 复制花街介绍时附带的合作联系方式
-/* 活动购票：暂不在首页放入口，仅通过下面这个 hash 访问（内测用） */
-const TICKET_HASH = "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
+/* 活动购票页的地址。首页入口只在「购票已开放 + 管理页没勾（测试）」时出现；
+   测试期间直接访问这个 hash 也能进（方便内测） */
+const TICKET_HASH = "#ti";
+/* 内测时用过的长链接：已经发出去的也还能打开，进来后自动换成短链接 */
+const TICKET_HASH_LEGACY = "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
 /* 购票页标题与「（测试）」后缀改为在管理页「购票管理」里设置（存在 Worker / D1），
    这里只是状态读回来之前、或读取失败时的兜底值 */
 const TICKET_TITLE = "莫古力中秋月轮祭 · 购票";
@@ -1498,6 +1598,9 @@ function routeFromHash() {
     showView("view-internal");
   } else if (hash === TICKET_HASH) {
     openTicketView();
+  } else if (hash === TICKET_HASH_LEGACY) {
+    history.replaceState(null, "", TICKET_HASH);   // 换成短链接，不产生额外的历史记录
+    openTicketView();
   } else if (hash === "#latest") {
     openLatestEvent();
   } else if (hash === "#previous") {
@@ -1518,7 +1621,8 @@ function initHashRoute() {
   routeFromHash();
   if (coldDeepLink) {
     const landing = document.querySelector(".view:not([hidden])");
-    if (landing && landing.querySelector(".back-btn")) {
+    /* 购票页例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏 */
+    if (landing && landing.id !== "view-ticket" && landing.querySelector(".back-btn")) {
       coldEntryView = landing.id;
       hideColdEntryBack();
     }
@@ -2431,7 +2535,7 @@ function initStarlightPanel() {
 
 /* =============================================================================
    6b. 活动购票（访客表单 / 查询 / 管理员面板 / Excel 导出）
-   - 首页暂无入口，仅通过 TICKET_HASH 进入
+   - 首页入口在「购票已开放 + 未勾（测试）」时出现，点击先看购票须知；也可直接访问 TICKET_HASH（#ti）
    - 「日」按国服时间的「每日票额刷新时间」切换（默认 0:00，管理页可改），由 Worker 统一计算
    - 标题、「（测试）」后缀、再次购票的间隔（冷却）也都在管理页设置
    - 进入页面时已售罄或未开放 → 弹窗提示并隐藏表单；
@@ -2463,6 +2567,7 @@ const TICKET_ERRORS = {
   captcha: "人机验证未通过，请重新验证后再提交",
   rate_limited: "提交太频繁了，请稍后再试",
   cooldown: "刚刚已经成功登记过了，请稍后再提交",
+  server_error: "服务器出错了。请先用下方「查询我的登记」确认是否已登记成功，查不到再重新提交",
 };
 
 const ticketState = {
@@ -2679,6 +2784,8 @@ async function openTicketView() {
   }
   setTicketMode("form");
   if (captchaOn && ticketGate) ticketGate.open();
+  /* 拿着链接直接进来、还没看过须知的：先弹一次（从首页入口进来的已经确认过了） */
+  if (!ticketGuideAcked && $("ticketGuideOverlay").hidden) openTicketGuide("ack");
   const left = (ticketState.cooldownUntil - Date.now()) / 1000;
   if (left > 0) setMsg($("ticketMsg"), ticketCooldownText(left));
 }
@@ -2722,7 +2829,7 @@ function collectTicketForm() {
     const server = row.querySelector(".th-server");
     if (!name.value.trim()) return { error: `请填写${ticketHolderLabel(i).replace(" 和服务器", "")}`, focus: name };
     if (/[@＠]/.test(name.value)) return { error: "角色名里不用写 @ 和服务器，服务器在右边选择", focus: name };
-    if (!server.value) return { error: `请为${i === 0 ? "持票玩家" : `第${"二三四五"[i - 1]}位持票玩家`}选择服务器`, focus: server };
+    if (!server.value) return { error: `请为${i === 0 ? "持票玩家" : `第${TICKET_CN_NUM[i] || i + 1}位持票玩家`}选择服务器`, focus: server };
     holders.push({ name: name.value.trim(), server: server.value });
   }
   return {
@@ -2769,10 +2876,16 @@ async function submitTicket(e) {
   ticketState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
-  resetTicketCaptcha();
+  /* 验证凭证是一次性的，但 Worker 在「未开放 / 表单不对 / 冷却中 / 限流」时根本没走到验证那步，
+     凭证还没被用掉——这些情况就别让访客重做一遍验证。其余情况（成功、验证失败、
+     服务器出错、网络断了不知道走到哪一步）一律作废重来 */
+  const PRE_VERIFY_ERRORS = ["closed", "cooldown", "rate_limited", "bad_contact", "bad_qty", "bad_holders",
+    "bad_holder_name", "bad_holder_server", "pending_not_allowed", "first_holder_required"];
+  if (!(data && !data.ok && PRE_VERIFY_ERRORS.includes(data.error))) resetTicketCaptcha();
 
   if (!data) {
-    setMsg(msg, "连接失败，检查一下网络后再试（本次未登记成功）");
+    /* 请求可能已经到了服务器、只是回应丢了：不能断言「没登记成功」，让访客先查一下，免得重复下单 */
+    setMsg(msg, "连接中断，无法确认是否登记成功。请先用下方「查询我的登记」查一下，查不到再重新提交");
     return;
   }
   if (!data.ok) {
@@ -3033,25 +3146,108 @@ function initTicket() {
   setTicketQty(1);
 }
 
-/* 首页购票入口（预留）--------------------------------------------------------------
-   下个版本才会在首页放「购票入口」按钮。这里先把开关做好：
-   给入口元素加上 data-ticket-entry，购票关闭时它们会自动隐藏、开放时自动出现。
+/* 首页购票入口 ----------------------------------------------------------------------
+   两个入口都带 data-ticket-entry：
+     · 收起视频时，最新活动卡片右下角的圆形按钮（#tileTicketEntry）
+     · 展开视频时，视频下方那行最右侧的「进入购票」（#videoTicketEntry）
+   只有「购票已开放」且「管理页没勾（测试）」时才出现；点任何一个都先弹「购票须知」，确认后进购票页。
+   管理页设了定时开启 / 关闭时，页面会在那个时间点自己再查一次，不用访客刷新 */
+let ticketEntryShown = false;
+let ticketEntryChecked = false;   // 第一次查询回来之前入口一直藏着：宁可晚一点出现，也别闪一下再消失
+let ticketEntryTimer = 0;
+let ticketEntryRetries = 0;
+let ticketEntryLastCheck = 0;
 
-     <a class="ticket-badge" data-ticket-entry href="#ticket-...">购票入口</a>
+function applyTicketEntryVisibility(show) {
+  ticketEntryShown = !!show;
+  document.querySelectorAll("[data-ticket-entry]").forEach((el) => { el.hidden = !show; });
+  $("latestTile")?.classList.toggle("has-ticket-entry", !!show);
+  $("latestVideoActions")?.classList.toggle("has-ticket-entry", !!show);
+}
 
-   页面上一个这样的元素都没有时，refreshTicketEntry 直接返回，
-   连状态请求都不会发，所以现在挂着它不产生任何开销。 */
-function applyTicketEntryVisibility(open) {
-  document.querySelectorAll("[data-ticket-entry]").forEach((el) => { el.hidden = !open; });
+/* 状态里的 open / testMode 决定入口显不显示 */
+const ticketEntryVisibleFor = (st) => !!(st && st.open && !st.testMode);
+
+/* 到下一个定时开关的时间点再查一次（加几秒随机错峰，别让所有人同一秒打到 Worker） */
+function scheduleTicketEntryCheck(st) {
+  clearTimeout(ticketEntryTimer);
+  if (!st || !st.ok) return;
+  const now = Date.now();
+  const next = [st.openAt, st.closeAt].filter((t) => t > 0).sort((a, b) => a - b)[0];
+  if (!next) { ticketEntryRetries = 0; return; }
+  let delay = next - now;
+  /* 时间已经过了但服务端还没结算（访客电脑时钟偏快）：隔 20 秒再看，最多重试 10 次 */
+  if (delay <= 0) {
+    if (ticketEntryRetries >= 10) return;
+    ticketEntryRetries++;
+    delay = 20000;
+  } else {
+    ticketEntryRetries = 0;
+  }
+  if (delay > 24 * 3600 * 1000) return;   // 太远了就不挂定时器，访客总会刷新页面的
+  ticketEntryTimer = setTimeout(refreshTicketEntry, delay + 1000 + Math.floor(Math.random() * 14000));
 }
 
 async function refreshTicketEntry() {
-  const entries = document.querySelectorAll("[data-ticket-entry]");
-  if (!entries.length) return;
-  // 状态没回来之前先藏着：宁可晚一点出现，也别闪一下再消失
-  entries.forEach((el) => { el.hidden = true; });
+  if (!document.querySelector("[data-ticket-entry]")) return;
+  if (!ticketEntryChecked) applyTicketEntryVisibility(false);
+  ticketEntryLastCheck = Date.now();
   const st = await callWorker({ action: "get_ticket_status" });
-  applyTicketEntryVisibility(!!(st && st.ok && st.open));
+  ticketEntryChecked = true;
+  if (!st || !st.ok) return;   // 读失败就维持现状，下次切回页面时再查
+  applyTicketEntryVisibility(ticketEntryVisibleFor(st));
+  scheduleTicketEntryCheck(st);
+}
+
+/* 购票须知 --------------------------------------------------------------------------
+   mode = "enter"：从首页入口点进来，确认按钮 =「我已阅读，进入购票」
+   mode = "ack"  ：直接拿链接进了购票页、还没看过须知，自动弹一次，确认按钮 =「我已阅读」
+   mode = "view" ：购票页里点「购票须知」重新打开，确认按钮 =「知道了」 */
+let ticketGuideMode = "view";
+/* 看过一次就记在本次会话里（sessionStorage），刷新购票页不会再弹；关掉浏览器再来会重新弹 */
+const TICKET_GUIDE_ACK_KEY = "hj_ticket_guide_ack";
+let ticketGuideAcked = (() => { try { return sessionStorage.getItem(TICKET_GUIDE_ACK_KEY) === "1"; } catch (e) { return false; } })();
+const TICKET_GUIDE_OK_TEXT = { enter: "我已阅读，进入购票", ack: "我已阅读", view: "知道了" };
+
+function openTicketGuide(mode = "view") {
+  ticketGuideMode = mode;
+  $("ticketGuideOkBtn").textContent = TICKET_GUIDE_OK_TEXT[mode] || TICKET_GUIDE_OK_TEXT.view;
+  $("ticketGuideOverlay").hidden = false;
+  $("ticketGuideScroll").scrollTop = 0;
+  playEnterAnim($("ticketGuideBox"));
+}
+
+function closeTicketGuide() {
+  $("ticketGuideOverlay").hidden = true;
+}
+
+function confirmTicketGuide() {
+  ticketGuideAcked = true;
+  try { sessionStorage.setItem(TICKET_GUIDE_ACK_KEY, "1"); } catch (e) { /* 隐私模式等：只记在内存里 */ }
+  closeTicketGuide();
+  if (ticketGuideMode === "enter") setRoute(TICKET_HASH);   // hashchange → openTicketView
+}
+
+function onTicketEntryClick(e) {
+  e.preventDefault();
+  e.stopPropagation();   // 卡片上的按钮：不触发卡片本身的「进入详情」
+  openTicketGuide("enter");
+}
+
+function initTicketEntry() {
+  $("tileTicketEntry").addEventListener("click", onTicketEntryClick);
+  $("videoTicketEntry").addEventListener("click", onTicketEntryClick);
+  $("ticketGuideReopenBtn").addEventListener("click", () => openTicketGuide("view"));
+  $("ticketGuideOkBtn").addEventListener("click", confirmTicketGuide);
+  $("ticketGuideClose").addEventListener("click", closeTicketGuide);
+  closeOnBackdrop($("ticketGuideOverlay"), closeTicketGuide);
+  $("ticketGuideCopyBtn").addEventListener("click", () => copyText(GROUP_QQ, "群号已复制", "群号：" + GROUP_QQ));
+  /* 切回这个标签页时，距上次查询超过 3 分钟就再查一次（开票前挂着页面等的人能及时看到入口） */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && Date.now() - ticketEntryLastCheck > 3 * 60 * 1000) {
+      refreshTicketEntry();
+    }
+  });
 }
 
 /* 管理员面板 ---------------------------------------------------------------------- */
@@ -3232,7 +3428,8 @@ async function ticketAdminSet(patch, okMsg) {
   }
   ticketAdmin.status = data.status;
   renderTicketAdmin();
-  applyTicketEntryVisibility(!!data.status.open);   // 首页入口跟着开关走
+  applyTicketEntryVisibility(ticketEntryVisibleFor(data.status));   // 首页入口跟着「开放 + 非测试」走
+  scheduleTicketEntryCheck({ ok: true, ...data.status });
   showToast(okMsg);
 }
 
@@ -6297,6 +6494,7 @@ const A11Y_MODALS = [
   { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
   { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
   { overlay: "siteAboutOverlay", closeBtn: "siteAboutClose", close: closeSiteAbout },
+  { overlay: "ticketGuideOverlay", closeBtn: "ticketGuideClose", close: closeTicketGuide },
   { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
   { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: closeTicketNotice },
   { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: closeAdminPanel },
@@ -6341,6 +6539,7 @@ function initApp() {
   initStarlightPanel();
   initAdminPanels();
   initTicket();
+  initTicketEntry();
   initTicketAdmin();
   initFeedbackAdmin();
   refreshTicketEntry();   // 首页购票入口：现在还没有按钮，不会发请求
@@ -6363,6 +6562,8 @@ function initApp() {
 
   // 通知开屏脚本：主程序已就绪。新访客点击开屏图后自动弹出花街介绍
   window.HJ_BOOT.appReady(() => {
+    /* 拿着购票链接直接进来的访客：购票页自己会弹「购票须知」，这里就别再叠一层花街介绍 */
+    if (!$("view-ticket").hidden) return;
     firstBootInfoOpen = true;
     openInfoModal();
   });

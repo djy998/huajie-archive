@@ -3571,3 +3571,218 @@ body.day-mode .about-form select {
   .gate-card .ticket-title-edit input { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
   .gate-card .ticket-title-edit button { padding: 9px 16px; }
 }
+
+
+/* =============================================================================
+   17. 购票入口（首页）+ 购票须知弹窗
+   ============================================================================= */
+
+/* 最新活动卡片上的圆形购票按钮。
+   宽度用卡片宽度的百分比，所以任何屏宽下都跟卡片等比缩放：
+   桌面端卡片 2926:1426、海报 4:3 且 contain，海报右边缘最多到卡片宽度的 82.5%，
+   按钮左边缘在 100% - 2.2% - 13% = 84.8%，两者之间永远留着缝，不会压到海报。 */
+.ticket-entry-btn {
+  position: absolute; z-index: 5;
+  right: 2.2%; bottom: 3%;
+  width: 13%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: var(--cursor-img), pointer;
+  filter: drop-shadow(0 8px 18px rgba(8,6,18,.5));
+  transition: transform .25s ease, filter .25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.ticket-entry-btn[hidden] { display: none; }
+.ticket-entry-btn img {
+  display: block;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.ticket-entry-btn:hover { transform: scale(1.07) rotate(-4deg); filter: drop-shadow(0 12px 24px rgba(8,6,18,.58)); }
+.ticket-entry-btn:active { transform: scale(.96); }
+.ticket-entry-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+/* 特效开着时轻轻上下浮动，吸引一下注意；悬停时停下来 */
+body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 3.2s ease-in-out infinite; }
+@keyframes ticketEntryBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6%); }
+}
+
+/* 有购票按钮时，「播放视频」让到左下角（海报左边那块同样是空白） */
+.tile-hero.has-poster.has-ticket-entry .hero-play { right: auto; left: 30px; }
+/* 桌面窄屏：左边空白不够放完整的「播放视频」，只留图标，免得压到海报 */
+@media (min-width: 641px) and (max-width: 900px) {
+  .tile-hero.has-poster.has-ticket-entry .hero-play { left: 2.2%; padding: 12px; gap: 0; }
+  .tile-hero.has-poster.has-ticket-entry .hero-play span { display: none; }
+}
+/* 手机：卡片接近正方形，海报占满宽度、上下留边。有购票按钮时把海报推到顶上，
+   上下两条边合成底部一条（约卡片宽度的 23%），按钮（19%）和「播放视频」都放在这条里 */
+@media (max-width: 640px) {
+  .tile-hero.has-ticket-entry .tile-poster { object-position: center top; }
+  .ticket-entry-btn { width: 19%; right: 2.5%; bottom: 2%; }
+  .tile-hero.has-poster.has-ticket-entry .hero-play { left: 12px; right: auto; bottom: calc(11.3% - 16px); }
+}
+
+/* 视频展开时：下方那行最右侧的「进入购票」。
+   左边放一个等宽的弹性空白（::before），中间那组按钮就仍然居中；
+   宽度不够时「进入购票」自动换到下一行，不会叠在别的按钮上 */
+.video-actions.has-ticket-entry::before { content: ""; flex: 1 1 0; }
+.video-ticket-slot { flex: 1 1 0; display: flex; justify-content: flex-end; min-width: max-content; }
+.video-ticket-slot[hidden] { display: none; }
+.video-action.video-action-ticket {
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--accent-ink);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.04) 76%, rgba(0,0,0,.1) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.42);
+}
+.video-action.video-action-ticket:hover { color: var(--accent-ink); border-color: #fff; filter: brightness(1.06); }
+@media (max-width: 640px) {
+  .video-actions.has-ticket-entry::before { display: none; }
+  .video-ticket-slot { flex: 0 0 auto; }
+}
+
+/* 购票页：标题下方的「购票须知」 */
+.ticket-guide-row { display: flex; justify-content: center; margin: -10px 0 18px; }
+.gate-card button.ticket-guide-btn { padding: 6px 18px; font-size: .82rem; font-weight: 600; }
+
+/* 购票须知弹窗：内容区单独滚动，底部按钮常驻 */
+#ticketGuideOverlay { z-index: 230; }
+.info-box.guide-box {
+  display: flex; flex-direction: column;
+  max-width: 720px;
+  max-height: 88vh;
+  padding: 0;
+  overflow: hidden;
+}
+.guide-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 40px 40px 18px;
+  outline: none;
+}
+.guide-eyebrow { margin: 0 0 2px; font-size: .9rem; letter-spacing: .14em; color: var(--text-mute); }
+.guide-title { margin-bottom: 18px; }
+.guide-h {
+  margin: 26px 0 12px;
+  padding-bottom: 6px;
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--lantern-soft);
+  border-bottom: 1px solid var(--line);
+}
+.guide-prices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.guide-price {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 2px;
+  padding: 16px 12px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.guide-price:first-child { border-color: var(--accent); background: rgba(185,164,224,.1); }
+.guide-price-name { font-size: .9rem; font-weight: 600; color: var(--text-soft); }
+.guide-price-num { font-size: 1.9rem; line-height: 1.2; color: var(--cream); }
+.guide-price-num small { margin-left: 2px; font-size: .9rem; font-weight: 500; color: var(--text-soft); }
+.guide-price-label { margin-top: 6px; font-size: .74rem; color: var(--text-mute); }
+.guide-price-time { font-size: .86rem; line-height: 1.6; color: var(--text-soft); }
+.guide-ways { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
+.guide-way {
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.guide-way h4 { margin: 0 0 8px; font-size: .98rem; color: var(--cream); }
+.guide-way p, .guide-steps li { font-size: .9rem; line-height: 1.8; color: var(--text-soft); }
+.guide-way p + p { margin-top: 8px; }
+.guide-steps { margin: 0; padding-left: 1.4em; }
+.guide-steps li + li { margin-top: 6px; }
+.guide-steps li::marker { color: var(--lantern-soft); font-weight: 700; }
+.guide-qa { margin: 0; }
+.guide-qa dt {
+  margin-top: 16px;
+  font-size: .96rem;
+  font-weight: 700;
+  line-height: 1.7;
+  color: var(--cream);
+}
+.guide-qa dt:first-child { margin-top: 0; }
+.guide-qa dd { margin: 6px 0 0; padding-left: 14px; border-left: 2px solid var(--line); }
+.guide-qa dd p { margin: 0; font-size: .9rem; line-height: 1.85; color: var(--text-soft); }
+.guide-qa dd p + p { margin-top: 6px; }
+.guide-qa u, .guide-way u { text-decoration-color: var(--lantern-soft); text-underline-offset: 3px; color: var(--cream); }
+.guide-end { margin: 26px 0 4px; font-size: .92rem; line-height: 1.8; text-align: center; color: var(--text-soft); }
+.guide-sign { margin: 10px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
+.guide-actions {
+  flex: 0 0 auto;
+  display: flex; justify-content: center; flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(18,14,30,.55);
+}
+.guide-actions .share-site-btn { margin: 0; }
+.guide-actions .guide-ok-btn {
+  color: var(--accent-ink);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.04) 76%, rgba(0,0,0,.1) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.42);
+}
+.guide-actions .guide-ok-btn:hover { color: var(--accent-ink); }
+.guide-box .info-close { z-index: 3; }
+
+body.day-mode .guide-eyebrow,
+body.day-mode .guide-price-label { color: var(--day-brown-soft); }
+body.day-mode .guide-h,
+body.day-mode .guide-sign { color: var(--day-brown); border-color: rgba(138,90,28,.35); }
+body.day-mode .guide-price,
+body.day-mode .guide-way { background: rgba(255,252,240,.5); border-color: #c98f3a; }
+body.day-mode .guide-price:first-child { border-color: #8a5a1c; background: rgba(255,244,214,.7); }
+body.day-mode .guide-price-num,
+body.day-mode .guide-way h4,
+body.day-mode .guide-qa dt,
+body.day-mode .guide-qa u,
+body.day-mode .guide-way u { color: var(--day-ink); }
+body.day-mode .guide-price-name,
+body.day-mode .guide-price-num small,
+body.day-mode .guide-price-time,
+body.day-mode .guide-way p,
+body.day-mode .guide-steps li,
+body.day-mode .guide-qa dd p,
+body.day-mode .guide-end { color: var(--day-text); }
+body.day-mode .guide-qa dd { border-color: rgba(138,90,28,.35); }
+body.day-mode .guide-steps li::marker { color: var(--day-brown); }
+body.day-mode .guide-actions { background: rgba(232,181,99,.92); border-color: rgba(138,90,28,.3); }
+
+@media (max-width: 640px) {
+  .info-box.guide-box { max-height: 90vh; }
+  .guide-scroll { padding: 36px 18px 14px; }
+  .guide-prices, .guide-ways { grid-template-columns: 1fr; }
+  .guide-price-num { font-size: 1.6rem; }
+  .guide-actions { padding: 12px 14px 14px; gap: 10px; }
+  .guide-actions .share-site-btn { padding: 10px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: none; }
+}
+body.day-mode .video-action.video-action-ticket {
+  color: var(--accent-ink);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 42%, rgba(120,75,10,.04) 76%, rgba(120,75,10,.1) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.6);
+}
+body.day-mode .video-action.video-action-ticket:hover { color: var(--accent-ink); border-color: #fff; }
