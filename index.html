@@ -105,13 +105,17 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 55;
+      var CSS_VERSION = 56;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
       var fresh = true;
       try { fresh = !localStorage.getItem("hj_visited"); } catch (e) {}
-      root.classList.add(fresh ? "boot-pending" : "css-wait");
+      /* 拿着购票链接（#ti，或内测时的旧长链接）直接进来的新访客：不弹莫古力开屏图，直接看购票页。
+         这里不记 hj_visited，下次从首页进来仍会看到开屏图。两个 hash 要和页面脚本里的 TICKET_HASH / TICKET_HASH_LEGACY 一致 */
+      var h = location.hash;
+      var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
+      root.classList.add(fresh && !ticketLanding ? "boot-pending" : "css-wait");
 
       function addStylesheet(href, onDone) {
         var link = document.createElement("link");
@@ -1051,6 +1055,9 @@
      6. 管理员：站点开关、星芒节   12. 点赞
      6b. 活动购票                 12b. 闹铃与倒计时（纯本地）
                                   13. 无障碍 & 启动
+   拆分：6b 的访客购票部分在 ticket.js（紧跟本脚本加载）；
+         5、6 的管理面板和 6b 的购票管理、7b 的反馈建议箱在 admin.js（进入 #internal 时才按需加载）。
+         三个文件共用本脚本里的全局函数 / 常量（$、callWorker、showToast…），加载顺序不能乱。
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
    验证：界面在 verify.js（HJVerify，新增文件），题目与判卷在 Worker（见 verify-ext/）。
    ============================================================================= */
@@ -1597,12 +1604,12 @@ function routeFromHash() {
   closeAllModals();
   const hash = location.hash;
   if (hash === "#internal") {
-    showView("view-internal");
+    openInternalView();
   } else if (hash === TICKET_HASH) {
-    openTicketView();
+    openTicketViewSafe();
   } else if (hash === TICKET_HASH_LEGACY) {
     history.replaceState(null, "", TICKET_HASH);   // 换成短链接，不产生额外的历史记录
-    openTicketView();
+    openTicketViewSafe();
   } else if (hash === "#latest") {
     openLatestEvent();
   } else if (hash === "#previous") {
@@ -1616,6 +1623,50 @@ function routeFromHash() {
   } else {
     showView("view-home");
   }
+}
+
+/* 购票页在 ticket.js：万一那个文件没传上去 / 被缓存挡住，给句人话，而不是整页报错 */
+function openTicketViewSafe() {
+  if (typeof openTicketView === "function") { openTicketView(); return; }
+  console.error("[购票] ticket.js 没有加载成功");
+  showView("view-home");
+  showToast("购票页面没加载出来，刷新一下页面再试");
+}
+
+/* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载 ------------------
+   改了 admin.js 之后把 ADMIN_JS_VERSION +1，让已经缓存旧文件的浏览器拿到新文件 */
+const ADMIN_JS_VERSION = 1;
+let adminJsPromise = null;
+
+function loadAdminJs() {
+  if (window.HJ_ADMIN_READY) return Promise.resolve();
+  adminJsPromise ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `admin.js?v=${ADMIN_JS_VERSION}`;
+    s.onload = () => (window.HJ_ADMIN_READY ? resolve() : reject(new Error("admin.js init failed")));
+    s.onerror = () => { s.remove(); reject(new Error("admin.js load failed")); };
+    document.head.appendChild(s);
+  }).catch((e) => { adminJsPromise = null; throw e; });   // 失败了允许下次重试
+  return adminJsPromise;
+}
+
+function openInternalView() {
+  showView("view-internal");
+  if (window.HJ_ADMIN_READY) return;
+  const btn = $("internalSubmit");
+  const msg = $("internalMsg");
+  btn.disabled = true;
+  setMsg(msg, "正在加载…");
+  loadAdminJs().then(() => {
+    btn.disabled = false;
+    btn.onclick = null;
+    setMsg(msg, "");
+  }, (e) => {
+    console.error("[管理页]", e);
+    btn.disabled = false;
+    btn.onclick = () => openInternalView();   // 点「进入」重试加载
+    setMsg(msg, "管理页脚本加载失败，检查一下网络后点「进入」重试");
+  });
 }
 
 function initHashRoute() {
@@ -1978,363 +2029,11 @@ function initNav() {
 }
 
 
-/* =============================================================================
-   5. 内部入口与公告板
-   密码由 Worker 校验（get_announcements 兼作登录），身份：A / B 只读，C 为管理员。
-   ============================================================================= */
-
-let internalAdminPassword = null;   // 管理员登录后保存，用于后续写操作
-let editingAnnouncementId = null;
-let pendingAnnouncementImageUrl = null;
-
-/* 密码累计输错计数（存本地，刷新不清零）：每满 PW_FAIL_CAPTCHA_EVERY 次弹一次人机验证 */
-const PW_FAIL_CAPTCHA_EVERY = 5;
-const getPwFailCount = () => Number(storage.get(STORE.pwFails)) || 0;
-function setPwFailCount(n) {
-  if (n > 0) storage.set(STORE.pwFails, n);
-  else storage.remove(STORE.pwFails);
-}
-
-function initInternal() {
-  $("internalSubmit").addEventListener("click", checkInternalPassword);
-  $("internalPassword").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") checkInternalPassword();
-  });
-  $("internalPasswordShow").addEventListener("change", (e) => {
-    $("internalPassword").type = e.target.checked ? "text" : "password";
-  });
-}
-
-async function checkInternalPassword() {
-  const input = $("internalPassword");
-  const msg = $("internalMsg");
-  const btn = $("internalSubmit");
-
-  if (!WORKER_URL) {
-    setMsg(msg, "数据库还没配置好，暂时无法验证密码。");
-    return;
-  }
-
-  btn.disabled = true;
-  setMsg(msg, "验证中…");
-  const data = await callWorker({ action: "get_announcements", password: input.value });
-  btn.disabled = false;
-
-  if (!data) {
-    setMsg(msg, "连接失败，检查一下网络后再试");
-    return;
-  }
-  if (!data.ok) {
-    // 此处直接 openCaptcha：不享受 5 分钟免验证窗口
-    const fails = getPwFailCount() + 1;
-    setPwFailCount(fails);
-    if (fails % PW_FAIL_CAPTCHA_EVERY === 0) {
-      setMsg(msg, "密码不对，错误次数太多，先完成人机验证");
-      openCaptcha("internal");
-    } else {
-      setMsg(msg, "密码不对，再试试");
-    }
-    return;
-  }
-
-  setPwFailCount(0);
-  setMsg(msg, "");
-  $("internalGate").hidden = true;
-  $("internalBoard").hidden = false;
-  renderAnnouncements(data.items, data.isAdmin);
-
-  // 管理面板都收进弹窗里，通过上方的胶囊按钮打开
-  $("adminPills").hidden = !data.isAdmin;
-  if (data.isAdmin) internalAdminPassword = input.value;
-}
-
-/* 管理功能弹窗：把面板节点搬进弹窗，打开时刷新它自己的数据 */
-const ADMIN_PANEL_REFRESH = {
-  lockdownPanel: () => refreshLockdownStatus(),
-  captchaPanel: () => refreshCaptchaSwitch(),
-  starlightPanel: () => syncStarlightPanel(),
-  ticketAdminPanel: () => refreshTicketAdmin(),
-  feedbackAdminPanel: () => refreshFeedbackAdmin(),
-};
-
-/* 关掉 / 切换面板时把节点搬回 stash，避免被下一个面板顶掉 */
-function stashAdminPanels() {
-  [...$("adminModalHost").children].forEach((el) => {
-    el.hidden = true;
-    $("adminPanelStash").appendChild(el);
-  });
-}
-
-function openAdminPanel(id) {
-  const panel = $(id);
-  if (!panel) return;
-  stashAdminPanels();
-  $("adminModalHost").appendChild(panel);
-  panel.hidden = false;
-  $("adminModalOverlay").hidden = false;
-  playEnterAnim(document.querySelector("#adminModalOverlay .admin-modal"));
-  ADMIN_PANEL_REFRESH[id]?.();
-}
-
-function closeAdminPanel() {
-  $("adminModalOverlay").hidden = true;
-  stashAdminPanels();
-}
-
-function initAdminPanels() {
-  $("adminPills").querySelectorAll("[data-admin-panel]").forEach((btn) => {
-    btn.addEventListener("click", () => openAdminPanel(btn.dataset.adminPanel));
-  });
-  $("adminModalClose").addEventListener("click", closeAdminPanel);
-  closeOnBackdrop($("adminModalOverlay"), closeAdminPanel);
-}
-
-function renderAnnouncements(items, isAdmin) {
-  const list = $("announcementList");
-  if (!items || !items.length) {
-    list.innerHTML = `<div class="empty-note">公告板还没有内容</div>`;
-    return;
-  }
-
-  list.innerHTML = items.map((a) => {
-    let tag = "";
-    let adminBtns = "";
-    if (isAdmin) {
-      const targets = [a.show_a && "A", a.show_b && "B"].filter(Boolean);
-      tag = `<span class="announcement-audience">[${targets.length ? targets.join("+") : "谁都看不到"}]</span>`;
-      adminBtns = `
-        <div class="announcement-admin-btns">
-          <button type="button" class="announcement-edit-btn" data-id="${a.id}">编辑</button>
-          <button type="button" class="announcement-delete-btn" data-id="${a.id}">删除</button>
-        </div>`;
-    }
-    const imageHtml = a.image_url
-      ? `<img src="${escapeHtml(workerImageUrl(a.image_url))}" loading="lazy" class="announcement-image" data-lightbox>`
-      : "";
-    return `
-      <div class="announcement">
-        <div class="date">${new Date(a.created_at).toLocaleDateString("zh-CN")}${tag}</div>
-        <div class="body">${escapeHtml(a.body)}</div>
-        ${imageHtml}
-        ${adminBtns}
-      </div>`;
-  }).join("");
-
-  if (!isAdmin) return;
-  list.querySelectorAll(".announcement-edit-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const item = items.find((x) => String(x.id) === btn.dataset.id);
-      if (item) startEditAnnouncement(item);
-    });
-  });
-  list.querySelectorAll(".announcement-delete-btn").forEach((btn) => {
-    btn.addEventListener("click", () => deleteAnnouncement(btn.dataset.id));
-  });
-}
-
-async function refreshAnnouncements() {
-  const data = await callWorker({ action: "get_announcements", password: internalAdminPassword });
-  if (data && data.ok) renderAnnouncements(data.items, data.isAdmin);
-}
-
-/* 公告配图 ------------------------------------------------------------------ */
-
-function showAnnouncementImagePreview(url) {
-  $("announcementImagePreviewImg").src = url || "";
-  $("announcementImagePreview").hidden = !url;
-}
-
-const readAsDataURL = (blob) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(reader.result);
-  reader.onerror = () => reject(new Error("read fail"));
-  reader.readAsDataURL(blob);
-});
-
-/* 压缩为 WebP：长边不超过 maxDim，返回 { base64, contentType } */
-async function compressImageFile(file, maxDim = 1600, quality = 0.82) {
-  const dataUrl = await readAsDataURL(file);
-  const img = await new Promise((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("decode fail"));
-    el.src = dataUrl;
-  });
-
-  let width = img.naturalWidth;
-  let height = img.naturalHeight;
-  const scale = Math.min(1, maxDim / Math.max(width, height));
-  width = Math.round(width * scale);
-  height = Math.round(height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
-  if (!blob) throw new Error("encode fail");
-  const encoded = await readAsDataURL(blob);
-  return { base64: encoded.split(",")[1], contentType: blob.type || "image/webp" };
-}
-
-function initAnnouncementImageUpload() {
-  const input = $("announcementImageInput");
-  const pickBtn = $("announcementImagePickBtn");
-  const status = $("announcementImageStatus");
-
-  pickBtn.addEventListener("click", () => input.click());
-  $("announcementImageRemoveBtn").addEventListener("click", () => {
-    pendingAnnouncementImageUrl = null;
-    showAnnouncementImagePreview(null);
-  });
-
-  input.addEventListener("change", async () => {
-    const file = input.files && input.files[0];
-    input.value = "";
-    if (!file) return;
-    setMsg(status, "图片处理中…");
-    pickBtn.disabled = true;
-    try {
-      const { base64, contentType } = await compressImageFile(file);
-      const data = await callWorker({
-        action: "upload_announcement_image",
-        password: internalAdminPassword,
-        image: base64,
-        content_type: contentType,
-      });
-      if (!data || !data.ok) throw new Error((data && data.error) || "upload failed");
-      pendingAnnouncementImageUrl = new URL(`image/${data.key}`, workerBase()).href;
-      showAnnouncementImagePreview(pendingAnnouncementImageUrl);
-      setMsg(status, "");
-    } catch (e) {
-      setMsg(status, "图片上传失败，请重试");
-    }
-    pickBtn.disabled = false;
-  });
-}
-
-/* 发布 / 编辑 / 删除 --------------------------------------------------------- */
-
-function startEditAnnouncement(item) {
-  openAdminPanel("postAnnouncementPanel");
-  editingAnnouncementId = item.id;
-  $("announcementText").value = item.body;
-  $("announceShowA").checked = !!item.show_a;
-  $("announceShowB").checked = !!item.show_b;
-  pendingAnnouncementImageUrl = item.image_url || null;
-  showAnnouncementImagePreview(pendingAnnouncementImageUrl);
-  $("postAnnouncementBtn").textContent = "保存修改";
-  $("cancelEditAnnouncementBtn").hidden = false;
-  $("announcementText").focus({ preventScroll: true });
-}
-
-function cancelEditAnnouncement() {
-  editingAnnouncementId = null;
-  pendingAnnouncementImageUrl = null;
-  showAnnouncementImagePreview(null);
-  $("announcementText").value = "";
-  $("announceShowA").checked = true;
-  $("announceShowB").checked = true;
-  $("postAnnouncementBtn").textContent = "发布";
-  $("cancelEditAnnouncementBtn").hidden = true;
-}
-
-async function deleteAnnouncement(id) {
-  if (!confirm("确定要删除这条公告吗？删除后无法恢复。")) return;
-  const data = await callWorker({ action: "delete_announcement", password: internalAdminPassword, id });
-  if (!data || !data.ok) {
-    showToast("删除失败，请重试");
-    return;
-  }
-  showToast("已删除");
-  if (String(editingAnnouncementId) === String(id)) cancelEditAnnouncement();
-  refreshAnnouncements();
-}
-
-async function submitAnnouncement() {
-  const text = $("announcementText");
-  const msg = $("postAnnouncementMsg");
-  const btn = $("postAnnouncementBtn");
-  const isEditing = !!editingAnnouncementId;
-
-  setMsg(msg, "");
-  if (!text.value.trim()) {
-    setMsg(msg, "写点内容再发布吧");
-    return;
-  }
-
-  btn.disabled = true;
-  const data = await callWorker({
-    action: isEditing ? "edit_announcement" : "post_announcement",
-    password: internalAdminPassword,
-    id: editingAnnouncementId,
-    content: text.value,
-    show_a: $("announceShowA").checked,
-    show_b: $("announceShowB").checked,
-    image_url: pendingAnnouncementImageUrl,
-  });
-  btn.disabled = false;
-
-  if (!data || !data.ok) {
-    setMsg(msg, isEditing ? "保存失败，请重试" : "发布失败，请重试");
-    return;
-  }
-  cancelEditAnnouncement();
-  closeAdminPanel();
-  showToast(isEditing ? "公告已更新" : "公告已发布");
-  refreshAnnouncements();
-}
-
-function initPostAnnouncement() {
-  $("cancelEditAnnouncementBtn").addEventListener("click", cancelEditAnnouncement);
-  $("postAnnouncementBtn").addEventListener("click", submitAnnouncement);
-}
-
+/* 5. 内部入口与公告板、6. 各类管理面板 → 已拆到 admin.js（进入 #internal 时按需加载，见 3. 路由里的 openInternalView） */
 
 /* =============================================================================
    6. 管理员：站点开关、星芒节时间覆盖
    ============================================================================= */
-
-/* 分享功能开关：数据库里存的仍是 lockdown（1 = 分享功能关闭），
-   界面按「分享功能」正向表述：开启 = 正常，关闭 = 纯静态展示 */
-async function refreshLockdownStatus() {
-  const status = $("lockdownStatus");
-  status.textContent = "当前状态：读取中…";
-  const data = await callWorker({ action: "get_lockdown" });
-  if (!data) {
-    status.textContent = "当前状态：读取失败";
-    return;
-  }
-  siteLockdown = !!data.value;
-  status.textContent = data.value
-    ? "当前状态：已关闭（纯静态展示，联系方式 / 活动群 / 场地登记 / 点赞都不可用）"
-    : "当前状态：已开启（正常运行）";
-  $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
-  $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
-}
-
-function initLockdownToggle() {
-  const btn = $("lockdownToggleBtn");
-  btn.addEventListener("click", async () => {
-    const msg = $("lockdownMsg");
-    setMsg(msg, "");
-    btn.disabled = true;
-    const data = await callWorker({
-      action: "set_lockdown",
-      password: internalAdminPassword,
-      value: btn.dataset.current !== "1",
-    });
-    btn.disabled = false;
-    if (!data || !data.ok) {
-      setMsg(msg, "切换失败，请重新登录内部入口后再试");
-      return;
-    }
-    siteLockdown = !!data.value;
-    showToast(data.value ? "分享功能已关闭（纯静态展示）" : "分享功能已开启");
-    refreshLockdownStatus();
-  });
-}
 
 /* 机器人验证总开关 ------------------------------------------------------------
    captchaOn = false 时全站不弹人机验证，Worker 端 verifyHuman 也一律放行（压测用）。
@@ -2342,18 +2041,12 @@ function initLockdownToggle() {
 let captchaOn = true;
 
 function applyCaptchaEnabled(on) {
+  const changed = captchaOn !== !!on;
   captchaOn = !!on;
-  const host = $("ticketVerify");
-  if (host) host.hidden = !captchaOn;
-  if (captchaOn) {
-    // 重新打开时把购票表单里的验证组件补上（管理员切换后不必刷新页面）
-    if (!ticketGate) initTicketCaptcha();
-    if (ticketGate && $("ticketForm") && !$("ticketForm").hidden) ticketGate.open();
-  } else {
-    ticketState.proof = null;
-    if (ticketGate) ticketGate.hide();
-    if (!$("captchaOverlay").hidden) closeCaptcha();
-  }
+  /* 购票表单里的验证组件在 ticket.js；只在开关真的变了时才动它，
+     否则每次读到「开启」都会把访客已经做完的验证重置掉 */
+  if (typeof syncTicketCaptcha === "function") syncTicketCaptcha(changed);
+  if (!captchaOn && !$("captchaOverlay").hidden) closeCaptcha();
   syncFeedbackGate();   // 网站说明弹窗里的反馈表单同样跟着总开关走
 }
 
@@ -2362,44 +2055,6 @@ async function loadCaptchaFlag() {
   // 读不到就维持默认「开启」，不能因为网络问题把验证关掉
   if (data && data.ok) applyCaptchaEnabled(!!data.enabled);
   return captchaOn;
-}
-
-async function refreshCaptchaSwitch() {
-  const status = $("captchaStatus");
-  status.textContent = "当前状态：读取中…";
-  const data = await callWorker({ action: "get_captcha" });
-  if (!data || !data.ok) {
-    status.textContent = "当前状态：读取失败";
-    return;
-  }
-  applyCaptchaEnabled(!!data.enabled);
-  status.textContent = data.enabled
-    ? "当前状态：已开启（正常验证）"
-    : "当前状态：已关闭（全站不验证，任何人都能直接提交，请尽快开回来）";
-  $("captchaToggleBtn").textContent = data.enabled ? "关闭机器人验证" : "开启机器人验证";
-  $("captchaToggleBtn").dataset.current = data.enabled ? "1" : "0";
-}
-
-function initCaptchaSwitch() {
-  const btn = $("captchaToggleBtn");
-  btn.addEventListener("click", async () => {
-    const msg = $("captchaSwitchMsg");
-    setMsg(msg, "");
-    btn.disabled = true;
-    const data = await callWorker({
-      action: "set_captcha",
-      password: internalAdminPassword,
-      enabled: btn.dataset.current !== "1",
-    });
-    btn.disabled = false;
-    if (!data || !data.ok) {
-      setMsg(msg, "切换失败，请重新登录内部入口后再试");
-      return;
-    }
-    applyCaptchaEnabled(!!data.enabled);
-    showToast(data.enabled ? "机器人验证已开启" : "机器人验证已关闭（压测模式）");
-    refreshCaptchaSwitch();
-  });
 }
 
 /* 星芒节时间覆盖 --------------------------------------------------------------
@@ -2485,1315 +2140,7 @@ function refreshStarlightStatus() {
     + (active ? "（进行中：所有天气显示为小雪）" : "（不在时段内：天气按算法正常显示）");
 }
 
-/* 管理员登录后调用：刷新状态、回填输入框、清空提示 */
-function syncStarlightPanel() {
-  refreshStarlightStatus();
-  $("starlightStart").value = hjStarlight ? epochMsToCnInput(hjStarlight.start) : "";
-  $("starlightEnd").value = hjStarlight ? epochMsToCnInput(hjStarlight.end) : "";
-  setMsg($("starlightMsg"), "");
-}
-
-/* value = { start, end } 保存；null 清除 */
-async function saveStarlight(value) {
-  const msg = $("starlightMsg");
-  const buttons = [$("starlightSaveBtn"), $("starlightClearBtn")];
-
-  setMsg(msg, "保存中…");
-  buttons.forEach((b) => { b.disabled = true; });
-  const data = await callWorker({ action: "set_starlight", password: internalAdminPassword, value });
-  buttons.forEach((b) => { b.disabled = false; });
-
-  if (!data) {
-    setMsg(msg, "连接失败，检查一下网络后再试");
-    return;
-  }
-  if (!data.ok) {
-    setMsg(msg, "保存失败，请重新登录内部入口后再试");
-    return;
-  }
-  applyStarlight(value);
-  syncStarlightPanel();
-  showToast(value ? "星芒节时段已保存，期间全站天气显示为小雪" : "已清除星芒节覆盖，天气恢复正常计算");
-}
-
-function initStarlightPanel() {
-  $("starlightSaveBtn").addEventListener("click", () => {
-    const msg = $("starlightMsg");
-    const start = cnInputToEpochMs($("starlightStart").value);
-    const end = cnInputToEpochMs($("starlightEnd").value);
-    if (!Number.isFinite(start) || !Number.isFinite(end)) {
-      setMsg(msg, "先把开始和结束时间都填完整");
-      return;
-    }
-    if (end <= start) {
-      setMsg(msg, "结束时间要晚于开始时间");
-      return;
-    }
-    saveStarlight({ start, end });
-  });
-  $("starlightClearBtn").addEventListener("click", () => saveStarlight(null));
-}
-
-
-/* =============================================================================
-   6b. 活动购票（访客表单 / 查询 / 管理员面板 / Excel 导出）
-   - 首页入口在「购票已开放 + 未勾（测试）」时出现，点击先看购票须知；也可直接访问 TICKET_HASH（#ti）
-   - 「日」按国服时间的「每日票额刷新时间」切换（默认 0:00，管理页可改），由 Worker 统一计算
-   - 标题、「（测试）」后缀、再次购票的间隔（冷却）也都在管理页设置
-   - 进入页面时已售罄或未开放 → 弹窗提示并隐藏表单；
-     填表过程中额度被买满 → 仍可提交，Worker 将整单标记为超额（导出标红）
-   ============================================================================= */
-
-/* 单人限购由后台配置（Worker 的 ticket_per_person），这里只是读不到状态时的兜底值。
-   Worker 侧还有一道硬上限（TICKET_PER_PERSON_MAX = 20），前端被改也越不过去。 */
-const TICKET_PER_PERSON_FALLBACK = 5;
-/* 区服按大区分组：下拉里用分组标题显示【大区】，存进表格的仍是服务器名（与往年表格一致） */
-const TICKET_SERVER_GROUPS = [
-  { dc: "陆行鸟", servers: ["拉诺西亚", "幻影群岛", "神意之地", "萌芽池", "红玉海", "宇宙和音", "沃仙曦染", "晨曦王座"] },
-  { dc: "莫古力", servers: ["潮风亭", "神拳痕", "白银乡", "白金幻象", "旅人栈桥", "拂晓之间", "龙巢神殿", "梦羽宝境"] },
-  { dc: "猫小胖", servers: ["紫水栈桥", "延夏", "静语庄园", "摩杜纳", "海猫茶屋", "柔风海湾", "琥珀原"] },
-  { dc: "豆豆柴", servers: ["水晶塔", "银泪湖", "太阳海岸", "伊修加德", "红茶川"] },
-];
-const TICKET_SERVERS = TICKET_SERVER_GROUPS.flatMap((g) => g.servers);
-const TICKET_MSG_SOLD_OUT = "今日活动票已售罄，可留意后续放票！";
-const TICKET_MSG_CLOSED = "购票暂未开放，请留意活动群通知";
-const TICKET_ERRORS = {
-  closed: TICKET_MSG_CLOSED,
-  bad_contact: "请填写联系方式",
-  bad_qty: "购票数量超出单人限额，请减少后再试",
-  bad_holders: "持票人信息不完整，请检查",
-  bad_holder_name: "请填写每位持票人的 id",
-  bad_holder_server: "请为每位持票人选择区服",
-  pending_not_allowed: "当前不支持 id 待定，请填写完整的持票人信息",
-  first_holder_required: "第一位持票玩家的 id 和区服必须填写，不能待定",
-  captcha: "人机验证未通过，请重新验证后再提交",
-  rate_limited: "提交太频繁了，请稍后再试",
-  cooldown: "刚刚已经成功登记过了，请稍后再提交",
-  server_error: "服务器出错了。请先用下方「查询我的登记」确认是否已登记成功，查不到再重新提交",
-};
-
-const ticketState = {
-  qty: 1,
-  perPerson: TICKET_PER_PERSON_FALLBACK,   // 由 get_ticket_status 下发
-  allowPending: false,
-  remaining: null,
-  proof: null,        // 人机验证凭证：{ token }（Cloudflare）或 { verifyPass }（手动验证）
-  submitting: false,
-  /* 以下由 get_ticket_status 下发（管理页可改），这里是兜底值 */
-  title: TICKET_TITLE,
-  testMode: true,
-  cooldownMin: 30,     // 成功提交后至少隔多少分钟才能再提交（0 = 不限制）
-  cooldownUntil: 0,    // 本机估算的冷却结束时间（epoch 毫秒），真正的判断在 Worker
-  resetMin: 0,         // 每日票额刷新时间：国服 0 点之后的分钟数
-};
-
-/* 页面上显示的完整标题：后台标题 + 可选的「（测试）」 */
-const ticketFullTitle = () => (ticketState.title || TICKET_TITLE) + (ticketState.testMode ? "（测试）" : "");
-/* 分钟数 ↔ "HH:MM" */
-const minutesToHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-const hhmmToMinutes = (v) => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(v || ""));
-  if (!m) return null;
-  const h = Number(m[1]);
-  const mi = Number(m[2]);
-  return h < 24 && mi < 60 ? h * 60 + mi : null;
-};
-/* 剩余秒数 → 「约 N 分钟」/「N 秒」 */
-const formatWait = (sec) => (sec >= 60 ? `约 ${Math.ceil(sec / 60)} 分钟` : `${Math.max(1, Math.ceil(sec))} 秒`);
-function ticketCooldownText(sec) {
-  const gap = ticketState.cooldownMin ? `每次成功登记后需间隔 ${ticketState.cooldownMin} 分钟才能再次提交，` : "";
-  return `${gap}请${formatWait(sec)}后再试`;
-}
-
-/* 把状态里的标题 / 冷却 / 刷新时间同步到页面 */
-function applyTicketMeta(st) {
-  if (typeof st.title === "string" && st.title) ticketState.title = st.title;
-  if (typeof st.testMode === "boolean") ticketState.testMode = st.testMode;
-  if (Number.isInteger(st.cooldownMin)) ticketState.cooldownMin = st.cooldownMin;
-  if (Number.isInteger(st.resetMin)) ticketState.resetMin = st.resetMin;
-  if (Number.isFinite(st.cooldownLeftSec)) {
-    ticketState.cooldownUntil = st.cooldownLeftSec > 0 ? Date.now() + st.cooldownLeftSec * 1000 : 0;
-  }
-  if (!$("view-ticket").hidden) {
-    $("ticketTitle").textContent = ticketFullTitle();
-    document.title = `${ticketFullTitle()} · 花舞之街`;
-  }
-  const hint = $("ticketResetHint");
-  if (hint) {
-    hint.hidden = !ticketState.resetMin;
-    hint.textContent = ticketState.resetMin ? `每日 ${minutesToHHMM(ticketState.resetMin)} 刷新（国服时间）` : "";
-  }
-}
-
-const TICKET_CN_NUM = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
-const ticketHolderLabel = (i) =>
-  i === 0 ? "持票玩家 id 和服务器" : `第${TICKET_CN_NUM[i] || i + 1}位持票玩家 id 和服务器`;
-const formatHolder = (h) => (!h || h.pending) ? "待定" : `${h.name}@${h.server}`;
-
-/* 国服时间换算 ------------------------------------------------------------------
-   定时开关的时间一律按国服时间（UTC+8）理解，和站长本人所在时区无关。
-   datetime-local 控件给出的是「浏览器本地时区」的字面时间，人在日本（UTC+9）时
-   直接 new Date(value) 会整整差一小时，所以必须显式按 +08:00 解析、按 +8 小时格式化。 */
-const cnLocalToEpoch = (v) => {
-  if (!v) return 0;
-  const t = Date.parse(`${String(v).slice(0, 16)}:00+08:00`);
-  return Number.isFinite(t) ? t : 0;
-};
-const epochToCnLocal = (ms) => (ms ? new Date(ms + 8 * 3600 * 1000).toISOString().slice(0, 16) : "");
-const formatCnTime = (ms) => {
-  if (!ms) return "";
-  const iso = new Date(ms + 8 * 3600 * 1000).toISOString();
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
-};
-
-/* 弹窗 ------------------------------------------------------------------------ */
-function openTicketNotice(text) {
-  $("ticketNoticeText").textContent = text;
-  $("ticketNoticeOverlay").hidden = false;
-}
-function closeTicketNotice() {
-  $("ticketNoticeOverlay").hidden = true;
-}
-
-/* 持票人输入行 ------------------------------------------------------------------ */
-function renderTicketHolders() {
-  const wrap = $("ticketHolders");
-  // 保留已填内容，数量变化时不丢
-  const prev = Array.from(wrap.querySelectorAll(".ticket-holder")).map((row) => ({
-    name: row.querySelector(".th-name").value,
-    server: row.querySelector(".th-server").value,
-    pending: !!row.querySelector(".th-pending")?.checked,
-  }));
-  const options = `<option value="">选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
-    `<optgroup label="【${g.dc}】">${g.servers.map((s) => `<option value="${s}">${s}</option>`).join("")}</optgroup>`
-  ).join("");
-
-  wrap.innerHTML = Array.from({ length: ticketState.qty }, (_, i) => `
-    <div class="ticket-field ticket-holder" data-index="${i}">
-      <span class="ticket-label is-required">${ticketHolderLabel(i)}</span>
-      <p class="ticket-sub">${i === 0 ? "例：乔薇塔 @ 梦羽宝境" : `购买 ${i + 1} 张票时填写`}</p>
-      <div class="ticket-holder-row">
-        <input type="text" class="th-name" maxlength="30" placeholder="角色名" aria-label="${ticketHolderLabel(i)}：角色名">
-        <select class="th-server" aria-label="${ticketHolderLabel(i)}：服务器">${options}</select>
-        ${(ticketState.allowPending && i > 0) ? `
-        <label class="audience-opt th-pending-opt">
-          <input type="checkbox" class="th-pending"><span>id 待定</span>
-        </label>` : ""}
-      </div>
-    </div>`).join("");
-
-  wrap.querySelectorAll(".ticket-holder").forEach((row, i) => {
-    const name = row.querySelector(".th-name");
-    const server = row.querySelector(".th-server");
-    const pending = row.querySelector(".th-pending");
-    if (prev[i]) {
-      name.value = prev[i].name;
-      server.value = prev[i].server;
-      if (pending) pending.checked = prev[i].pending;
-    }
-    const sync = () => {
-      const on = !!pending?.checked;
-      name.disabled = on;
-      server.disabled = on;
-      row.classList.toggle("is-pending", on);
-    };
-    pending?.addEventListener("change", sync);
-    sync();
-  });
-}
-
-function setTicketQty(n) {
-  ticketState.qty = Math.min(ticketState.perPerson, Math.max(1, n));
-  $("ticketQty").textContent = String(ticketState.qty);
-  $("ticketQtyMinus").disabled = ticketState.qty <= 1;
-  $("ticketQtyPlus").disabled = ticketState.qty >= ticketState.perPerson;
-  updateTicketQtyWarn();
-  renderTicketHolders();
-}
-
-function updateTicketQtyWarn() {
-  const r = ticketState.remaining;
-  const over = r !== null && r > 0 && ticketState.qty > r;
-  $("ticketQtyWarn").hidden = !over;
-  if (over) $("ticketQtyWarn").textContent = `今日仅剩 ${r} 张，超出部分需等待工作人员确认`;
-}
-
-/* 单人限额变了：更新提示文案、夹住当前数量、重画持票人行 */
-function applyTicketPerPerson(perPerson) {
-  const n = Number(perPerson);
-  const next = Number.isInteger(n) && n >= 1 ? n : TICKET_PER_PERSON_FALLBACK;
-  if (next === ticketState.perPerson && $("ticketHolders").children.length) return;
-  ticketState.perPerson = next;
-  const hint = $("ticketLimitHint");
-  if (hint) hint.textContent = `每名游客限购 ${next} 张，需要批量购票的游客请联系活动群群主。`;
-  setTicketQty(Math.min(ticketState.qty, next));
-}
-
-function renderTicketStock(remaining) {
-  ticketState.remaining = remaining;
-  $("ticketRemaining").textContent = remaining === null ? "--" : String(remaining);
-  $("ticketStock").classList.toggle("is-empty", remaining === 0);
-  updateTicketQtyWarn();
-}
-
-/* 页面状态：form（可填写）/ blocked（未开放或售罄）/ result（提交成功） */
-function setTicketMode(mode, blockedText = "") {
-  $("ticketForm").hidden = mode !== "form";
-  $("ticketResult").hidden = mode !== "result";
-  let blocked = $("ticketBlocked");
-  if (!blocked) {
-    blocked = document.createElement("p");
-    blocked.id = "ticketBlocked";
-    blocked.className = "ticket-blocked";
-    $("ticketForm").before(blocked);
-  }
-  blocked.hidden = mode !== "blocked";
-  blocked.textContent = blockedText;
-}
-
-/* 进入购票页 --------------------------------------------------------------------- */
-async function openTicketView() {
-  showView("view-ticket");
-  $("ticketTitle").textContent = ticketFullTitle();
-  document.title = `${ticketFullTitle()} · 花舞之街`;
-  if (!$("ticketResult").hidden) clearTicketForm();   // 再次进入购票页 → 回到空白表单
-
-  setTicketMode("blocked", "正在读取购票状态…");
-  const st = await callWorker({ action: "get_ticket_status" });
-  if (!st || !st.ok) {
-    renderTicketStock(null);
-    setTicketMode("blocked", "购票状态读取失败，检查一下网络后刷新页面再试");
-    return;
-  }
-  applyTicketMeta(st);
-  applyTicketPerPerson(st.perPerson);
-  renderTicketStock(st.remaining);
-  if (!st.open) {
-    /* 已经排好开启时间的话，告诉访客几点开，比一句「未开放」有用得多 */
-    const text = st.openAt ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 国服时间开启）` : TICKET_MSG_CLOSED;
-    setTicketMode("blocked", text);
-    openTicketNotice(text);
-    return;
-  }
-  if (st.remaining <= 0) {
-    setTicketMode("blocked", TICKET_MSG_SOLD_OUT);
-    openTicketNotice(TICKET_MSG_SOLD_OUT);
-    return;
-  }
-  if (ticketState.allowPending !== !!st.allowPending || !$("ticketHolders").children.length) {
-    ticketState.allowPending = !!st.allowPending;
-    renderTicketHolders();
-  }
-  setTicketMode("form");
-  if (captchaOn && ticketGate) ticketGate.open();
-  /* 拿着链接直接进来、还没看过须知的：先弹一次（从首页入口进来的已经确认过了） */
-  if (!ticketGuideAcked && $("ticketGuideOverlay").hidden) openTicketGuide("ack");
-  const left = (ticketState.cooldownUntil - Date.now()) / 1000;
-  if (left > 0) setMsg($("ticketMsg"), ticketCooldownText(left));
-}
-
-/* 表单内的人机验证：和弹窗共用 verify.js 的同一套组件
-   （自动验证 Cloudflare，或手动验证的狒科生 / 文科生 / 理科生，完成任意一种即可）。
-   通过后凭证挂在 ticketState.proof 上，随表单一起交给 Worker 校验并消费。 */
-let ticketGate = null;
-
-function initTicketCaptcha() {
-  if (!captchaOn) { $("ticketVerify").hidden = true; return; }   // 总开关关掉：不出题
-  if (!window.HJVerify) { console.error("[验证] verify.js 没有加载成功，购票表单的人机验证不可用"); return; }
-  ticketGate = HJVerify.createGate($("ticketVerify"), {
-    post: callWorker,
-    turnstileSiteKey: TURNSTILE_SITE_KEY,
-    onPass: (proof) => {
-      ticketState.proof = proof;
-      setMsg($("ticketMsg"), "");
-    },
-  });
-}
-
-/* 提交后重新出题（凭证是一次性的，用过就得重新验证） */
-function resetTicketCaptcha() {
-  ticketState.proof = null;
-  if (captchaOn && ticketGate) ticketGate.refresh();
-}
-
-function collectTicketForm() {
-  const contact = $("ticketContact").value.trim();
-  if (!contact) return { error: "请填写联系方式", focus: $("ticketContact") };
-
-  const holders = [];
-  for (const row of $("ticketHolders").querySelectorAll(".ticket-holder")) {
-    const i = Number(row.dataset.index);
-    if (row.querySelector(".th-pending")?.checked) {
-      holders.push({ pending: true });
-      continue;
-    }
-    const name = row.querySelector(".th-name");
-    const server = row.querySelector(".th-server");
-    if (!name.value.trim()) return { error: `请填写${ticketHolderLabel(i).replace(" 和服务器", "")}`, focus: name };
-    if (/[@＠]/.test(name.value)) return { error: "角色名里不用写 @ 和服务器，服务器在右边选择", focus: name };
-    if (!server.value) return { error: `请为${i === 0 ? "持票玩家" : `第${TICKET_CN_NUM[i] || i + 1}位持票玩家`}选择服务器`, focus: server };
-    holders.push({ name: name.value.trim(), server: server.value });
-  }
-  return {
-    payload: {
-      contact,
-      qty: ticketState.qty,
-      holders,
-      message: $("ticketMessage").value.trim(),
-      anonymous: $("ticketAnonymous").checked,
-    },
-  };
-}
-
-async function submitTicket(e) {
-  e.preventDefault();
-  if (ticketState.submitting) return;
-  const msg = $("ticketMsg");
-  const form = collectTicketForm();
-  if (form.error) {
-    setMsg(msg, form.error);
-    form.focus?.focus();
-    return;
-  }
-  /* 冷却中就别让访客白做一遍人机验证（真正的判断在 Worker，这里只是提前提示） */
-  const cdLeft = (ticketState.cooldownUntil - Date.now()) / 1000;
-  if (cdLeft > 0) {
-    setMsg(msg, ticketCooldownText(cdLeft));
-    return;
-  }
-  const proof = ticketState.proof;
-  if (captchaOn && !proof) {
-    setMsg(msg, ticketGate
-      ? "请先完成下方的人机验证（自动验证，或点「自动验证不成功？点击手动验证」换手动验证）"
-      : "人机验证组件没加载出来，刷新页面再试一次（或联系管理员检查 verify.js）");
-    return;
-  }
-
-  setMsg(msg, "");
-  ticketState.submitting = true;
-  const btn = $("ticketSubmitBtn");
-  btn.disabled = true;
-  btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...(proof || {}) });
-  ticketState.submitting = false;
-  btn.disabled = false;
-  btn.textContent = "提交";
-  /* 验证凭证是一次性的，但 Worker 在「未开放 / 表单不对 / 冷却中 / 限流」时根本没走到验证那步，
-     凭证还没被用掉——这些情况就别让访客重做一遍验证。其余情况（成功、验证失败、
-     服务器出错、网络断了不知道走到哪一步）一律作废重来 */
-  const PRE_VERIFY_ERRORS = ["closed", "cooldown", "rate_limited", "bad_contact", "bad_qty", "bad_holders",
-    "bad_holder_name", "bad_holder_server", "pending_not_allowed", "first_holder_required"];
-  if (!(data && !data.ok && PRE_VERIFY_ERRORS.includes(data.error))) resetTicketCaptcha();
-
-  if (!data) {
-    /* 请求可能已经到了服务器、只是回应丢了：不能断言「没登记成功」，让访客先查一下，免得重复下单 */
-    setMsg(msg, "连接中断，无法确认是否登记成功。请先用下方「查询我的登记」查一下，查不到再重新提交");
-    return;
-  }
-  if (!data.ok) {
-    if (data.error === "closed") {
-      setTicketMode("blocked", TICKET_MSG_CLOSED);
-      openTicketNotice(TICKET_MSG_CLOSED);
-      return;
-    }
-    if (data.error === "cooldown") {
-      if (Number.isInteger(data.cooldownMin)) ticketState.cooldownMin = data.cooldownMin;
-      const wait = Number(data.waitSec) || 60;
-      ticketState.cooldownUntil = Date.now() + wait * 1000;
-      setMsg(msg, ticketCooldownText(wait));
-      return;
-    }
-    if (data.error === "captcha") {
-      setMsg(msg, proof && proof.verifyPass
-        ? "人机验证凭证已过期或用过，已换一题，请重新验证后提交"
-        : "人机验证未通过，已换一题，请重新验证后提交");
-      return;
-    }
-    setMsg(msg, TICKET_ERRORS[data.error] || "提交失败，请稍后再试");
-    return;
-  }
-
-  if (Number.isInteger(data.cooldownMin)) ticketState.cooldownMin = data.cooldownMin;
-  ticketState.cooldownUntil = ticketState.cooldownMin ? Date.now() + ticketState.cooldownMin * 60 * 1000 : 0;
-  renderTicketStock(data.remaining);
-  showTicketResult(form.payload, data);
-}
-
-function showTicketResult(p, data) {
-  const dayLabel = `${Number(data.day.slice(5, 7))}月${Number(data.day.slice(8, 10))}日`;
-  $("ticketResultTitle").textContent = `登记成功 · ${dayLabel}`;
-  $("ticketResultNote").textContent = data.overLimit
-    ? `提交时今日票额已满，本单为超额登记，需等待工作人员确认。请截图保存本页，并留意活动群${GROUP_QQ}。`
-    : `请截图保存本页，付款与取票请留意活动群${GROUP_QQ}。`;
-  $("ticketResultNote").classList.toggle("is-warn", !!data.overLimit);
-  const rows = [
-    ["联系方式", p.contact],
-    ["购票数量", `${p.qty} 张`],
-    ...p.holders.map((h, i) => [`持票人 ${i + 1}`, formatHolder(h)]),
-  ];
-  if (p.message) rows.push(["留言", `${p.message}（${p.anonymous ? "匿名" : "实名"}）`]);
-  ticketResultSnapshot = { rows, dayLabel, note: $("ticketResultNote").textContent };
-  $("ticketResultList").innerHTML = rows
-    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
-  setTicketMode("result");
-  $("ticketResult").scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function clearTicketForm() {
-  $("ticketForm").reset();
-  $("ticketAnonymous").checked = true;
-  $("ticketHolders").innerHTML = "";
-  setMsg($("ticketMsg"), "");
-  setTicketQty(1);
-  $("ticketResult").hidden = true;
-}
-
-function resetTicketForm() {
-  clearTicketForm();
-  openTicketView();
-}
-
-/* 截图保存 ----------------------------------------------------------------------
-   用 canvas 自己画一张登记凭证图（不依赖外部库，国内也能用），右下角带水印 */
-let ticketResultSnapshot = null;
-
-const TICKET_IMG = {
-  width: 760,
-  pad: 44,
-  bg: "#241d3c",
-  card: "#2a2344",
-  line: "rgba(233,224,255,.16)",
-  cream: "#f7f0e2",
-  gold: "#ffd699",
-  soft: "#c9bfe0",
-  mute: "#948aad",
-  serif: '"Noto Serif SC", "Songti SC", "Source Han Serif SC", serif',
-};
-
-/* 按最大宽度折行，返回行数组 */
-function wrapCanvasText(ctx, text, maxWidth) {
-  const lines = [];
-  for (const paragraph of String(text).split("\n")) {
-    let line = "";
-    for (const ch of paragraph) {
-      if (ctx.measureText(line + ch).width > maxWidth && line) {
-        lines.push(line);
-        line = ch;
-      } else {
-        line += ch;
-      }
-    }
-    lines.push(line);
-  }
-  return lines;
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function drawTicketImage(snap) {
-  const S = TICKET_IMG;
-  const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
-  const labelW = 110;
-  const valueW = S.width - S.pad * 2 - labelW - 16;
-  const measure = document.createElement("canvas").getContext("2d");
-
-  // 先量高度：标题 + 副标题 + 说明（可能折行） + 每行信息 + 水印
-  measure.font = `16px ${S.serif}`;
-  const noteLines = wrapCanvasText(measure, snap.note, S.width - S.pad * 2);
-  const rowLines = snap.rows.map(([k, v]) => ({ k, lines: wrapCanvasText(measure, v, valueW) }));
-  const rowsHeight = rowLines.reduce((n, r) => n + Math.max(1, r.lines.length) * 28 + 10, 0);
-  const height = Math.round(S.pad + 46 + 40 + noteLines.length * 26 + 22 + rowsHeight + 18 + 22 + S.pad);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = S.width * scale;
-  canvas.height = height * scale;
-  const ctx = canvas.getContext("2d");
-  ctx.scale(scale, scale);
-  ctx.textBaseline = "top";
-
-  ctx.fillStyle = S.bg;
-  ctx.fillRect(0, 0, S.width, height);
-  roundRect(ctx, 14, 14, S.width - 28, height - 28, 22);
-  ctx.fillStyle = S.card;
-  ctx.fill();
-  ctx.strokeStyle = S.line;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  let y = S.pad;
-  ctx.textAlign = "center";
-  ctx.fillStyle = S.gold;
-  ctx.font = `bold 30px ${S.serif}`;
-  ctx.fillText(ticketFullTitle(), S.width / 2, y);
-  y += 46;
-  ctx.fillStyle = S.cream;
-  ctx.font = `bold 22px ${S.serif}`;
-  ctx.fillText(`登记成功 · ${snap.dayLabel}`, S.width / 2, y);
-  y += 40;
-  ctx.fillStyle = S.soft;
-  ctx.font = `15px ${S.serif}`;
-  noteLines.forEach((line) => {
-    ctx.fillText(line, S.width / 2, y);
-    y += 26;
-  });
-  y += 22;
-
-  ctx.textAlign = "left";
-  rowLines.forEach(({ k, lines }) => {
-    ctx.fillStyle = S.mute;
-    ctx.font = `15px ${S.serif}`;
-    ctx.fillText(k, S.pad, y + 2);
-    ctx.fillStyle = S.cream;
-    ctx.font = `17px ${S.serif}`;
-    lines.forEach((line, i) => ctx.fillText(line, S.pad + labelW + 16, y + i * 28));
-    y += Math.max(1, lines.length) * 28 + 10;
-  });
-
-  // 水印：右下角
-  ctx.textAlign = "right";
-  ctx.fillStyle = "rgba(255,214,153,.55)";
-  ctx.font = `14px ${S.serif}`;
-  ctx.fillText(`花舞之街·薰风花语町，${snap.dayLabel}`, S.width - S.pad, height - S.pad - 14);
-
-  return canvas;
-}
-
-function saveTicketImage() {
-  if (!ticketResultSnapshot) return;
-  const canvas = drawTicketImage(ticketResultSnapshot);
-  const download = (url, revoke) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `花街购票登记_${ticketResultSnapshot.dayLabel}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    showToast("图片已保存到下载目录");
-    if (revoke) setTimeout(() => URL.revokeObjectURL(url), 20000);
-  };
-  if (canvas.toBlob) {
-    canvas.toBlob((blob) => blob ? download(URL.createObjectURL(blob), true) : openTicketImageFallback(canvas), "image/png");
-  } else {
-    openTicketImageFallback(canvas);
-  }
-}
-
-/* 个别浏览器（老版本 iOS Safari）不支持直接下载：新窗口打开让用户长按保存 */
-function openTicketImageFallback(canvas) {
-  const url = canvas.toDataURL("image/png");
-  const w = window.open();
-  if (w) {
-    w.document.write(`<title>购票登记</title><img src="${url}" style="max-width:100%">`);
-    showToast("长按图片即可保存");
-  } else {
-    showToast("浏览器拦截了新窗口，请直接截屏保存");
-  }
-}
-
-/* 查询 -------------------------------------------------------------------------- */
-async function lookupTicket() {
-  const msg = $("ticketLookupMsg");
-  const list = $("ticketLookupList");
-  const contact = $("ticketLookupContact").value.trim();
-  const firstName = $("ticketLookupName").value.trim();
-  list.innerHTML = "";
-  if (!contact || !firstName) {
-    setMsg(msg, "联系方式和第一位持票人 id 都要填写");
-    return;
-  }
-  setMsg(msg, "");
-  const btn = $("ticketLookupBtn");
-  btn.disabled = true;
-  const data = await callWorker({ action: "lookup_ticket", contact, firstName });
-  btn.disabled = false;
-  if (!data || !data.ok) {
-    setMsg(msg, data?.error === "rate_limited" ? "查询太频繁了，请稍后再试" : "查询失败，请稍后再试");
-    return;
-  }
-  if (!data.items.length) {
-    setMsg(msg, "没有找到对应的登记记录，检查一下填写是否与登记时完全一致");
-    return;
-  }
-  list.innerHTML = data.items.map((o) => `
-    <div class="ticket-lookup-item${o.voided ? " is-void" : o.overLimit ? " is-over" : ""}">
-      <div class="tli-head">${escapeHtml(o.day)} · 第 ${o.seq} 号 · ${o.qty} 张${
-        o.voided ? " · 此单已作废，请联系活动群确认" : o.overLimit ? " · 超额登记，待确认" : ""}</div>
-      <div class="tli-body">${o.holders.map((h) => escapeHtml(formatHolder(h))).join("、")}</div>
-    </div>`).join("");
-}
-
-function initTicket() {
-  $("ticketQtyMinus").addEventListener("click", () => setTicketQty(ticketState.qty - 1));
-  $("ticketQtyPlus").addEventListener("click", () => setTicketQty(ticketState.qty + 1));
-  $("ticketForm").addEventListener("submit", submitTicket);
-  $("ticketAgainBtn").addEventListener("click", resetTicketForm);
-  $("ticketSaveImgBtn").addEventListener("click", saveTicketImage);
-  $("ticketNoticeClose").addEventListener("click", closeTicketNotice);
-  $("ticketNoticeOverlay").addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeTicketNotice();
-  });
-  $("ticketLookupBtn").addEventListener("click", lookupTicket);
-  initTicketCaptcha();
-  $("ticketLookupName").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") lookupTicket();
-  });
-  setTicketQty(1);
-}
-
-/* 首页购票入口 ----------------------------------------------------------------------
-   两个入口都带 data-ticket-entry：
-     · 收起视频时，最新活动卡片右下角的圆形按钮（#tileTicketEntry）
-     · 展开视频时，视频下方那行最右侧的「进入购票」（#videoTicketEntry）
-   只有「购票已开放」且「管理页没勾（测试）」时才出现；点任何一个都先弹「购票须知」，确认后进购票页。
-   管理页设了定时开启 / 关闭时，页面会在那个时间点自己再查一次，不用访客刷新 */
-let ticketEntryShown = false;
-let ticketEntryChecked = false;   // 第一次查询回来之前入口一直藏着：宁可晚一点出现，也别闪一下再消失
-let ticketEntryTimer = 0;
-let ticketEntryRetries = 0;
-let ticketEntryLastCheck = 0;
-
-function applyTicketEntryVisibility(show) {
-  ticketEntryShown = !!show;
-  document.querySelectorAll("[data-ticket-entry]").forEach((el) => { el.hidden = !show; });
-  $("latestTile")?.classList.toggle("has-ticket-entry", !!show);
-  $("latestVideoActions")?.classList.toggle("has-ticket-entry", !!show);
-}
-
-/* 状态里的 open / testMode 决定入口显不显示 */
-const ticketEntryVisibleFor = (st) => !!(st && st.open && !st.testMode);
-
-/* 到下一个定时开关的时间点再查一次（加几秒随机错峰，别让所有人同一秒打到 Worker） */
-function scheduleTicketEntryCheck(st) {
-  clearTimeout(ticketEntryTimer);
-  if (!st || !st.ok) return;
-  const now = Date.now();
-  const next = [st.openAt, st.closeAt].filter((t) => t > 0).sort((a, b) => a - b)[0];
-  if (!next) { ticketEntryRetries = 0; return; }
-  let delay = next - now;
-  /* 时间已经过了但服务端还没结算（访客电脑时钟偏快）：隔 20 秒再看，最多重试 10 次 */
-  if (delay <= 0) {
-    if (ticketEntryRetries >= 10) return;
-    ticketEntryRetries++;
-    delay = 20000;
-  } else {
-    ticketEntryRetries = 0;
-  }
-  if (delay > 24 * 3600 * 1000) return;   // 太远了就不挂定时器，访客总会刷新页面的
-  ticketEntryTimer = setTimeout(refreshTicketEntry, delay + 1000 + Math.floor(Math.random() * 14000));
-}
-
-async function refreshTicketEntry() {
-  if (!document.querySelector("[data-ticket-entry]")) return;
-  if (!ticketEntryChecked) applyTicketEntryVisibility(false);
-  ticketEntryLastCheck = Date.now();
-  const st = await callWorker({ action: "get_ticket_status" });
-  ticketEntryChecked = true;
-  if (!st || !st.ok) return;   // 读失败就维持现状，下次切回页面时再查
-  applyTicketEntryVisibility(ticketEntryVisibleFor(st));
-  scheduleTicketEntryCheck(st);
-}
-
-/* 购票须知 --------------------------------------------------------------------------
-   mode = "enter"：从首页入口点进来，确认按钮 =「我已阅读，进入购票」
-   mode = "ack"  ：直接拿链接进了购票页、还没看过须知，自动弹一次，确认按钮 =「我已阅读」
-   mode = "view" ：购票页里点「购票须知」重新打开，确认按钮 =「知道了」 */
-let ticketGuideMode = "view";
-/* 看过一次就记在本次会话里（sessionStorage），刷新购票页不会再弹；关掉浏览器再来会重新弹 */
-const TICKET_GUIDE_ACK_KEY = "hj_ticket_guide_ack";
-let ticketGuideAcked = (() => { try { return sessionStorage.getItem(TICKET_GUIDE_ACK_KEY) === "1"; } catch (e) { return false; } })();
-const TICKET_GUIDE_OK_TEXT = { enter: "我已阅读，进入购票", ack: "我已阅读", view: "知道了" };
-
-function openTicketGuide(mode = "view") {
-  ticketGuideMode = mode;
-  $("ticketGuideOkBtn").textContent = TICKET_GUIDE_OK_TEXT[mode] || TICKET_GUIDE_OK_TEXT.view;
-  $("ticketGuideOverlay").hidden = false;
-  $("ticketGuideScroll").scrollTop = 0;
-  playEnterAnim($("ticketGuideBox"));
-}
-
-function closeTicketGuide() {
-  $("ticketGuideOverlay").hidden = true;
-}
-
-function confirmTicketGuide() {
-  ticketGuideAcked = true;
-  try { sessionStorage.setItem(TICKET_GUIDE_ACK_KEY, "1"); } catch (e) { /* 隐私模式等：只记在内存里 */ }
-  closeTicketGuide();
-  if (ticketGuideMode === "enter") setRoute(TICKET_HASH);   // hashchange → openTicketView
-}
-
-function onTicketEntryClick(e) {
-  e.preventDefault();
-  e.stopPropagation();   // 卡片上的按钮：不触发卡片本身的「进入详情」
-  openTicketGuide("enter");
-}
-
-function initTicketEntry() {
-  $("tileTicketEntry").addEventListener("click", onTicketEntryClick);
-  $("videoTicketEntry").addEventListener("click", onTicketEntryClick);
-  $("ticketGuideReopenBtn").addEventListener("click", () => openTicketGuide("view"));
-  $("ticketGuideOkBtn").addEventListener("click", confirmTicketGuide);
-  $("ticketGuideClose").addEventListener("click", closeTicketGuide);
-  closeOnBackdrop($("ticketGuideOverlay"), closeTicketGuide);
-  $("ticketGuideCopyBtn").addEventListener("click", () => copyText(GROUP_QQ, "群号已复制", "群号：" + GROUP_QQ));
-  /* 切回这个标签页时，距上次查询超过 3 分钟就再查一次（开票前挂着页面等的人能及时看到入口） */
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && Date.now() - ticketEntryLastCheck > 3 * 60 * 1000) {
-      refreshTicketEntry();
-    }
-  });
-}
-
-/* 管理员面板 ---------------------------------------------------------------------- */
-const ticketAdmin = { status: null, orders: [], day: "" };
-
-/* 重复标记：同一联系方式出现在多单；同一 id@区服 出现多次（待定除外） */
-function computeTicketDuplicates(orders) {
-  const normContact = (c) => String(c).replace(/\s+/g, "").toLowerCase();
-  const normHolder = (h) => `${h.name.replace(/\s+/g, "").toLowerCase()}@${h.server}`;
-  const contactCount = new Map();
-  const holderCount = new Map();
-  /* 作废单不算重复：它已经不占票额了，再标红会让人以为还要处理 */
-  orders.filter((o) => !o.voided).forEach((o) => {
-    const c = normContact(o.contact);
-    contactCount.set(c, (contactCount.get(c) || 0) + 1);
-    o.holders.forEach((h) => {
-      if (h.pending) return;
-      const k = normHolder(h);
-      holderCount.set(k, (holderCount.get(k) || 0) + 1);
-    });
-  });
-  return new Map(orders.map((o) => [o.id, o.voided
-    ? { contact: false, holders: o.holders.map(() => false) }   // 作废单自己也不标重复
-    : {
-        contact: contactCount.get(normContact(o.contact)) > 1,
-        holders: o.holders.map((h) => !h.pending && holderCount.get(normHolder(h)) > 1),
-      }]));
-}
-
-function setTicketSwitch(btn, on, onText, offText) {
-  btn.setAttribute("aria-pressed", on ? "true" : "false");
-  btn.classList.toggle("is-on", on);
-  btn.textContent = on ? onText : offText;
-}
-
-function renderTicketAdmin() {
-  const st = ticketAdmin.status;
-  if (!st) return;
-  const orders = ticketAdmin.orders;
-  /* 统计一律只看未作废的单；作废的单单独列一项，方便核对 */
-  const live = orders.filter((o) => !o.voided);
-  const todayOrders = live.filter((o) => o.day === st.day);
-  const overToday = todayOrders.filter((o) => o.overLimit).reduce((n, o) => n + o.qty, 0);
-  const voidedAll = orders.filter((o) => o.voided);
-
-  $("ticketAdminStatus").textContent = `当前票日：${st.day}（每日 ${minutesToHHMM(st.resetMin || 0)} 刷新，国服时间）`;
-  $("ticketAdminStats").innerHTML = [
-    ["已售", `${st.sold} 张`],
-    ["今日限额", `${st.limit} 张`],
-    ["今日余票", `${st.remaining} 张`],
-    ["今日订单", `${todayOrders.length} 单${overToday ? `（超额 ${overToday} 张）` : ""}`],
-    ["累计", `${live.length} 单 / ${live.reduce((n, o) => n + o.qty, 0)} 张`],
-    ["已作废", `${voidedAll.length} 单 / ${voidedAll.reduce((n, o) => n + o.qty, 0)} 张`],
-  ].map(([k, v]) => `<div class="tas-item"><span>${k}</span><b>${v}</b></div>`).join("");
-
-  setTicketSwitch($("ticketOpenBtn"), st.open, "已开放（点击关闭）", "已关闭（点击开放）");
-  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许待定（点击关闭）", "不允许待定（点击开启）");
-  setTicketSwitch($("ticketTestBtn"), !!st.testMode, "显示「（测试）」（点击去掉）", "不显示（点击加上）");
-  if (document.activeElement !== $("ticketTitleInput")) $("ticketTitleInput").value = st.title || TICKET_TITLE;
-  $("ticketTitlePreview").textContent = `访客看到的标题：${st.title || TICKET_TITLE}${st.testMode ? "（测试）" : ""}`;
-  $("ticketTitlePreview").hidden = false;
-  if (document.activeElement !== $("ticketCooldownInput")) $("ticketCooldownInput").value = String(st.cooldownMin ?? 30);
-  if (document.activeElement !== $("ticketResetInput")) $("ticketResetInput").value = minutesToHHMM(st.resetMin || 0);
-  if (document.activeElement !== $("ticketLimitInput")) $("ticketLimitInput").value = String(st.limit);
-  if (document.activeElement !== $("ticketPerPersonInput")) $("ticketPerPersonInput").value = String(st.perPerson ?? "");
-  renderTicketSchedule(st);
-
-  // 日期下拉：所有有订单的日期 + 今天
-  const days = [...new Set([...orders.map((o) => o.day), st.day])].sort().reverse();
-  if (!days.includes(ticketAdmin.day)) ticketAdmin.day = st.day;
-  $("ticketDaySelect").innerHTML = days.map((d) => {
-    const list = live.filter((o) => o.day === d);
-    const qty = list.reduce((n, o) => n + o.qty, 0);
-    const voided = orders.filter((o) => o.day === d && o.voided).length;
-    return `<option value="${d}"${d === ticketAdmin.day ? " selected" : ""}>${d}（${list.length} 单 / ${qty} 张${voided ? ` · 作废 ${voided}` : ""}）</option>`;
-  }).join("");
-
-  const dup = computeTicketDuplicates(orders);
-  const rows = orders.filter((o) => o.day === ticketAdmin.day);
-  $("ticketAdminTbody").innerHTML = rows.length ? rows.map((o) => {
-    const d = dup.get(o.id) || { contact: false, holders: [] };
-    const holders = o.holders.map((h, i) =>
-      `<span class="${d.holders[i] ? "is-dup" : ""}">${escapeHtml(formatHolder(h))}</span>`).join("<br>");
-    const msgText = o.message ? `${escapeHtml(o.message)}<small>${o.anonymous ? "匿名" : "实名"}</small>` : "";
-    const time = new Date(o.createdAt).toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
-    const act = o.voided
-      ? `<button type="button" class="tt-act is-restore" data-void-id="${o.id}" data-void="0">恢复</button>`
-      : `<button type="button" class="tt-act is-void" data-void-id="${o.id}" data-void="1">作废</button>`;
-    return `<tr class="${o.voided ? "is-void" : o.overLimit ? "is-over" : ""}">
-      <td>${o.seq}</td>
-      <td class="${d.contact ? "is-dup" : ""}">${escapeHtml(o.contact)}</td>
-      <td>${o.qty}</td>
-      <td>${holders}</td>
-      <td class="tt-msg">${msgText}</td>
-      <td>${time}</td>
-      <td class="tt-actions">${act}</td>
-    </tr>`;
-  }).join("") : `<tr><td colspan="7" class="tt-empty">这一天还没有订单</td></tr>`;
-}
-
-/* 定时开关：把服务端的 openAt / closeAt 回填到输入框，并用一句人话说明接下来会发生什么。
-   输入框正在被编辑时不覆盖，免得打字打到一半被刷新冲掉。 */
-function renderTicketSchedule(st) {
-  const openIn = $("ticketOpenAtInput");
-  const closeIn = $("ticketCloseAtInput");
-  if (document.activeElement !== openIn) openIn.value = epochToCnLocal(st.openAt);
-  if (document.activeElement !== closeIn) closeIn.value = epochToCnLocal(st.closeAt);
-
-  const parts = [];
-  if (st.openAt) parts.push(`将于 ${formatCnTime(st.openAt)} 自动开启`);
-  if (st.closeAt) parts.push(`将于 ${formatCnTime(st.closeAt)} 自动关闭`);
-  const note = $("ticketSchedNote");
-  note.textContent = parts.length
-    ? `${parts.join("；")}（国服时间；计划执行后自动清除）`
-    : "";
-  note.hidden = !parts.length;
-}
-
-/* 作废 / 恢复一单。服务端会连带把最新状态回传，所以这里直接用返回值更新，
-   不用再多打一次 ticket_admin_get。 */
-async function ticketAdminVoid(id, voided) {
-  const msg = $("ticketAdminMsg");
-  setMsg(msg, "");
-  const data = await callWorker({
-    action: "ticket_admin_void", password: internalAdminPassword, id, voided,
-  });
-  if (!data || !data.ok) {
-    if (data && data.error === "not_changed") {
-      /* 别人已经改过了（或重复点击）：直接拉一次最新数据，让界面回到真实状态 */
-      setMsg(msg, "这一单的状态已经变过了，已为你刷新");
-      await refreshTicketAdmin();
-      return;
-    }
-    setMsg(msg, "操作失败，请重新登录内部入口后再试");
-    return;
-  }
-  const row = ticketAdmin.orders.find((o) => o.id === data.order.id);
-  if (row) {
-    row.voided = data.order.voided;
-    row.overLimit = data.order.overLimit;
-  }
-  ticketAdmin.status = data.status;
-  renderTicketAdmin();
-  showToast(data.order.voided
-    ? `第 ${data.order.seq} 号已作废，票额已放回`
-    : `第 ${data.order.seq} 号已恢复${data.order.overLimit ? "（票额已满，按超额票计）" : ""}`);
-}
-
-async function refreshTicketAdmin() {
-  const data = await callWorker({ action: "ticket_admin_get", password: internalAdminPassword });
-  if (!data || !data.ok) {
-    $("ticketAdminStatus").textContent = "读取失败：若是刚更新的 Worker，先在 D1 里执行 ticket-voided.sql 加上 voided 列；若是全新部署，先执行 schema.sql 建表";
-    return false;
-  }
-  ticketAdmin.status = data.status;
-  ticketAdmin.orders = data.orders;
-  renderTicketAdmin();
-  return true;
-}
-
-async function ticketAdminSet(patch, okMsg) {
-  const msg = $("ticketAdminMsg");
-  setMsg(msg, "");
-  const data = await callWorker({ action: "ticket_admin_set", password: internalAdminPassword, ...patch });
-  if (!data || !data.ok) {
-    const TICKET_SET_ERRORS = {
-      bad_limit: "限额需为 0 以上的整数",
-      bad_per_person: "单人限购需为 1–20 之间的整数",
-      bad_cooldown: "购票间隔需为 0–1440 之间的整数（分钟）",
-      bad_reset: "刷新时间格式不对",
-      bad_title: "标题太长了（最多 60 个字）",
-      bad_time: "定时时间格式不对",
-      bad_schedule: "定时时间格式不对",
-      no_texts_table: "保存标题失败：先在 D1 里执行 feedback-and-ticket-settings.sql 建 site_texts 表",
-    };
-    setMsg(msg, TICKET_SET_ERRORS[data?.error] || "保存失败，请重新登录内部入口后再试");
-    return;
-  }
-  ticketAdmin.status = data.status;
-  renderTicketAdmin();
-  applyTicketEntryVisibility(ticketEntryVisibleFor(data.status));   // 首页入口跟着「开放 + 非测试」走
-  scheduleTicketEntryCheck({ ok: true, ...data.status });
-  showToast(okMsg);
-}
-
-/* Excel 导出（ExcelJS 按需加载） --------------------------------------------------- */
-let excelJsPromise = null;
-function loadExcelJs() {
-  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
-  const urls = [
-    "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
-    "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js",
-  ];
-  const load = (i) => new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = urls[i];
-    s.onload = () => (window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error("no ExcelJS")));
-    s.onerror = () => {
-      s.remove();
-      if (i + 1 < urls.length) load(i + 1).then(resolve, reject);
-      else reject(new Error("load failed"));
-    };
-    document.head.appendChild(s);
-  });
-  excelJsPromise ??= load(0).catch((e) => { excelJsPromise = null; throw e; });
-  return excelJsPromise;
-}
-
-const XL_RED = "FFE02020";
-const XL_ORANGE = "FFED7D31";
-const XL_GREEN = "FF92D050";
-
-/* orders：要写进表里的订单（调用方已经把作废单过滤掉了）
-   voidedOrders：可选。给「清空前的备份」用——正常导出不带它，
-   备份时带上，作废记录会单独放一张「已作废」表，免得清空后这部分数据彻底消失。 */
-async function buildTicketWorkbook(orders, voidedOrders = null) {
-  const ExcelJS = await loadExcelJs();
-  const wb = new ExcelJS.Workbook();
-  const center = { horizontal: "center", vertical: "middle" };
-  const dup = computeTicketDuplicates(orders);
-  const days = [...new Set(orders.map((o) => o.day))].sort();
-
-  /* 第一页：预售票。每天一栏：联系方式 / 序号 / 购票数量 / 购票id（1…N） / 是否取票 + 1 列空隔。
-     N 平时是 5（与往年表格一致）；后台把单人限购调到 5 张以上时自动加宽，
-     否则多出来的持票人会被默默截掉。 */
-  const ID_COLS = Math.max(5, ...orders.map((o) => o.qty), 0);
-  const ws = wb.addWorksheet("预售票");
-  const BLOCK = ID_COLS + 6;
-  const header = ["联系方式", "序号", "购票数量",
-    ...Array.from({ length: ID_COLS }, (_, i) => `购票id（${i + 1}）`), "是否取票"];
-  const totalRefs = [];
-  days.forEach((day, di) => {
-    const c0 = di * BLOCK + 1;
-    const list = orders.filter((o) => o.day === day);
-    const lastRow = Math.max(3, list.length + 2);
-    const [y, m, d] = day.split("-").map(Number);
-
-    ws.mergeCells(1, c0, 1, c0 + ID_COLS + 1);
-    const dateCell = ws.getCell(1, c0);
-    dateCell.value = new Date(Date.UTC(y, m - 1, d));
-    dateCell.numFmt = "yyyy/m/d";
-    dateCell.alignment = center;
-    dateCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_GREEN } };
-    ws.getCell(1, c0 + ID_COLS + 2).value = "售出票数：";
-    ws.getCell(1, c0 + ID_COLS + 2).alignment = center;
-    const qtyCol = ws.getColumn(c0 + 2).letter;
-    const sum = list.reduce((n, o) => n + o.qty, 0);
-    ws.getCell(1, c0 + ID_COLS + 3).value = { formula: `SUM(${qtyCol}3:${qtyCol}${lastRow})`, result: sum };
-    ws.getCell(1, c0 + ID_COLS + 3).alignment = center;
-    totalRefs.push(`预售票!${ws.getColumn(c0 + ID_COLS + 3).letter}1`);
-
-    header.forEach((h, i) => {
-      const cell = ws.getCell(2, c0 + i);
-      cell.value = h;
-      cell.alignment = center;
-      cell.font = { bold: true };
-    });
-
-    list.forEach((o, ri) => {
-      const r = ri + 3;
-      const flags = dup.get(o.id);
-      const values = [o.contact, o.seq, o.qty,
-        ...Array.from({ length: ID_COLS }, (_, k) => o.holders[k] ? formatHolder(o.holders[k]) : null), null];
-      values.forEach((v, i) => {
-        const cell = ws.getCell(r, c0 + i);
-        cell.value = v;
-        cell.alignment = center;
-        let color = o.overLimit ? XL_RED : null;
-        if (i === 0 && flags.contact) color = XL_ORANGE;
-        if (i >= 3 && i < 3 + ID_COLS && flags.holders[i - 3]) color = XL_ORANGE;
-        if (color) cell.font = { color: { argb: color }, bold: o.overLimit };
-      });
-    });
-
-    ws.getColumn(c0).width = 16;
-    for (let i = 3; i < 3 + ID_COLS; i++) ws.getColumn(c0 + i).width = 22;
-    ws.getColumn(c0 + 1).width = 6;
-    ws.getColumn(c0 + 2).width = 9;
-    ws.getColumn(c0 + ID_COLS + 3).width = 10;
-    ws.getColumn(c0 + BLOCK - 1).width = 4;
-  });
-
-  // 图例放在所有日期栏右侧
-  const lc = Math.max(1, days.length) * BLOCK + 1;
-  ws.getCell(1, lc).value = "标注说明";
-  ws.getCell(1, lc).font = { bold: true };
-  ws.getCell(2, lc).value = "红字：提交时当日票额已满（超额登记，整单标红）";
-  ws.getCell(2, lc).font = { color: { argb: XL_RED } };
-  ws.getCell(3, lc).value = "橙字：联系方式或持票 id 与其他订单重复";
-  ws.getCell(3, lc).font = { color: { argb: XL_ORANGE } };
-  ws.getCell(4, lc).value = "已在后台作废的订单不会出现在本表中";
-  ws.getColumn(lc).width = 44;
-  ws.views = [{ state: "frozen", ySplit: 2 }];
-
-  /* 其余工作表保持模板结构，内容留空 */
-  const group = wb.addWorksheet("团购票");
-  group.addRow(["id", "票数", "是否取票", "总计"]);
-  group.getCell("D2").value = { formula: "SUM(B2:B2207)", result: 0 };
-  group.getColumn(1).width = 15;
-
-  const inner = wb.addWorksheet("内部票");
-  inner.addRow(["店家/个人", "票数", "票价", "是否取票"]);
-  inner.getCell("F5").value = "总计";
-  inner.getCell("F6").value = { formula: "SUM(B2:B365)", result: 0 };
-  inner.getColumn(1).width = 26;
-
-  wb.addWorksheet("现场票");
-
-  const stat = wb.addWorksheet("票务统计");
-  stat.addRow(["票型", "单价（wgil）", "售票量", "收入"]);
-  const presaleTotal = orders.reduce((n, o) => n + o.qty, 0);
-  stat.addRow(["预售票", 98, { formula: totalRefs.length ? totalRefs.join("+") : "0", result: presaleTotal }, null]);
-  stat.addRow(["团购票", 98, { formula: "团购票!D2", result: 0 }, null]);
-  stat.addRow(["内部票①", 50, { formula: "内部票!F6", result: 0 }, null]);
-  stat.addRow(["内部票②", 0, null, null]);
-  stat.addRow(["现场票", 118, null, null]);
-  stat.columns.forEach((c) => { c.width = 12; });
-
-  /* 已作废（只有清空前的备份会带这张表） */
-  if (voidedOrders && voidedOrders.length) {
-    const vw = wb.addWorksheet("已作废");
-    vw.addRow(["日期", "序号", "联系方式", "数量", "持票人", "留言", "登记时间"]);
-    vw.getRow(1).font = { bold: true };
-    voidedOrders.forEach((o) => {
-      vw.addRow([o.day, o.seq, o.contact, o.qty, o.holders.map(formatHolder).join("、"), o.message || "",
-        new Date(o.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })]);
-    });
-    [12, 6, 16, 6, 40, 40, 20].forEach((w, i) => { vw.getColumn(i + 1).width = w; });
-  }
-
-  /* 留言 */
-  const msgWs = wb.addWorksheet("留言");
-  msgWs.addRow(["日期", "序号", "联系方式", "第一位持票人", "留言", "是否匿名"]);
-  msgWs.getRow(1).font = { bold: true };
-  orders.filter((o) => o.message).forEach((o) => {
-    msgWs.addRow([o.day, o.seq, o.contact, formatHolder(o.holders[0]), o.message, o.anonymous ? "是" : "否"]);
-  });
-  [12, 6, 16, 22, 60, 10].forEach((w, i) => { msgWs.getColumn(i + 1).width = w; });
-  msgWs.getColumn(5).alignment = { wrapText: true, vertical: "top" };
-
-  return wb;
-}
-
-/* withVoided：清空前的备份传 true，把作废记录也一并存进表里的「已作废」页。
-   平时导出传 false（默认），作废单在整个文件里都不出现。 */
-async function exportTicketExcel(withVoided = false) {
-  /* 作废的单不进表：票额已经放回，导出时就当它不存在。
-     这里过滤一次，后面的重复标记、留言页、票务统计就都自动跟着排除了。 */
-  const orders = ticketAdmin.orders.filter((o) => !o.voided);
-  const voided = withVoided ? ticketAdmin.orders.filter((o) => o.voided) : null;
-  const wb = await buildTicketWorkbook(orders, voided);
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const stamp = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `花街购票信息${ticketAdmin.status?.testMode ? "（测试）" : ""}${withVoided ? "_含作废备份" : ""}_${stamp}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-}
-
-async function withAdminBusy(btn, fn) {
-  const msg = $("ticketAdminMsg");
-  setMsg(msg, "");
-  btn.disabled = true;
-  try {
-    await fn(msg);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function initTicketAdmin() {
-  $("ticketOpenBtn").addEventListener("click", () => {
-    const next = !ticketAdmin.status?.open;
-    ticketAdminSet({ open: next }, next ? "购票已开放" : "购票已关闭");
-  });
-  $("ticketPendingBtn").addEventListener("click", () => {
-    const next = !ticketAdmin.status?.allowPending;
-    ticketAdminSet({ allowPending: next }, next ? "已允许持票 id 待定" : "已关闭持票 id 待定");
-  });
-  const saveLimit = () => {
-    const raw = $("ticketLimitInput").value.trim();
-    const n = Number(raw);
-    if (raw === "" || !Number.isInteger(n) || n < 0) {
-      setMsg($("ticketAdminMsg"), "限额需为 0 以上的整数");
-      return;
-    }
-    $("ticketLimitInput").blur();
-    ticketAdminSet({ limit: n }, `每日限额已设为 ${n} 张`);
-  };
-  $("ticketLimitSaveBtn").addEventListener("click", saveLimit);
-  $("ticketLimitInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveLimit();
-  });
-
-  /* 单人限购 */
-  const savePerPerson = () => {
-    const raw = $("ticketPerPersonInput").value.trim();
-    const n = Number(raw);
-    if (raw === "" || !Number.isInteger(n) || n < 1 || n > 20) {
-      setMsg($("ticketAdminMsg"), "单人限购需为 1–20 之间的整数");
-      return;
-    }
-    $("ticketPerPersonInput").blur();
-    ticketAdminSet({ perPerson: n }, `单人限购已设为 ${n} 张`);
-  };
-  $("ticketPerPersonSaveBtn").addEventListener("click", savePerPerson);
-  $("ticketPerPersonInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") savePerPerson();
-  });
-
-  /* 购票页标题 / 「（测试）」后缀 */
-  const saveTitle = () => {
-    const title = $("ticketTitleInput").value.trim();
-    if (title.length > 60) { setMsg($("ticketAdminMsg"), "标题太长了（最多 60 个字）"); return; }
-    $("ticketTitleInput").blur();
-    ticketAdminSet({ title }, title ? "购票页标题已保存" : "已恢复默认标题");
-  };
-  $("ticketTitleSaveBtn").addEventListener("click", saveTitle);
-  $("ticketTitleInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveTitle();
-  });
-  $("ticketTestBtn").addEventListener("click", () => {
-    const next = !ticketAdmin.status?.testMode;
-    ticketAdminSet({ testMode: next }, next ? "标题已加上「（测试）」" : "标题已去掉「（测试）」");
-  });
-
-  /* 再次购票间隔（冷却） */
-  const saveCooldown = () => {
-    const raw = $("ticketCooldownInput").value.trim();
-    const n = Number(raw);
-    if (raw === "" || !Number.isInteger(n) || n < 0 || n > 1440) {
-      setMsg($("ticketAdminMsg"), "购票间隔需为 0–1440 之间的整数（分钟）");
-      return;
-    }
-    $("ticketCooldownInput").blur();
-    ticketAdminSet({ cooldownMin: n }, n ? `再次购票间隔已设为 ${n} 分钟` : "已取消再次购票间隔");
-  };
-  $("ticketCooldownSaveBtn").addEventListener("click", saveCooldown);
-  $("ticketCooldownInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveCooldown();
-  });
-
-  /* 每日票额刷新时间 */
-  const saveReset = () => {
-    const m = hhmmToMinutes($("ticketResetInput").value);
-    if (m === null) { setMsg($("ticketAdminMsg"), "请填写刷新时间（时:分）"); return; }
-    if (m !== (ticketAdmin.status?.resetMin || 0) && !confirm(
-      `确定把每日票额刷新时间改为 ${minutesToHHMM(m)}（国服时间）吗？\n\n`
-      + "改完后「今日余票」立刻按新的时间段重新计算；已有订单的日期不会变。")) return;
-    $("ticketResetInput").blur();
-    ticketAdminSet({ resetMin: m }, `每日票额将在 ${minutesToHHMM(m)} 刷新（国服时间）`);
-  };
-  $("ticketResetSaveBtn").addEventListener("click", saveReset);
-  $("ticketResetInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveReset();
-  });
-
-  /* 定时开关：两个框都可以只填一个；留空表示不安排这个方向 */
-  $("ticketSchedSaveBtn").addEventListener("click", () => {
-    const openAt = cnLocalToEpoch($("ticketOpenAtInput").value);
-    const closeAt = cnLocalToEpoch($("ticketCloseAtInput").value);
-    if ($("ticketOpenAtInput").value && !openAt) { setMsg($("ticketAdminMsg"), "开启时间格式不对"); return; }
-    if ($("ticketCloseAtInput").value && !closeAt) { setMsg($("ticketAdminMsg"), "关闭时间格式不对"); return; }
-    if (!openAt && !closeAt) { setMsg($("ticketAdminMsg"), "至少填一个时间，或点「清除」取消定时"); return; }
-
-    const now = Date.now();
-    const past = [openAt && openAt <= now ? "开启" : "", closeAt && closeAt <= now ? "关闭" : ""].filter(Boolean);
-    if (past.length && !confirm(`定时${past.join("和")}的时间已经过去了，保存后会立刻生效。确定吗？`)) return;
-
-    const parts = [];
-    if (openAt) parts.push(`${formatCnTime(openAt)} 开启`);
-    if (closeAt) parts.push(`${formatCnTime(closeAt)} 关闭`);
-    ticketAdminSet({ openAt, closeAt }, `已设定：${parts.join("，")}（国服时间）`);
-  });
-  $("ticketSchedClearBtn").addEventListener("click", () => {
-    $("ticketOpenAtInput").value = "";
-    $("ticketCloseAtInput").value = "";
-    ticketAdminSet({ openAt: 0, closeAt: 0 }, "已清除定时开关");
-  });
-
-  /* 作废 / 恢复：按钮是渲染出来的，用事件委托绑在表格上 */
-  $("ticketAdminTbody").addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-void-id]");
-    if (!btn) return;
-    const id = Number(btn.dataset.voidId);
-    const toVoid = btn.dataset.void === "1";
-    const order = ticketAdmin.orders.find((o) => o.id === id);
-    if (toVoid && !confirm(`确定作废${order ? `第 ${order.seq} 号（${order.qty} 张）` : "这一单"}吗？\n\n作废后该单不会导出，票额会放回当日余票。之后可以再恢复。`)) return;
-    btn.disabled = true;
-    try { await ticketAdminVoid(id, toVoid); } finally { btn.disabled = false; }
-  });
-  $("ticketDaySelect").addEventListener("change", (e) => {
-    ticketAdmin.day = e.target.value;
-    renderTicketAdmin();
-  });
-
-  $("ticketRefreshBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async () => {
-    if (await refreshTicketAdmin()) showToast("已刷新");
-  }));
-
-  $("ticketExportBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
-    if (!(await refreshTicketAdmin())) {
-      setMsg(msg, "读取购票数据失败，未导出");
-      return;
-    }
-    try {
-      await exportTicketExcel();
-    } catch (err) {
-      console.error(err);
-      setMsg(msg, "导出失败：表格组件加载不出来，检查一下网络后再试");
-    }
-  }));
-
-  $("ticketClearBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
-    if (!(await refreshTicketAdmin())) {
-      setMsg(msg, "读取购票数据失败，未执行清空");
-      return;
-    }
-    const n = ticketAdmin.orders.length;
-    const voidedN = ticketAdmin.orders.filter((o) => o.voided).length;
-    if (!confirm(`确定要清空全部购票数据吗？（共 ${n} 单${voidedN ? `，含 ${voidedN} 单已作废` : ""}）\n\n`
-      + `清空前会先自动下载一份 Excel 备份（作废记录会单独放在「已作废」页里），清空后无法恢复。`)) return;
-    if (n) {
-      try {
-        await exportTicketExcel(true);   // 备份要完整，作废的也留一份
-      } catch (err) {
-        console.error(err);
-        setMsg(msg, "备份导出失败，已取消清空。检查网络后再试");
-        return;
-      }
-    }
-    const data = await callWorker({ action: "ticket_admin_clear", password: internalAdminPassword, confirm: "CLEAR" });
-    if (!data || !data.ok) {
-      setMsg(msg, "清空失败，请重新登录内部入口后再试");
-      return;
-    }
-    await refreshTicketAdmin();
-    showToast(n ? "已备份并清空购票数据" : "购票数据已清空");
-  }));
-}
+/* 6b. 活动购票 → 已拆到 ticket.js（页面里紧跟在本脚本后面加载） */
 
 
 /* =============================================================================
@@ -4077,91 +2424,6 @@ function initSiteAbout() {
   $("shareSiteBtn").addEventListener("click", () => copyText(SHARE_TEXT, "分享内容已复制", SHARE_TEXT));
 }
 
-/* 管理员：反馈建议箱 ---------------------------------------------------------------- */
-const feedbackAdmin = { items: [], loaded: false };
-
-function renderFeedbackAdmin() {
-  const cat = $("feedbackFilterCat").value;
-  const state = $("feedbackFilterState").value;
-  const items = feedbackAdmin.items;
-  const openN = items.filter((i) => !i.handled).length;
-  $("feedbackAdminStatus").textContent = items.length
-    ? `共 ${items.length} 条，未处理 ${openN} 条`
-    : "还没有收到反馈";
-  const badge = $("feedbackPillBadge");
-  badge.hidden = !openN;
-  badge.textContent = openN > 99 ? "99+" : String(openN);
-
-  const list = items.filter((i) => (!cat || i.category === cat)
-    && (!state || (state === "done" ? i.handled : !i.handled)));
-  $("feedbackAdminList").innerHTML = list.length ? list.map((i) => {
-    const time = new Date(i.createdAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
-    return `<div class="fb-item${i.handled ? " is-done" : ""}" data-fb-id="${i.id}">
-      <div class="fb-head">
-        <span class="fb-cat fb-cat-${escapeHtml(i.category)}">${escapeHtml(FEEDBACK_CATEGORIES[i.category] || i.category)}</span>
-        <span class="fb-time">${escapeHtml(time)}（国服）</span>
-        ${i.handled ? `<span class="fb-state">已处理</span>` : ""}
-      </div>
-      <div class="fb-body">${escapeHtml(i.content)}</div>
-      <div class="fb-contact">${i.contact ? `联系方式：<b>${escapeHtml(i.contact)}</b>` : "未留联系方式"}</div>
-      <div class="fb-actions">
-        ${i.contact ? `<button type="button" class="tt-act is-copy" data-fb-act="copy">复制联系方式</button>` : ""}
-        <button type="button" class="tt-act ${i.handled ? "is-reopen" : "is-restore"}" data-fb-act="mark">${i.handled ? "标记为未处理" : "标记已处理"}</button>
-        <button type="button" class="tt-act is-void" data-fb-act="delete">删除</button>
-      </div>
-    </div>`;
-  }).join("") : `<p class="fb-empty">${items.length ? "没有符合筛选条件的反馈" : "反馈箱还是空的"}</p>`;
-}
-
-async function refreshFeedbackAdmin() {
-  const data = await callWorker({ action: "feedback_admin_list", password: internalAdminPassword });
-  if (!data || !data.ok) {
-    $("feedbackAdminStatus").textContent = data?.error === "no_table"
-      ? "读取失败：先在 D1 里执行 feedback-and-ticket-settings.sql 建 feedback 表"
-      : data?.error === "unknown action"
-        ? "读取失败：Worker 还是旧版本，请部署新的 worker.js"
-        : "读取失败，请重新登录内部入口后再试";
-    return false;
-  }
-  feedbackAdmin.items = data.items;
-  feedbackAdmin.loaded = true;
-  renderFeedbackAdmin();
-  return true;
-}
-
-function initFeedbackAdmin() {
-  $("feedbackFilterCat").insertAdjacentHTML("beforeend",
-    Object.entries(FEEDBACK_CATEGORIES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(""));
-  $("feedbackFilterCat").addEventListener("change", renderFeedbackAdmin);
-  $("feedbackFilterState").addEventListener("change", renderFeedbackAdmin);
-  $("feedbackRefreshBtn").addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    try { if (await refreshFeedbackAdmin()) showToast("已刷新"); } finally { btn.disabled = false; }
-  });
-  $("feedbackAdminList").addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-fb-act]");
-    if (!btn) return;
-    const id = Number(btn.closest("[data-fb-id]").dataset.fbId);
-    const item = feedbackAdmin.items.find((i) => i.id === id);
-    if (!item) return;
-    const msg = $("feedbackAdminMsg");
-    setMsg(msg, "");
-    const act = btn.dataset.fbAct;
-    if (act === "copy") { copyText(item.contact, "联系方式已复制", item.contact); return; }
-    if (act === "delete" && !confirm("确定删除这条反馈吗？删除后无法恢复。")) return;
-    btn.disabled = true;
-    const data = act === "mark"
-      ? await callWorker({ action: "feedback_admin_mark", password: internalAdminPassword, id, handled: !item.handled })
-      : await callWorker({ action: "feedback_admin_delete", password: internalAdminPassword, id });
-    btn.disabled = false;
-    if (!data || !data.ok) { setMsg(msg, "操作失败，请重新登录内部入口后再试"); return; }
-    if (act === "mark") item.handled = !!data.handled;
-    else feedbackAdmin.items = feedbackAdmin.items.filter((i) => i.id !== id);
-    renderFeedbackAdmin();
-    showToast(act === "mark" ? (item.handled ? "已标记为已处理" : "已标记为未处理") : "已删除");
-  });
-}
 
 
 
@@ -5418,8 +3680,8 @@ function initCalWidget() {
   }
 
   initCalDrag();
+  buildCalEvents();   // 先建事件索引再渲染，否则第一次画出来的日格上没有活动横条
   renderCal();
-  buildCalEvents();
   if (storage.get(STORE.calOpen) === "1") openCalWidget(true);
 }
 
@@ -5524,9 +3786,12 @@ function hjGobletWeatherAt(unixSec) {
   const eDays = Math.floor(eHours / 24);
   const chunk = ((eHours % 24) - (eHours % 8) + 8) % 24;   // ET 0/8/16 → 8/16/0
   const seed = eDays * 100 + chunk;
-  const s1 = (seed << 11) ^ seed;
-  const s2 = (s1 >>> 8) ^ s1;
-  const chance = ((s2 % 100) + 100) % 100;
+  /* 原算法是无符号 32 位运算。JS 的 ^ 结果是有符号的，最高位为 1 时会变成负数，
+     之前用 ((x % 100) + 100) % 100 兜底，得到的余数和无符号的结果对不上（2^32 % 100 = 96），
+     所以这里用 >>> 0 转回无符号再取余 */
+  const s1 = ((seed << 11) ^ seed) >>> 0;
+  const s2 = ((s1 >>> 8) ^ s1) >>> 0;
+  const chance = s2 % 100;
   const idx = HJ_GOBLET_WEATHERS.findIndex((w) => chance < w.limit);
   const i = idx === -1 ? HJ_GOBLET_WEATHERS.length - 1 : idx;
   return { chance, idx: i, ...HJ_GOBLET_WEATHERS[i] };
@@ -6496,10 +4761,10 @@ const A11Y_MODALS = [
   { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
   { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
   { overlay: "siteAboutOverlay", closeBtn: "siteAboutClose", close: closeSiteAbout },
-  { overlay: "ticketGuideOverlay", closeBtn: "ticketGuideClose", close: closeTicketGuide },
+  { overlay: "ticketGuideOverlay", closeBtn: "ticketGuideClose", close: () => closeTicketGuide() },   // ticket.js
   { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
-  { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: closeTicketNotice },
-  { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: closeAdminPanel },
+  { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: () => closeTicketNotice() },   // ticket.js
+  { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: () => closeAdminPanel() },         // admin.js
   { overlay: "alarmOverlay",    closeBtn: "alarmClose",    close: closeAlarmModal },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
@@ -6537,7 +4802,6 @@ function initApp() {
   initA11yTabs($("infoBox"));
   initA11yTabs($("siteAboutBox"));
   initNav();
-  initInternal();
   initLikes();
   initDayNight();
   initFxToggle();
@@ -6545,17 +4809,14 @@ function initApp() {
   initSiteAbout();
   initLightbox();
   initCaptcha();
-  initLockdownToggle();
-  initCaptchaSwitch();
-  initStarlightPanel();
-  initAdminPanels();
-  initTicket();
-  initTicketEntry();
-  initTicketAdmin();
-  initFeedbackAdmin();
-  refreshTicketEntry();   // 首页购票入口：现在还没有按钮，不会发请求
-  initPostAnnouncement();
-  initAnnouncementImageUpload();
+  /* 购票（ticket.js）。管理页的初始化在 admin.js 末尾，进入 #internal 时才执行 */
+  if (typeof initTicket === "function") {
+    initTicket();
+    initTicketEntry();
+    refreshTicketEntry();   // 首页购票入口：购票开放且非测试时才出现
+  } else {
+    console.error("[购票] ticket.js 没有加载成功，购票入口与购票页不可用");
+  }
   initClickBurst();
   initA11yTiles();
   initA11yModals();
@@ -6580,8 +4841,12 @@ function initApp() {
   });
 }
 
-initApp();
+/* initApp() 在 ticket.js 加载之后才调用（见下方） */
 </script>
+
+<!-- 购票页脚本（访客表单 / 查询 / 首页入口 / 购票须知）。改了 ticket.js 之后把 ?v= +1 -->
+<script src="ticket.js?v=1"></script>
+<script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>

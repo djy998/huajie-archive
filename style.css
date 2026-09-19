@@ -2323,6 +2323,10 @@ body.day-mode footer { color: var(--day-title); }
 
 .ticket-holder-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ticket-holder-row .th-name { flex: 1 1 180px; width: auto; }
+/* 第一位持票人没有说明文字了，给输入行补上和标题之间的间距；id 不合规时的实时提示 */
+.ticket-holder .ticket-label + .ticket-holder-row { margin-top: 9px; }
+.ticket-holder .th-warn { margin-top: 6px; color: #e08e84; }
+.ticket-card .ticket-holder-row .th-name.is-invalid { border-color: #e08e84; }
 .ticket-card select,
 .ticket-admin select {
   flex: 0 0 140px;
@@ -2571,6 +2575,7 @@ body.day-mode .ticket-blocked,
 body.day-mode .ticket-result h3,
 body.day-mode .tli-head,
 body.day-mode .ticket-warn { color: var(--day-brown); }
+body.day-mode .ticket-holder .th-warn { color: #c0392b; }
 body.day-mode .tas-item b,
 body.day-mode .ticket-result-list dd,
 body.day-mode .ticket-notice p,
