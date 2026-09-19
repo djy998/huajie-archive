@@ -3320,3 +3320,254 @@ body.day-mode .ticket-badge-inline:active {
   border-color: rgba(255,255,255,.4);
   box-shadow: inset 0 2px 7px rgba(58,34,6,.26);
 }
+
+
+/* =============================================================================
+   16. 网站说明弹窗（首页底部小字）+ 反馈建议箱 + 购票管理新增项
+   ============================================================================= */
+
+/* 页脚：看起来就是普通文字，鼠标悬停才出现下划线 */
+footer .footer-link {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+footer .footer-link:hover,
+footer .footer-link:focus-visible { text-decoration: underline; }
+footer .footer-link:focus-visible { outline: none; }
+
+/* 弹窗外壳沿用 .info-box（和花街介绍同一套底色），只把宽度收窄一些 */
+.about-box { max-width: 640px; padding: 42px 36px 36px; }
+.about-box .info-title { margin-bottom: 16px; }
+.about-tabs { margin-bottom: 22px; }
+.about-panel[hidden] { display: none; }
+
+/* 关于网站 */
+.about-text p { margin-bottom: 14px; font-size: .98rem; line-height: 1.95; color: var(--text-soft); }
+.about-text .about-sub {
+  margin: 18px 0 8px;
+  font-size: .82rem;
+  letter-spacing: .12em;
+  color: var(--text-mute);
+}
+.about-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 16px;
+  margin: 0 0 14px;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.about-list dt { font-weight: 600; font-size: .92rem; line-height: 1.8; color: var(--lantern-soft); white-space: nowrap; }
+.about-list dd { margin: 0; font-size: .92rem; line-height: 1.8; color: var(--text-soft); }
+.about-text .about-thanks { margin: 20px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
+.about-inline-link {
+  display: inline;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.about-inline-link:hover { color: var(--cream); }
+
+/* 反馈与建议：问卷 */
+.about-field { margin-bottom: 18px; }
+.about-label { display: block; margin-bottom: 6px; font-size: .92rem; font-weight: 600; color: var(--cream); }
+.about-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
+.about-hint { margin: -2px 0 8px; font-size: .8rem; line-height: 1.7; color: var(--text-mute); }
+.about-center { text-align: center; }
+.about-count { margin: 4px 0 0; font-size: .74rem; text-align: right; color: var(--text-mute); }
+.about-form select,
+.about-form textarea,
+.about-form input:not([type="checkbox"]) {
+  width: 100%;
+  border: 1px solid var(--line);
+  font-family: var(--serif);
+  font-size: .92rem;
+  color: var(--cream);
+  background-color: var(--ink-2);
+}
+.about-form select {
+  padding: 11px 34px 11px 16px;
+  border-radius: 999px;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 14px center,
+    var(--ink-2);
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  cursor: pointer;
+}
+.about-form select option { color: var(--cream); background: var(--ink-2); }
+.about-form textarea {
+  min-height: 130px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  line-height: 1.7;
+  resize: vertical;
+}
+.about-form input:not([type="checkbox"]) { padding: 10px 16px; border-radius: 999px; }
+.about-form #feedbackContact { margin-top: 10px; }
+.about-form #feedbackContact[hidden] { display: none; }
+.about-form select:focus,
+.about-form textarea:focus,
+.about-form input:focus { outline: none; border-color: var(--accent); }
+.about-form input::placeholder,
+.about-form textarea::placeholder { color: var(--text-mute); }
+/* 自绘复选框（.gate-card 那套只在卡片里生效，这里单独写一份） */
+.about-form input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 17px; height: 17px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  display: inline-grid; place-content: center;
+  line-height: 1;
+  background: var(--ink-2);
+  cursor: pointer;
+}
+.about-form input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.about-form input[type="checkbox"]:checked::after { content: "✓"; color: var(--accent-ink); font-size: 12px; font-weight: 700; }
+.about-check { white-space: normal; }
+.about-verify { margin: 6px 0 4px; }
+.about-verify[hidden] { display: none; }
+.about-verify input.verify-input { text-align: center; }
+.about-submit-row { display: flex; justify-content: center; margin-top: 16px; }
+.about-submit-row .share-site-btn { margin: 0; min-width: 140px; }
+.about-submit-row .share-site-btn:disabled { opacity: .6; cursor: default; transform: none; }
+#feedbackForm[hidden], .about-done[hidden] { display: none; }
+.about-form .form-msg { margin-top: 12px; text-align: center; }
+.about-done { padding: 26px 0 10px; text-align: center; }
+.about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--lantern-soft); }
+.about-done .share-site-btn { margin-top: 18px; }
+
+/* 分享网站 */
+.about-share-text {
+  margin: 0 0 20px;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  font-size: .92rem;
+  line-height: 1.8;
+  text-align: center;
+  word-break: break-all;
+  color: var(--text-soft);
+  background: var(--panel-soft);
+  border: 1px dashed var(--line);
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+/* 白天模式 */
+body.day-mode .about-text p,
+body.day-mode .about-list dd,
+body.day-mode .about-share-text { color: var(--day-text); }
+body.day-mode .about-text .about-sub,
+body.day-mode .about-hint,
+body.day-mode .about-count { color: var(--day-brown-soft); }
+body.day-mode .about-list dt,
+body.day-mode .about-text .about-thanks,
+body.day-mode .about-done-title { color: var(--day-brown); }
+body.day-mode .about-label { color: var(--day-ink); }
+body.day-mode .about-list,
+body.day-mode .about-share-text { background: rgba(255,252,240,.5); border-color: #c98f3a; }
+body.day-mode .about-inline-link { color: var(--day-brown); }
+body.day-mode .about-inline-link:hover { color: var(--day-ink); }
+body.day-mode .about-form select,
+body.day-mode .about-form textarea,
+body.day-mode .about-form input:not([type="checkbox"]) { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
+body.day-mode .about-form select option { color: var(--day-ink); background: #f6e3bb; }
+body.day-mode .about-form input::placeholder,
+body.day-mode .about-form textarea::placeholder { color: #8a6a3a; }
+body.day-mode .about-form input[type="checkbox"] { background: #f6e3bb; border-color: #c98f3a; }
+body.day-mode .about-form input[type="checkbox"]:checked { background: #8a5a1c; border-color: #8a5a1c; }
+body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0; }
+
+@media (max-width: 640px) {
+  .about-box { padding: 38px 18px 26px; }
+  .about-list { grid-template-columns: 1fr; gap: 2px; padding: 12px 14px; }
+  .about-list dd { margin-bottom: 8px; }
+  .about-list dd:last-child { margin-bottom: 0; }
+}
+
+/* 购票页：余票后面的「每日 xx:xx 刷新」 */
+.ticket-reset-hint { display: block; margin-top: 1px; font-size: .72rem; text-align: center; color: var(--text-mute); }
+.ticket-reset-hint[hidden] { display: none; }
+body.day-mode .ticket-reset-hint { color: var(--day-brown-soft); }
+.ticket-stock:has(.ticket-reset-hint:not([hidden])) { border-radius: 18px; text-align: center; }
+
+/* 购票管理：标题输入框更宽 */
+.gate-card .ticket-title-edit input { width: 260px; max-width: 58vw; }
+.ticket-title-preview { color: var(--text-mute); }
+body.day-mode .ticket-title-preview { color: var(--day-brown-soft); }
+
+/* 反馈建议箱（管理员） */
+.admin-pills .fb-pill-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: #fff;
+  background: #c9463c;
+}
+.admin-pills .fb-pill-badge[hidden] { display: none; }
+.fb-admin-filters { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+.fb-admin-filters select { flex: 0 1 auto; padding-top: 8px; padding-bottom: 8px; }
+.gate-card .fb-admin-filters button { padding: 8px 20px; font-size: .84rem; }
+.fb-admin-list { display: grid; gap: 12px; text-align: left; }
+.fb-item {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+.fb-item.is-done { opacity: .62; }
+.fb-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px; font-size: .78rem; color: var(--text-mute); }
+.fb-cat { padding: 2px 10px; border-radius: 999px; font-weight: 600; color: var(--accent-ink); background: var(--accent); }
+.fb-cat-bug { background: #e0857b; color: #2a0d08; }
+.fb-cat-feature { background: #8fcf9f; color: #0d2a15; }
+.fb-cat-join { background: #f0b562; color: #3a2508; }
+.fb-state { margin-left: auto; color: #6fd08c; }
+.fb-body { font-size: .92rem; line-height: 1.75; white-space: pre-wrap; word-break: break-word; color: var(--cream); }
+.fb-contact { margin-top: 8px; font-size: .82rem; color: var(--text-mute); word-break: break-all; }
+.fb-contact b { color: var(--text-soft); }
+.fb-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.feedback-admin .fb-actions button:not(#_) { padding: 5px 14px; font-size: .78rem; font-weight: 500; }
+.feedback-admin .fb-actions button.is-void:not(#_) { color: #ff7a6e; }
+.fb-empty { padding: 18px; text-align: center; font-size: .88rem; color: var(--text-mute); }
+body.day-mode .fb-item { background: rgba(255,252,240,.5); border-color: #c98f3a; }
+body.day-mode .fb-head,
+body.day-mode .fb-contact,
+body.day-mode .fb-empty { color: var(--day-brown-soft); }
+body.day-mode .fb-body,
+body.day-mode .fb-contact b { color: var(--day-ink); }
+body.day-mode .fb-state { color: #2f7d4a; }
+body.day-mode .feedback-admin .fb-actions button.is-void:not(#_) { color: #b0261b; }
+.gate-card .ticket-limit-edit input[type="time"] { width: 150px; color-scheme: dark; }
+body.day-mode .gate-card .ticket-limit-edit input[type="time"] { color-scheme: light; }
+body.day-mode .about-form select {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236b4a24' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 14px center,
+    #f6e3bb;
+}
+.gate-card .ticket-limit-edit button { white-space: nowrap; }
+@media (max-width: 640px) {
+  .about-tabs { gap: 8px; flex-wrap: nowrap; }
+  .about-tabs .tab-btn { padding: 8px 13px; font-size: .8rem; white-space: nowrap; }
+  .gate-card .ticket-title-edit { width: 100%; }
+  .gate-card .ticket-title-edit input { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
+  .gate-card .ticket-title-edit button { padding: 9px 16px; }
+}
