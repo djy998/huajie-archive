@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 56;
+      var CSS_VERSION = 57;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -446,7 +446,8 @@
       <div class="ticket-guide-row">
         <button type="button" class="ticket-guide-btn" id="ticketGuideReopenBtn">购票须知</button>
       </div>
-      <div class="ticket-stock" id="ticketStock">今日余票 <b id="ticketRemaining">--</b> 张<small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
+      <!-- 余票 + 刷新时间 / 定时开关时间：显示哪些由管理页「购票管理」设置，内容由 ticket.js 填 -->
+      <div class="ticket-stock" id="ticketStock"><span id="ticketStockText">今日余票 <b>--</b> 张</span><small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
 
       <form id="ticketForm" novalidate autocomplete="off">
         <div class="ticket-field">
@@ -589,6 +590,28 @@
           <span class="ticket-admin-key">持票 id 可待定</span>
           <button type="button" class="ticket-switch" id="ticketPendingBtn" aria-pressed="false">—</button>
         </div>
+        <!-- 购票页显示设置 -->
+        <div class="ticket-admin-row">
+          <label class="ticket-admin-key" for="ticketRemainModeSelect">购票页显示余票</label>
+          <select id="ticketRemainModeSelect">
+            <option value="full">完全显示（具体张数）</option>
+            <option value="range">显示大致范围</option>
+            <option value="hidden">不显示</option>
+          </select>
+        </div>
+        <p class="ticket-sched-note ticket-title-preview" id="ticketRemainPreview" hidden></p>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">购票页显示定时开启 / 关闭时间</span>
+          <button type="button" class="ticket-switch" id="ticketShowSchedBtn" aria-pressed="false">—</button>
+        </div>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">购票页显示每日刷新时间</span>
+          <button type="button" class="ticket-switch" id="ticketShowResetBtn" aria-pressed="false">—</button>
+        </div>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">「购票情况」查看页（查看密码登录）</span>
+          <button type="button" class="ticket-switch" id="ticketViewerBtn" aria-pressed="false">—</button>
+        </div>
         <div class="ticket-admin-row">
           <label class="ticket-admin-key" for="ticketLimitInput">每日限额（张）</label>
           <span class="ticket-limit-edit">
@@ -692,6 +715,11 @@
       </div>
       <h2 class="section-title">公告板</h2>
       <div id="announcementList"></div>
+    </div>
+
+    <!-- 查看购票情况（只读）：输入查看密码后进入，「购票管理」面板以只读方式搬到这里（见 admin.js） -->
+    <div id="ticketViewBoard" hidden>
+      <div id="ticketViewHost"></div>
     </div>
   </section>
 
@@ -1635,7 +1663,7 @@ function openTicketViewSafe() {
 
 /* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载 ------------------
    改了 admin.js 之后把 ADMIN_JS_VERSION +1，让已经缓存旧文件的浏览器拿到新文件 */
-const ADMIN_JS_VERSION = 1;
+const ADMIN_JS_VERSION = 3;
 let adminJsPromise = null;
 
 function loadAdminJs() {
@@ -4845,7 +4873,7 @@ function initApp() {
 </script>
 
 <!-- 购票页脚本（访客表单 / 查询 / 首页入口 / 购票须知）。改了 ticket.js 之后把 ?v= +1 -->
-<script src="ticket.js?v=1"></script>
+<script src="ticket.js?v=3"></script>
 <script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->

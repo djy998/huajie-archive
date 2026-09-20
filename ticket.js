@@ -8,6 +8,8 @@
    playEnterAnim、closeOnBackdrop、copyText、captchaOn、TICKET_HASH、TICKET_TITLE、GROUP_QQ、TURNSTILE_SITE_KEY。
    购票管理（管理员面板、Excel 导出）在 admin.js，也会用到这里的 formatHolder / minutesToHHMM 等工具函数。
    改了本文件之后把 index.html 里 ticket.js?v= 的数字 +1。
+   余票 / 定时开关时间 / 刷新时间在购票页上显示与否，由管理页「购票管理」设置，
+   Worker 按设置决定下发什么（余票不显示或只显示范围时，具体张数根本不会发到访客浏览器）。
    ============================================================================= */
 
 /* =============================================================================
@@ -61,6 +63,15 @@ const ticketState = {
   cooldownMin: 30,     // 成功提交后至少隔多少分钟才能再提交（0 = 不限制）
   cooldownUntil: 0,    // 本机估算的冷却结束时间（epoch 毫秒），真正的判断在 Worker
   resetMin: 0,         // 每日票额刷新时间：国服 0 点之后的分钟数
+  /* 购票页上显示什么（管理页可改）。旧版 Worker 不下发这些字段时按「全部显示」处理 */
+  stockMode: "full",   // full = 具体张数 / range = 大致范围 / hidden = 不显示
+  stockLevel: "",      // range 时 Worker 给的档位：none / few / low / plenty
+  soldOut: false,
+  showSchedule: true,  // 显示定时开启 / 关闭时间
+  showReset: true,     // 显示每日刷新时间
+  open: false,
+  openAt: 0,
+  closeAt: 0,
 };
 
 /* 页面上显示的完整标题：后台标题 + 可选的「（测试）」 */
@@ -90,15 +101,54 @@ function applyTicketMeta(st) {
   if (Number.isFinite(st.cooldownLeftSec)) {
     ticketState.cooldownUntil = st.cooldownLeftSec > 0 ? Date.now() + st.cooldownLeftSec * 1000 : 0;
   }
+  if (typeof st.showSchedule === "boolean") ticketState.showSchedule = st.showSchedule;
+  if (typeof st.showReset === "boolean") ticketState.showReset = st.showReset;
+  if (typeof st.open === "boolean") ticketState.open = st.open;
+  ticketState.openAt = Number(st.openAt) || 0;
+  ticketState.closeAt = Number(st.closeAt) || 0;
   if (!$("view-ticket").hidden) {
     $("ticketTitle").textContent = ticketFullTitle();
     document.title = `${ticketFullTitle()} · 花舞之街`;
   }
-  const hint = $("ticketResetHint");
-  if (hint) {
-    hint.hidden = !ticketState.resetMin;
-    hint.textContent = ticketState.resetMin ? `每日 ${minutesToHHMM(ticketState.resetMin)} 刷新（国服时间）` : "";
+  paintTicketStock();
+}
+
+/* 余票文案（admin.js 的「访客看到」预览也用它）。返回 HTML；不显示时返回 "" */
+const TICKET_STOCK_LEVEL_HTML = {
+  none: "今日余票 <b>已售罄</b>",
+  few: "今日<b>余票10张以内</b>",
+  low: "今日<b>余票不多</b>",
+  plenty: "今日<b>余票充裕</b>",
+};
+function ticketStockHtml(mode, remaining, level) {
+  if (mode === "hidden") return "";
+  if (mode === "range") return TICKET_STOCK_LEVEL_HTML[level] || "";
+  return `今日余票 <b>${Number.isFinite(remaining) ? remaining : "--"}</b> 张`;
+}
+
+/* 余票下面那几行小字：每日刷新时间、定时开启 / 关闭时间（各自受管理页开关控制） */
+function ticketTimeLines() {
+  const lines = [];
+  if (ticketState.showReset) lines.push(`每日 ${minutesToHHMM(ticketState.resetMin)} 刷新票额（国服时间）`);
+  if (ticketState.showSchedule) {
+    if (!ticketState.open && ticketState.openAt) lines.push(`预计 ${formatCnTime(ticketState.openAt)} 开启购票（国服时间）`);
+    if (ticketState.open && ticketState.closeAt) lines.push(`购票将于 ${formatCnTime(ticketState.closeAt)} 截止（国服时间）`);
   }
+  return lines;
+}
+
+function paintTicketStock() {
+  const html = ticketStockHtml(ticketState.stockMode, ticketState.remaining, ticketState.stockLevel);
+  const text = $("ticketStockText");
+  text.innerHTML = html;
+  text.hidden = !html;
+  const lines = ticketTimeLines();
+  const hint = $("ticketResetHint");
+  hint.textContent = lines.join("\n");
+  hint.hidden = !lines.length;
+  $("ticketStock").hidden = !html && !lines.length;
+  $("ticketStock").classList.toggle("is-empty", ticketState.soldOut);
+  updateTicketQtyWarn();
 }
 
 const TICKET_CN_NUM = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
@@ -261,7 +311,7 @@ function setTicketQty(n) {
 }
 
 function updateTicketQtyWarn() {
-  const r = ticketState.remaining;
+  const r = ticketState.stockMode === "full" ? ticketState.remaining : null;   // 只有显示具体张数时才提示
   const over = r !== null && r > 0 && ticketState.qty > r;
   $("ticketQtyWarn").hidden = !over;
   if (over) $("ticketQtyWarn").textContent = `今日仅剩 ${r} 张，超出部分需等待工作人员确认`;
@@ -278,11 +328,14 @@ function applyTicketPerPerson(perPerson) {
   setTicketQty(Math.min(ticketState.qty, next));
 }
 
-function renderTicketStock(remaining) {
+/* info：get_ticket_status / submit_ticket 的返回（null = 读取失败） */
+function renderTicketStock(info) {
+  const remaining = info && Number.isFinite(info.remaining) ? info.remaining : null;
+  ticketState.stockMode = (info && info.remainingMode) || "full";
   ticketState.remaining = remaining;
-  $("ticketRemaining").textContent = remaining === null ? "--" : String(remaining);
-  $("ticketStock").classList.toggle("is-empty", remaining === 0);
-  updateTicketQtyWarn();
+  ticketState.stockLevel = (info && info.remainingLevel) || "";
+  ticketState.soldOut = info && typeof info.soldOut === "boolean" ? info.soldOut : remaining === 0;
+  paintTicketStock();
 }
 
 /* 页面状态：form（可填写）/ blocked（未开放或售罄）/ result（提交成功） */
@@ -310,21 +363,24 @@ async function openTicketView() {
   setTicketMode("blocked", "正在读取购票状态…");
   const st = await callWorker({ action: "get_ticket_status" });
   if (!st || !st.ok) {
+    ticketState.showReset = false;
+    ticketState.showSchedule = false;
     renderTicketStock(null);
     setTicketMode("blocked", "购票状态读取失败，检查一下网络后刷新页面再试");
     return;
   }
   applyTicketMeta(st);
   applyTicketPerPerson(st.perPerson);
-  renderTicketStock(st.remaining);
+  renderTicketStock(st);
   if (!st.open) {
-    /* 已经排好开启时间的话，告诉访客几点开，比一句「未开放」有用得多 */
-    const text = st.openAt ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 国服时间开启）` : TICKET_MSG_CLOSED;
+    /* 已经排好开启时间、且管理页允许显示的话，告诉访客几点开 */
+    const text = st.openAt && ticketState.showSchedule
+      ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 国服时间开启）` : TICKET_MSG_CLOSED;
     setTicketMode("blocked", text);
     openTicketNotice(text);
     return;
   }
-  if (st.remaining <= 0) {
+  if (ticketState.soldOut) {
     setTicketMode("blocked", TICKET_MSG_SOLD_OUT);
     openTicketNotice(TICKET_MSG_SOLD_OUT);
     return;
@@ -485,7 +541,7 @@ async function submitTicket(e) {
 
   if (Number.isInteger(data.cooldownMin)) ticketState.cooldownMin = data.cooldownMin;
   ticketState.cooldownUntil = ticketState.cooldownMin ? Date.now() + ticketState.cooldownMin * 60 * 1000 : 0;
-  renderTicketStock(data.remaining);
+  renderTicketStock(data);
   showTicketResult(form.payload, data);
 }
 

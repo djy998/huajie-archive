@@ -5,6 +5,7 @@
    进入 #internal 时由主脚本的 openInternalView() → loadAdminJs() 按需加载，
    加载完在文件末尾自己完成初始化，并设置 window.HJ_ADMIN_READY = true。
    内容：内部入口（密码 / 公告板 / 公告配图）、分享功能开关、机器人验证开关、星芒节面板、
+         「查看购票情况」只读页（查看密码登录，只能看和导出 Excel，不能改任何东西）、
          购票管理（订单表、作废 / 恢复、定时开关、Excel 导出、清空）、反馈建议箱。
    依赖主脚本（$、callWorker、setMsg、showToast、escapeHtml、playEnterAnim、closeOnBackdrop、copyText、
    openCaptcha、workerBase、workerImageUrl、siteLockdown、captchaOn、applyCaptchaEnabled、
@@ -60,6 +61,10 @@ async function checkInternalPassword() {
     setMsg(msg, "连接失败，检查一下网络后再试");
     return;
   }
+  if (data.error === "viewer_closed") {
+    setMsg(msg, "「购票情况」页面目前已关闭，请联系管理员");
+    return;
+  }
   if (!data.ok) {
     // 此处直接 openCaptcha：不享受 5 分钟免验证窗口
     const fails = getPwFailCount() + 1;
@@ -76,12 +81,40 @@ async function checkInternalPassword() {
   setPwFailCount(0);
   setMsg(msg, "");
   $("internalGate").hidden = true;
+  /* 查看密码：只进「购票情况」只读页，不显示公告板 */
+  if (data.isViewer) {
+    enterTicketViewer(input.value);
+    return;
+  }
   $("internalBoard").hidden = false;
   renderAnnouncements(data.items, data.isAdmin);
 
   // 管理面板都收进弹窗里，通过上方的胶囊按钮打开
   $("adminPills").hidden = !data.isAdmin;
   if (data.isAdmin) internalAdminPassword = input.value;
+}
+
+/* 查看购票情况（只读）-------------------------------------------------------------
+   直接借用「购票管理」面板，加 is-readonly 后由 CSS 藏掉所有设置项、作废按钮和清空按钮，
+   只留统计、订单表、刷新、导出 Excel。Worker 端对查看密码同样只放行 ticket_admin_get，
+   写操作（设置 / 作废 / 清空）一律拒绝，前端被改也改不了数据。
+   页面开着时每分钟自动刷新一次（切到后台时不刷）。 */
+let internalViewPassword = null;
+let ticketViewTimer = 0;
+
+function enterTicketViewer(password) {
+  internalViewPassword = password;
+  const panel = $("ticketAdminPanel");
+  panel.classList.add("is-readonly");
+  panel.querySelector("h2").textContent = "购票情况";
+  $("ticketViewHost").appendChild(panel);
+  panel.hidden = false;
+  $("ticketViewBoard").hidden = false;
+  refreshTicketAdmin();
+  clearInterval(ticketViewTimer);
+  ticketViewTimer = setInterval(() => {
+    if (!document.hidden && !$("view-internal").hidden && !$("ticketViewBoard").hidden) refreshTicketAdmin();
+  }, 60 * 1000);
 }
 
 /* 管理功能弹窗：把面板节点搬进弹窗，打开时刷新它自己的数据 */
@@ -515,6 +548,16 @@ function renderTicketAdmin() {
   if (document.activeElement !== $("ticketTitleInput")) $("ticketTitleInput").value = st.title || TICKET_TITLE;
   $("ticketTitlePreview").textContent = `访客看到的标题：${st.title || TICKET_TITLE}${st.testMode ? "（测试）" : ""}`;
   $("ticketTitlePreview").hidden = false;
+  /* 购票页显示设置 */
+  const mode = st.remainingMode || "full";
+  if (document.activeElement !== $("ticketRemainModeSelect")) $("ticketRemainModeSelect").value = mode;
+  const stockHtml = ticketStockHtml(mode, st.remaining, st.stockLevel);
+  $("ticketRemainPreview").textContent = `访客现在看到：${stockHtml ? stockHtml.replace(/<[^>]+>/g, "") : "（不显示余票）"}`
+    + (mode === "range" ? `　｜ 档位：≤10 张「余票10张以内」，≤ 限额 50% 「余票不多」，其余「余票充裕」` : "");
+  $("ticketRemainPreview").hidden = false;
+  setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示（点击隐藏）", "不显示（点击显示）");
+  setTicketSwitch($("ticketShowResetBtn"), st.showReset !== false, "显示（点击隐藏）", "不显示（点击显示）");
+  setTicketSwitch($("ticketViewerBtn"), st.viewerEnabled !== false, "已开放（点击关闭）", "已关闭（点击开放）");
   if (document.activeElement !== $("ticketCooldownInput")) $("ticketCooldownInput").value = String(st.cooldownMin ?? 30);
   if (document.activeElement !== $("ticketResetInput")) $("ticketResetInput").value = minutesToHHMM(st.resetMin || 0);
   if (document.activeElement !== $("ticketLimitInput")) $("ticketLimitInput").value = String(st.limit);
@@ -603,7 +646,16 @@ async function ticketAdminVoid(id, voided) {
 }
 
 async function refreshTicketAdmin() {
-  const data = await callWorker({ action: "ticket_admin_get", password: internalAdminPassword });
+  const data = await callWorker({ action: "ticket_admin_get", password: internalAdminPassword || internalViewPassword });
+  if (data && data.error === "viewer_closed") {
+    /* 查看页被管理员关掉了：清空已显示的数据，停止自动刷新 */
+    clearInterval(ticketViewTimer);
+    ticketAdmin.orders = [];
+    $("ticketAdminStats").innerHTML = "";
+    $("ticketAdminTbody").innerHTML = "";
+    $("ticketAdminStatus").textContent = "「购票情况」页面已被管理员关闭";
+    return false;
+  }
   if (!data || !data.ok) {
     $("ticketAdminStatus").textContent = "读取失败：若是刚更新的 Worker，先在 D1 里执行 ticket-voided.sql 加上 voided 列；若是全新部署，先执行 schema.sql 建表";
     return false;
@@ -625,6 +677,7 @@ async function ticketAdminSet(patch, okMsg) {
       bad_cooldown: "购票间隔需为 0–1440 之间的整数（分钟）",
       bad_reset: "刷新时间格式不对",
       bad_title: "标题太长了（最多 60 个字）",
+      bad_remaining_mode: "余票显示方式不对",
       bad_time: "定时时间格式不对",
       bad_schedule: "定时时间格式不对",
       no_texts_table: "保存标题失败：先在 D1 里执行 feedback-and-ticket-settings.sql 建 site_texts 表",
@@ -882,6 +935,28 @@ function initTicketAdmin() {
   $("ticketTestBtn").addEventListener("click", () => {
     const next = !ticketAdmin.status?.testMode;
     ticketAdminSet({ testMode: next }, next ? "标题已加上「（测试）」" : "标题已去掉「（测试）」");
+  });
+
+  /* 购票页显示设置：余票（具体 / 范围 / 不显示）、定时开关时间、每日刷新时间 */
+  const REMAIN_MODE_TEXT = { full: "购票页显示具体余票张数", range: "购票页只显示余票大致范围", hidden: "购票页不显示余票" };
+  $("ticketRemainModeSelect").addEventListener("change", (e) => {
+    const v = e.target.value;
+    e.target.blur();
+    ticketAdminSet({ remainingMode: v }, REMAIN_MODE_TEXT[v] || "已保存");
+  });
+  $("ticketShowSchedBtn").addEventListener("click", () => {
+    const next = ticketAdmin.status?.showSchedule === false;
+    ticketAdminSet({ showSchedule: next }, next ? "购票页显示定时开启 / 关闭时间" : "购票页不显示定时开启 / 关闭时间");
+  });
+  $("ticketViewerBtn").addEventListener("click", () => {
+    const next = ticketAdmin.status?.viewerEnabled === false;
+    ticketAdminSet({ viewerEnabled: next }, next
+      ? "「购票情况」查看页已开放"
+      : "「购票情况」查看页已关闭，查看密码暂时进不去（已经打开的页面下次刷新时也会被挡住）");
+  });
+  $("ticketShowResetBtn").addEventListener("click", () => {
+    const next = ticketAdmin.status?.showReset === false;
+    ticketAdminSet({ showReset: next }, next ? "购票页显示每日刷新时间" : "购票页不显示每日刷新时间");
   });
 
   /* 再次购票间隔（冷却） */

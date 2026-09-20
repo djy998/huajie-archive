@@ -3508,6 +3508,21 @@ body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0
 .ticket-reset-hint[hidden] { display: none; }
 body.day-mode .ticket-reset-hint { color: var(--day-brown-soft); }
 .ticket-stock:has(.ticket-reset-hint:not([hidden])) { border-radius: 18px; text-align: center; }
+/* 刷新时间和定时开关时间可能有两行；余票不显示时只剩小字那几行 */
+.ticket-reset-hint { white-space: pre-line; line-height: 1.6; }
+.ticket-stock[hidden], #ticketStockText[hidden] { display: none; }
+#ticketStockText[hidden] + .ticket-reset-hint { margin-top: 0; font-size: .78rem; }
+
+/* 购票管理：余票显示方式下拉框按文字宽度 */
+.ticket-admin #ticketRemainModeSelect { flex: 0 1 auto; }
+
+/* 查看购票情况（只读）：藏掉所有设置项、作废 / 恢复、清空，只留统计、订单表、刷新、导出 */
+.ticket-admin.is-readonly .ticket-admin-row,
+.ticket-admin.is-readonly .ticket-sched-note,
+.ticket-admin.is-readonly #ticketClearBtn,
+.ticket-admin.is-readonly .ticket-table th:last-child,
+.ticket-admin.is-readonly .ticket-table td.tt-actions { display: none !important; }
+#ticketViewBoard[hidden] { display: none; }
 
 /* 购票管理：标题输入框更宽 */
 .gate-card .ticket-title-edit input { width: 260px; max-width: 58vw; }
