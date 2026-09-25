@@ -2906,17 +2906,32 @@ body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color:
   overscroll-behavior: contain;
   border-radius: var(--radius);
   background: var(--panel);
-  padding: 8px 0;
+  padding: 0;
+  /* 玻璃边框画在弹窗本身上（和 .gate-card 同一套阴影）：
+     以前弹窗留了 8px 内边距、里面的面板又自带一圈边框，看起来是双重边框 */
+  box-shadow:
+    0 2px 8px rgba(8,6,18,.2),
+    0 18px 40px rgba(0,0,0,.32),
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16);
 }
-/* 弹窗里的面板去掉自身外边距，宽度交给弹窗控制 */
+/* 弹窗里的面板去掉自身外边距和边框，宽度、边框都交给弹窗 */
 .admin-modal .gate-card {
   max-width: none;
   margin: 0;
   background: none;
+  box-shadow: none;
   padding: 34px 30px 30px;
 }
-body.day-mode .admin-modal { background: #e8b563; }
-body.day-mode .admin-modal .gate-card { background: none; }
+body.day-mode .admin-modal {
+  background: #e8b563;
+  box-shadow:
+    0 2px 8px rgba(96,64,16,.14),
+    0 18px 40px rgba(96,64,16,.2),
+    inset 0 0 0 1px rgba(255,255,255,.14),
+    inset 0 1px 0 rgba(255,255,255,.28);
+}
+body.day-mode .admin-modal .gate-card { background: none; box-shadow: none; }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
 /* 区服下拉的大区分组 */
