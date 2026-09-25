@@ -3806,3 +3806,131 @@ body.day-mode .video-action.video-action-ticket {
   border-color: rgba(255,255,255,.6);
 }
 body.day-mode .video-action.video-action-ticket:hover { color: var(--accent-ink); border-color: #fff; }
+
+/* =============================================================================
+   场地使用登记（站内表单 #venue，原金数据问卷）+ 管理页「场地预约」
+   表单结构由 venue.js 生成；访客页和管理页的新增 / 修改表单共用这些样式
+   ============================================================================= */
+.venue-card .venue-intro { line-height: 1.8; text-align: left; }
+.venue-form .ticket-field[hidden],
+.venue-submit[hidden],
+.venue-other[hidden] { display: none; }
+
+/* 与 .gate-card input:not([type="checkbox"]) 特指度相同，靠书写顺序覆盖：单选框不能被撑成整行的输入框 */
+.gate-card input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 17px; height: 17px;
+  margin: 0; padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: inline-grid; place-content: center;
+  background: var(--ink-2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.gate-card input[type="radio"]:checked { border-color: var(--accent); }
+.gate-card input[type="radio"]:checked::after {
+  content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+}
+body.day-mode .gate-card input[type="radio"] { background: #f6e3bb; border-color: #c98f3a; }
+body.day-mode .gate-card input[type="radio"]:checked { border-color: #8a5a1c; }
+body.day-mode .gate-card input[type="radio"]:checked::after { background: #8a5a1c; }
+
+/* 选项：整块可点，选中后描边高亮 */
+.venue-choices { display: grid; gap: 8px; margin-top: 9px; }
+.venue-choice {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: .9rem;
+  line-height: 1.5;
+  color: var(--text-soft);
+  background: var(--panel-soft);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.venue-choice:hover { border-color: rgba(233,224,255,.3); color: var(--cream); }
+.venue-choice:has(input:checked) { border-color: var(--accent); color: var(--cream); background: rgba(185,164,224,.14); }
+.venue-choice span { min-width: 0; word-break: break-word; }
+.gate-card .venue-other { margin: 8px 0 0; text-align: left; }
+.venue-form .ticket-field input:not([type="checkbox"]):not([type="radio"]) { margin-bottom: 0; text-align: left; }
+.venue-form textarea { min-height: 84px; margin-bottom: 0; }
+
+/* 场地：按 22 / 23 区分两组，每组自适应列数 */
+.venue-places { display: grid; gap: 14px; margin-top: 9px; }
+.venue-place-title { margin-bottom: 7px; font-size: .82rem; font-weight: 600; letter-spacing: .06em; color: var(--lantern-soft); }
+.venue-place-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.venue-place { padding: 9px 12px; font-size: .86rem; }
+
+.venue-submit { margin-top: 6px; }
+.venue-result .ticket-result-list dd { white-space: pre-wrap; }
+.gate-card #venueAgainBtn { margin-top: 18px; }
+
+body.day-mode .venue-choice { color: var(--day-text); background: rgba(255,252,240,.45); border-color: #c98f3a; }
+body.day-mode .venue-choice:hover { color: var(--day-ink); border-color: #8a5a1c; }
+body.day-mode .venue-choice:has(input:checked) { color: var(--day-ink); border-color: #8a5a1c; background: rgba(255,246,224,.85); }
+body.day-mode .venue-place-title { color: var(--day-brown); }
+
+/* ---- 管理页「场地预约」 ---- */
+.gate-card.venue-admin { text-align: center; }
+.venue-edit {
+  margin: 0 0 18px;
+  padding: 20px 18px 18px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  background: rgba(255,255,255,.03);
+}
+.venue-edit[hidden] { display: none; }
+.venue-edit-title { margin-bottom: 14px; font-size: 1.05rem; text-align: center; color: var(--lantern-soft); }
+.venue-edit-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.venue-edit .form-msg { text-align: center; }
+
+.venue-item.is-void { opacity: .6; }
+.venue-item.is-void .venue-date { text-decoration: line-through; }
+.venue-item.is-past:not(.is-void) .venue-date { color: var(--text-soft); }
+.venue-date { font-size: .98rem; font-weight: 700; color: var(--lantern-soft); }
+.venue-tag { padding: 1px 9px; border-radius: 999px; font-size: .72rem; color: var(--text-soft); border: 1px solid var(--line); }
+.venue-tag.is-void { color: #ff7a6e; border-color: rgba(255,122,110,.5); }
+.venue-item .fb-time { margin-left: auto; }
+.venue-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; font-size: .78rem; }
+.venue-tags .venue-purpose { color: var(--cream); background: rgba(255,255,255,.1); border: 1px solid var(--line); }
+.venue-places-line { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.venue-chip { padding: 3px 10px; border-radius: 999px; font-size: .8rem; color: var(--lantern-soft); background: rgba(240,181,98,.12); border: 1px solid rgba(240,181,98,.35); }
+.venue-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: .86rem; }
+.venue-kv dt { color: var(--text-mute); white-space: nowrap; }
+.venue-kv dd { margin: 0; color: var(--cream); white-space: pre-wrap; word-break: break-word; }
+.venue-note { margin-top: 8px; padding: 7px 11px; border-radius: 10px; font-size: .82rem; line-height: 1.6; color: var(--text-soft); background: rgba(240,181,98,.08); border-left: 3px solid var(--lantern); white-space: pre-wrap; }
+.venue-note b { margin-right: 8px; color: var(--lantern-soft); }
+.feedback-admin .fb-actions button.is-restore:not(#_) { color: #6fd08c; }
+
+body.day-mode .venue-edit { background: rgba(255,252,240,.35); border-color: #8a5a1c; }
+body.day-mode .venue-edit-title,
+body.day-mode .venue-date { color: var(--day-brown); }
+body.day-mode .venue-item.is-past:not(.is-void) .venue-date { color: var(--day-brown-soft); }
+body.day-mode .venue-tag { color: var(--day-brown-soft); border-color: #c98f3a; }
+body.day-mode .venue-tag.is-void { color: #b0261b; border-color: #b0261b; }
+body.day-mode .venue-tags .venue-purpose { color: var(--day-ink); background: rgba(255,252,240,.6); border-color: #c98f3a; }
+body.day-mode .venue-chip { color: #6b4310; background: rgba(255,246,224,.8); border-color: #c98f3a; }
+body.day-mode .venue-kv dt { color: var(--day-brown-soft); }
+body.day-mode .venue-kv dd { color: var(--day-ink); }
+body.day-mode .venue-note { color: var(--day-text); background: rgba(255,246,224,.7); border-left-color: #8a5a1c; }
+body.day-mode .venue-note b { color: var(--day-brown); }
+body.day-mode .feedback-admin .fb-actions button.is-restore:not(#_) { color: #2f7d4a; }
+
+@media (max-width: 640px) {
+  .venue-place-grid { grid-template-columns: 1fr; }
+  .venue-edit { padding: 16px 12px 14px; }
+  .venue-kv { grid-template-columns: 1fr; gap: 0; }
+  .venue-kv dd { margin-bottom: 6px; }
+}
+/* 日期 / 时间框：夜间用深色控件，日历图标才看得见；白天换回浅色 */
+.venue-form input[type="date"],
+.venue-form input[type="datetime-local"] { color-scheme: dark; }
+body.day-mode .venue-form input[type="date"],
+body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }

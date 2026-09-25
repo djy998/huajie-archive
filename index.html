@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 57;
+      var CSS_VERSION = 58;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -503,6 +503,32 @@
     </div>
   </section>
 
+  <!-- ============ 场地使用登记（原金数据问卷；表单由 venue.js 生成，数据进 Worker 的 venue_bookings 表） ============ -->
+  <section id="view-venue" class="view" hidden>
+    <button class="back-btn" data-back>← 返回</button>
+    <div class="gate-card ticket-card venue-card">
+      <h2>场地使用登记</h2>
+      <p class="hint venue-intro" id="venueIntro"></p>
+      <p class="ticket-blocked" id="venueBlocked" hidden></p>
+      <form id="venueForm" novalidate autocomplete="off">
+        <div class="venue-form" id="venueFields"></div>
+        <div class="venue-submit" data-venue-submit>
+          <div class="verify-host ticket-verify" id="venueVerify"></div>
+          <div class="ticket-submit-row">
+            <button type="submit" id="venueSubmitBtn">提交</button>
+          </div>
+          <p class="form-msg" id="venueMsg" hidden></p>
+        </div>
+      </form>
+      <div class="ticket-result venue-result" id="venueResult" hidden>
+        <h3 id="venueResultTitle">登记成功</h3>
+        <p class="ticket-result-note" id="venueResultNote"></p>
+        <dl class="ticket-result-list" id="venueResultList"></dl>
+        <button type="button" id="venueAgainBtn">再登记一个日期</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 内部入口 ============ -->
   <section id="view-internal" class="view" hidden>
 
@@ -526,6 +552,7 @@
         <button type="button" class="tab-btn" data-admin-panel="captchaPanel">机器人验证</button>
         <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
         <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
+        <button type="button" class="tab-btn" data-admin-panel="venueAdminPanel">场地预约</button>
         <button type="button" class="tab-btn" data-admin-panel="feedbackAdminPanel">反馈建议箱<span class="fb-pill-badge" id="feedbackPillBadge" hidden></span></button>
         <button type="button" class="tab-btn" data-admin-panel="postAnnouncementPanel">发布公告</button>
       </div>
@@ -670,6 +697,38 @@
             <tbody id="ticketAdminTbody"></tbody>
           </table>
         </div>
+      </div>
+      <!-- 场地预约：访客在 #venue 提交的登记 + 金数据导入的历史登记；可新增 / 修改 / 作废（见 admin.js 7c） -->
+      <div class="gate-card admin-card ticket-admin feedback-admin venue-admin" id="venueAdminPanel" hidden>
+        <h2>场地预约</h2>
+        <p class="hint" id="venueAdminStatus">读取中…</p>
+        <div class="fb-admin-filters">
+          <select id="venueFilterState" aria-label="按状态筛选">
+            <option value="active" selected>有效</option>
+            <option value="void">已作废</option>
+            <option value="">全部状态</option>
+          </select>
+          <select id="venueFilterTime" aria-label="按预约日期筛选">
+            <option value="" selected>全部日期</option>
+            <option value="upcoming">今天及以后</option>
+            <option value="past">已过去</option>
+          </select>
+          <button type="button" id="venueRefreshBtn" class="ticket-btn-ghost">刷新</button>
+          <button type="button" id="venueNewBtn">新增预约</button>
+        </div>
+        <p class="form-msg" id="venueAdminMsg" hidden></p>
+        <div class="venue-edit" id="venueEditBox" hidden>
+          <h3 class="venue-edit-title" id="venueEditTitle">新增预约</h3>
+          <form id="venueAdminForm" novalidate autocomplete="off">
+            <div class="venue-form" id="venueAdminFields"></div>
+            <div class="venue-edit-actions">
+              <button type="submit" id="venueAdminSaveBtn">保存</button>
+              <button type="button" id="venueAdminCancelBtn" class="ticket-btn-ghost">取消</button>
+            </div>
+            <p class="form-msg" id="venueAdminFormMsg" hidden></p>
+          </form>
+        </div>
+        <div class="fb-admin-list venue-admin-list" id="venueAdminList"></div>
       </div>
       <div class="gate-card admin-card ticket-admin feedback-admin" id="feedbackAdminPanel" hidden>
         <h2>反馈建议箱</h2>
@@ -1086,7 +1145,8 @@
      6b. 活动购票                 12b. 闹铃与倒计时（纯本地）
                                   13. 无障碍 & 启动
    拆分：6b 的访客购票部分在 ticket.js（紧跟本脚本加载）；
-         5、6 的管理面板和 6b 的购票管理、7b 的反馈建议箱在 admin.js（进入 #internal 时才按需加载）。
+         场地使用登记（#venue，原金数据问卷）在 venue.js（紧跟 ticket.js 加载）；
+         5、6 的管理面板和 6b 的购票管理、7b 的反馈建议箱、7c 的场地预约在 admin.js（进入 #internal 时才按需加载）。
          三个文件共用本脚本里的全局函数 / 常量（$、callWorker、showToast…），加载顺序不能乱。
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
    验证：界面在 verify.js（HJVerify，新增文件），题目与判卷在 Worker（见 verify-ext/）。
@@ -1111,7 +1171,7 @@ const WORKER_URL = "/api/";                                        // 当前：�
 // const WORKER_URL = "https://huayu-api.1316816234.workers.dev/";  // 备用：workers.dev，国内访客连不上
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 
-const VENUE_URL = "https://70kzvrch.jsjform.com/f/uKTiXQ";   // 场地使用登记（金数据）
+/* 场地使用登记：原来跳金数据（https://70kzvrch.jsjform.com/f/uKTiXQ），现在是站内表单 #venue，见 venue.js */
 const GROUP_QQ = "453278026";
 const CONTACT_QQ = "1316816234";                             // 复制花街介绍时附带的合作联系方式
 /* 活动购票页的地址。首页入口只在「购票已开放 + 管理页没勾（测试）」时出现；
@@ -1532,7 +1592,7 @@ const prefersReducedMotion = () =>
    3. 视图切换与路由
    每个视图对应一个 hash，前进 / 后退可正确还原：
      (空) 首页  #latest 最新活动  #previous 往期列表  #event-<id> 往期详情
-     #mini-review 小型活动回顾  #internal 内部入口
+     #mini-review 小型活动回顾  #internal 内部入口  #venue 场地使用登记
    ============================================================================= */
 
 /* 页面进入动画 ------------------------------------------------------------- */
@@ -1641,6 +1701,9 @@ function routeFromHash() {
   } else if (hash === TICKET_HASH_LEGACY) {
     history.replaceState(null, "", TICKET_HASH);   // 换成短链接，不产生额外的历史记录
     openTicketViewSafe();
+  } else if (hash === "#venue") {
+    if (typeof openVenueView === "function") openVenueView();
+    else { showView("view-home"); showToast("登记页没加载出来，刷新一下页面再试"); }
   } else if (hash === "#latest") {
     openLatestEvent();
   } else if (hash === "#previous") {
@@ -1666,7 +1729,7 @@ function openTicketViewSafe() {
 
 /* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载 ------------------
    改了 admin.js 之后把 ADMIN_JS_VERSION +1，让已经缓存旧文件的浏览器拿到新文件 */
-const ADMIN_JS_VERSION = 3;
+const ADMIN_JS_VERSION = 4;
 let adminJsPromise = null;
 
 function loadAdminJs() {
@@ -1705,8 +1768,8 @@ function initHashRoute() {
   routeFromHash();
   if (coldDeepLink) {
     const landing = document.querySelector(".view:not([hidden])");
-    /* 购票页例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏 */
-    if (landing && landing.id !== "view-ticket" && landing.querySelector(".back-btn")) {
+    /* 购票页、场地登记页例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏 */
+    if (landing && landing.id !== "view-ticket" && landing.id !== "view-venue" && landing.querySelector(".back-btn")) {
       coldEntryView = landing.id;
       hideColdEntryBack();
     }
@@ -2048,9 +2111,12 @@ function initNav() {
   $("archiveTile").addEventListener("click", openArchiveList);
   $("venueTile").addEventListener("click", openMiniReview);
   $("infoTile").addEventListener("click", () => requestCaptcha("info"));
+  /* 场地使用登记：站内表单（venue.js），hashchange → openVenueView */
   $("internalTile").addEventListener("click", async () => {
     if (await blockedByStaticMode()) return;
-    window.open(VENUE_URL, "_blank", "noopener");
+    if (typeof openVenueView !== "function") { showToast("登记页没加载出来，刷新一下页面再试"); return; }
+    if (location.hash === VENUE_HASH) openVenueView();
+    else setRoute(VENUE_HASH);
   });
   $("groupTile").addEventListener("click", async () => {
     if (await blockedByStaticMode()) return;
@@ -2077,6 +2143,7 @@ function applyCaptchaEnabled(on) {
   /* 购票表单里的验证组件在 ticket.js；只在开关真的变了时才动它，
      否则每次读到「开启」都会把访客已经做完的验证重置掉 */
   if (typeof syncTicketCaptcha === "function") syncTicketCaptcha(changed);
+  if (typeof syncVenueCaptcha === "function") syncVenueCaptcha(changed);   // 场地登记表单（venue.js）
   if (!captchaOn && !$("captchaOverlay").hidden) closeCaptcha();
   syncFeedbackGate();   // 网站说明弹窗里的反馈表单同样跟着总开关走
 }
@@ -4848,6 +4915,9 @@ function initApp() {
   } else {
     console.error("[购票] ticket.js 没有加载成功，购票入口与购票页不可用");
   }
+  /* 场地使用登记（venue.js） */
+  if (typeof initVenue === "function") initVenue();
+  else console.error("[场地登记] venue.js 没有加载成功，场地使用登记不可用");
   initClickBurst();
   initA11yTiles();
   initA11yModals();
@@ -4877,6 +4947,8 @@ function initApp() {
 
 <!-- 购票页脚本（访客表单 / 查询 / 首页入口 / 购票须知）。改了 ticket.js 之后把 ?v= +1 -->
 <script src="ticket.js?v=3"></script>
+<!-- 场地使用登记（站内表单，原金数据问卷）。改了 venue.js 之后把 ?v= +1 -->
+<script src="venue.js?v=2"></script>
 <script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->

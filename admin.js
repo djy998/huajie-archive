@@ -6,7 +6,8 @@
    加载完在文件末尾自己完成初始化，并设置 window.HJ_ADMIN_READY = true。
    内容：内部入口（密码 / 公告板 / 公告配图）、分享功能开关、机器人验证开关、星芒节面板、
          「查看购票情况」只读页（查看密码登录，只能看和导出 Excel，不能改任何东西）、
-         购票管理（订单表、作废 / 恢复、定时开关、Excel 导出、清空）、反馈建议箱。
+         购票管理（订单表、作废 / 恢复、定时开关、Excel 导出、清空）、反馈建议箱、
+         场地预约（场地使用登记的列表 / 新增 / 修改 / 作废，表单与文字对照在 venue.js）。
    依赖主脚本（$、callWorker、setMsg、showToast、escapeHtml、playEnterAnim、closeOnBackdrop、copyText、
    openCaptcha、workerBase、workerImageUrl、siteLockdown、captchaOn、applyCaptchaEnabled、
    hjStarlight、applyStarlight、refreshStarlightStatus、FEEDBACK_CATEGORIES…）
@@ -124,6 +125,7 @@ const ADMIN_PANEL_REFRESH = {
   starlightPanel: () => syncStarlightPanel(),
   ticketAdminPanel: () => refreshTicketAdmin(),
   feedbackAdminPanel: () => refreshFeedbackAdmin(),
+  venueAdminPanel: () => refreshVenueAdmin(),
 };
 
 /* 关掉 / 切换面板时把节点搬回 stash，避免被下一个面板顶掉 */
@@ -1161,6 +1163,189 @@ function initFeedbackAdmin() {
   });
 }
 
+/* ---- 7c. 管理员：场地预约（场地使用登记，原金数据问卷） ----
+   列表：访客在 #venue 提交的登记 + 金数据导入的历史登记（Worker 建表时自动导入）。
+   新增 / 修改用的是和访客页同一套表单（venue.js 的 buildVenueForm，admin 模式），
+   后台录入不限日期、角色id与联系方式至少填一项，另外可以改「提交时间」和写「管理备注」。
+   作废不删除：作废后默认筛选里看不到，切到「已作废」可以恢复。 */
+const venueAdmin = { items: [], today: "", editingId: null, loaded: false };
+
+const VENUE_SOURCE_TEXT = { web: "网站登记", admin: "后台录入", import: "金数据导入" };
+
+function venueAdminFiltered() {
+  const state = $("venueFilterState").value;
+  const time = $("venueFilterTime").value;
+  const today = venueAdmin.today || venueCnDate(0);
+  const list = venueAdmin.items.filter((i) =>
+    (!state || (state === "void" ? i.voided : !i.voided))
+    && (!time || (time === "upcoming" ? i.date >= today : i.date < today)));
+  /* 「今天及以后」按日期从近到远；其余按日期从新到旧 */
+  list.sort((a, b) => (time === "upcoming"
+    ? a.date.localeCompare(b.date) || a.id - b.id
+    : b.date.localeCompare(a.date) || b.id - a.id));
+  return list;
+}
+
+function renderVenueAdmin() {
+  const items = venueAdmin.items;
+  const today = venueAdmin.today || venueCnDate(0);
+  const live = items.filter((i) => !i.voided);
+  const upcoming = live.filter((i) => i.date >= today).length;
+  const voided = items.length - live.length;
+  $("venueAdminStatus").textContent = items.length
+    ? `共 ${items.length} 条：有效 ${live.length} 条（今天及以后 ${upcoming} 条）${voided ? `，已作废 ${voided} 条` : ""}`
+    : "还没有场地登记";
+
+  const list = venueAdminFiltered();
+  const fmt = (ms) => new Date(ms).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  $("venueAdminList").innerHTML = list.length ? list.map((i) => {
+    const past = i.date < today;
+    const rows = venueSummaryRows(i).filter(([k]) => !["预约日期", "申请身份", "使用意向", "预约场地"].includes(k));
+    return `<div class="fb-item venue-item${i.voided ? " is-void" : ""}${past ? " is-past" : ""}" data-venue-id="${i.id}">
+      <div class="fb-head">
+        <span class="venue-date">${escapeHtml(venueDateLabel(i.date))}</span>
+        ${i.voided ? `<span class="venue-tag is-void">已作废</span>` : past ? `<span class="venue-tag">已过去</span>` : ""}
+        <span class="fb-time">#${i.id} · ${escapeHtml(VENUE_SOURCE_TEXT[i.source] || i.source)}</span>
+      </div>
+      <div class="venue-tags">
+        <span class="fb-cat">${escapeHtml(venueIdentityText(i))}</span>
+        <span class="fb-cat venue-purpose">${escapeHtml(venuePurposeText(i))}</span>
+      </div>
+      <div class="venue-places-line">${(i.places || []).map((p) => `<span class="venue-chip">${escapeHtml(venuePlaceLabel(p))}</span>`).join("")}</div>
+      <dl class="venue-kv">${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>
+      ${i.adminNote ? `<p class="venue-note"><b>管理备注</b>${escapeHtml(i.adminNote)}</p>` : ""}
+      <p class="fb-contact">提交于 ${escapeHtml(fmt(i.createdAt))}（国服）${i.updatedAt ? ` · 最后修改 ${escapeHtml(fmt(i.updatedAt))}` : ""}</p>
+      <div class="fb-actions">
+        ${i.contact ? `<button type="button" class="tt-act is-copy" data-venue-act="copy">复制联系方式</button>` : ""}
+        <button type="button" class="tt-act" data-venue-act="edit">修改</button>
+        ${i.voided
+          ? `<button type="button" class="tt-act is-restore" data-venue-act="restore">恢复</button>`
+          : `<button type="button" class="tt-act is-void" data-venue-act="void">作废</button>`}
+      </div>
+    </div>`;
+  }).join("") : `<p class="fb-empty">${items.length ? "没有符合筛选条件的登记" : "还没有场地登记"}</p>`;
+}
+
+async function refreshVenueAdmin() {
+  const data = await callWorker({ action: "venue_admin_list", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    $("venueAdminStatus").textContent = data?.error === "unknown action"
+      ? "读取失败：Worker 还是旧版本，请部署新的 worker.js"
+      : data?.error === "db_error"
+        ? "读取失败：数据库出错，稍后再试"
+        : "读取失败，请重新登录内部入口后再试";
+    return false;
+  }
+  venueAdmin.items = data.items;
+  venueAdmin.today = data.today || venueCnDate(0);
+  venueAdmin.loaded = true;
+  renderVenueAdmin();
+  return true;
+}
+
+function openVenueEditor(item = null) {
+  venueAdmin.editingId = item ? item.id : null;
+  const root = $("venueAdminFields");
+  if (item) fillVenueForm(root, item);
+  else clearVenueForm(root);
+  $("venueEditTitle").textContent = item ? `修改登记 #${item.id}` : "新增预约";
+  $("venueAdminSaveBtn").textContent = item ? "保存修改" : "保存";
+  setMsg($("venueAdminFormMsg"), "");
+  $("venueEditBox").hidden = false;
+  $("venueNewBtn").disabled = true;
+  $("venueEditBox").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeVenueEditor() {
+  venueAdmin.editingId = null;
+  $("venueEditBox").hidden = true;
+  $("venueNewBtn").disabled = false;
+  clearVenueForm($("venueAdminFields"));
+}
+
+async function saveVenueAdmin(e) {
+  e.preventDefault();
+  const msg = $("venueAdminFormMsg");
+  const form = readVenueForm($("venueAdminFields"));
+  if (form.error) {
+    setMsg(msg, form.error);
+    form.focus?.focus();
+    return;
+  }
+  const id = venueAdmin.editingId;
+  const btn = $("venueAdminSaveBtn");
+  btn.disabled = true;
+  setMsg(msg, "");
+  const data = await callWorker({
+    action: "venue_admin_save", password: internalAdminPassword, ...(id ? { id } : {}), ...form.payload,
+  });
+  btn.disabled = false;
+  if (!data || !data.ok) {
+    setMsg(msg, !data ? "连接失败，检查一下网络后再试"
+      : VENUE_ERRORS[data.error] || "保存失败，请重新登录内部入口后再试");
+    return;
+  }
+  const at = venueAdmin.items.findIndex((i) => i.id === data.item.id);
+  if (at >= 0) venueAdmin.items[at] = data.item;
+  else venueAdmin.items.push(data.item);
+  closeVenueEditor();
+  renderVenueAdmin();
+  showToast(id ? `登记 #${id} 已保存` : `已新增登记 #${data.item.id}`);
+}
+
+async function venueAdminVoid(item, voided) {
+  const msg = $("venueAdminMsg");
+  setMsg(msg, "");
+  const data = await callWorker({ action: "venue_admin_void", password: internalAdminPassword, id: item.id, voided });
+  if (!data || !data.ok) {
+    if (data && data.error === "not_changed") {
+      setMsg(msg, "这条登记的状态已经变过了，已为你刷新");
+      await refreshVenueAdmin();
+      return;
+    }
+    setMsg(msg, "操作失败，请重新登录内部入口后再试");
+    return;
+  }
+  const at = venueAdmin.items.findIndex((i) => i.id === data.item.id);
+  if (at >= 0) venueAdmin.items[at] = data.item;
+  renderVenueAdmin();
+  showToast(voided ? `登记 #${item.id} 已作废（切到「已作废」可以恢复）` : `登记 #${item.id} 已恢复`);
+}
+
+function initVenueAdmin() {
+  buildVenueForm($("venueAdminFields"), { prefix: "vfa", admin: true });
+  ["input", "change"].forEach((t) => $("venueAdminFields").addEventListener(t, () => setMsg($("venueAdminFormMsg"), "")));
+  $("venueFilterState").addEventListener("change", renderVenueAdmin);
+  $("venueFilterTime").addEventListener("change", renderVenueAdmin);
+  $("venueRefreshBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { if (await refreshVenueAdmin()) showToast("已刷新"); } finally { btn.disabled = false; }
+  });
+  $("venueNewBtn").addEventListener("click", () => openVenueEditor(null));
+  $("venueAdminCancelBtn").addEventListener("click", closeVenueEditor);
+  $("venueAdminForm").addEventListener("submit", saveVenueAdmin);
+  $("venueAdminList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-venue-act]");
+    if (!btn) return;
+    const id = Number(btn.closest("[data-venue-id]").dataset.venueId);
+    const item = venueAdmin.items.find((i) => i.id === id);
+    if (!item) return;
+    const act = btn.dataset.venueAct;
+    if (act === "copy") { copyText(item.contact, "联系方式已复制", item.contact); return; }
+    if (act === "edit") {
+      if (venueAdmin.editingId && venueAdmin.editingId !== id
+        && !confirm(`正在修改 #${venueAdmin.editingId}，还没保存。放弃那边的修改、改为修改 #${id} 吗？`)) return;
+      openVenueEditor(item);
+      return;
+    }
+    if (act === "void" && !confirm(`确定作废登记 #${id}（${venueDateLabel(item.date)} · ${item.charId || item.contact}）吗？\n\n作废后不会删除，切到「已作废」还能恢复。`)) return;
+    btn.disabled = true;
+    try { await venueAdminVoid(item, act === "void"); } finally { btn.disabled = false; }
+  });
+}
+
 /* ---- 初始化（本文件加载完立即执行） ---- */
 initInternal();
 initAdminPanels();
@@ -1169,6 +1354,8 @@ initCaptchaSwitch();
 initStarlightPanel();
 initTicketAdmin();
 initFeedbackAdmin();
+if (typeof buildVenueForm === "function") initVenueAdmin();
+else console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用");
 initPostAnnouncement();
 initAnnouncementImageUpload();
 window.HJ_ADMIN_READY = true;
