@@ -844,10 +844,10 @@
           <dd>对于外链视频（b站视频）无法生效，仅在静音时对视频静音</dd>
           <dt>动画按钮</dt>
           <dd>页面特效，按钮动画等均会产生变化，电脑端默认开启，手机端默认关闭，请根据设备性能自行开关</dd>
-          <dt>验证功能</dt>
-          <dd>国内玩家，网络连接不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
         </dl>
         <dl class="about-list">
+          <dt>验证功能</dt>
+          <dd>国内玩家，网络连接不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
           <dt>场地使用登记</dt>
           <dd>如果您需要使用花街场地进行活动，欢迎填写该问卷</dd>
         </dl>
@@ -1258,7 +1258,7 @@ const LATEST_EVENT = {
   ticketUrl: "",   // 购票链接，留空则不显示购票按钮
   cover: "poster-moguri-2026.webp",   // 详情页标题栏背景图（同「往期街区活动」的 cover 字段用法）
   areas: [],
-  manual: "",
+  manual: { images: ["assets/latest/latest-002.webp?v=1"] },   // 游玩手册（2026中秋月轮祭）
   poster: { images: ["assets/latest/latest-001.webp?v=2"] },   // 换了同名图片记得把 ?v= 数字 +1，强制客人刷新缓存
   review: "",
   feedback: "",
