@@ -3949,3 +3949,255 @@ body.day-mode .feedback-admin .fb-actions button.is-restore:not(#_) { color: #2f
 .venue-form input[type="datetime-local"] { color-scheme: dark; }
 body.day-mode .venue-form input[type="date"],
 body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
+
+/* =============================================================================
+   活动问卷（最新活动详情页「反馈与建议」，表单由 survey.js 生成）+ 管理页「活动问卷」
+   选项格子沿用场地登记的 .venue-choice；表单外框沿用购票页的 .ticket-card / .ticket-field
+   ============================================================================= */
+.gate-card.survey-card { max-width: none; margin: 0 0 20px; }
+.survey-card .survey-intro { margin-bottom: 6px; line-height: 1.8; text-align: left; }
+.survey-card .ticket-blocked { margin: 18px 0 6px; }
+#surveyForm[hidden], .survey-done[hidden] { display: none; }
+
+.survey-draft-note {
+  margin: 14px 0 0;
+  padding: 7px 14px;
+  border-radius: 12px;
+  font-size: .82rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+  background: rgba(185,164,224,.1);
+  border: 1px dashed var(--line);
+}
+.survey-draft-note[hidden] { display: none; }
+
+/* 文字按钮（清空重填、跳到反馈与建议）：:not(#_) 压过 .gate-card button 的玻璃按钮样式 */
+.survey-card button.survey-link:not(#_) {
+  display: inline;
+  margin: 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-soft);
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transform: none;
+  cursor: pointer;
+}
+.survey-card button.survey-link:not(#_):hover { color: var(--cream); transform: none; box-shadow: none; }
+.survey-card button.survey-link:not(#_):active { transform: none; box-shadow: none; }
+
+/* 分节标题：一、活动宣传 …… 右边拖一条细线 */
+.survey-sec { margin-top: 30px; }
+.survey-sec-title {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 18px;
+  font-size: 1.06rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--lantern-soft);
+}
+.survey-sec-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.survey-sec-no {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-family: var(--brush);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--accent-ink);
+  background: var(--lantern-soft);
+}
+
+.survey-form .survey-q[hidden] { display: none; }
+.survey-no { font-weight: 500; color: var(--text-mute); }
+.survey-q .ticket-sub:last-child { margin-bottom: 0; }
+/* 没有说明文字时，题目和输入框之间补一点间距 */
+.survey-q > .ticket-label + textarea,
+.survey-q > .ticket-label + input[type="text"] { margin-top: 9px; }
+
+/* 选项：默认自适应列数；是 / 否两列；项目格子宽一点 */
+.survey-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 9px; }
+.survey-options.is-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 360px; }
+.survey-options.is-wide,
+.survey-options.is-long { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+.venue-choice.survey-choice { padding: 9px 13px; }
+.survey-choice-text small { display: block; margin-top: 1px; font-size: .74rem; line-height: 1.45; color: var(--text-mute); }
+.gate-card .survey-other { margin-top: 8px; }
+
+/* 1～10 分：十个格子，整格可点；选中后填满强调色 */
+.survey-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.survey-scale-opt { position: relative; display: block; min-width: 0; cursor: pointer; }
+.gate-card .survey-scale-opt input[type="radio"] {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0;
+  border: 0; border-radius: 12px;
+  opacity: 0;
+  cursor: pointer;
+}
+.survey-scale-opt span {
+  display: flex; align-items: center; justify-content: center;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: var(--panel-soft);
+  transition: border-color .15s, background .15s, color .15s;
+  pointer-events: none;
+}
+.survey-scale-opt:hover span { border-color: rgba(233,224,255,.36); color: var(--cream); }
+.survey-scale-opt input:checked + span { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.survey-scale-opt input:focus-visible + span { outline: 2px solid var(--accent-soft); outline-offset: 2px; }
+.survey-scale-ends { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: .74rem; color: var(--text-mute); }
+
+/* 游玩项目：每个选中的项目一张小卡片（打分 + 意见） */
+.survey-q.is-card {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.03);
+}
+.survey-card-title { font-size: 1rem; font-weight: 700; color: var(--lantern-soft); }
+.survey-card-sub { margin: 1px 0 10px; font-size: .78rem; color: var(--text-mute); }
+.ticket-label.survey-card-label { font-size: .88rem; font-weight: 600; }
+.survey-sublabel { display: block; margin: 14px 0 6px; font-size: .84rem; color: var(--text-soft); }
+.survey-sublabel em { font-style: normal; color: var(--text-mute); }
+.survey-card .survey-q textarea { min-height: 76px; margin-bottom: 0; }
+.survey-card .survey-q.is-card textarea { min-height: 62px; }
+
+/* 没答 / 答错：题目标红 + 一行提示 */
+.survey-err { margin-top: 7px; font-size: .8rem; color: #e08e84; }
+.survey-err[hidden] { display: none; }
+.survey-q.is-error .survey-scale-opt span,
+.survey-q.is-error .venue-choice { border-color: rgba(224,142,132,.7); }
+.survey-q.is-error.is-card { border-color: rgba(224,142,132,.7); }
+.survey-card .survey-q.is-error textarea,
+.survey-card .survey-q.is-error input[type="text"] { border-color: rgba(224,142,132,.7); }
+
+.survey-submit { margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+.survey-done { padding: 12px 0 4px; }
+.survey-done-more { font-size: .85rem; line-height: 1.8; color: var(--text-soft); }
+
+/* 白天 */
+body.day-mode .survey-draft-note { color: var(--day-text); background: rgba(255,252,240,.45); border-color: #c98f3a; }
+body.day-mode .survey-card button.survey-link:not(#_) { color: var(--day-brown); background: none; border: 0; box-shadow: none; }
+body.day-mode .survey-card button.survey-link:not(#_):hover { color: var(--day-ink); }
+body.day-mode .survey-sec-title { color: var(--day-brown); }
+body.day-mode .survey-sec-title::after { background: rgba(138,90,28,.35); }
+body.day-mode .survey-sec-no { color: #fff6e0; background: #8a5a1c; }
+body.day-mode .survey-no,
+body.day-mode .survey-choice-text small,
+body.day-mode .survey-scale-ends,
+body.day-mode .survey-card-sub,
+body.day-mode .survey-sublabel em { color: var(--day-brown-soft); }
+body.day-mode .survey-scale-opt span { color: var(--day-text); background: rgba(255,252,240,.45); border-color: #c98f3a; }
+body.day-mode .survey-scale-opt:hover span { color: var(--day-ink); border-color: #8a5a1c; }
+body.day-mode .survey-scale-opt input:checked + span { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
+body.day-mode .survey-scale-opt input:focus-visible + span { outline-color: #8a5a1c; }
+body.day-mode .survey-q.is-card { background: rgba(255,252,240,.3); border-color: #c98f3a; }
+body.day-mode .survey-card-title { color: var(--day-brown); }
+body.day-mode .survey-sublabel,
+body.day-mode .survey-done-more { color: var(--day-text); }
+body.day-mode .survey-err { color: #b0261b; }
+body.day-mode .survey-q.is-error .survey-scale-opt span,
+body.day-mode .survey-q.is-error .venue-choice,
+body.day-mode .survey-q.is-error.is-card,
+body.day-mode .survey-card .survey-q.is-error textarea,
+body.day-mode .survey-card .survey-q.is-error input[type="text"] { border-color: #b0261b; }
+body.day-mode .survey-submit { border-top-color: rgba(138,90,28,.35); }
+
+@media (max-width: 640px) {
+  .gate-card.survey-card { padding: 26px 16px; }
+  .survey-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .survey-options.is-pair { max-width: none; }
+  .survey-options.is-wide,
+  .survey-options.is-long { grid-template-columns: 1fr; }
+  .survey-q.is-card { padding: 12px 12px 14px; }
+}
+/* 手机竖屏：十个格子太挤，换成两排各五个 */
+@media (max-width: 480px) {
+  .survey-scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .survey-scale-opt span { height: 40px; }
+}
+
+/* ---- 管理页「活动问卷」 ---- */
+.survey-admin select[hidden],
+.survey-admin .survey-stats[hidden],
+.survey-admin .fb-admin-list[hidden] { display: none; }
+.survey-stats { display: grid; gap: 12px; text-align: left; }
+.sv-stat-sec { margin: 10px 0 0; font-size: .95rem; font-weight: 700; color: var(--lantern-soft); }
+.sv-overview { padding: 14px 16px; border-radius: var(--radius-sm); background: rgba(240,181,98,.08); border: 1px solid rgba(240,181,98,.3); }
+.sv-overview .sv-stat-sec { margin: 0 0 10px; }
+.sv-overview-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; margin: 0; }
+.sv-ov-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.sv-ov-item dt { min-width: 0; font-size: .84rem; color: var(--text-soft); }
+.sv-ov-item dd { flex: none; margin: 0; }
+.sv-ov-item dd b { font-size: 1.02rem; color: var(--cream); }
+.sv-ov-item dd small { margin-left: 5px; font-size: .72rem; color: var(--text-mute); }
+.sv-ov-item.is-empty dd b { color: var(--text-mute); }
+.sv-stat { padding: 13px 15px; border-radius: var(--radius-sm); background: var(--panel-soft); border: 1px solid var(--line); }
+.sv-stat.is-card { border-color: rgba(240,181,98,.3); }
+.sv-stat-title { font-size: .9rem; font-weight: 600; line-height: 1.6; color: var(--cream); }
+.sv-stat-title small { margin-left: 8px; font-size: .74rem; font-weight: 400; color: var(--text-mute); }
+.sv-stat-meta { margin: 2px 0 8px; font-size: .78rem; color: var(--text-mute); }
+.sv-stat-meta b { font-size: .95rem; color: var(--lantern-soft); }
+.sv-bars { display: grid; gap: 5px; }
+.sv-bar-row { display: grid; grid-template-columns: minmax(84px, 36%) 1fr 64px; align-items: center; gap: 10px; font-size: .8rem; }
+.sv-bar-key { min-width: 0; color: var(--text-soft); word-break: break-word; }
+.sv-bar { height: 9px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+.sv-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.sv-bar-n { text-align: right; color: var(--cream); font-variant-numeric: tabular-nums; }
+.sv-bar-n small { margin-left: 5px; color: var(--text-mute); }
+.sv-hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; max-width: 420px; }
+.sv-hist-col { display: grid; justify-items: center; gap: 2px; font-size: .7rem; }
+.sv-hist-bar { display: flex; align-items: flex-end; width: 100%; height: 48px; border-radius: 6px; background: rgba(255,255,255,.05); overflow: hidden; }
+.sv-hist-bar i { display: block; width: 100%; background: var(--accent); }
+.sv-hist-n { color: var(--cream); font-variant-numeric: tabular-nums; }
+.sv-hist-k { color: var(--text-mute); }
+.sv-texts { margin-top: 8px; font-size: .82rem; }
+.sv-texts summary { cursor: pointer; color: var(--accent-soft); }
+.sv-texts ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.sv-texts li { padding: 6px 10px; border-radius: 10px; line-height: 1.7; color: var(--cream); background: rgba(255,255,255,.04); white-space: pre-wrap; word-break: break-word; }
+.sv-text-id { margin-right: 8px; font-size: .72rem; color: var(--text-mute); }
+.survey-item .venue-kv dt { white-space: normal; max-width: 15em; }
+
+body.day-mode .sv-stat-sec,
+body.day-mode .sv-stat-meta b { color: var(--day-brown); }
+body.day-mode .sv-overview { background: rgba(255,246,224,.55); border-color: #c98f3a; }
+body.day-mode .sv-ov-item { border-bottom-color: rgba(138,90,28,.3); }
+body.day-mode .sv-ov-item dt,
+body.day-mode .sv-bar-key { color: var(--day-text); }
+body.day-mode .sv-ov-item dd b,
+body.day-mode .sv-stat-title,
+body.day-mode .sv-bar-n,
+body.day-mode .sv-hist-n,
+body.day-mode .sv-texts li { color: var(--day-ink); }
+body.day-mode .sv-ov-item dd small,
+body.day-mode .sv-ov-item.is-empty dd b,
+body.day-mode .sv-stat-title small,
+body.day-mode .sv-stat-meta,
+body.day-mode .sv-bar-n small,
+body.day-mode .sv-hist-k,
+body.day-mode .sv-text-id { color: var(--day-brown-soft); }
+body.day-mode .sv-stat { background: rgba(255,252,240,.5); border-color: #c98f3a; }
+body.day-mode .sv-bar,
+body.day-mode .sv-hist-bar { background: rgba(138,90,28,.12); }
+body.day-mode .sv-bar i,
+body.day-mode .sv-hist-bar i { background: #8a5a1c; }
+body.day-mode .sv-texts summary { color: var(--day-brown); }
+body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
+
+@media (max-width: 640px) {
+  .sv-bar-row { grid-template-columns: minmax(72px, 40%) 1fr 58px; gap: 8px; }
+  .survey-item .venue-kv dt { max-width: none; }
+}

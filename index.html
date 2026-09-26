@@ -105,16 +105,17 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 61;
+      var CSS_VERSION = 62;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
       var fresh = true;
       try { fresh = !localStorage.getItem("hj_visited"); } catch (e) {}
-      /* 拿着购票链接（#ti，或内测时的旧长链接）直接进来的新访客：不弹莫古力开屏图，直接看购票页。
-         这里不记 hj_visited，下次从首页进来仍会看到开屏图。两个 hash 要和页面脚本里的 TICKET_HASH / TICKET_HASH_LEGACY 一致 */
+      /* 拿着购票链接（#ti，或内测时的旧长链接）或问卷链接（#survey）直接进来的新访客：不弹莫古力开屏图，直接看对应页面。
+         这里不记 hj_visited，下次从首页进来仍会看到开屏图。
+         这几个 hash 要和页面脚本里的 TICKET_HASH / TICKET_HASH_LEGACY / SURVEY_HASH 一致 */
       var h = location.hash;
-      var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
+      var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd" || h === "#survey";
       root.classList.add(fresh && !ticketLanding ? "boot-pending" : "css-wait");
 
       function addStylesheet(href, onDone) {
@@ -553,6 +554,7 @@
         <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
         <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
         <button type="button" class="tab-btn" data-admin-panel="venueAdminPanel">场地预约</button>
+        <button type="button" class="tab-btn" data-admin-panel="surveyAdminPanel">活动问卷</button>
         <button type="button" class="tab-btn" data-admin-panel="feedbackAdminPanel">反馈建议箱<span class="fb-pill-badge" id="feedbackPillBadge" hidden></span></button>
         <button type="button" class="tab-btn" data-admin-panel="postAnnouncementPanel">发布公告</button>
       </div>
@@ -560,14 +562,14 @@
       <div id="adminPanelStash" hidden>
       <div class="gate-card admin-card" id="lockdownPanel" hidden>
         <h2>分享功能开关</h2>
-        <p class="hint">关闭后网页变成纯静态展示：复制花街介绍不再附联系方式，活动群、场地使用登记、点赞都会提示「功能未开放」。</p>
+        <p class="hint">关闭后网页变成纯静态展示：复制花街介绍不再附联系方式，活动群、场地使用登记、活动问卷、点赞都会提示「功能未开放」。</p>
         <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
         <button id="lockdownToggleBtn">切换</button>
         <p class="form-msg" id="lockdownMsg" hidden></p>
       </div>
       <div class="gate-card admin-card" id="captchaPanel" hidden>
         <h2>机器人验证开关</h2>
-        <p class="hint">关闭后全站取消人机验证：活动群、花街介绍、复制联系方式、场地使用登记都不再弹验证，Worker 端也一律放行。<br>仅用于压力测试，测完记得开回来。</p>
+        <p class="hint">关闭后全站取消人机验证：活动群、花街介绍、复制联系方式、场地使用登记、活动问卷都不再弹验证，Worker 端也一律放行。<br>仅用于压力测试，测完记得开回来。</p>
         <p class="hint" id="captchaStatus">当前状态：加载中…</p>
         <button id="captchaToggleBtn">切换</button>
         <p class="form-msg" id="captchaSwitchMsg" hidden></p>
@@ -729,6 +731,33 @@
           </form>
         </div>
         <div class="fb-admin-list venue-admin-list" id="venueAdminList"></div>
+      </div>
+      <!-- 活动问卷：最新活动详情页「反馈与建议」里的站内问卷（题目在 survey.js；统计 / 逐份查看 / 作废 / 导出见 admin.js 7d） -->
+      <div class="gate-card admin-card ticket-admin feedback-admin survey-admin" id="surveyAdminPanel" hidden>
+        <h2>活动问卷</h2>
+        <p class="hint" id="surveyAdminStatus">读取中…</p>
+        <div class="ticket-admin-row">
+          <span class="ticket-admin-key">问卷开放（访客可以填写）</span>
+          <button type="button" class="ticket-switch" id="surveyOpenBtn" aria-pressed="false">—</button>
+        </div>
+        <p class="ticket-sched-note" id="surveyLockNote" hidden>「分享功能开关」现在是关闭的，访客暂时提交不了问卷（开回来后自动恢复）。</p>
+        <div class="fb-admin-filters">
+          <select id="surveyViewSelect" aria-label="查看方式">
+            <option value="stats" selected>统计汇总</option>
+            <option value="list">逐份查看</option>
+          </select>
+          <select id="surveyFilterState" aria-label="按状态筛选" hidden>
+            <option value="active" selected>有效</option>
+            <option value="void">已作废</option>
+            <option value="">全部</option>
+          </select>
+          <button type="button" id="surveyRefreshBtn" class="ticket-btn-ghost">刷新</button>
+          <button type="button" id="surveyExportBtn">导出 Excel</button>
+          <button type="button" id="surveyCopyLinkBtn" class="ticket-btn-ghost">复制问卷链接</button>
+        </div>
+        <p class="form-msg" id="surveyAdminMsg" hidden></p>
+        <div class="survey-stats" id="surveyAdminStats"></div>
+        <div class="fb-admin-list survey-admin-list" id="surveyAdminList" hidden></div>
       </div>
       <div class="gate-card admin-card ticket-admin feedback-admin" id="feedbackAdminPanel" hidden>
         <h2>反馈建议箱</h2>
@@ -1148,8 +1177,9 @@
                                   13. 无障碍 & 启动
    拆分：6b 的访客购票部分在 ticket.js（紧跟本脚本加载）；
          场地使用登记（#venue，原金数据问卷）在 venue.js（紧跟 ticket.js 加载）；
-         5、6 的管理面板和 6b 的购票管理、7b 的反馈建议箱、7c 的场地预约在 admin.js（进入 #internal 时才按需加载）。
-         三个文件共用本脚本里的全局函数 / 常量（$、callWorker、showToast…），加载顺序不能乱。
+         最新活动「反馈与建议」里的活动问卷（#survey）在 survey.js（紧跟 venue.js 加载）；
+         5、6 的管理面板和 6b 的购票管理、7b 的反馈建议箱、7c 的场地预约、7d 的活动问卷在 admin.js（进入 #internal 时才按需加载）。
+         这几个文件共用本脚本里的全局函数 / 常量（$、callWorker、showToast…），加载顺序不能乱。
    后端：Cloudflare Worker（WORKER_URL），密码与公告均在 Worker + D1，页面中不含密码。
    验证：界面在 verify.js（HJVerify，新增文件），题目与判卷在 Worker（见 verify-ext/）。
    ============================================================================= */
@@ -1181,6 +1211,9 @@ const CONTACT_QQ = "1316816234";                             // 复制花街介�
 const TICKET_HASH = "#ti";
 /* 内测时用过的长链接：已经发出去的也还能打开，进来后自动换成短链接 */
 const TICKET_HASH_LEGACY = "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
+/* 活动问卷的直达链接：打开最新活动详情页并直接切到「反馈与建议」（问卷本身在 survey.js）。
+   可以直接发群里：https://swayingsussurrusstreet.dpdns.org/#survey */
+const SURVEY_HASH = "#survey";
 /* 购票页标题与「（测试）」后缀改为在管理页「购票管理」里设置（存在 Worker / D1），
    这里只是状态读回来之前、或读取失败时的兜底值 */
 const TICKET_TITLE = "莫古力中秋月轮祭 · 购票";
@@ -1250,7 +1283,9 @@ const LATEST_VIDEO = {
 /* 最新活动（详情页内容）：title 为空时详情页标题显示「敬请期待」
    字段格式同 ARCHIVE_EVENTS；poster / manual / review / feedback 可以是
    字符串，或 { text, images: [...], link: { url, label } } 对象；
-   feedback（反馈与建议）只在最新活动中显示。 */
+   feedback（反馈与建议）只在最新活动中显示。
+   survey: true 时「反馈与建议」里显示站内活动问卷（题目在 survey.js），这时 feedback 字段不再使用；
+   改成 false 就恢复显示 feedback 的内容。 */
 const LATEST_EVENT = {
   title: "2026莫古力花舞之街月轮祭",
   dateLabel: "",
@@ -1279,6 +1314,7 @@ const LATEST_EVENT = {
   poster: { images: ["assets/latest/latest-001.webp?v=2"] },   // 换了同名图片记得把 ?v= 数字 +1，强制客人刷新缓存
   review: "",
   feedback: "",
+  survey: true,    // 「反馈与建议」= 站内活动问卷（survey.js）
 };
 
 /* 往期活动：新的加在数组最前面
@@ -1612,6 +1648,7 @@ const prefersReducedMotion = () =>
    每个视图对应一个 hash，前进 / 后退可正确还原：
      (空) 首页  #latest 最新活动  #previous 往期列表  #event-<id> 往期详情
      #mini-review 小型活动回顾  #internal 内部入口  #venue 场地使用登记
+     #survey 最新活动详情页，直接打开「反馈与建议」（活动问卷）
    ============================================================================= */
 
 /* 页面进入动画 ------------------------------------------------------------- */
@@ -1725,6 +1762,8 @@ function routeFromHash() {
     else { showView("view-home"); showToast("登记页没加载出来，刷新一下页面再试"); }
   } else if (hash === "#latest") {
     openLatestEvent();
+  } else if (hash === SURVEY_HASH) {
+    openLatestSurvey();
   } else if (hash === "#previous") {
     openArchiveList();
   } else if (hash === "#mini-review") {
@@ -1748,7 +1787,7 @@ function openTicketViewSafe() {
 
 /* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载 ------------------
    改了 admin.js 之后把 ADMIN_JS_VERSION +1，让已经缓存旧文件的浏览器拿到新文件 */
-const ADMIN_JS_VERSION = 4;
+const ADMIN_JS_VERSION = 5;
 let adminJsPromise = null;
 
 function loadAdminJs() {
@@ -1787,8 +1826,9 @@ function initHashRoute() {
   routeFromHash();
   if (coldDeepLink) {
     const landing = document.querySelector(".view:not([hidden])");
-    /* 购票页、场地登记页例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏 */
-    if (landing && landing.id !== "view-ticket" && landing.id !== "view-venue" && landing.querySelector(".back-btn")) {
+    /* 购票页、场地登记页、问卷链接例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏 */
+    const keepBack = landing && (landing.id === "view-ticket" || landing.id === "view-venue" || location.hash === SURVEY_HASH);
+    if (landing && !keepBack && landing.querySelector(".back-btn")) {
       coldEntryView = landing.id;
       hideColdEntryBack();
     }
@@ -2035,6 +2075,8 @@ function selectDetailTab(tab) {
     b.setAttribute("aria-selected", active ? "true" : "false");
   });
   detailView.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = p.id !== "panel-" + tab; });
+  /* 切到「反馈与建议」：活动问卷（survey.js）刷新一次开放状态 */
+  if (tab === "feedback" && window.HJ_SURVEY_READY && typeof onSurveyTabShown === "function") onSurveyTabShown();
 }
 
 function initTabs() {
@@ -2046,8 +2088,10 @@ function initTabs() {
   });
 }
 
+/* data.route / data.tab：从 #survey 进来时用，保留 #survey 地址、直接打开「反馈与建议」 */
 function openDetail(data) {
-  if (data.isLatest) setRoute("#latest");
+  if (data.route) setRoute(data.route);
+  else if (data.isLatest) setRoute("#latest");
   else if (data.id) setRoute("#event-" + data.id);
 
   $("detailBackBtn").style.display = "";
@@ -2066,10 +2110,15 @@ function openDetail(data) {
   $("panel-review").innerHTML = renderTabContent(data.review);
 
   $("feedbackTabBtn").hidden = !data.isLatest;
-  if (data.isLatest) $("panel-feedback").innerHTML = renderTabContent(data.feedback);
+  if (data.isLatest) {
+    /* 活动问卷只建一次、之后原样挂回来：来回切页面，填了一半的内容也不会丢 */
+    if (data.survey && window.HJ_SURVEY_READY && typeof mountSurvey === "function") mountSurvey($("panel-feedback"));
+    else if (data.survey) $("panel-feedback").innerHTML = `<div class="empty-note">问卷没加载出来，刷新一下页面再试</div>`;
+    else $("panel-feedback").innerHTML = renderTabContent(data.feedback);
+  }
   $("reviewTabBtn").hidden = !!data.hideReview;
 
-  selectDetailTab("poster");
+  selectDetailTab(data.tab || "poster");
   showView("view-detail");
 }
 
@@ -2078,6 +2127,17 @@ function openLatestEvent() {
     ...LATEST_EVENT,
     title: LATEST_EVENT.title || "敬请期待",
     isLatest: true,
+  });
+}
+
+/* #survey：最新活动详情页，直接打开「反馈与建议」（活动问卷） */
+function openLatestSurvey() {
+  openDetail({
+    ...LATEST_EVENT,
+    title: LATEST_EVENT.title || "敬请期待",
+    isLatest: true,
+    route: SURVEY_HASH,
+    tab: "feedback",
   });
 }
 
@@ -2163,6 +2223,7 @@ function applyCaptchaEnabled(on) {
      否则每次读到「开启」都会把访客已经做完的验证重置掉 */
   if (typeof syncTicketCaptcha === "function") syncTicketCaptcha(changed);
   if (typeof syncVenueCaptcha === "function") syncVenueCaptcha(changed);   // 场地登记表单（venue.js）
+  if (window.HJ_SURVEY_READY && typeof syncSurveyCaptcha === "function") syncSurveyCaptcha(changed);   // 活动问卷（survey.js）
   if (!captchaOn && !$("captchaOverlay").hidden) closeCaptcha();
   syncFeedbackGate();   // 网站说明弹窗里的反馈表单同样跟着总开关走
 }
@@ -4968,6 +5029,8 @@ function initApp() {
 <script src="ticket.js?v=3"></script>
 <!-- 场地使用登记（站内表单，原金数据问卷）。改了 venue.js 之后把 ?v= +1 -->
 <script src="venue.js?v=3"></script>
+<!-- 活动问卷（最新活动「反馈与建议」）。改了 survey.js 之后把 ?v= +1 -->
+<script src="survey.js?v=1"></script>
 <script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->

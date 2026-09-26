@@ -7,7 +7,8 @@
    内容：内部入口（密码 / 公告板 / 公告配图）、分享功能开关、机器人验证开关、星芒节面板、
          「查看购票情况」只读页（查看密码登录，只能看和导出 Excel，不能改任何东西）、
          购票管理（订单表、作废 / 恢复、定时开关、Excel 导出、清空）、反馈建议箱、
-         场地预约（场地使用登记的列表 / 新增 / 修改 / 作废，表单与文字对照在 venue.js）。
+         场地预约（场地使用登记的列表 / 新增 / 修改 / 作废，表单与文字对照在 venue.js）、
+         活动问卷（统计 / 逐份查看 / 作废 / 开放关闭 / Excel 导出，题目定义在 survey.js）。
    依赖主脚本（$、callWorker、setMsg、showToast、escapeHtml、playEnterAnim、closeOnBackdrop、copyText、
    openCaptcha、workerBase、workerImageUrl、siteLockdown、captchaOn、applyCaptchaEnabled、
    hjStarlight、applyStarlight、refreshStarlightStatus、FEEDBACK_CATEGORIES…）
@@ -126,6 +127,11 @@ const ADMIN_PANEL_REFRESH = {
   ticketAdminPanel: () => refreshTicketAdmin(),
   feedbackAdminPanel: () => refreshFeedbackAdmin(),
   venueAdminPanel: () => refreshVenueAdmin(),
+  surveyAdminPanel: () => {
+    if (window.HJ_SURVEY_READY) return refreshSurveyAdmin();
+    $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
+    return null;
+  },
 };
 
 /* 关掉 / 切换面板时把节点搬回 stash，避免被下一个面板顶掉 */
@@ -375,7 +381,7 @@ async function refreshLockdownStatus() {
   }
   siteLockdown = !!data.value;
   status.textContent = data.value
-    ? "当前状态：已关闭（纯静态展示，联系方式 / 活动群 / 场地登记 / 点赞都不可用）"
+    ? "当前状态：已关闭（纯静态展示，联系方式 / 活动群 / 场地登记 / 活动问卷 / 点赞都不可用）"
     : "当前状态：已开启（正常运行）";
   $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
   $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
@@ -1346,6 +1352,339 @@ function initVenueAdmin() {
   });
 }
 
+/* ---- 7d. 管理员：活动问卷 ----
+   访客在最新活动「反馈与建议」里填的问卷（题目定义、文字对照在 survey.js）。
+   · 统计汇总：只算有效答卷（作废的不算）；每道打分题给平均分和 1～10 分分布，文字题可以展开看全部内容
+   · 逐份查看：按有效 / 已作废 / 全部筛选；每份可以作废 / 恢复、复制联系方式。没有删除
+   · 「第 n 份」= 有效答卷按提交先后的序号（要按提交顺序抽奖之类时用）；#编号 是数据库里的编号，作废也不变
+   · 导出 Excel：答卷明细、统计、文字意见三张表，只含有效答卷 */
+const surveyAdmin = { items: [], open: true, lockdown: false, loaded: false };
+
+const surveyAdminValid = () => surveyAdmin.items.filter((i) => !i.voided);
+const surveyAdminTime = (ms) => new Date(ms).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false,
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+function surveyAdminSeqMap() {
+  const m = new Map();
+  surveyAdminValid().forEach((it, i) => m.set(it.id, i + 1));
+  return m;
+}
+
+/* 统计：字段 key → { n, counts / sum / dist / texts } */
+function surveyAdminStats(items) {
+  const st = {};
+  SURVEY_FIELDS.forEach((f) => {
+    st[f.key] = { n: 0, counts: {}, sum: 0, dist: Array(11).fill(0), texts: [] };
+  });
+  items.forEach((it) => {
+    const a = it.answers || {};
+    SURVEY_FIELDS.forEach((f) => {
+      const v = a[f.key];
+      if (v === undefined || v === null || v === "") return;
+      const s = st[f.key];
+      if (f.type === "score") {
+        if (!Number.isInteger(v) || v < 1 || v > 10) return;
+        s.n++; s.sum += v; s.dist[v]++;
+      } else if (f.type === "single" || f.type === "multi") {
+        const list = Array.isArray(v) ? v : [v];
+        if (!list.length) return;
+        s.n++;
+        list.forEach((k) => { s.counts[k] = (s.counts[k] || 0) + 1; });
+      } else {
+        s.n++;
+        s.texts.push({ id: it.id, text: String(v) });
+      }
+    });
+  });
+  return st;
+}
+
+const surveyAvg = (s) => (s.n ? (s.sum / s.n).toFixed(1) : "—");
+const surveyPct = (k, n) => (n ? Math.round((k / n) * 100) : 0);
+
+function surveyTextsHtml(title, texts, seq) {
+  if (!texts.length) return "";
+  return `<details class="sv-texts"><summary>${escapeHtml(title)}（${texts.length} 条）</summary><ul>`
+    + texts.map((t) => `<li><span class="sv-text-id">${seq.has(t.id) ? `第 ${seq.get(t.id)} 份` : `#${t.id}`}</span>${escapeHtml(t.text)}</li>`).join("")
+    + `</ul></details>`;
+}
+
+function renderSurveyAdminStats() {
+  const valid = surveyAdminValid();
+  const box = $("surveyAdminStats");
+  if (!valid.length) {
+    box.innerHTML = `<p class="fb-empty">${surveyAdmin.items.length ? "有效答卷为 0（都被作废了）" : "还没有人填写问卷"}</p>`;
+    return;
+  }
+  const st = surveyAdminStats(valid);
+  const seq = surveyAdminSeqMap();
+
+  /* 评分一览：所有打分题的平均分，一眼看完（总评在前，各游玩项目在后） */
+  const scoreItems = [
+    ...SURVEY_ITEMS.filter((it) => it.kind === "score" && !it.card),
+    ...SURVEY_ITEMS.filter((it) => it.kind === "score" && it.card),
+  ];
+  const overview = `<div class="sv-overview"><p class="sv-stat-sec">评分一览（平均分，满分 10 分）</p><dl class="sv-overview-list">`
+    + scoreItems.map((it) => {
+      const s = st[it.key];
+      return `<div class="sv-ov-item${s.n ? "" : " is-empty"}"><dt>${escapeHtml(it.card ? `项目 · ${it.card.title}` : it.short || it.label)}</dt>`
+        + `<dd><b>${surveyAvg(s)}</b><small>${s.n} 人</small></dd></div>`;
+    }).join("") + `</dl></div>`;
+
+  const blocks = SURVEY.sections.map((sec, si) => {
+    const inner = SURVEY_ITEMS.filter((it) => it.section === si).map((it) => {
+      const s = st[it.key];
+      if (it.kind === "choice") {
+        const max = Math.max(1, ...it.options.map((o) => s.counts[o.key] || 0));
+        const bars = it.options.map((o) => {
+          const k = s.counts[o.key] || 0;
+          return `<div class="sv-bar-row"><span class="sv-bar-key">${escapeHtml(o.label)}</span>`
+            + `<span class="sv-bar"><i style="width:${(k / max) * 100}%"></i></span>`
+            + `<span class="sv-bar-n">${k}<small>${surveyPct(k, s.n)}%</small></span></div>`;
+        }).join("");
+        const other = it.other ? surveyTextsHtml("「其他」补充说明", st[it.other.key].texts, seq) : "";
+        return `<div class="sv-stat"><p class="sv-stat-title">${escapeHtml(it.label)}</p>`
+          + `<p class="sv-stat-meta">${s.n} 人作答${it.multi ? "（多选，百分比按作答人数算）" : ""}</p>`
+          + `<div class="sv-bars">${bars}</div>${other}</div>`;
+      }
+      if (it.kind === "score") {
+        const max = Math.max(1, ...s.dist.slice(1));
+        const hist = s.dist.slice(1).map((k, i) => `<span class="sv-hist-col" title="${i + 1} 分：${k} 人">`
+          + `<span class="sv-hist-bar"><i style="height:${(k / max) * 100}%"></i></span>`
+          + `<span class="sv-hist-n">${k}</span><span class="sv-hist-k">${i + 1}</span></span>`).join("");
+        const note = it.comment ? surveyTextsHtml("意见或建议", st[it.comment.key].texts, seq) : "";
+        const title = it.card
+          ? `${escapeHtml(it.card.title)}<small>${escapeHtml(it.card.sub)}</small>`
+          : escapeHtml(it.label);
+        return `<div class="sv-stat${it.card ? " is-card" : ""}"><p class="sv-stat-title">${title}</p>`
+          + `<p class="sv-stat-meta">${s.n ? `${s.n} 人打分 · 平均 <b>${surveyAvg(s)}</b> 分` : "还没有人打分"}</p>`
+          + (s.n ? `<div class="sv-hist" aria-label="1～10 分各有多少人">${hist}</div>` : "") + note + `</div>`;
+      }
+      return `<div class="sv-stat"><p class="sv-stat-title">${escapeHtml(it.label)}</p>`
+        + `<p class="sv-stat-meta">${s.n ? `${s.n} 条` : "还没有人填写"}</p>`
+        + surveyTextsHtml("展开查看", s.texts, seq) + `</div>`;
+    }).join("");
+    return `<p class="sv-stat-sec">${SURVEY_SECTION_NO[si] || si + 1}、${escapeHtml(sec.title)}</p>${inner}`;
+  }).join("");
+  box.innerHTML = overview + blocks;
+}
+
+function renderSurveyAdminList() {
+  const state = $("surveyFilterState").value;
+  const seq = surveyAdminSeqMap();
+  const list = surveyAdmin.items
+    .filter((i) => !state || (state === "void" ? i.voided : !i.voided))
+    .slice().sort((a, b) => b.id - a.id);   // 新的在上面
+  $("surveyAdminList").innerHTML = list.length ? list.map((i) => {
+    const a = i.answers || {};
+    const rows = SURVEY_FIELDS.filter((f) => a[f.key] !== undefined && a[f.key] !== "").map((f) => {
+      const v = f.type === "score" ? `${a[f.key]} 分` : surveyAnswerText(f.key, a[f.key]);
+      return `<dt>${escapeHtml(surveyFieldHeader(f.key))}</dt><dd>${escapeHtml(v)}</dd>`;
+    }).join("");
+    return `<div class="fb-item venue-item survey-item${i.voided ? " is-void" : ""}" data-sv-id="${i.id}">
+      <div class="fb-head">
+        <span class="venue-date">${i.voided ? `#${i.id}` : `第 ${seq.get(i.id)} 份`}</span>
+        ${i.voided ? `<span class="venue-tag is-void">已作废</span>` : ""}
+        <span class="fb-time">#${i.id} · ${escapeHtml(surveyAdminTime(i.createdAt))}（国服）</span>
+      </div>
+      <dl class="venue-kv">${rows}</dl>
+      <div class="fb-actions">
+        ${a.contact ? `<button type="button" class="tt-act is-copy" data-sv-act="copy">复制联系方式</button>` : ""}
+        ${i.voided
+          ? `<button type="button" class="tt-act is-restore" data-sv-act="restore">恢复</button>`
+          : `<button type="button" class="tt-act is-void" data-sv-act="void">作废</button>`}
+      </div>
+    </div>`;
+  }).join("") : `<p class="fb-empty">${surveyAdmin.items.length ? "没有符合筛选条件的答卷" : "还没有人填写问卷"}</p>`;
+}
+
+function renderSurveyAdmin() {
+  const items = surveyAdmin.items;
+  const valid = surveyAdminValid().length;
+  const voided = items.length - valid;
+  $("surveyAdminStatus").textContent = items.length
+    ? `共 ${items.length} 份：有效 ${valid} 份${voided ? `，已作废 ${voided} 份` : ""}`
+    : "还没有人填写问卷";
+  setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "已开放（点击关闭）", "已关闭（点击开放）");
+  $("surveyLockNote").hidden = !surveyAdmin.lockdown;
+  const view = $("surveyViewSelect").value;
+  $("surveyFilterState").hidden = view !== "list";
+  $("surveyAdminStats").hidden = view !== "stats";
+  $("surveyAdminList").hidden = view !== "list";
+  if (view === "list") renderSurveyAdminList();
+  else renderSurveyAdminStats();
+}
+
+async function refreshSurveyAdmin() {
+  const data = await callWorker({ action: "survey_admin_list", password: internalAdminPassword, survey: SURVEY.id });
+  if (!data || !data.ok) {
+    $("surveyAdminStatus").textContent = data?.error === "unknown action"
+      ? "读取失败：Worker 还是旧版本，请部署新的 worker.js"
+      : data?.error === "db_error"
+        ? "读取失败：数据库出错，稍后再试"
+        : data?.error === "bad_survey"
+          ? `读取失败：Worker 里没有「${SURVEY.id}」这份问卷，检查 worker.js 的 SURVEYS`
+          : "读取失败，请重新登录内部入口后再试";
+    return false;
+  }
+  surveyAdmin.items = Array.isArray(data.items) ? data.items : [];
+  surveyAdmin.open = data.open !== false;
+  surveyAdmin.lockdown = !!data.lockdown;
+  surveyAdmin.loaded = true;
+  renderSurveyAdmin();
+  return true;
+}
+
+/* Excel：答卷明细 / 统计 / 文字意见（只含有效答卷） */
+async function exportSurveyExcel() {
+  const ExcelJS = await loadExcelJs();
+  const wb = new ExcelJS.Workbook();
+  const valid = surveyAdminValid();
+  const bold = { bold: true };
+
+  const ws = wb.addWorksheet("答卷");
+  ws.addRow(["第几份", "编号", "提交时间（国服）", ...SURVEY_FIELDS.map((f) => surveyFieldHeader(f.key))]);
+  ws.getRow(1).font = bold;
+  valid.forEach((it, i) => {
+    const a = it.answers || {};
+    ws.addRow([i + 1, it.id, surveyAdminTime(it.createdAt), ...SURVEY_FIELDS.map((f) => {
+      const v = a[f.key];
+      if (f.type === "score") return typeof v === "number" ? v : null;
+      return surveyAnswerText(f.key, v) || null;
+    })]);
+  });
+  ws.getColumn(1).width = 7;
+  ws.getColumn(2).width = 7;
+  ws.getColumn(3).width = 18;
+  SURVEY_FIELDS.forEach((f, i) => { ws.getColumn(i + 4).width = f.type === "score" ? 12 : f.type === "text" ? 30 : 24; });
+  ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
+
+  const st = surveyAdminStats(valid);
+  const sw = wb.addWorksheet("统计");
+  sw.addRow([`有效答卷 ${valid.length} 份`]).font = bold;
+  sw.addRow([]);
+  sw.addRow(["打分题", "作答人数", "平均分", ...Array.from({ length: 10 }, (_, i) => `${i + 1}分`)]).font = bold;
+  SURVEY_ITEMS.filter((it) => it.kind === "score").forEach((it) => {
+    const s = st[it.key];
+    sw.addRow([it.card ? `${it.card.title}（${it.card.sub}）` : it.label, s.n, s.n ? Number((s.sum / s.n).toFixed(2)) : null, ...s.dist.slice(1)]);
+  });
+  sw.addRow([]);
+  sw.addRow(["选择题", "选项", "人数", "占作答人数"]).font = bold;
+  SURVEY_ITEMS.filter((it) => it.kind === "choice").forEach((it) => {
+    const s = st[it.key];
+    it.options.forEach((o, oi) => {
+      const k = s.counts[o.key] || 0;
+      sw.addRow([oi === 0 ? `${it.label}（${s.n} 人作答）` : "", o.label, k, s.n ? `${surveyPct(k, s.n)}%` : "—"]);
+    });
+  });
+  sw.getColumn(1).width = 52;
+  sw.getColumn(2).width = 28;
+  for (let c = 3; c <= 13; c++) sw.getColumn(c).width = 9;
+
+  const tw = wb.addWorksheet("文字意见");
+  tw.addRow(["题目", "第几份", "编号", "内容"]).font = bold;
+  const seq = surveyAdminSeqMap();
+  SURVEY_FIELDS.filter((f) => f.type === "text").forEach((f) => {
+    st[f.key].texts.forEach((t) => tw.addRow([surveyFieldHeader(f.key), seq.get(t.id), t.id, t.text]));
+  });
+  tw.getColumn(1).width = 34;
+  tw.getColumn(2).width = 8;
+  tw.getColumn(3).width = 7;
+  tw.getColumn(4).width = 80;
+  tw.getColumn(4).alignment = { wrapText: true, vertical: "top" };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const stamp = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `花街活动问卷_${SURVEY.id}_${stamp}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+}
+
+async function surveyAdminVoid(item, voided) {
+  const msg = $("surveyAdminMsg");
+  setMsg(msg, "");
+  const data = await callWorker({ action: "survey_admin_void", password: internalAdminPassword, id: item.id, voided });
+  if (!data || !data.ok) {
+    if (data && data.error === "not_changed") {
+      setMsg(msg, "这份答卷的状态已经变过了，已为你刷新");
+      await refreshSurveyAdmin();
+      return;
+    }
+    setMsg(msg, "操作失败，请重新登录内部入口后再试");
+    return;
+  }
+  const at = surveyAdmin.items.findIndex((i) => i.id === data.item.id);
+  if (at >= 0) surveyAdmin.items[at] = data.item;
+  renderSurveyAdmin();
+  showToast(voided ? `答卷 #${item.id} 已作废（切到「已作废」可以恢复）` : `答卷 #${item.id} 已恢复`);
+}
+
+function initSurveyAdmin() {
+  $("surveyViewSelect").addEventListener("change", renderSurveyAdmin);
+  $("surveyFilterState").addEventListener("change", renderSurveyAdmin);
+  $("surveyRefreshBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try { if (await refreshSurveyAdmin()) showToast("已刷新"); } finally { btn.disabled = false; }
+  });
+  $("surveyOpenBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const next = !surveyAdmin.open;
+    if (!next && !confirm("确定关闭问卷吗？\n\n关闭后访客看到「问卷已经结束收集」，不能再提交；已经收到的答卷不受影响，之后随时可以再开放。")) return;
+    setMsg($("surveyAdminMsg"), "");
+    btn.disabled = true;
+    try {
+      const data = await callWorker({ action: "survey_admin_set", password: internalAdminPassword, survey: SURVEY.id, open: next });
+      if (!data || !data.ok) {
+        setMsg($("surveyAdminMsg"), data?.error === "unknown action" ? "切换失败：Worker 还是旧版本，请部署新的 worker.js" : "切换失败，请重新登录内部入口后再试");
+        return;
+      }
+      surveyAdmin.open = data.open;
+      renderSurveyAdmin();
+      showToast(data.open ? "问卷已开放" : "问卷已关闭");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $("surveyExportBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const msg = $("surveyAdminMsg");
+    setMsg(msg, "");
+    btn.disabled = true;
+    try {
+      if (!(await refreshSurveyAdmin())) { setMsg(msg, "读取问卷数据失败，未导出"); return; }
+      if (!surveyAdminValid().length) { setMsg(msg, "还没有有效答卷，没有可导出的内容"); return; }
+      await exportSurveyExcel();
+    } catch (err) {
+      console.error(err);
+      setMsg(msg, "导出失败：表格组件加载不出来，检查一下网络后再试");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $("surveyCopyLinkBtn").addEventListener("click", () => {
+    const url = `${location.origin}${location.pathname}${SURVEY_HASH}`;
+    copyText(url, "问卷链接已复制，可以直接发群里", url);
+  });
+  $("surveyAdminList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-sv-act]");
+    if (!btn) return;
+    const id = Number(btn.closest("[data-sv-id]").dataset.svId);
+    const item = surveyAdmin.items.find((i) => i.id === id);
+    if (!item) return;
+    const act = btn.dataset.svAct;
+    if (act === "copy") { copyText(item.answers.contact, "联系方式已复制", item.answers.contact); return; }
+    if (act === "void" && !confirm(`确定作废答卷 #${id} 吗？\n\n作废后不进统计和导出，但不会删除，切到「已作废」还能恢复。`)) return;
+    btn.disabled = true;
+    try { await surveyAdminVoid(item, act === "void"); } finally { btn.disabled = false; }
+  });
+}
+
 /* ---- 初始化（本文件加载完立即执行） ---- */
 initInternal();
 initAdminPanels();
@@ -1356,6 +1695,8 @@ initTicketAdmin();
 initFeedbackAdmin();
 if (typeof buildVenueForm === "function") initVenueAdmin();
 else console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用");
+if (window.HJ_SURVEY_READY) initSurveyAdmin();
+else console.error("[活动问卷] survey.js 没有加载成功，管理页的「活动问卷」不可用");
 initPostAnnouncement();
 initAnnouncementImageUpload();
 window.HJ_ADMIN_READY = true;
