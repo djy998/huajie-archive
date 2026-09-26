@@ -1360,14 +1360,14 @@ body.day-mode .tab-btn.is-active {
 .area-block h4 { font-size: .94rem; font-weight: 600; color: var(--wisteria-soft); margin-bottom: 12px; }
 .shop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .shop-item {
-  display: grid; grid-template-columns: 44px 1fr auto; align-items: start;
+  display: grid; grid-template-columns: 84px 1fr auto; align-items: start;
   gap: 14px;
   padding: 14px 18px;
   border-radius: var(--radius-sm);
   font-size: .85rem;
   background: var(--panel);
 }
-.shop-item .num { color: var(--text-mute); font-size: .78rem; padding-top: 2px; }
+.shop-item .num { color: var(--text-mute); font-size: .78rem; padding-top: 2px; overflow-wrap: anywhere; }   /* 房号格加宽；放不下时换行，不压到店名 */
 .shop-item .name { color: var(--cream); font-weight: 600; margin-bottom: 3px; }
 .shop-item .desc { color: var(--text-soft); font-size: .83rem; }
 .shop-item .price { color: var(--lantern-soft); font-size: .82rem; white-space: nowrap; text-align: right; }
@@ -2248,7 +2248,7 @@ body.day-mode footer { color: var(--day-title); }
   .video-hero { flex: none; aspect-ratio: 16/9; margin-bottom: 0; }
   .video-actions { flex: 1 1 auto; align-items: center; align-content: center; min-height: 0; }
 
-  .shop-item { grid-template-columns: 32px 1fr; }
+  .shop-item { grid-template-columns: 60px 1fr; gap: 12px; }
   .shop-item .price { grid-column: 2; text-align: left; padding-top: 4px; }
 
   .info-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

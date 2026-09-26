@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 59;
+      var CSS_VERSION = 60;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -1257,7 +1257,24 @@ const LATEST_EVENT = {
   location: "",
   ticketUrl: "",   // 购票链接，留空则不显示购票按钮
   cover: "poster-moguri-2026.webp",   // 详情页标题栏背景图（同「往期街区活动」的 cover 字段用法）
-  areas: [],
+  areas: [
+    {
+      name: "",   // 不分会场，标题留空
+      shops: [
+        { num: "31·32·34·36", name: "真理馆", desc: "迷宫探索", price: "" },
+        { num: "33·44", name: "Miumiucandy拉拉菲尔主题店", desc: "书信、故事续写·漂流瓶", price: "" },
+        { num: "35", name: "麦田舞团", desc: "舞蹈", price: "" },
+        { num: "38", name: "青木原", desc: "情景游戏/抽奖", price: "" },
+        { num: "39·40", name: "七海小镇", desc: "限时游戏（庭院）", price: "" },
+        { num: "41", name: "丽姬娅·群星", desc: "占卜（自营）", price: "" },
+        { num: "42", name: "Paradise·乐园", desc: "舞蹈", price: "" },
+        { num: "43", name: "抹茶Sweetheart", desc: "小品", price: "" },
+        { num: "49", name: "†龙门†龙娘伊甸园", desc: "指名", price: "" },
+        { num: "场外", name: "深夜相亲大会", desc: "相亲交友活动（雄心广场旁 · 中心泳池处）", price: "" },
+        { num: "场外", name: "老二次元音乐社", desc: "乐队演奏（高脚市场旁）", price: "" }
+      ]
+    }
+  ],
   manual: { images: ["assets/latest/latest-002.webp?v=1"] },   // 游玩手册（2026中秋月轮祭）
   poster: { images: ["assets/latest/latest-001.webp?v=2"] },   // 换了同名图片记得把 ?v= 数字 +1，强制客人刷新缓存
   review: "",
@@ -1970,11 +1987,11 @@ function renderShopsPanel(areas) {
   if (!areas || !areas.length) return EMPTY_NOTE;
   return areas.map((area) => `
     <div class="area-block">
-      <h4>${area.name}</h4>
+      ${area.name ? `<h4>${area.name}</h4>` : ""}
       <ul class="shop-list">
         ${area.shops.map((s) => `
           <li class="shop-item">
-            <span class="num">${s.num}</span>
+            <span class="num">${String(s.num).replace(/·/g, "·<wbr>")}</span>
             <span>
               <span class="name">${s.name}</span>
               <span class="desc">${s.desc}</span>
