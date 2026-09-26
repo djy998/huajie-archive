@@ -1360,7 +1360,7 @@ body.day-mode .tab-btn.is-active {
 .area-block h4 { font-size: .94rem; font-weight: 600; color: var(--wisteria-soft); margin-bottom: 12px; }
 .shop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .shop-item {
-  display: grid; grid-template-columns: 84px 1fr auto; align-items: start;
+  display: grid; grid-template-columns: 85px 1fr auto; align-items: start;
   gap: 14px;
   padding: 14px 18px;
   border-radius: var(--radius-sm);
