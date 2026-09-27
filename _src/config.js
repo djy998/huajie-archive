@@ -318,7 +318,7 @@ const ARCHIVE_EVENTS = [
   {
     id: "ny2024",
     year: "2023",
-    title: "“铃声与牵绊的温暖”2023跨年盛典",
+    title: "“铃声与牵绊的温暖”跨年盛典",
     dateLabel: "2023年12月31日 20:00–0:00",
     location: "莫古力区 · 梦羽宝境 高脚孤丘23区（扩建北区）31–45号",
     cover: "assets/gallery/gallery-039.webp",
@@ -397,7 +397,7 @@ const HJ_CAL_ITEMS = [
   { start: "2021-12-24", end: "2021-12-26", label: "2021 花舞之街星芒集市", tone: "rose" },
   { date: "2022-12-31", label: "2022 花舞之街新年集市", tone: "gold" },
   { date: "2023-08-20", label: "海之心3周年 & 新生庆典游园会", tone: "rose" },
-  { date: "2023-12-31", label: "“铃声与牵绊的温暖”2023跨年盛典", tone: "gold" },
+  { date: "2023-12-31", label: "“铃声与牵绊的温暖”2023 跨年盛典", tone: "gold" },
   { date: "2024-08-27", label: "海之心4周年 & 红莲夏日祭", tone: "rose" },
   { start: "2024-12-31", end: "2025-01-01", label: "2025 花语町·花舞之街莫古力跨年盛典", tone: "gold" },
   { date: "2025-09-21", label: "金秋新生庆典游园会", tone: "orange" },
