@@ -385,8 +385,8 @@ const ARCHIVE_EVENTS = [
    full（可选）：点开后看的图片（不写就看 image 那张），比如按钮用横幅、点开看长图海报
    pinLast: true（可选）：固定排在最后，前面再加新的也不会变 */
 const MINI_REVIEWS = [
-  { image: "assets/gallery/gallery-034.jpg", caption: "2026年跨年举火把巡游-从格里达尼亚走到乌尔达哈" },
   { image: "assets/gallery/gallery-033.jpg", caption: "女精群&兔娘群春游团建" },
+  { image: "assets/gallery/gallery-034.jpg", caption: "2026年跨年举火把巡游-从格里达尼亚走到乌尔达哈" },
   { image: "assets/gallery/gallery-041.webp", full: "assets/gallery/gallery-042.jpg", pinLast: true,
     caption: "“花舞之街-结缘之地”跨服婚礼包办（仅展示往期活动形式，详情请至活动群咨询）" }
 ];
