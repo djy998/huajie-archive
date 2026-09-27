@@ -343,7 +343,7 @@
     </div>
     <div class="video-actions" id="latestVideoActions">
       <button type="button" class="video-action video-action-primary" id="videoDetailBtn">查看活动详情</button>
-      <a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener" hidden>看不了？去 B 站看</a>
+      <a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>看不了？去 B 站看</a>
       <button type="button" class="video-action" id="videoCloseBtn">收起视频</button>
       <span class="video-ticket-slot" data-ticket-entry hidden>
         <button type="button" class="video-action video-action-ticket" id="videoTicketEntry">进入购票</button>
@@ -2133,7 +2133,7 @@ function renderTabVideo(video, fallbackCover) {
     <div class="tab-video" id="${id}" data-cover="${escapeHtml(cover)}">
       <div class="tab-video-frame">${tabVideoFacadeHtml(title, cover)}</div>
       <div class="tab-video-actions">
-        <a class="video-action" href="https://www.bilibili.com/video/${escapeHtml(video.bvid)}/" target="_blank" rel="noopener">看不了？去 B 站看</a>
+        <a class="video-action" href="https://www.bilibili.com/video/${escapeHtml(video.bvid)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">看不了？去 B 站看</a>
       </div>
     </div>`;
 }
@@ -2182,7 +2182,9 @@ function initTabVideos() {
   });
 }
 
-/* 标签页内容：接受字符串，或 { text, images, link, links, video } 对象 */
+/* 标签页内容：接受字符串，或 { text, images, link, links, video } 对象
+   跳出站外的链接一律 noreferrer：B 站对带着本站 Referer 点进去的部分视频（比如直播回放）
+   会直接显示「啊叻？视频不见了？」，不带来源（和直接粘贴地址一样）就能正常打开 */
 function renderTabContent(tab) {
   if (typeof tab === "string") {
     return tab ? `<div class="empty-note empty-note-left">${escapeHtml(tab)}</div>` : EMPTY_NOTE;
@@ -2195,7 +2197,7 @@ function renderTabContent(tab) {
   }
   if (tab.links && tab.links.length) {
     html += `<div class="tab-links">`
-      + tab.links.map((l) => `<a class="ticket-badge-inline tab-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label || "查看详情")}</a>`).join("")
+      + tab.links.map((l) => `<a class="ticket-badge-inline tab-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(l.label || "查看详情")}</a>`).join("")
       + `</div>`;
   }
   if (tab.images && tab.images.length) {
@@ -2207,7 +2209,7 @@ function renderTabContent(tab) {
     html += `<div class="empty-note empty-note-left">${tab.text}</div>`;
   }
   if (tab.link) {
-    html += `<a class="ticket-badge-inline" href="${tab.link.url}" target="_blank" rel="noopener" style="display:inline-block;">${tab.link.label || "查看详情"}</a>`;
+    html += `<a class="ticket-badge-inline" href="${tab.link.url}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" style="display:inline-block;">${tab.link.label || "查看详情"}</a>`;
   }
   return html;
 }
@@ -5111,7 +5113,7 @@ function popupBodyHtml(text) {
   return escapeHtml(text || "").replace(/https?:\/\/[^\s<>"']+/g, (url) => {
     const trail = /[，。；、）)\].,;!！?？]+$/.exec(url);   // 句尾标点不算进网址
     const clean = trail ? url.slice(0, -trail[0].length) : url;
-    return `<a href="${clean}" target="_blank" rel="noopener">${clean}</a>${trail ? trail[0] : ""}`;
+    return `<a href="${clean}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${clean}</a>${trail ? trail[0] : ""}`;
   });
 }
 
