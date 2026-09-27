@@ -18,7 +18,7 @@
 <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
 <link rel="preload" as="font" type="font/woff2" href="assets/site/brush.woff2" crossorigin>
 <style>body{margin:0;background:#1c1830}html.css-wait body{visibility:hidden}html.boot-pending body>header,html.boot-pending body>main,html.boot-pending body>footer{display:none}#bootOverlay{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:18px}html.boot-pending #bootOverlay{display:flex}#bootImageBtn{appearance:none;-webkit-appearance:none;border:none;background:none;padding:0;margin:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation}#bootImage{display:block;width:min(56vw,280px);height:auto;filter:drop-shadow(0 8px 30px rgba(0,0,0,.35));transition:transform .2s ease;-webkit-user-drag:none;user-select:none;pointer-events:none}#bootImageBtn:hover #bootImage{transform:scale(1.04)}#bootImage.is-spinning{animation:bootSpin 1s ease-in-out}@keyframes bootSpin{0%{transform:rotate(0)}to{transform:rotate(720deg)}}#bootHint{min-height:1.5em;color:#c9bfe0;font:600 .9rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em;opacity:0;transition:opacity .3s ease}#bootOverlay.is-waiting #bootHint{opacity:1;animation:bootPulse 1.4s ease-in-out infinite}@keyframes bootPulse{50%{opacity:.45}}@media(prefers-reduced-motion:reduce){#bootImage.is-spinning,#bootOverlay.is-waiting #bootHint{animation:none}}</style>
-<script>window.HJ_VERSION="20260928d",(function(){var l="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap",a=document.documentElement,i=!0;try{i=!localStorage.getItem("hj_visited")}catch(e){}var s=location.hash,c=s==="#ti"||s==="#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd"||s==="#survey";if(a.classList.add(i&&!c?"boot-pending":"css-wait"),s!=="#survey"&&c)try{(localStorage.getItem("hj_ticket_look")||"").charAt(0)==="1"&&a.classList.add("hj-ticket-bare")}catch(e){}function h(e,t){var n=document.createElement("link");n.rel="stylesheet",n.href=e,t&&(n.onload=n.onerror=t),document.head.appendChild(n)}function o(){a.classList.remove("css-wait"),a.classList.add("css-ready"),document.dispatchEvent(new Event("hj:cssready"))}h("style.css?v="+window.HJ_VERSION,o);var d=new Date().getHours();window.HJ_START_DAY=d>=6&&d<18;var r=window.HJ_START_DAY?"day":"night";["assets/site/sky-"+r+".webp","assets/site/tile-latest-"+r+".webp"].forEach(function(e){var t=document.createElement("link");t.rel="preload",t.as="image",t.href=e,document.head.appendChild(t)}),window.fetch&&fetch(l).then(function(e){return e.ok?e.text():""}).then(function(e){if(e){var t=document.createElement("style");t.textContent=e,document.head.appendChild(t)}}).catch(function(){}),setTimeout(function(){a.classList.contains("css-ready")||o()},8e3)})();</script>
+<script>window.HJ_VERSION="20260928f",(function(){var l="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap",a=document.documentElement,i=!0;try{i=!localStorage.getItem("hj_visited")}catch(e){}var s=location.hash,c=s==="#ti"||s==="#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd"||s==="#survey";if(a.classList.add(i&&!c?"boot-pending":"css-wait"),s!=="#survey"&&c)try{(localStorage.getItem("hj_ticket_look")||"").charAt(0)==="1"&&a.classList.add("hj-ticket-bare")}catch(e){}function h(e,t){var n=document.createElement("link");n.rel="stylesheet",n.href=e,t&&(n.onload=n.onerror=t),document.head.appendChild(n)}function o(){a.classList.remove("css-wait"),a.classList.add("css-ready"),document.dispatchEvent(new Event("hj:cssready"))}h("style.css?v="+window.HJ_VERSION,o);var d=new Date().getHours();window.HJ_START_DAY=d>=6&&d<18;var r=window.HJ_START_DAY?"day":"night";["assets/site/sky-"+r+".webp","assets/site/tile-latest-"+r+".webp"].forEach(function(e){var t=document.createElement("link");t.rel="preload",t.as="image",t.href=e,document.head.appendChild(t)}),window.fetch&&fetch(l).then(function(e){return e.ok?e.text():""}).then(function(e){if(e){var t=document.createElement("style");t.textContent=e,document.head.appendChild(t)}}).catch(function(){}),setTimeout(function(){a.classList.contains("css-ready")||o()},8e3)})();</script>
 <noscript><link rel="stylesheet" href="style.css"></noscript>
 </head>
 <body>
@@ -95,9 +95,11 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 </div>
 <div id="alarmWidgetLayer" aria-label="闹铃与倒计时小组件"></div>
 <h1 class="brand"><span class="brand-name">花舞之街</span><span class="brand-dot"> · </span><span class="brand-name">薰风花语町</span></h1>
-<p class="tagline">莫古力区 · 梦羽宝境<br>
-花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
-薰风花语町-高脚孤丘22区扩建区36,45,49,54-60号房 及 扩建区公寓3-17号房间</p>
+<p class="tagline">
+<span class="tl-line">莫古力区<span class="tl-gap"> </span>·<span class="tl-gap"> </span>梦羽宝境</span>
+<span class="tl-line"><span class="tl-seg">花舞之街-高脚孤丘23区扩建区</span><span class="tl-seg">31-45,49号房<span class="tl-gap"> </span>及<span class="tl-gap"> </span>扩建区公寓1-2号房间</span></span>
+<span class="tl-line"><span class="tl-seg">薰风花语町-高脚孤丘22区扩建区</span><span class="tl-seg">36,45,49,54-60号房</span><span class="tl-seg"><span class="tl-gap"> </span>及 扩建区公寓3-17号房间</span></span>
+</p>
 <p class="hj-clock is-hidden" id="hjClock" role="timer" aria-live="off" aria-label="国服时间与艾欧泽亚时间">
 <span class="hj-clock-cell">
 <span class="hj-clock-label">国服</span>
@@ -600,12 +602,12 @@ controlslist="nodownload" hidden></video>
 </div>
 </div>
 </div>
-<script src="verify.js?v=20260928d"></script>
-<script src="config.js?v=20260928d"></script>
-<script src="main.js?v=20260928d"></script>
-<script src="ticket.js?v=20260928d"></script>
-<script src="venue.js?v=20260928d"></script>
-<script src="survey.js?v=20260928d"></script>
+<script src="verify.js?v=20260928f"></script>
+<script src="config.js?v=20260928f"></script>
+<script src="main.js?v=20260928f"></script>
+<script src="ticket.js?v=20260928f"></script>
+<script src="venue.js?v=20260928f"></script>
+<script src="survey.js?v=20260928f"></script>
 <script>initApp();</script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>

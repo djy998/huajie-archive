@@ -152,6 +152,13 @@ body.day-mode::after {
 }
 body.day-mode .site-header .brand { color: var(--day-title); }
 body.day-mode .site-header .tagline { color: #5b4326; }
+.site-header .tagline .tl-line { display: block; }
+/* 手机：地址按段各占一行，全部居中 */
+@media (max-width: 640px) {
+  .site-header .tagline { font-size: .95rem; letter-spacing: .03em; line-height: 1.6; }
+  .site-header .tagline .tl-seg { display: block; }
+  .site-header .tagline .tl-gap { display: none; }
+}
 
 /* 右上角圆形玻璃按钮（类名沿用 daynight-toggle，所有头部圆钮共用） */
 .daynight-toggle {
@@ -2045,8 +2052,25 @@ body.day-mode #captchaOverlay #captchaClose:hover { color: var(--day-ink); borde
   transition: transform .15s ease;
 }
 .lightbox-overlay img.is-dragging { cursor: grabbing; transition: none; }
+/* 长图：按页面宽度显示（最宽 760px），整个预览层上下滚动 */
+.lightbox-overlay.is-long {
+  align-items: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 72px 16px 40px;
+}
+.lightbox-overlay.is-long img {
+  width: min(760px, 100%);
+  max-width: none;
+  max-height: none;
+  flex: none;
+  cursor: default;
+  touch-action: pan-y;
+  transition: none;
+}
 .lightbox-close {
-  position: fixed; top: 20px; right: 24px;
+  position: fixed; top: 20px; right: 24px; z-index: 2;   /* 长图滚动时始终压在图片上面 */
   width: 44px; height: 44px;
   border-radius: 50%;
   font-size: 1.6rem;

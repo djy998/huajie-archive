@@ -789,103 +789,116 @@ function openLatestSurvey() {
   });
 }
 
-/* 往期活动相册（瀑布流）：每张卡片按封面图自己的比例显示整张图，标题叠在图片底部；
-   列数按宽度自动定（每列至少 260px），卡片按顺序依次放进当前最短的一列，
-   所以从左到右、从上到下读就是从新到老，列与列之间也不会留空 */
-const ALBUM_MIN_COL = 260;
-const ALBUM_GAP = 20;
-const albumRatios = {};   // 封面地址 → 宽高比（加载过一次就记住）
+/* 瀑布流（往期活动相册、小型活动回顾共用）-------------------------------------
+   每张卡片按图片自己的比例显示整张图；列数按宽度自动定（每列至少 260px），
+   卡片按顺序依次放进当前最短的一列，所以从左到右、从上到下读就是列表的顺序，列与列之间也不会留空 */
+const MASONRY_MIN_COL = 260;
+const MASONRY_GAP = 20;
+const imageRatios = {};   // 图片地址 → 宽高比（加载过一次就记住）
 
-function loadAlbumRatio(src) {
-  if (albumRatios[src]) return Promise.resolve(albumRatios[src]);
+function loadImageRatio(src) {
+  if (imageRatios[src]) return Promise.resolve(imageRatios[src]);
   return new Promise((resolve) => {
     const img = new Image();
-    const done = (r) => { albumRatios[src] = r; resolve(r); };
+    const done = (r) => { imageRatios[src] = r; resolve(r); };
     img.onload = () => done(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 4 / 3);
     img.onerror = () => done(4 / 3);
     img.src = src;
   });
 }
 
-function albumColCount(grid) {
-  const w = grid.clientWidth;
-  return Math.max(1, Math.floor((w + ALBUM_GAP) / (ALBUM_MIN_COL + ALBUM_GAP)));
+function masonryColCount(grid) {
+  return Math.max(1, Math.floor((grid.clientWidth + MASONRY_GAP) / (MASONRY_MIN_COL + MASONRY_GAP)));
 }
 
-function layoutAlbumGrid() {
-  const grid = $("albumGrid");
-  const cards = Array.from(grid.querySelectorAll(".album-card"))
-    .sort((x, y) => Number(x.dataset.index) - Number(y.dataset.index));
-  if (!cards.length) return;
-  const n = albumColCount(grid);
+/* 卡片的高度由 aspect-ratio 决定，不用等图片加载完就能量出来 */
+function layoutMasonry(grid) {
+  const items = Array.from(grid.querySelectorAll("[data-index]"))
+    .sort((x, y) => x.dataset.index - y.dataset.index);
+  if (!items.length) return;
+  const n = masonryColCount(grid);
   const cols = Array.from({ length: n }, () => {
     const col = document.createElement("div");
     col.className = "album-col";
     return col;
   });
-  const heights = new Array(n).fill(0);
-  cards.forEach((card) => {
-    const i = heights.indexOf(Math.min(...heights));   // 最短的一列（一样高时取最左边）
-    cols[i].appendChild(card);
-    heights[i] += 1 / Number(card.dataset.ratio) + ALBUM_GAP / ALBUM_MIN_COL;
-  });
   grid.replaceChildren(...cols);
+  items.forEach((item) => {
+    let target = cols[0];
+    cols.forEach((col) => { if (col.offsetHeight < target.offsetHeight - 1) target = col; });   // 一样高时取最左边
+    target.appendChild(item);
+  });
   grid.dataset.cols = String(n);
 }
 
+/* 卡片排好后按顺序依次入场 */
+function playMasonryEnter(grid) {
+  Array.from(grid.querySelectorAll("[data-index]"))
+    .sort((x, y) => x.dataset.index - y.dataset.index)
+    .forEach((el, i) => playFxAnim(el, "fx-page-enter", 180 + i * 60, true));
+}
+
+/* 窗口宽度变化导致列数变了才重排 */
+let masonryResizeTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(masonryResizeTimer);
+  masonryResizeTimer = setTimeout(() => {
+    ["albumGrid", "miniReviewGrid"].forEach((id) => {
+      const grid = $(id);
+      if (!grid || grid.closest(".view").hidden || !grid.querySelector("[data-index]")) return;
+      if (String(masonryColCount(grid)) !== grid.dataset.cols) layoutMasonry(grid);
+    });
+  }, 150);
+});
+
+/* 往期活动相册：标题叠在图片底部，点开进活动详情；
+   右上角的点赞和详情页横幅里的点赞是同一个目标（act:<id>），数字互相同步 */
 function renderAlbumGrid() {
   const grid = $("albumGrid");
   grid.replaceChildren();
-  return Promise.all(ARCHIVE_EVENTS.map((ev) => loadAlbumRatio(ev.cover))).then((ratios) => {
+  return Promise.all(ARCHIVE_EVENTS.map((ev) => loadImageRatio(ev.cover))).then((ratios) => {
     grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
-      <div class="album-card" data-index="${i}" data-ratio="${ratios[i]}"
+      <div class="album-card" data-index="${i}"
         style="aspect-ratio:${ratios[i]};background-image:url('${escapeHtml(ev.cover)}')">
         <div class="overlay">
           <span class="year">${escapeHtml(ev.year)}</span>
           <div class="title">${escapeHtml(ev.title)}</div>
         </div>
+        ${likeBtnHtml("act:" + ev.id)}
       </div>
     `).join("");
     grid.querySelectorAll(".album-card").forEach((card) => {
       card.addEventListener("click", () => openDetail(ARCHIVE_EVENTS[Number(card.dataset.index)]));
     });
-    layoutAlbumGrid();
+    layoutMasonry(grid);
+    paintLikes();          // 已经拿到过的数字先显示出来
+    refreshLikes(grid);    // 再向服务器取最新的
   });
 }
-
-/* 窗口宽度变化导致列数变了才重排 */
-let albumResizeTimer = 0;
-window.addEventListener("resize", () => {
-  clearTimeout(albumResizeTimer);
-  albumResizeTimer = setTimeout(() => {
-    const grid = $("albumGrid");
-    if (!grid || $("view-archive-list").hidden || !grid.querySelector(".album-card")) return;
-    if (String(albumColCount(grid)) !== grid.dataset.cols) layoutAlbumGrid();
-  }, 150);
-});
 
 function openArchiveList() {
   setRoute("#previous");
   $("archiveBackBtn").style.display = "";
   showView("view-archive-list");
   playViewEnterStagger("view-archive-list", "albumGrid");
-  /* 卡片排好后按顺序（从新到老）依次入场 */
-  renderAlbumGrid().then(() => {
-    Array.from($("albumGrid").querySelectorAll(".album-card"))
-      .sort((x, y) => x.dataset.index - y.dataset.index)
-      .forEach((el, i) => playFxAnim(el, "fx-page-enter", 180 + i * 60, true));
-  });
+  renderAlbumGrid().then(() => playMasonryEnter($("albumGrid")));
 }
 
-function openMiniReview() {
-  setRoute("#mini-review");
+/* 小型活动回顾：图片下面是点赞和说明；点图片看大图（有 full 就看 full 那张，比如长图海报）；
+   pinLast: true 的固定排在最后 */
+function renderMiniReviews() {
   const grid = $("miniReviewGrid");
+  grid.replaceChildren();
   if (!MINI_REVIEWS.length) {
     grid.innerHTML = `<div class="empty-note">还没有内容，敬请期待</div>`;
-  } else {
-    grid.innerHTML = MINI_REVIEWS.map((item) => `
-      <div class="review-item">
-        <button type="button" class="review-photo" data-lightbox data-lightbox-src="${escapeHtml(item.image)}">
+    return Promise.resolve();
+  }
+  const list = [...MINI_REVIEWS.filter((item) => !item.pinLast), ...MINI_REVIEWS.filter((item) => item.pinLast)];
+  return Promise.all(list.map((item) => loadImageRatio(item.image))).then((ratios) => {
+    grid.innerHTML = list.map((item, i) => `
+      <div class="review-item" data-index="${i}">
+        <button type="button" class="review-photo" style="aspect-ratio:${ratios[i]}"
+          data-lightbox data-lightbox-src="${escapeHtml(item.full || item.image)}">
           <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
         </button>
         ${likeBtnHtml(likeKeyFromSrc("mini", item.image))}
@@ -893,9 +906,15 @@ function openMiniReview() {
       </div>
     `).join("");
     refreshLikes(grid);
-  }
+    layoutMasonry(grid);
+  });
+}
+
+function openMiniReview() {
+  setRoute("#mini-review");
   showView("view-mini-review");
   playViewEnterStagger("view-mini-review", "miniReviewGrid");
+  renderMiniReviews().then(() => playMasonryEnter($("miniReviewGrid")));
 }
 
 function initNav() {
@@ -1274,6 +1293,7 @@ function initSiteAbout() {
    8. 大图预览（Lightbox）
    - 普通模式：单击 / 双击放大，右键缩小，拖动平移，双指缩放
    - 相册模式（花街介绍相册）：不缩放，双击把图片设为网页背景
+   - 长图（高度超过宽度 LB_LONG_RATIO 倍的海报等）：自动按页面宽度显示、上下滚动看，不缩放
    页面里带 data-lightbox 属性的元素点击即打开；data-lightbox="gallery" 为相册模式，
    data-lightbox-src 可指定图片地址（默认取元素自身的 src）。
    ============================================================================= */
@@ -1281,8 +1301,10 @@ function initSiteAbout() {
 const LB_ZOOM_STEP = 2.5;
 const LB_MAX_SCALE = 20;
 const DOUBLE_TAP_MS = 320;
+const LB_LONG_RATIO = 2.5;
 
 let lightboxMode = "normal";
+let lbLong = false;   // 当前是长图（滚动查看，不缩放）
 let lbState = null;
 
 function resetLightboxTransform() {
@@ -1297,19 +1319,36 @@ function applyLightboxTransform() {
   if (!lbState.dragging) img.style.cursor = lbState.scale > 1 ? "zoom-out" : "zoom-in";
 }
 
+function setLightboxLong(long) {
+  lbLong = long;
+  const overlay = $("lightboxOverlay");
+  overlay.classList.toggle("is-long", long);
+  if (long) {
+    overlay.scrollTop = 0;
+    $("lightboxImg").style.cursor = "default";
+  }
+}
+
 function openLightbox(src, mode) {
   lightboxMode = mode === "gallery" ? "gallery" : "normal";
   const img = $("lightboxImg");
+  setLightboxLong(false);
+  img.onload = () => {
+    if (lightboxMode !== "gallery" && img.naturalWidth && img.naturalHeight / img.naturalWidth > LB_LONG_RATIO) setLightboxLong(true);
+  };
   img.src = src;
   $("lightboxOverlay").hidden = false;
   resetLightboxTransform();
   if (lightboxMode === "gallery") img.style.cursor = "default";
+  if (img.complete && img.naturalWidth) img.onload();   // 已缓存的图片
 }
 
 function closeLightbox() {
   $("lightboxOverlay").hidden = true;
+  $("lightboxImg").onload = null;
   $("lightboxImg").removeAttribute("src");
   lightboxMode = "normal";
+  setLightboxLong(false);
   resetLightboxTransform();
 }
 
@@ -1348,7 +1387,7 @@ function zoomAt(clientX, clientY, factor) {
 }
 
 function lbPointerDown(x, y) {
-  if (lbState.scale <= 1) return;
+  if (lbLong || lbState.scale <= 1) return;
   Object.assign(lbState, { dragging: true, moved: false, startX: x - lbState.tx, startY: y - lbState.ty });
   const img = $("lightboxImg");
   img.classList.add("is-dragging");
@@ -1394,7 +1433,7 @@ function initLightbox() {
   window.addEventListener("mouseup", lbPointerUp);
   img.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (lightboxMode === "gallery") return;
+    if (lightboxMode === "gallery" || lbLong) return;
     if (lbState.moved) {
       lbState.moved = false;
       return;
@@ -1403,7 +1442,7 @@ function initLightbox() {
   });
   img.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    if (lightboxMode !== "gallery") zoomAt(e.clientX, e.clientY, 1 / LB_ZOOM_STEP);
+    if (lightboxMode !== "gallery" && !lbLong) zoomAt(e.clientX, e.clientY, 1 / LB_ZOOM_STEP);
   });
   img.addEventListener("dblclick", (e) => {
     e.preventDefault();
@@ -1418,7 +1457,7 @@ function initLightbox() {
   const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 
   img.addEventListener("touchstart", (e) => {
-    if (lightboxMode === "gallery") return;
+    if (lightboxMode === "gallery" || lbLong) return;
     if (e.touches.length === 2) {
       pinching = true;
       lbState.dragging = false;
@@ -1433,7 +1472,7 @@ function initLightbox() {
   });
 
   img.addEventListener("touchmove", (e) => {
-    if (lightboxMode === "gallery") return;
+    if (lightboxMode === "gallery" || lbLong) return;
     if (e.touches.length === 2) {
       e.preventDefault();
       const scale = clamp(pinchStartScale * (touchDist(e.touches) / pinchStartDist), 1, LB_MAX_SCALE);
@@ -1448,7 +1487,7 @@ function initLightbox() {
   }, { passive: false });
 
   img.addEventListener("touchend", (e) => {
-    if (e.touches.length !== 0) return;
+    if (e.touches.length !== 0 || lbLong) return;
     const now = Date.now();
     const isDoubleTap = now - lastTap < DOUBLE_TAP_MS;
 
