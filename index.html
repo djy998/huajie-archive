@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 65;
+      var CSS_VERSION = 66;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -117,6 +117,10 @@
       var h = location.hash;
       var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd" || h === "#survey";
       root.classList.add(fresh && !ticketLanding ? "boot-pending" : "css-wait");
+      /* 购票页「不显示网站标题」：按上次读到的设置先把标题藏起来，免得先闪一下（ticket.js 的 TICKET_LOOK_KEY） */
+      if (h !== "#survey" && ticketLanding) {
+        try { if ((localStorage.getItem("hj_ticket_look") || "").charAt(0) === "1") root.classList.add("hj-ticket-bare"); } catch (e) {}
+      }
 
       function addStylesheet(href, onDone) {
         var link = document.createElement("link");
@@ -441,15 +445,18 @@
 
   <!-- ============ 活动购票（首页入口在购票开放且非测试时出现；也可直接访问 TICKET_HASH） ============ -->
   <section id="view-ticket" class="view" hidden>
-    <button class="back-btn" data-back>← 返回</button>
+    <!-- 「与首页隔离」时 ticket.js 给 #view-ticket 加 is-isolated，这个返回按钮就藏起来 -->
+    <button class="back-btn" id="ticketBackBtn" data-back>← 返回</button>
     <div class="gate-card ticket-card">
       <h2 id="ticketTitle">活动购票</h2>
       <p class="hint" id="ticketLimitHint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
-      <div class="ticket-guide-row">
+      <div class="ticket-guide-row" id="ticketGuideRow">
         <button type="button" class="ticket-guide-btn" id="ticketGuideReopenBtn">购票须知</button>
       </div>
       <!-- 余票 + 刷新时间 / 定时开关时间：显示哪些由管理页「购票管理」设置，内容由 ticket.js 填 -->
       <div class="ticket-stock" id="ticketStock"><span id="ticketStockText">今日余票 <b>--</b> 张</span><small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
+      <!-- 停留时间倒计时（管理页「对客户显示剩余时间」打开时才出现） -->
+      <p class="ticket-idle" id="ticketIdle" role="timer" aria-live="off" hidden></p>
 
       <form id="ticketForm" novalidate autocomplete="off">
         <div class="ticket-field">
@@ -469,7 +476,7 @@
 
         <div id="ticketHolders"></div>
 
-        <div class="ticket-field">
+        <div class="ticket-field" id="ticketMessageField">
           <label class="ticket-label" for="ticketMessage">愿意的话，为活动或者你的艾欧泽亚之旅留一句想说的话吧~</label>
           <p class="ticket-sub">我们可能在活动中抽选部分留言进行喊话</p>
           <textarea id="ticketMessage" maxlength="200" placeholder="选填"></textarea>
@@ -597,109 +604,284 @@
         </div>
         <p class="form-msg" id="starlightMsg" hidden></p>
       </div>
+      <!-- 购票管理（admin.js 6b）：三个子标签。只读端（查看密码）只有「详细订单」和（允许时）「售票统计」 -->
       <div class="gate-card admin-card ticket-admin" id="ticketAdminPanel" hidden>
         <h2>活动购票管理</h2>
         <p class="hint" id="ticketAdminStatus">读取中…</p>
+        <div class="tabs ticket-admin-tabs" id="ticketAdminTabs" role="tablist" aria-label="购票管理">
+          <button type="button" class="tab-btn is-active" role="tab" data-ta-tab="settings" aria-selected="true">购票管理</button>
+          <button type="button" class="tab-btn" role="tab" data-ta-tab="orders" aria-selected="false">详细订单</button>
+          <button type="button" class="tab-btn" role="tab" data-ta-tab="stats" aria-selected="false">售票统计</button>
+        </div>
         <div class="ticket-admin-stats" id="ticketAdminStats"></div>
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketTitleInput">购票页标题</label>
-          <span class="ticket-limit-edit ticket-title-edit">
-            <input type="text" id="ticketTitleInput" maxlength="60" placeholder="留空则恢复默认标题">
-            <button type="button" id="ticketTitleSaveBtn">保存</button>
-          </span>
-        </div>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">标题后缀「（测试）」</span>
-          <button type="button" class="ticket-switch" id="ticketTestBtn" aria-pressed="false">—</button>
-        </div>
-        <p class="ticket-sched-note ticket-title-preview" id="ticketTitlePreview" hidden></p>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">购票开放</span>
-          <button type="button" class="ticket-switch" id="ticketOpenBtn" aria-pressed="false">—</button>
-        </div>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">持票 id 可待定</span>
-          <button type="button" class="ticket-switch" id="ticketPendingBtn" aria-pressed="false">—</button>
-        </div>
-        <!-- 购票页显示设置 -->
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketRemainModeSelect">购票页显示余票</label>
-          <select id="ticketRemainModeSelect">
-            <option value="full">完全显示（具体张数）</option>
-            <option value="range">显示大致范围</option>
-            <option value="hidden">不显示</option>
-          </select>
-        </div>
-        <p class="ticket-sched-note ticket-title-preview" id="ticketRemainPreview" hidden></p>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">购票页显示定时开启 / 关闭时间</span>
-          <button type="button" class="ticket-switch" id="ticketShowSchedBtn" aria-pressed="false">—</button>
-        </div>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">购票页显示每日刷新时间</span>
-          <button type="button" class="ticket-switch" id="ticketShowResetBtn" aria-pressed="false">—</button>
-        </div>
-        <div class="ticket-admin-row">
-          <span class="ticket-admin-key">「购票情况」查看页（查看密码登录）</span>
-          <button type="button" class="ticket-switch" id="ticketViewerBtn" aria-pressed="false">—</button>
-        </div>
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketLimitInput">每日限额（张）</label>
-          <span class="ticket-limit-edit">
-            <input type="number" id="ticketLimitInput" min="0" max="100000" step="1" inputmode="numeric">
-            <button type="button" id="ticketLimitSaveBtn">保存</button>
-          </span>
-        </div>
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketPerPersonInput">单人限购（张）</label>
-          <span class="ticket-limit-edit">
-            <input type="number" id="ticketPerPersonInput" min="1" max="20" step="1" inputmode="numeric">
-            <button type="button" id="ticketPerPersonSaveBtn">保存</button>
-          </span>
-        </div>
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketCooldownInput">再次购票间隔（分钟，0 = 不限）</label>
-          <span class="ticket-limit-edit">
-            <input type="number" id="ticketCooldownInput" min="0" max="1440" step="1" inputmode="numeric">
-            <button type="button" id="ticketCooldownSaveBtn">保存</button>
-          </span>
-        </div>
-        <div class="ticket-admin-row">
-          <label class="ticket-admin-key" for="ticketResetInput">每日票额刷新（国服时间）</label>
-          <span class="ticket-limit-edit">
-            <input type="time" id="ticketResetInput" step="60">
-            <button type="button" id="ticketResetSaveBtn">保存</button>
-          </span>
-        </div>
-        <!-- 定时开关：输入的是国服时间（UTC+8），与站长所在时区无关 -->
-        <div class="ticket-admin-row ticket-sched-row">
-          <span class="ticket-admin-key">定时开关（国服时间）</span>
-          <span class="ticket-sched-edit">
-            <label for="ticketOpenAtInput">开启</label>
-            <input type="datetime-local" id="ticketOpenAtInput">
-            <label for="ticketCloseAtInput">关闭</label>
-            <input type="datetime-local" id="ticketCloseAtInput">
-            <button type="button" id="ticketSchedSaveBtn">保存</button>
-            <button type="button" id="ticketSchedClearBtn" class="ticket-btn-ghost">清除</button>
-          </span>
-        </div>
-        <p class="ticket-sched-note" id="ticketSchedNote" hidden></p>
-        <div class="ticket-admin-actions">
+        <div class="ticket-admin-actions ta-topbar">
           <button type="button" id="ticketExportBtn">导出 Excel</button>
           <button type="button" id="ticketRefreshBtn" class="ticket-btn-ghost">刷新</button>
-          <button type="button" id="ticketClearBtn" class="ticket-btn-danger">清空购票数据</button>
         </div>
         <p class="form-msg" id="ticketAdminMsg" hidden></p>
-        <div class="ticket-admin-list-head">
-          <label for="ticketDaySelect">订单</label>
-          <select id="ticketDaySelect"></select>
-          <span class="ticket-legend"><i class="lg-over"></i>超额 <i class="lg-dup"></i>重复 <i class="lg-void"></i>已作废</span>
+
+        <!-- ================= 子标签一：购票管理 ================= -->
+        <div class="ta-pane" data-ta-pane="settings">
+          <section class="ta-group">
+            <h3 class="ta-group-title">基本</h3>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketTitleInput">购票页标题</label>
+              <span class="ticket-limit-edit ticket-title-edit">
+                <input type="text" id="ticketTitleInput" maxlength="60" placeholder="留空则恢复默认标题">
+                <button type="button" id="ticketTitleSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">标题后缀「（测试）」</span>
+              <button type="button" class="ticket-switch" id="ticketTestBtn" aria-pressed="false">—</button>
+            </div>
+            <p class="ticket-sched-note ticket-title-preview" id="ticketTitlePreview" hidden></p>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">购票开放</span>
+              <button type="button" class="ticket-switch" id="ticketOpenBtn" aria-pressed="false">—</button>
+            </div>
+            <!-- 定时开关：输入的是国服时间（UTC+8），与站长所在时区无关 -->
+            <div class="ticket-admin-row ticket-sched-row">
+              <span class="ticket-admin-key">定时开关（国服时间）</span>
+              <span class="ticket-sched-edit">
+                <label for="ticketOpenAtInput">开启</label>
+                <input type="datetime-local" id="ticketOpenAtInput">
+                <label for="ticketCloseAtInput">关闭</label>
+                <input type="datetime-local" id="ticketCloseAtInput">
+                <button type="button" id="ticketSchedSaveBtn">保存</button>
+                <button type="button" id="ticketSchedClearBtn" class="ticket-btn-ghost">清除</button>
+              </span>
+            </div>
+            <p class="ticket-sched-note" id="ticketSchedNote" hidden></p>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">持票 id 可待定</span>
+              <button type="button" class="ticket-switch" id="ticketPendingBtn" aria-pressed="false">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketPerPersonInput">单人限购（张）</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketPerPersonInput" min="1" max="20" step="1" inputmode="numeric">
+                <button type="button" id="ticketPerPersonSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketCooldownInput">再次购票间隔（分钟，0 = 不限）</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketCooldownInput" min="0" max="1440" step="1" inputmode="numeric">
+                <button type="button" id="ticketCooldownSaveBtn">保存</button>
+              </span>
+            </div>
+          </section>
+
+          <section class="ta-group">
+            <h3 class="ta-group-title">票额与刷新</h3>
+            <p class="ta-group-hint">两次刷新之间叫「一轮」，每一轮开始时定下票额；没卖完的票不结转到下一轮（需要的话用「临时加票」手动加上）。</p>
+            <div class="ta-round" id="ticketRoundBox"></div>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketExtraInput">临时加票（只对当前这一轮）</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketExtraInput" min="1" max="100000" step="1" inputmode="numeric" placeholder="张数">
+                <button type="button" id="ticketExtraAddBtn">加上</button>
+                <button type="button" id="ticketExtraSubBtn" class="ticket-btn-ghost">减去</button>
+                <button type="button" id="ticketExtraClearBtn" class="ticket-btn-ghost">清零</button>
+              </span>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">每日刷新</span>
+              <button type="button" class="ticket-switch" id="ticketDailyBtn" aria-pressed="false">—</button>
+            </div>
+            <div class="ticket-admin-row ta-daily-only">
+              <label class="ticket-admin-key" for="ticketResetInput">每日刷新时间（国服时间）</label>
+              <span class="ticket-limit-edit">
+                <input type="time" id="ticketResetInput" step="60">
+                <button type="button" id="ticketResetSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ticket-admin-row ta-daily-only">
+              <label class="ticket-admin-key" for="ticketLimitInput">每日票额（张）</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketLimitInput" min="0" max="100000" step="1" inputmode="numeric">
+                <label class="audience-opt ta-inline-opt" id="ticketLimitCurWrap"><input type="checkbox" id="ticketLimitCurChk" checked><span>当前这一轮也改</span></label>
+                <button type="button" id="ticketLimitSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ta-sub">
+              <p class="ta-sub-title">自定义刷新点（年月日 时:分，国服时间）</p>
+              <p class="ta-group-hint">到了这个时间开始新的一轮，票额按这里填的。可以和每日刷新一起用；同一分钟两个都有时按这里的。</p>
+              <div class="ta-points" id="ticketPointsList"></div>
+              <div class="ta-sub-actions">
+                <button type="button" id="ticketPointAddBtn" class="ticket-btn-ghost">+ 添加刷新点</button>
+                <button type="button" id="ticketPointSaveBtn">保存刷新点</button>
+                <button type="button" id="ticketPointResetBtn" class="ticket-btn-ghost">撤销修改</button>
+              </div>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">下一次刷新：<b id="ticketNextInfo">—</b></span>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketNextInput" min="0" max="100000" step="1" inputmode="numeric" aria-label="下一次刷新的票额">
+                <button type="button" id="ticketNextSaveBtn">保存</button>
+                <button type="button" id="ticketNextResetBtn" class="ticket-btn-ghost" hidden>恢复默认</button>
+              </span>
+            </div>
+            <p class="ticket-sched-note" id="ticketNextNote" hidden></p>
+          </section>
+
+          <section class="ta-group">
+            <h3 class="ta-group-title">购票页显示</h3>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketRemainModeSelect">余票</label>
+              <select id="ticketRemainModeSelect">
+                <option value="full">完全显示（具体张数）</option>
+                <option value="range">显示大致范围</option>
+                <option value="hidden">不显示</option>
+              </select>
+            </div>
+            <p class="ticket-sched-note ticket-title-preview" id="ticketRemainPreview" hidden></p>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">定时开启 / 关闭时间</span>
+              <button type="button" class="ticket-switch" id="ticketShowSchedBtn" aria-pressed="false">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">刷新时间</span>
+              <button type="button" class="ticket-switch" id="ticketShowResetBtn" aria-pressed="false">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">超额标记对客户显示</span>
+              <button type="button" class="ticket-switch" data-ta-flag="showOver" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="客户能看到自己的单是超额登记" data-toast-off="超额标记不再对客户显示">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">重复标记对客户显示</span>
+              <button type="button" class="ticket-switch" data-ta-flag="showDup" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="客户能看到自己的登记和别人重复" data-toast-off="重复标记不再对客户显示">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">购票留言栏</span>
+              <button type="button" class="ticket-switch" data-ta-flag="messageOn" data-on="有（点击去掉）" data-off="没有（点击加上）"
+                      data-toast-on="购票页加上了留言栏" data-toast-off="购票页去掉了留言栏">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">显示网站标题（标题、地址、时间天气）</span>
+              <button type="button" class="ticket-switch" data-ta-flag="showBrand" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="购票页显示网站标题" data-toast-off="购票页不显示网站标题、地址和时间天气">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">与首页隔离（没有返回按钮，首页没有入口）</span>
+              <button type="button" class="ticket-switch" data-ta-flag="isolated" data-on="已隔离（点击取消）" data-off="不隔离（点击隔离）"
+                      data-toast-on="购票页已与首页隔离" data-toast-off="购票页已取消隔离"
+                      data-confirm-on="与首页隔离吗？&#10;&#10;购票页没有返回按钮，首页不再显示购票入口，只能拿购票链接进入；停留时间限制同时失效。">—</button>
+            </div>
+            <div class="ticket-admin-row ta-idle-row">
+              <label class="ticket-admin-key" for="ticketIdleInput">停留超过几分钟跳回首页（0 = 不限制）</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketIdleInput" min="0" max="1440" step="1" inputmode="numeric">
+                <button type="button" id="ticketIdleSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ticket-admin-row ta-idle-row">
+              <span class="ticket-admin-key">给客户显示剩余时间</span>
+              <button type="button" class="ticket-switch" data-ta-flag="showIdle" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="购票页显示剩余时间" data-toast-off="购票页不显示剩余时间">—</button>
+            </div>
+            <p class="ticket-sched-note" id="ticketIdleIsoNote" hidden>现在「与首页隔离」开着，停留时间限制不生效。</p>
+          </section>
+
+          <section class="ta-group">
+            <h3 class="ta-group-title">购票须知</h3>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">显示购票须知</span>
+              <button type="button" class="ticket-switch" data-ta-flag="guideOn" data-on="显示（点击关闭）" data-off="不显示（点击打开）"
+                      data-toast-on="购票须知已打开" data-toast-off="购票须知已关闭：首页入口直接进购票页，购票页也没有须知按钮">—</button>
+            </div>
+            <details class="ta-guide" id="ticketGuideEditor">
+              <summary>编辑购票须知正文 <span id="ticketGuideState"></span></summary>
+              <div class="ta-guide-help">
+                <p>每行开头的写法决定样式（其余每一行就是一段文字，空行只是分隔）：</p>
+                <ul>
+                  <li><code>^ 文字</code> 标题上方的小字　<code># 文字</code> 大标题　<code>## 文字</code> 小节标题</li>
+                  <li><code>[票价] 名称 | 价格 | 小标签 | 时间</code> 票价卡片（连着写几行就并排几张）</li>
+                  <li><code>### 标题</code> 卡片（连着的几张并排，卡片里可以写段落和列表，到下一个 <code>##</code> 为止）</li>
+                  <li><code>1. 文字</code> 有序列表　<code>- 文字</code> 无序列表</li>
+                  <li><code>Q1：问题</code> 问答（下面几行是回答，到下一个问题或 <code>##</code> 为止）</li>
+                  <li><code>&gt; 文字</code> 居中的结尾说明　<code>-- 文字</code> 右下角署名　<code>---</code> 分隔线</li>
+                  <li>行内：<code>**加粗**</code>　<code>__下划线__</code>　http 开头的网址自动变成链接</li>
+                </ul>
+              </div>
+              <textarea id="ticketGuideInput" maxlength="12000" spellcheck="false" aria-label="购票须知正文"></textarea>
+              <div class="ta-sub-actions">
+                <button type="button" id="ticketGuideSaveBtn">保存须知</button>
+                <button type="button" id="ticketGuideResetBtn" class="ticket-btn-ghost">恢复默认</button>
+              </div>
+              <p class="form-msg" id="ticketGuideMsg" hidden></p>
+              <p class="ta-sub-title">预览（访客看到的样子）</p>
+              <div class="ta-guide-preview" id="ticketGuidePreview"></div>
+            </details>
+          </section>
+
+          <section class="ta-group">
+            <h3 class="ta-group-title">只读端（查看密码登录的「购票情况」）</h3>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">「购票情况」查看页</span>
+              <button type="button" class="ticket-switch" id="ticketViewerBtn" aria-pressed="false">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">显示「售票统计」</span>
+              <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="只读端可以看售票统计" data-toast-off="只读端看不到售票统计了">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">显示「活动问卷」（只读）</span>
+              <button type="button" class="ticket-switch" data-ta-flag="viewerSurvey" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                      data-toast-on="只读端可以看活动问卷（只读，下次登录生效）" data-toast-off="只读端看不到活动问卷了">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <span class="ticket-admin-key">可以勾选取票</span>
+              <button type="button" class="ticket-switch" data-ta-flag="viewerPickup" data-on="可以（点击关闭）" data-off="不可以（点击打开）"
+                      data-toast-on="只读端可以勾选取票了（操作会记日志）" data-toast-off="只读端不能勾选取票了">—</button>
+            </div>
+            <div class="ticket-admin-row">
+              <label class="ticket-admin-key" for="ticketLogHoursInput">操作日志每几小时合并成一条</label>
+              <span class="ticket-limit-edit">
+                <input type="number" id="ticketLogHoursInput" min="1" max="720" step="1" inputmode="numeric">
+                <button type="button" id="ticketLogHoursSaveBtn">保存</button>
+              </span>
+            </div>
+            <div class="ta-sub-actions"><button type="button" id="ticketLogBtn" class="ticket-btn-ghost">查看只读端操作日志</button></div>
+            <div class="fb-admin-list ta-log" id="ticketLogList" hidden></div>
+          </section>
+
+          <section class="ta-group ta-danger">
+            <h3 class="ta-group-title">数据</h3>
+            <div class="ta-sub-actions">
+              <button type="button" id="ticketClearBtn" class="ticket-btn-danger">清空购票数据</button>
+            </div>
+          </section>
         </div>
-        <div class="ticket-table-wrap">
-          <table class="ticket-table">
-            <thead><tr><th>序号</th><th>联系方式</th><th>数量</th><th>持票人</th><th>留言</th><th>时间</th><th>操作</th></tr></thead>
-            <tbody id="ticketAdminTbody"></tbody>
-          </table>
+
+        <!-- ================= 子标签二：详细订单 ================= -->
+        <div class="ta-pane" data-ta-pane="orders" hidden>
+          <div class="ticket-admin-list-head">
+            <label for="ticketDaySelect">轮次</label>
+            <select id="ticketDaySelect"></select>
+            <input type="search" id="ticketSearchInput" class="ta-search" placeholder="搜联系方式 / 持票人 / 序号" autocomplete="off" aria-label="搜索订单">
+            <span class="ticket-legend"><i class="lg-over"></i>超额 <i class="lg-dup"></i>重复 <i class="lg-void"></i>已作废 <i class="lg-picked"></i>已取票</span>
+          </div>
+          <div class="venue-edit ta-edit" id="ticketEditBox" hidden></div>
+          <div class="ticket-table-wrap">
+            <table class="ticket-table ta-orders">
+              <thead><tr><th>序号</th><th>联系方式</th><th>数量</th><th>持票人</th><th>留言</th><th>时间</th><th class="tt-actions-th">操作</th><th>取票</th></tr></thead>
+              <tbody id="ticketAdminTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ================= 子标签三：售票统计 ================= -->
+        <div class="ta-pane" data-ta-pane="stats" hidden>
+          <div class="ticket-admin-list-head">
+            <label for="ticketStatsRound">范围</label>
+            <select id="ticketStatsRound"></select>
+          </div>
+          <div class="ta-stats" id="ticketStatsBody"></div>
         </div>
       </div>
       <!-- 场地预约：访客在 #venue 提交的登记 + 金数据导入的历史登记；可新增 / 修改 / 作废（见 admin.js 7c） -->
@@ -839,6 +1021,11 @@
 
     <!-- 查看购票情况（只读）：输入查看密码后进入，「购票管理」面板以只读方式搬到这里（见 admin.js） -->
     <div id="ticketViewBoard" hidden>
+      <!-- 管理员打开了「只读端显示活动问卷」时才出现：在购票情况和活动问卷（只读）之间切换 -->
+      <div class="admin-pills" id="viewerPills" hidden>
+        <button type="button" class="tab-btn is-active" data-viewer-panel="ticketAdminPanel">购票情况</button>
+        <button type="button" class="tab-btn" data-viewer-panel="surveyAdminPanel">活动问卷</button>
+      </div>
       <div id="ticketViewHost"></div>
     </div>
   </section>
@@ -984,6 +1171,9 @@
   <div class="info-box guide-box" id="ticketGuideBox">
     <button class="info-close" id="ticketGuideClose" aria-label="关闭">×</button>
     <div class="guide-scroll" id="ticketGuideScroll" tabindex="-1">
+      <!-- 正文可在管理页「购票管理 → 购票须知」编辑（存在 Worker），ticket.js 读到后替换这里；
+           读不到时就显示下面这份默认须知（和 ticket.js 里的 TICKET_GUIDE_DEFAULT 内容相同） -->
+      <div id="ticketGuideContent">
       <p class="guide-eyebrow">2026莫古力中秋月轮祭</p>
       <h2 class="info-title guide-title" id="ticketGuideTitle">购票须知</h2>
 
@@ -1056,6 +1246,7 @@
 
       <p class="guide-end">其他购票相关的问题请前往活动群（群号 453278026）私聊群主，感谢您对活动的支持！</p>
       <p class="guide-sign">花舞之街·薰风花语町</p>
+      </div>
     </div>
     <div class="guide-actions">
       <button type="button" class="share-site-btn guide-copy-btn" id="ticketGuideCopyBtn">复制群号</button>
@@ -1206,7 +1397,7 @@
 
 
 <!-- 人机验证组件（自动验证 Cloudflare Turnstile + 手动验证：狒科生 / 文科生 / 理科生），必须放在页面脚本之前 -->
-<script src="verify.js?v=5"></script>
+<script src="verify.js?v=6"></script>
 
 <script>
 /* =============================================================================
@@ -1796,7 +1987,12 @@ function hideColdEntryBack() {
 
 const BASE_DOC_TITLE = document.title;
 function showView(id) {
-  if (id !== "view-ticket") document.title = BASE_DOC_TITLE;
+  if (id !== "view-ticket") {
+    document.title = BASE_DOC_TITLE;
+    /* 离开购票页：恢复网站标题（购票页可能设了不显示），停掉停留时间计时（ticket.js） */
+    document.documentElement.classList.remove("hj-ticket-bare");
+    if (typeof stopTicketIdle === "function") stopTicketIdle();
+  }
   if (id !== "view-home" && homeVideoOpen) setHomeVideoOpen(false);
   // 回到首页时：设成默认展开（LATEST_VIDEO.defaultOpen）且用户没有手动收起过，才恢复展开（不自动播放）
   if (id === "view-home" && LATEST_VIDEO.defaultOpen && !homeVideoOpen && !homeVideoUserClosed && hasHomeVideo()) setHomeVideoOpen(true);
@@ -1860,7 +2056,7 @@ function openTicketViewSafe() {
 
 /* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载 ------------------
    改了 admin.js 之后把 ADMIN_JS_VERSION +1，让已经缓存旧文件的浏览器拿到新文件 */
-const ADMIN_JS_VERSION = 6;
+const ADMIN_JS_VERSION = 7;
 let adminJsPromise = null;
 
 function loadAdminJs() {
@@ -5296,7 +5492,7 @@ function initApp() {
 </script>
 
 <!-- 购票页脚本（访客表单 / 查询 / 首页入口 / 购票须知）。改了 ticket.js 之后把 ?v= +1 -->
-<script src="ticket.js?v=3"></script>
+<script src="ticket.js?v=4"></script>
 <!-- 场地使用登记（站内表单，原金数据问卷）。改了 venue.js 之后把 ?v= +1 -->
 <script src="venue.js?v=3"></script>
 <!-- 活动问卷（最新活动「反馈与建议」）。改了 survey.js 之后把 ?v= +1 -->

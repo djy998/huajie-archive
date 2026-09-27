@@ -19,7 +19,7 @@
        验证区下方常驻一个「自动验证不成功？点击手动验证」按钮，随时可以自己切过去。
      · 手动验证 —— 下分三种，切到手动验证后用一排小标签互相切换，也可以点「返回自动验证」：
          · 狒科生 —— 看职业图标选职业（三选一），图标来自仓库 jobicon/ 文件夹
-         · 文科生 —— 飞花令：给一个常用汉字，写一句含该字的诗词；可点「提示」拿 20 个字来拼
+         · 文科生 —— 飞花令：给一个常用汉字，写一句含该字的诗词；可点「提示」拿 10 个字来拼
          · 理科生 —— 算术题
 
    安全设计：
@@ -30,7 +30,8 @@
      · 狒科生的职业图标由 Worker 从站点 jobicon/ 取回、以 data URL 内联进题目，
        地址里不含职业名，看源码也抄不到答案；
      · 答对后拿到一次性通行证 verifyPass（默认 10 分钟内有效、只能用一次），
-       提交表单时随请求交给 Worker 消费；服务端未通过就一律按「人机验证未通过」处理。
+       提交表单时随请求交给 Worker 消费；服务端未通过就一律按「人机验证未通过」处理；
+     · 2026-09-28 起所有题目答错一次就换题（Worker 同时把答错的那道题作废，同一题不能再交）。
    ============================================================================= */
 
 (function (global) {
@@ -166,7 +167,7 @@
     if (!data) return networkHint || "连接失败，检查一下网络后再试";
     switch (data.error) {
       case "rate_limited": return "操作太频繁了，请稍等一会儿再试";
-      case "wrong": return "答案不对，再试一次";
+      case "wrong": return "答案不对，已换一题";
       case "expired":
       case "not_found": return "题目已过期，已换一题，请重新作答";
       case "bad_mode": return "验证方式不对，请重新选择";
@@ -264,7 +265,7 @@
         this.submitAnswer(input ? input.value : "");
         return;
       }
-      if (act === "refresh") { this.loadTask(); return; }                   // 换一题 / 换一个令字
+      if (act === "refresh") { this.wrong = 0; this.loadTask(); return; }   // 换一题 / 换一个令字
       if (act === "hint") { this.loadHint(); return; }                      // 文科生：提示
       if (act === "char") {                                                 // 文科生：点提示里的字填进输入框
         const input = this.body.querySelector(".verify-input");
@@ -434,15 +435,15 @@
 
     /* ---------- 1.4 手动验证：出题 ---------- */
 
-    async loadTask() {
+    /* afterTip：出完题后要一直显示的一句话（答错换题时的「xxx，已换一题」），红字 */
+    async loadTask(afterTip) {
       const session = this.session;
       const mode = this.mode;
       this.task = null;
       this.hint = null;
-      this.wrong = 0;
       this.proof = null;
       this.body.innerHTML = "";
-      this.setTip("出题中…");
+      this.setTip(afterTip ? afterTip + "（出题中…）" : "出题中…", !!afterTip);
 
       const data = this.o.post ? await this.o.post({ action: "get_verify_task", mode: mode }) : null;
       if (session !== this.session || mode !== this.mode) return;
@@ -459,7 +460,7 @@
         return;
       }
       this.task = data;
-      this.setTip("");
+      this.setTip(afterTip || "", !!afterTip);
       this.renderTask();
     }
 
@@ -562,7 +563,7 @@
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一题</button></div>';
     }
 
-    /* 文科生：要提示。提示由 Worker 生成（随机挑一句含令字的答案，取其用到的字再补足到 20 个） */
+    /* 文科生：要提示。提示由 Worker 生成（随机挑一句含令字的答案，取其用到的字再补足到 10 个） */
     async loadHint() {
       if (!this.task) return;
       const session = this.session;
@@ -604,13 +605,10 @@
 
       if (!data || !data.ok) {
         if (data && (data.error === "wrong")) {
+          /* 答错一次就换题（Worker 已经把这道题作废了）。服务端给了原因（例如「这句里没有『春』字」）就一起显示 */
           this.wrong++;
-          /* 服务端会给出具体原因（例如「这句里没有『春』字」），有就直接显示 */
-          this.setTip((data.why ? data.why + "。" : "答案不对，再试一次。")
-            + "（已答错 " + this.wrong + " 次）"
-            + (this.mode === "poem" && !this.hint ? "，卡住了可以点下面的「提示」" : ""), true);
-          if (this.mode === "poem" && this.wrong >= 2 && !this.hint) this.loadHint();
-          else if (this.wrong >= 5) this.loadTask();
+          this.loadTask((data.why || "答案不对") + "，已换一题，请重新作答"
+            + (this.mode === "poem" ? "（卡住了可以点「提示」）" : ""));
           return;
         }
         if (data && (data.error === "expired" || data.error === "not_found")) {

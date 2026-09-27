@@ -3531,11 +3531,9 @@ body.day-mode .ticket-reset-hint { color: var(--day-brown-soft); }
 /* 购票管理：余票显示方式下拉框按文字宽度 */
 .ticket-admin #ticketRemainModeSelect { flex: 0 1 auto; }
 
-/* 查看购票情况（只读）：藏掉所有设置项、作废 / 恢复、清空，只留统计、订单表、刷新、导出 */
-.ticket-admin.is-readonly .ticket-admin-row,
-.ticket-admin.is-readonly .ticket-sched-note,
-.ticket-admin.is-readonly #ticketClearBtn,
-.ticket-admin.is-readonly .ticket-table th:last-child,
+/* 查看购票情况（只读）：「购票管理」子标签整个不出现（admin.js 控制），订单表里没有操作列 */
+.ticket-admin.is-readonly [data-ta-pane="settings"],
+.ticket-admin.is-readonly .ticket-table th.tt-actions-th,
 .ticket-admin.is-readonly .ticket-table td.tt-actions { display: none !important; }
 #ticketViewBoard[hidden] { display: none; }
 
@@ -4410,3 +4408,256 @@ body.custom-bg.day-mode .tab-sec-title { text-shadow: 0 1px 2px rgba(38,24,6,.55
   #latestTile .tile-overlay h2 { font-size: 1.6rem; }
   #latestTile .tile-overlay p { font-size: .9rem; }
 }
+
+
+/* =============================================================================
+   2026-09-28 购票系统升级
+   ============================================================================= */
+
+/* ---- 购票页：不显示网站标题（管理页「显示网站标题」关掉时，ticket.js 给 <html> 加 hj-ticket-bare）
+   标题、地址、时间天气条都藏起来，右上角只留昼夜和特效两个按钮 ---- */
+html.hj-ticket-bare .site-header .brand,
+html.hj-ticket-bare .site-header .tagline,
+html.hj-ticket-bare .site-header .hj-clock,
+html.hj-ticket-bare #moreToggle,
+html.hj-ticket-bare #clockToggle,
+html.hj-ticket-bare #soundToggle,
+html.hj-ticket-bare #volPanel,
+html.hj-ticket-bare #morePanel,
+html.hj-ticket-bare #calWidget,
+html.hj-ticket-bare #alarmWidgetLayer { display: none !important; }
+html.hj-ticket-bare .site-header { height: 72px; padding: 0; }
+html.hj-ticket-bare #dayNightToggle { right: 18px; }
+html.hj-ticket-bare #fxToggle { right: 70px; }
+@media (max-width: 640px) {
+  html.hj-ticket-bare .site-header { height: 60px; }
+  html.hj-ticket-bare #dayNightToggle { right: 12px; }
+  html.hj-ticket-bare #fxToggle { right: 58px; }
+}
+
+/* ---- 购票页：与首页隔离时没有返回按钮；留言栏 / 须知按钮可以关掉 ---- */
+#view-ticket.is-isolated .back-btn { display: none !important; }
+#view-ticket.is-isolated > .ticket-card:first-of-type { margin-top: 28px; }
+#ticketMessageField[hidden],
+#ticketGuideRow[hidden] { display: none !important; }
+
+/* ---- 购票页：停留时间倒计时 ---- */
+.ticket-idle {
+  margin: -6px 0 16px;
+  font-size: .84rem;
+  text-align: center;
+  color: var(--lantern-soft);
+  font-variant-numeric: tabular-nums;
+}
+.ticket-idle[hidden] { display: none; }
+.ticket-idle.is-urgent { color: #e08e84; font-weight: 600; }
+body.day-mode .ticket-idle { color: var(--day-brown); }
+body.day-mode .ticket-idle.is-urgent { color: #b0261b; }
+
+/* ---- 查询我的登记：部分作废的持票人、重复提示 ---- */
+.tli-void { color: var(--text-mute); }
+.tli-void s { text-decoration-thickness: 1px; }
+.tli-note { margin-top: 6px; font-size: .8rem; color: #ffa257; }
+body.day-mode .tli-void { color: #7a6a52; }
+body.day-mode .tli-note { color: #b85a00; }
+
+/* ---- 购票须知：可编辑正文新增的几种写法 ---- */
+.guide-p { margin: 0 0 8px; font-size: .9rem; line-height: 1.85; color: var(--text-soft); }
+.guide-bullets { list-style: disc; }
+.guide-hr { margin: 22px 0; border: 0; border-top: 1px solid var(--line); }
+.guide-way a, .guide-qa a, .guide-p a { color: var(--accent-soft); }
+@media (min-width: 641px) {
+  .guide-prices.guide-n-1, .guide-ways.guide-n-1 { grid-template-columns: 1fr; }
+  .guide-prices.guide-n-3, .guide-ways.guide-n-3 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+}
+body.day-mode .guide-p { color: var(--day-text); }
+body.day-mode .guide-hr { border-color: rgba(138,90,28,.35); }
+body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a { color: var(--day-brown); }
+
+/* ---- 购票管理：子标签、分组 ---- */
+.ticket-admin-tabs { justify-content: center; margin-bottom: 18px; }
+.ticket-admin-tabs[hidden], .ticket-admin-tabs .tab-btn[hidden], .ta-pane[hidden] { display: none; }
+.ta-topbar { margin: 0 0 14px; }
+.ta-group {
+  margin: 0 0 18px;
+  padding: 18px 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.025);
+}
+.ta-group-title { margin: 0 0 14px; font-size: 1rem; text-align: center; color: var(--lantern-soft); }
+.ta-group-hint, .ta-footnote { max-width: 560px; margin: -6px auto 14px; font-size: .78rem; line-height: 1.7; text-align: left; color: var(--text-mute); }
+.ta-footnote { margin: 8px 0 14px; max-width: none; }
+.ta-danger { border-color: rgba(224,90,79,.35); }
+.gate-card .ticket-limit-edit { flex-wrap: wrap; justify-content: flex-end; }
+.gate-card .ticket-limit-edit button { padding: 9px 18px; font-size: .86rem; }
+.ta-inline-opt { font-size: .8rem; }
+.gate-card .ticket-limit-edit input[type="checkbox"] { width: 17px; padding: 0; }
+.ta-inline-opt[hidden] { display: none; }
+.ta-daily-only.is-off { opacity: .5; }
+.ta-idle-row.is-disabled { opacity: .45; }
+.ta-sub { max-width: 560px; margin: 6px auto 16px; text-align: left; }
+.ta-sub-title { margin: 0 0 8px; font-size: .88rem; font-weight: 600; color: var(--text-soft); }
+.ta-sub-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+.gate-card .ta-sub-actions button { padding: 8px 18px; font-size: .84rem; }
+.ta-empty { margin: 4px 0; font-size: .82rem; color: var(--text-mute); }
+.ticket-admin .tt-act:not(#_) { padding: 5px 14px; font-size: .78rem; font-weight: 500; line-height: 1.5; }
+.ticket-admin .tt-act.is-void:not(#_) { color: #ff7a6e; }
+.ticket-admin .tt-act.is-restore:not(#_) { color: #6fd08c; }
+body.day-mode .ticket-admin .tt-act.is-void:not(#_) { color: #b0261b; }
+body.day-mode .ticket-admin .tt-act.is-restore:not(#_) { color: #2f7d4a; }
+
+/* 当前这一轮 */
+.ta-round {
+  max-width: 560px;
+  margin: 0 auto 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  font-size: .86rem;
+  line-height: 1.8;
+  text-align: left;
+  color: var(--text-soft);
+}
+.ta-round p { margin: 0; }
+.tas-item b small { margin-left: 6px; font-size: .72rem; font-weight: 400; color: var(--text-mute); }
+body.day-mode .tas-item b small { color: var(--day-brown-soft); }
+.ta-round b { color: var(--cream); }
+.ta-round small { margin-left: 8px; color: var(--text-mute); }
+
+/* 自定义刷新点 */
+.ta-points { display: grid; gap: 8px; }
+.ta-point { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.gate-card .ta-point input:not([type="checkbox"]) { width: auto; margin: 0; padding: 8px 12px; font-size: .88rem; }
+.gate-card .ta-point .ta-point-at { flex: 1 1 200px; color-scheme: dark; }
+.gate-card .ta-point .ta-point-qty { width: 96px; }
+.ta-point-unit { font-size: .82rem; color: var(--text-mute); }
+
+/* 购票须知编辑 */
+.ta-guide { max-width: 640px; margin: 4px auto 12px; text-align: left; }
+.ta-guide summary { cursor: pointer; font-size: .9rem; font-weight: 600; color: var(--accent-soft); text-align: center; padding: 6px 0; }
+.ta-guide summary span { font-weight: 400; color: var(--text-mute); }
+.ta-guide-help { margin: 8px 0 10px; font-size: .78rem; line-height: 1.8; color: var(--text-mute); }
+.ta-guide-help p { margin: 0 0 4px; }
+.ta-guide-help ul { margin: 0; padding-left: 1.2em; }
+.ta-guide-help code { padding: 0 4px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--text-soft); font-size: .76rem; }
+.gate-card #ticketGuideInput { min-height: 300px; font-size: .85rem; line-height: 1.7; }
+.ta-guide-preview {
+  max-height: 480px;
+  overflow: auto;
+  padding: 22px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line);
+  background: var(--ink-2);
+}
+.ta-guide-preview .guide-title { margin-bottom: 14px; }
+
+/* ---- 详细订单 ---- */
+.gate-card .ticket-admin-list-head input.ta-search:not([type="checkbox"]) { flex: 1 1 180px; width: auto; max-width: 280px; margin: 0; padding: 8px 14px; font-size: .86rem; text-align: left; }
+.ticket-legend .lg-picked { margin-left: 8px; background: #6fd08c; }
+.ta-orders .tt-round { display: block; margin-top: 2px; font-size: .7rem; color: var(--text-mute); white-space: nowrap; }
+.ta-orders .tt-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ta-orders .tt-acts .tt-act { white-space: nowrap; }
+.ta-orders .tt-h-void { color: var(--text-mute); }
+.ta-orders .tt-h-void small { margin-left: 4px; font-size: .7rem; }
+.ta-orders .tt-note { display: block; margin-top: 4px; color: var(--lantern-soft); }
+.ta-orders .tt-pick-cell { white-space: nowrap; }
+.tt-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: .8rem; }
+.tt-picked { color: #6fd08c; font-weight: 600; }
+.tt-unpicked { color: var(--text-mute); }
+.ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #6fd08c; font-weight: 600; }
+.ta-orders tr.is-void td.tt-pick-cell { text-decoration: none; }
+body.day-mode .ta-orders .tt-note { color: var(--day-brown); }
+body.day-mode .tt-picked,
+body.day-mode .ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #2f7d4a; }
+
+/* 编辑订单 / 部分作废 */
+.ta-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
+.ta-field { display: block; margin-bottom: 12px; }
+.ta-field > span { display: block; margin-bottom: 6px; font-size: .82rem; color: var(--text-mute); }
+.gate-card .ta-field input:not([type="checkbox"]),
+.gate-card .te-holder input:not([type="checkbox"]) { margin: 0; padding: 9px 14px; font-size: .9rem; text-align: left; }
+.gate-card .ta-field select { width: 100%; }
+.gate-card .ta-field textarea { min-height: 64px; margin: 0; }
+.te-holder { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.gate-card .te-holder .te-name { flex: 1 1 140px; width: auto; }
+.gate-card .te-holder select { flex: 0 1 150px; }
+.te-holder.is-void { font-size: .84rem; color: var(--text-mute); }
+.ta-edit-checks { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0 0 12px; }
+.ta-partial { display: grid; gap: 8px; margin: 0 0 12px; }
+.ta-partial-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .9rem; color: var(--text-soft); }
+.ta-partial-row.is-void { color: var(--text-mute); }
+body.day-mode .ta-field > span,
+body.day-mode .te-holder.is-void,
+body.day-mode .ta-partial-row.is-void { color: var(--day-brown-soft); }
+body.day-mode .ta-partial-row { color: var(--day-ink); }
+
+/* ---- 售票统计 ---- */
+.ta-stats { text-align: left; }
+.ta-stat-title { margin: 22px 0 10px; font-size: .95rem; color: var(--lantern-soft); }
+.ta-sellout tr.is-sel td { background: rgba(255,255,255,.05); }
+.ta-sellout td small { display: block; font-size: .72rem; color: var(--text-mute); }
+.ta-chart { --ta-bar: var(--accent); overflow: hidden; }
+.ta-chart svg { display: block; max-width: 100%; }
+.ta-chart .ta-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
+.ta-chart .ta-base { stroke: var(--text-mute); stroke-width: 1; opacity: .6; }
+.ta-chart .ta-axis { fill: var(--text-mute); font-size: 11px; font-family: var(--serif); }
+.ta-chart .ta-line { fill: none; stroke: var(--ta-bar); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ta-chart .ta-area { fill: var(--ta-bar); opacity: .14; }
+.ta-chart .ta-dot { fill: var(--ta-bar); stroke: var(--panel); stroke-width: 2; }
+.ta-chart .ta-hit { fill: transparent; }
+.ta-chart .ta-bar-g:hover .ta-hit { fill: rgba(255,255,255,.06); }
+.ta-chart .ta-bar-g:hover .ta-dot { r: 6; }
+.ta-dc { margin: 12px 0 6px; font-size: .84rem; font-weight: 600; color: var(--text-soft); }
+.ta-list-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 22px 0 10px; font-size: .84rem; color: var(--text-mute); }
+.ta-list-head .ta-stat-title { margin: 0; }
+.ta-unpicked summary { margin: 0 0 8px; cursor: pointer; font-size: .84rem; color: var(--accent-soft); }
+body.day-mode .ta-unpicked summary { color: var(--day-brown); }
+.gate-card .ta-copy-fallback { min-height: 160px; margin-top: 10px; font-size: .82rem; }
+.ta-copy-fallback[hidden] { display: none; }
+.ta-log { margin: 6px 0 12px; }
+.ta-log-ops { margin: 0; padding-left: 1.2em; font-size: .84rem; line-height: 1.8; color: var(--text-soft); }
+.ta-log-ops small { margin-left: 8px; color: var(--text-mute); }
+body.day-mode .ta-group { background: rgba(255,252,240,.18); border-color: rgba(138,90,28,.35); }
+body.day-mode .ta-group-title,
+body.day-mode .ta-stat-title { color: var(--day-brown); }
+body.day-mode .ta-group-hint,
+body.day-mode .ta-footnote,
+body.day-mode .ta-empty,
+body.day-mode .ta-list-head,
+body.day-mode .ta-point-unit,
+body.day-mode .ta-sellout td small,
+body.day-mode .ta-orders .tt-round,
+body.day-mode .ta-guide-help,
+body.day-mode .ta-guide summary span,
+body.day-mode .ta-log-ops small { color: var(--day-brown-soft); }
+body.day-mode .ta-round { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-text); }
+body.day-mode .ta-round b,
+body.day-mode .ta-sub-title,
+body.day-mode .ta-dc,
+body.day-mode .ta-log-ops { color: var(--day-ink); }
+body.day-mode .ta-round small { color: var(--day-brown-soft); }
+body.day-mode .ta-guide summary { color: var(--day-brown); }
+body.day-mode .ta-guide-help code { background: rgba(255,255,255,.4); color: var(--day-ink); }
+body.day-mode .ta-guide-preview { background: rgba(255,252,240,.55); border-color: #c98f3a; }
+body.day-mode .ta-chart { --ta-bar: #7a4a14; }
+body.day-mode .ta-chart .ta-axis { fill: var(--day-brown-soft); }
+body.day-mode .ta-chart .ta-grid { stroke: rgba(138,90,28,.3); }
+body.day-mode .ta-chart .ta-base { stroke: var(--day-brown-soft); }
+body.day-mode .ta-chart .ta-dot { stroke: #e8b563; }
+body.day-mode .ta-chart .ta-bar-g:hover .ta-hit { fill: rgba(255,255,255,.25); }
+body.day-mode .ta-sellout tr.is-sel td { background: rgba(255,255,255,.3); }
+body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
+
+/* ---- 只读端：活动问卷（只读）不显示开关 ---- */
+.survey-admin.is-readonly .ticket-admin-row,
+.survey-admin.is-readonly #surveyLockNote { display: none !important; }
+#viewerPills[hidden] { display: none; }
+
+@media (max-width: 640px) {
+  .ta-group { padding: 16px 10px 6px; }
+  .ta-orders .tt-acts { flex-direction: column; align-items: flex-start; }
+}
+/* 购票管理里的说明小字（定时开关说明、下一次刷新说明等）：白天模式金底上原来的浅黄色看不清 */
+body.day-mode .ticket-sched-note { color: var(--day-brown); }
