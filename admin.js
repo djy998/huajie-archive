@@ -8,7 +8,8 @@
          「查看购票情况」只读页（查看密码登录，只能看和导出 Excel，不能改任何东西）、
          购票管理（订单表、作废 / 恢复、定时开关、Excel 导出、清空）、反馈建议箱、
          场地预约（场地使用登记的列表 / 新增 / 修改 / 作废，表单与文字对照在 venue.js）、
-         活动问卷（统计 / 逐份查看 / 作废 / 开放关闭 / Excel 导出，题目定义在 survey.js）。
+         活动问卷（统计 / 逐份查看 / 作废 / 开放关闭 / Excel 导出，题目定义在 survey.js）、
+         首页弹窗公告（开关 / 标题 / 正文 / 一张配图 / 预览；访客端在 index.html 主脚本 12c 节）。
    依赖主脚本（$、callWorker、setMsg、showToast、escapeHtml、playEnterAnim、closeOnBackdrop、copyText、
    openCaptcha、workerBase、workerImageUrl、siteLockdown、captchaOn、applyCaptchaEnabled、
    hjStarlight、applyStarlight、refreshStarlightStatus、FEEDBACK_CATEGORIES…）
@@ -127,6 +128,7 @@ const ADMIN_PANEL_REFRESH = {
   ticketAdminPanel: () => refreshTicketAdmin(),
   feedbackAdminPanel: () => refreshFeedbackAdmin(),
   venueAdminPanel: () => refreshVenueAdmin(),
+  popupAdminPanel: () => refreshPopupAdmin(),
   surveyAdminPanel: () => {
     if (window.HJ_SURVEY_READY) return refreshSurveyAdmin();
     $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
@@ -1685,6 +1687,224 @@ function initSurveyAdmin() {
   });
 }
 
+/* ---- 首页弹窗公告 ----------------------------------------------------------------
+   Worker：popup_admin_get / popup_admin_save / popup_admin_set；配图复用 upload_announcement_image。
+   开关按钮只管开 / 关；「保存」只存内容（不动开关）。有没保存的修改时点「开启」，会先问要不要一起保存。 */
+const POPUP_IMAGE_MAX_BYTES = 50 * 1024 * 1024;   // 选图上限 50MB（上传前会压缩）
+const POPUP_IMAGE_MAX_DIM = 2560;
+const popupAdmin = { saved: null, imageUrl: null, loaded: false };
+
+const popupFormValue = () => ({
+  title: $("popupTitleInput").value.trim(),
+  body: $("popupBodyInput").value.replace(/\r\n?/g, "\n").trim(),
+  image_url: popupAdmin.imageUrl || null,
+});
+
+function popupFormDirty() {
+  const saved = popupAdmin.saved;
+  if (!saved) return false;
+  const v = popupFormValue();
+  return v.title !== (saved.title || "") || v.body !== (saved.body || "") || v.image_url !== (saved.image_url || null);
+}
+
+function showPopupImagePreview(url) {
+  $("popupImagePreviewImg").src = url ? workerImageUrl(url) : "";
+  $("popupImagePreview").hidden = !url;
+}
+
+function updatePopupBodyCount() {
+  $("popupBodyCount").textContent = `${$("popupBodyInput").value.length} / 3000`;
+}
+
+function renderPopupAdminStatus() {
+  const p = popupAdmin.saved;
+  const btn = $("popupToggleBtn");
+  if (!p) {
+    $("popupAdminStatus").textContent = "当前状态：读取失败";
+    btn.disabled = true;
+    return;
+  }
+  const when = p.updated_at ? `（内容最后修改：${new Date(p.updated_at).toLocaleString("zh-CN", { hour12: false })}）` : "";
+  $("popupAdminStatus").textContent = p.enabled
+    ? `当前状态：已开启，访客打开首页会弹出${when}`
+    : `当前状态：已关闭${when}`;
+  btn.textContent = p.enabled ? "关闭弹窗" : "开启弹窗";
+  btn.disabled = false;
+}
+
+function fillPopupAdminForm(p) {
+  $("popupTitleInput").value = p.title || "";
+  $("popupBodyInput").value = p.body || "";
+  popupAdmin.imageUrl = p.image_url || null;
+  showPopupImagePreview(popupAdmin.imageUrl);
+  updatePopupBodyCount();
+}
+
+async function refreshPopupAdmin() {
+  $("popupAdminStatus").textContent = "当前状态：读取中…";
+  $("popupToggleBtn").disabled = true;
+  setMsg($("popupAdminMsg"), "");
+  const data = await callWorker({ action: "popup_admin_get", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    popupAdmin.saved = null;
+    renderPopupAdminStatus();
+    setMsg($("popupAdminMsg"), data && data.ok === false && !data.error
+      ? "登录状态失效了，重新登录内部入口后再试"
+      : "读取失败（Worker 可能还没更新到 2026-09-27a 版），刷新后再试");
+    return;
+  }
+  /* 第一次打开，或者表单没有改过：用服务器上的内容填表；改了一半关掉再打开，保留正在改的内容 */
+  const keepEdits = popupAdmin.loaded && popupFormDirty();
+  popupAdmin.saved = data.popup;
+  popupAdmin.loaded = true;
+  if (!keepEdits) fillPopupAdminForm(data.popup);
+  renderPopupAdminStatus();
+  if (keepEdits) setMsg($("popupAdminMsg"), "有还没保存的修改");
+}
+
+function popupErrorText(error) {
+  return ({
+    empty: "标题、正文、配图至少要有一样",
+    title_too_long: "标题太长了（最多 60 字）",
+    body_too_long: "正文太长了（最多 3000 字）",
+    bad_image_url: "配图地址不对，重新上传一次图片",
+    rate_limited: "操作太频繁，歇一会儿再试",
+  })[error] || "保存失败，请重试";
+}
+
+async function savePopupAdmin(extra = {}) {
+  const v = popupFormValue();
+  if (!v.title && !v.body && !v.image_url) {
+    setMsg($("popupAdminMsg"), popupErrorText("empty"));
+    return false;
+  }
+  const data = await callWorker({
+    action: "popup_admin_save",
+    password: internalAdminPassword,
+    title: v.title,
+    content: v.body,
+    image_url: v.image_url,
+    ...extra,
+  });
+  if (!data || !data.ok) {
+    setMsg($("popupAdminMsg"), !data ? "连接失败，检查一下网络后再试"
+      : (!data.error ? "登录状态失效了，重新登录内部入口后再试" : popupErrorText(data.error)));
+    return false;
+  }
+  popupAdmin.saved = data.popup;
+  fillPopupAdminForm(data.popup);
+  renderPopupAdminStatus();
+  setMsg($("popupAdminMsg"), "");
+  return true;
+}
+
+/* 压成 WebP：长边不超过 POPUP_IMAGE_MAX_DIM。
+   用 objectURL 解码（比把几十 MB 的原图读成 base64 省内存）；压完还太大就降质量 / 降尺寸再压一次 */
+async function compressPopupImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("decode fail"));
+      el.src = url;
+    });
+    const attempts = [[POPUP_IMAGE_MAX_DIM, 0.9], [POPUP_IMAGE_MAX_DIM, 0.8], [2000, 0.8], [1600, 0.75]];
+    for (const [maxDim, quality] of attempts) {
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+      if (!blob) throw new Error("encode fail");
+      const base64 = (await readAsDataURL(blob)).split(",")[1];
+      if (base64.length <= 7.5 * 1024 * 1024) return { base64, contentType: blob.type || "image/webp" };
+    }
+    throw new Error("too large");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function initPopupAdmin() {
+  const input = $("popupImageInput");
+  const pickBtn = $("popupImagePickBtn");
+  const status = $("popupImageStatus");
+
+  $("popupBodyInput").addEventListener("input", updatePopupBodyCount);
+  pickBtn.addEventListener("click", () => input.click());
+  $("popupImageRemoveBtn").addEventListener("click", () => {
+    popupAdmin.imageUrl = null;
+    showPopupImagePreview(null);
+  });
+
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { setMsg(status, "只能选图片"); return; }
+    if (file.size > POPUP_IMAGE_MAX_BYTES) {
+      setMsg(status, `图片太大了（${(file.size / 1024 / 1024).toFixed(1)}MB），限 50MB`);
+      return;
+    }
+    setMsg(status, "图片处理中…");
+    pickBtn.disabled = true;
+    try {
+      const { base64, contentType } = await compressPopupImage(file);
+      setMsg(status, "上传中…");
+      const data = await callWorker({
+        action: "upload_announcement_image",
+        password: internalAdminPassword,
+        image: base64,
+        content_type: contentType,
+      });
+      if (!data || !data.ok) throw new Error((data && data.error) || "upload failed");
+      popupAdmin.imageUrl = new URL(`image/${data.key}`, workerBase()).href;
+      showPopupImagePreview(popupAdmin.imageUrl);
+      setMsg(status, "已上传，记得点「保存」");
+    } catch (e) {
+      setMsg(status, e.message === "decode fail" ? "这张图浏览器打不开，换一张试试（或先转成 JPG / PNG）"
+        : e.message === "rate_limited" ? "上传太频繁了（每小时 10 张），歇一会儿再试"
+        : "图片上传失败，请重试");
+    }
+    pickBtn.disabled = false;
+  });
+
+  $("popupSaveBtn").addEventListener("click", () => withAdminBusy($("popupSaveBtn"), async () => {
+    if (await savePopupAdmin()) {
+      showToast(popupAdmin.saved.enabled ? "已保存，访客打开首页会看到新内容" : "已保存（弹窗目前是关着的）");
+    }
+  }));
+
+  $("popupPreviewBtn").addEventListener("click", () => {
+    const v = popupFormValue();
+    if (!v.title && !v.body && !v.image_url) { setMsg($("popupAdminMsg"), "先写点内容再预览"); return; }
+    openSitePopup(v, true);
+  });
+
+  $("popupToggleBtn").addEventListener("click", () => withAdminBusy($("popupToggleBtn"), async () => {
+    const saved = popupAdmin.saved;
+    if (!saved) return;
+    const turnOn = !saved.enabled;
+    setMsg($("popupAdminMsg"), "");
+    if (turnOn && popupFormDirty()) {
+      if (!confirm("有还没保存的修改，保存并开启弹窗吗？\n\n（点「取消」什么都不做）")) return;
+      if (await savePopupAdmin({ enabled: true })) showToast("已保存并开启弹窗");
+      return;
+    }
+    const data = await callWorker({ action: "popup_admin_set", password: internalAdminPassword, enabled: turnOn });
+    if (!data || !data.ok) {
+      setMsg($("popupAdminMsg"), data && data.error === "empty" ? "还没有内容，先写好并保存再开启"
+        : !data ? "连接失败，检查一下网络后再试" : "切换失败，请重新登录内部入口后再试");
+      return;
+    }
+    popupAdmin.saved = data.popup;
+    renderPopupAdminStatus();
+    showToast(turnOn ? "弹窗公告已开启" : "弹窗公告已关闭");
+  }));
+}
+
 /* ---- 初始化（本文件加载完立即执行） ---- */
 initInternal();
 initAdminPanels();
@@ -1699,4 +1919,5 @@ if (window.HJ_SURVEY_READY) initSurveyAdmin();
 else console.error("[活动问卷] survey.js 没有加载成功，管理页的「活动问卷」不可用");
 initPostAnnouncement();
 initAnnouncementImageUpload();
+initPopupAdmin();
 window.HJ_ADMIN_READY = true;
