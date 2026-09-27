@@ -4320,3 +4320,79 @@ body.day-mode .popup-admin-count { color: var(--day-brown-soft); }
 
 /* 配图缩略图右上角的 ×：.gate-card button 的左右内边距把它撑成了椭圆（「发布公告」和「弹窗公告」共用） */
 .gate-card .announcement-image-preview button { padding: 0; display: flex; align-items: center; justify-content: center; }
+
+/* 2026-09-27 晚：活动回顾分三块 —— 活动剪影（视频 + 毛玻璃底）/ 直播回放（磁贴）/ 活动相册
+   视频的毛玻璃底和下面的直播回放磁贴用同一个比例 --review-ratio，两块一样大 */
+.tab-panel { --review-ratio: 1.6; }
+.tab-sec-title {
+  display: flex; align-items: center; gap: 12px;
+  margin: 30px 0 14px;
+  font-family: var(--brush);
+  font-size: 1.6rem;
+  font-weight: normal;
+  color: var(--lantern-soft);
+}
+.tab-sec-title:first-child { margin-top: 4px; }
+.tab-sec-title::after {   /* 标题右边一条淡淡的分隔线 */
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(255,214,153,.4), rgba(255,214,153,0));
+}
+body.day-mode .tab-sec-title { color: var(--day-brown); }
+body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91,54,16,.45), rgba(91,54,16,0)); }
+
+/* 活动剪影：借用首页 .video-block 的淡毛玻璃，视频和「去 B 站看」都压在玻璃上 */
+.tab-video.video-block {
+  aspect-ratio: var(--review-ratio);
+  margin-bottom: 0;
+  padding: 14px;
+}
+.tab-video.video-block .tab-video-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: auto;
+  margin-bottom: 12px;
+}
+.tab-video.video-block .tab-video-actions { margin-top: 0; flex: 0 0 auto; }   /* 首页手机版会把按钮行拉伸占满，这里不要 */
+
+/* 直播回放：首页磁贴同款（背景图 + 底部渐变 + 毛笔字），整块可点，大小和上面的视频块一样 */
+.tab-links .tab-tile-link {
+  display: block;
+  align-self: stretch;
+  width: 100%;
+  aspect-ratio: var(--review-ratio);
+  text-decoration: none;
+  color: inherit;
+}
+.tab-tile-link:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 4px 12px rgba(8,6,18,.28),
+    0 30px 64px rgba(0,0,0,.48),
+    inset 0 0 0 1px rgba(255,255,255,.1),
+    inset 0 1px 0 rgba(255,255,255,.2);
+}
+.tab-tile-link .tile-overlay {
+  padding: 28px 30px;
+  /* 封面图底部自带 B 站的播放数 / 时长，渐变压深一点，文字更清楚 */
+  background: linear-gradient(180deg, rgba(28,24,48,0) 30%, rgba(20,16,36,.62) 62%, rgba(20,16,36,.9) 100%);
+}
+.tab-tile-link h3 {
+  font-family: var(--brush);
+  font-size: 1.5rem;
+  font-weight: normal;
+  line-height: 1.45;
+  color: var(--cream);
+  text-shadow: 0 2px 8px rgba(0,0,0,.45);
+}
+.tab-tile-link .tile-hint { margin-top: 8px; font-size: .8rem; color: var(--text-soft); }
+.tab-links:has(.tab-tile-link) { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+  .tab-panel { --review-ratio: 1.4; }
+  .tab-sec-title { font-size: 1.35rem; margin-top: 24px; }
+  .tab-video.video-block { padding: 10px; }
+  .tab-video.video-block .tab-video-frame { margin-bottom: 10px; }
+  .tab-tile-link .tile-overlay { padding: 18px 18px; }
+  .tab-tile-link h3 { font-size: 1.15rem; }
+  .tab-tile-link .tile-hint { font-size: .74rem; }
+}

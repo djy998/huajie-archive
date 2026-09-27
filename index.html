@@ -105,7 +105,7 @@
        修改 style.css 后把 CSS_VERSION +1，让老访客拿到新文件 -->
   <script>
     (function () {
-      var CSS_VERSION = 63;
+      var CSS_VERSION = 64;
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
@@ -1366,15 +1366,17 @@ const LATEST_EVENT = {
   review: {   // 活动回顾（2026中秋月轮祭）
     video: {
       bvid: "BV1shat6BETu",
-      aid: 117341459451164,        // ← 建议补上：浏览器打开 https://api.bilibili.com/x/web-interface/view?bvid=BV1shat6BETu
-      cid: 42240708501,        //    抄 data.aid 和 data.cid 填到这两格（不填也能放，只是更容易被 B 站站外风控挡掉）
+      aid: 117341459451164,   // 已填（取自 B 站 view 接口）
+      cid: 42240708501,
       page: 1,
       danmaku: false,
       title: "活动回顾视频",
     },
     links: [
-      { url: "https://www.bilibili.com/video/BV1aZhd6fESZ/", label: "【直播回放】雪人小肥！猪区梦羽中秋花街！中秋快乐！ 2026年09月26日20点场" },
+      { url: "https://www.bilibili.com/video/BV1aZhd6fESZ/", label: "【直播回放】雪人小肥！猪区梦羽中秋花街！中秋快乐！ 2026年09月26日20点场",
+        image: "assets/latest/review-live.webp" },   // 有 image 就显示成磁贴（图 + 文字），没有就是普通胶囊按钮
     ],
+    titles: { video: "活动剪影", links: "直播回放", images: "活动相册" },   // 各块上方的小标题，不要哪个就删掉
     images: [
       "assets/latest/review-001.webp",
       "assets/latest/review-002.webp",
@@ -2130,9 +2132,9 @@ function renderTabVideo(video, fallbackCover) {
   const cover = video.cover || fallbackCover || "";
   const title = video.title || "活动视频";
   return `
-    <div class="tab-video" id="${id}" data-cover="${escapeHtml(cover)}">
+    <div class="tab-video video-block" id="${id}" data-cover="${escapeHtml(cover)}">
       <div class="tab-video-frame">${tabVideoFacadeHtml(title, cover)}</div>
-      <div class="tab-video-actions">
+      <div class="video-actions tab-video-actions">
         <a class="video-action" href="https://www.bilibili.com/video/${escapeHtml(video.bvid)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">看不了？去 B 站看</a>
       </div>
     </div>`;
@@ -2182,7 +2184,20 @@ function initTabVideos() {
   });
 }
 
-/* 标签页内容：接受字符串，或 { text, images, link, links, video } 对象
+/* 跳转磁贴：和首页磁贴同一套样式（背景图 + 底部渐变 + 文字），整块可点 */
+function renderTabTileLink(l) {
+  return `
+    <a class="tile tab-tile-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
+      style="background-image:url('${escapeHtml(l.image)}')">
+      <div class="tile-overlay">
+        <h3>${escapeHtml(l.label || "查看详情")}</h3>
+        <span class="tile-hint">点击前往 B 站观看 ↗</span>
+      </div>
+    </a>`;
+}
+
+/* 标签页内容：接受字符串，或 { text, images, link, links, video, titles } 对象
+   titles: { video, links, images } —— 各块上方的小标题（可选）
    跳出站外的链接一律 noreferrer：B 站对带着本站 Referer 点进去的部分视频（比如直播回放）
    会直接显示「啊叻？视频不见了？」，不带来源（和直接粘贴地址一样）就能正常打开 */
 function renderTabContent(tab) {
@@ -2191,17 +2206,21 @@ function renderTabContent(tab) {
   }
   if (!tab || (!tab.images && !tab.text && !tab.link && !(tab.links && tab.links.length) && !tab.video)) return EMPTY_NOTE;
 
+  const titles = tab.titles || {};
+  const secTitle = (key) => (titles[key] ? `<h3 class="tab-sec-title">${escapeHtml(titles[key])}</h3>` : "");
   let html = "";
   if (tab.video) {
-    html += renderTabVideo(tab.video, tab.images && tab.images[0]);
+    const v = renderTabVideo(tab.video, tab.images && tab.images[0]);
+    if (v) html += secTitle("video") + v;
   }
   if (tab.links && tab.links.length) {
-    html += `<div class="tab-links">`
-      + tab.links.map((l) => `<a class="ticket-badge-inline tab-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(l.label || "查看详情")}</a>`).join("")
+    html += secTitle("links") + `<div class="tab-links">`
+      + tab.links.map((l) => l.image ? renderTabTileLink(l)
+        : `<a class="ticket-badge-inline tab-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(l.label || "查看详情")}</a>`).join("")
       + `</div>`;
   }
   if (tab.images && tab.images.length) {
-    html += `<div class="tab-gallery">`
+    html += secTitle("images") + `<div class="tab-gallery">`
       + tab.images.map((src) => `<img src="${src}" loading="lazy" decoding="async" data-lightbox>`).join("")
       + `</div>`;
   }
