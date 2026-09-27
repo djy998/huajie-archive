@@ -165,8 +165,9 @@ const LATEST_EVENT = {
   survey: true,    // 「反馈与建议」= 站内活动问卷（survey.js）
 };
 
-/* 往期活动：新的加在数组最前面
-   id 用于分享链接（#event-<id>）和点赞；portrait: 竖版封面；hideReview: 隐藏「活动回顾」页 */
+/* 往期活动：按活动日期从新到老排（新的加在数组最前面）
+   id 用于分享链接（#event-<id>）和点赞；portrait: 竖版封面；hideReview: 隐藏「活动回顾」页；
+   tabs: 只显示列出的标签页（poster 活动介绍 / manual 游玩手册 / shops 活动店家 / review 活动回顾），不写就全部显示 */
 const ARCHIVE_EVENTS = [
   {
     id: "ny2026",
@@ -242,34 +243,6 @@ const ARCHIVE_EVENTS = [
     ]
   },
   {
-    id: "honglian2024",
-    year: "2024",
-    title: "红莲夏日祭",
-    dateLabel: "2024年夏",
-    location: "莫古力区 · 梦羽宝境",
-    cover: "assets/gallery/gallery-008.jpg",
-    ticketUrl: "",
-    manual: { images: ["assets/gallery/gallery-009.jpg","assets/gallery/gallery-010.jpg","assets/gallery/gallery-011.jpg","assets/gallery/gallery-012.jpg","assets/gallery/gallery-013.jpg","assets/gallery/gallery-014.jpg","assets/gallery/gallery-015.jpg","assets/gallery/gallery-016.jpg","assets/gallery/gallery-017.jpg","assets/gallery/gallery-018.jpg"] },
-    poster: { images: ["assets/gallery/gallery-019.jpg"] },
-    review: {},
-    hideReview: true,
-    areas: [
-      {
-        name: "",
-        shops: [
-          { num: "60", name: "丽姬娅", desc: "走秀", price: "" },
-          { num: "55", name: "PARADISE·乐园", desc: "团舞", price: "" },
-          { num: "49", name: "海波所及之馆", desc: "搓澡+击鼓传花", price: "" },
-          { num: "53", name: "太阳神", desc: "车队+指名", price: "" },
-          { num: "58", name: "GLF", desc: "指名+香槟舞", price: "" },
-          { num: "56", name: "青木原", desc: "情景游戏", price: "" },
-          { num: "60", name: "海之心", desc: "话剧", price: "" },
-          { num: "场外街头", name: "老二次元音乐社", desc: "演奏", price: "" }
-        ]
-      }
-    ]
-  },
-  {
     id: "ny2025",
     hideReview: true,
     portrait: true,
@@ -316,6 +289,45 @@ const ARCHIVE_EVENTS = [
     ]
   },
   {
+    id: "honglian2024",
+    year: "2024",
+    title: "红莲夏日祭",
+    dateLabel: "2024年夏",
+    location: "莫古力区 · 梦羽宝境",
+    cover: "assets/gallery/gallery-008.jpg",
+    ticketUrl: "",
+    manual: { images: ["assets/gallery/gallery-009.jpg","assets/gallery/gallery-010.jpg","assets/gallery/gallery-011.jpg","assets/gallery/gallery-012.jpg","assets/gallery/gallery-013.jpg","assets/gallery/gallery-014.jpg","assets/gallery/gallery-015.jpg","assets/gallery/gallery-016.jpg","assets/gallery/gallery-017.jpg","assets/gallery/gallery-018.jpg"] },
+    poster: { images: ["assets/gallery/gallery-019.jpg"] },
+    review: {},
+    hideReview: true,
+    areas: [
+      {
+        name: "",
+        shops: [
+          { num: "60", name: "丽姬娅", desc: "走秀", price: "" },
+          { num: "55", name: "PARADISE·乐园", desc: "团舞", price: "" },
+          { num: "49", name: "海波所及之馆", desc: "搓澡+击鼓传花", price: "" },
+          { num: "53", name: "太阳神", desc: "车队+指名", price: "" },
+          { num: "58", name: "GLF", desc: "指名+香槟舞", price: "" },
+          { num: "56", name: "青木原", desc: "情景游戏", price: "" },
+          { num: "60", name: "海之心", desc: "话剧", price: "" },
+          { num: "场外街头", name: "老二次元音乐社", desc: "演奏", price: "" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "ny2024",
+    year: "2023",
+    title: "“铃声与牵绊的温暖”2023跨年盛典",
+    dateLabel: "2023年12月31日 20:00–0:00",
+    location: "莫古力区 · 梦羽宝境 高脚孤丘23区（扩建北区）31–45号",
+    cover: "assets/gallery/gallery-039.webp",
+    tabs: ["poster", "review"],
+    poster: { images: ["assets/gallery/gallery-040.jpg"] },
+    review: { note: "莫古正在考古中……" }
+  },
+  {
     id: "welcome2023",
     hideReview: true,
     year: "2023",
@@ -345,6 +357,28 @@ const ARCHIVE_EVENTS = [
         ]
       }
     ]
+  },
+  {
+    id: "ny2023",
+    year: "2022",
+    title: "花舞之街新年集市",
+    dateLabel: "2022年12月31日 20:00–0:00",
+    location: "莫古力区 · 梦羽宝境 高脚孤丘23区（扩建北区）31–45号",
+    cover: "assets/gallery/gallery-037.webp",
+    tabs: ["poster", "review"],
+    poster: { images: ["assets/gallery/gallery-038.jpg"] },
+    review: { note: "莫古正在考古中……" }
+  },
+  {
+    id: "xmas2021",
+    year: "2021",
+    title: "花舞之街星芒集市",
+    dateLabel: "2021年12月24日–26日 每晚20:00–23:00",
+    location: "莫古力区 · 梦羽宝境 高脚孤丘23区（扩建北区）31–45号",
+    cover: "assets/gallery/gallery-035.webp",
+    tabs: ["poster", "review"],
+    poster: { images: ["assets/gallery/gallery-036.jpg"] },
+    review: { note: "莫古正在考古中……" }
   }
 ];
 
@@ -357,7 +391,10 @@ const MINI_REVIEWS = [
 /* 日历小组件的活动标注：单日写 date，跨日写 start + end；
    tone 可选 rose / gold / teal / wisteria / blue / orange */
 const HJ_CAL_ITEMS = [
+  { start: "2021-12-24", end: "2021-12-26", label: "2021 花舞之街星芒集市", tone: "rose" },
+  { date: "2022-12-31", label: "2022 花舞之街新年集市", tone: "gold" },
   { date: "2023-08-20", label: "海之心3周年 & 新生庆典游园会", tone: "rose" },
+  { date: "2023-12-31", label: "“铃声与牵绊的温暖”2023跨年盛典", tone: "gold" },
   { date: "2024-08-27", label: "海之心4周年 & 红莲夏日祭", tone: "rose" },
   { start: "2024-12-31", end: "2025-01-01", label: "2025 花语町·花舞之街莫古力跨年盛典", tone: "gold" },
   { date: "2025-09-21", label: "金秋新生庆典游园会", tone: "orange" },

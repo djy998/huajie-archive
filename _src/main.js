@@ -666,14 +666,14 @@ function renderTabTileLink(l) {
     </a>`;
 }
 
-/* 标签页内容：字符串（纯文字，保留换行），或 { video, links, images, text, link, titles } 对象，
-   按 视频 → 跳转按钮 → 图片 → 文字 → 单个链接 的顺序排。titles：各块上方的小标题（可选）。
+/* 标签页内容：字符串（纯文字，保留换行），或 { video, links, images, text, note, link, titles } 对象，
+   按 视频 → 跳转按钮 → 图片 → 文字 → 居中短句（note）→ 单个链接 的顺序排。titles：各块上方的小标题（可选）。
    站外链接一律 noreferrer：带着本站 Referer 点进 B 站的部分视频（如直播回放）会显示「视频不见了」 */
 function renderTabContent(tab) {
   if (typeof tab === "string") {
     return tab ? `<div class="empty-note empty-note-left">${escapeHtml(tab)}</div>` : EMPTY_NOTE;
   }
-  if (!tab || (!tab.images && !tab.text && !tab.link && !(tab.links && tab.links.length) && !tab.video)) return EMPTY_NOTE;
+  if (!tab || (!tab.images && !tab.text && !tab.note && !tab.link && !(tab.links && tab.links.length) && !tab.video)) return EMPTY_NOTE;
 
   const titles = tab.titles || {};
   const secTitle = (key) => (titles[key] ? `<h3 class="tab-sec-title">${escapeHtml(titles[key])}</h3>` : "");
@@ -695,6 +695,9 @@ function renderTabContent(tab) {
   }
   if (tab.text) {
     html += `<div class="empty-note empty-note-left">${escapeHtml(tab.text)}</div>`;
+  }
+  if (tab.note) {
+    html += `<div class="empty-note">${escapeHtml(tab.note)}</div>`;
   }
   if (tab.link) {
     html += `<a class="ticket-badge-inline" href="${escapeHtml(tab.link.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(tab.link.label || "查看详情")}</a>`;
@@ -757,9 +760,13 @@ function openDetail(data) {
     else if (data.survey) $("panel-feedback").innerHTML = `<div class="empty-note">问卷没加载出来，刷新一下页面再试</div>`;
     else $("panel-feedback").innerHTML = renderTabContent(data.feedback);
   }
-  $("reviewTabBtn").hidden = !!data.hideReview;
+  /* tabs：只显示列出的标签页（不写就是全部显示）；hideReview 单独隐藏「活动回顾」 */
+  ["poster", "manual", "shops", "review"].forEach((t) => {
+    $("view-detail").querySelector(`.tab-btn[data-tab="${t}"]`).hidden =
+      data.tabs ? !data.tabs.includes(t) : (t === "review" && !!data.hideReview);
+  });
 
-  selectDetailTab(data.tab || "poster");
+  selectDetailTab(data.tab || (data.tabs && data.tabs[0]) || "poster");
   showView("view-detail");
 }
 
@@ -785,8 +792,11 @@ function openLatestSurvey() {
 function renderAlbumGrid() {
   const grid = $("albumGrid");
   grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
-    <div class="album-card${ev.portrait ? " portrait" : ""}" data-index="${i}" style="background-image:url('${escapeHtml(ev.cover)}')">
-      <div class="overlay">
+    <div class="album-card${ev.portrait ? " portrait" : ""}" data-index="${i}">
+      <div class="album-cover" style="--cover:url('${escapeHtml(ev.cover)}')">
+        <img src="${escapeHtml(ev.cover)}" alt="" loading="lazy" decoding="async">
+      </div>
+      <div class="album-caption">
         <span class="year">${escapeHtml(ev.year)}</span>
         <div class="title">${escapeHtml(ev.title)}</div>
       </div>
