@@ -166,7 +166,7 @@ const LATEST_EVENT = {
 };
 
 /* 往期活动：按活动日期从新到老排（新的加在数组最前面）
-   id 用于分享链接（#event-<id>）和点赞；portrait: 竖版封面；hideReview: 隐藏「活动回顾」页；
+   id 用于分享链接（#event-<id>）和点赞；封面图什么比例都行（卡片自动按图片比例显示）；hideReview: 隐藏「活动回顾」页；
    tabs: 只显示列出的标签页（poster 活动介绍 / manual 游玩手册 / shops 活动店家 / review 活动回顾），不写就全部显示 */
 const ARCHIVE_EVENTS = [
   {
@@ -245,7 +245,6 @@ const ARCHIVE_EVENTS = [
   {
     id: "ny2025",
     hideReview: true,
-    portrait: true,
     year: "2025",
     title: "花语町·花舞之街 莫古力跨年盛典",
     dateLabel: "2024年12月31日–2025年1月1日",

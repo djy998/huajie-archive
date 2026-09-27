@@ -789,30 +789,92 @@ function openLatestSurvey() {
   });
 }
 
-function renderAlbumGrid() {
-  const grid = $("albumGrid");
-  grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
-    <div class="album-card${ev.portrait ? " portrait" : ""}" data-index="${i}">
-      <div class="album-cover" style="--cover:url('${escapeHtml(ev.cover)}')">
-        <img src="${escapeHtml(ev.cover)}" alt="" loading="lazy" decoding="async">
-      </div>
-      <div class="album-caption">
-        <span class="year">${escapeHtml(ev.year)}</span>
-        <div class="title">${escapeHtml(ev.title)}</div>
-      </div>
-    </div>
-  `).join("");
-  grid.querySelectorAll(".album-card").forEach((card) => {
-    card.addEventListener("click", () => openDetail(ARCHIVE_EVENTS[Number(card.dataset.index)]));
+/* 往期活动相册（瀑布流）：每张卡片按封面图自己的比例显示整张图，标题叠在图片底部；
+   列数按宽度自动定（每列至少 260px），卡片按顺序依次放进当前最短的一列，
+   所以从左到右、从上到下读就是从新到老，列与列之间也不会留空 */
+const ALBUM_MIN_COL = 260;
+const ALBUM_GAP = 20;
+const albumRatios = {};   // 封面地址 → 宽高比（加载过一次就记住）
+
+function loadAlbumRatio(src) {
+  if (albumRatios[src]) return Promise.resolve(albumRatios[src]);
+  return new Promise((resolve) => {
+    const img = new Image();
+    const done = (r) => { albumRatios[src] = r; resolve(r); };
+    img.onload = () => done(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 4 / 3);
+    img.onerror = () => done(4 / 3);
+    img.src = src;
   });
 }
+
+function albumColCount(grid) {
+  const w = grid.clientWidth;
+  return Math.max(1, Math.floor((w + ALBUM_GAP) / (ALBUM_MIN_COL + ALBUM_GAP)));
+}
+
+function layoutAlbumGrid() {
+  const grid = $("albumGrid");
+  const cards = Array.from(grid.querySelectorAll(".album-card"))
+    .sort((x, y) => Number(x.dataset.index) - Number(y.dataset.index));
+  if (!cards.length) return;
+  const n = albumColCount(grid);
+  const cols = Array.from({ length: n }, () => {
+    const col = document.createElement("div");
+    col.className = "album-col";
+    return col;
+  });
+  const heights = new Array(n).fill(0);
+  cards.forEach((card) => {
+    const i = heights.indexOf(Math.min(...heights));   // 最短的一列（一样高时取最左边）
+    cols[i].appendChild(card);
+    heights[i] += 1 / Number(card.dataset.ratio) + ALBUM_GAP / ALBUM_MIN_COL;
+  });
+  grid.replaceChildren(...cols);
+  grid.dataset.cols = String(n);
+}
+
+function renderAlbumGrid() {
+  const grid = $("albumGrid");
+  grid.replaceChildren();
+  return Promise.all(ARCHIVE_EVENTS.map((ev) => loadAlbumRatio(ev.cover))).then((ratios) => {
+    grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
+      <div class="album-card" data-index="${i}" data-ratio="${ratios[i]}"
+        style="aspect-ratio:${ratios[i]};background-image:url('${escapeHtml(ev.cover)}')">
+        <div class="overlay">
+          <span class="year">${escapeHtml(ev.year)}</span>
+          <div class="title">${escapeHtml(ev.title)}</div>
+        </div>
+      </div>
+    `).join("");
+    grid.querySelectorAll(".album-card").forEach((card) => {
+      card.addEventListener("click", () => openDetail(ARCHIVE_EVENTS[Number(card.dataset.index)]));
+    });
+    layoutAlbumGrid();
+  });
+}
+
+/* 窗口宽度变化导致列数变了才重排 */
+let albumResizeTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(albumResizeTimer);
+  albumResizeTimer = setTimeout(() => {
+    const grid = $("albumGrid");
+    if (!grid || $("view-archive-list").hidden || !grid.querySelector(".album-card")) return;
+    if (String(albumColCount(grid)) !== grid.dataset.cols) layoutAlbumGrid();
+  }, 150);
+});
 
 function openArchiveList() {
   setRoute("#previous");
   $("archiveBackBtn").style.display = "";
-  renderAlbumGrid();
   showView("view-archive-list");
   playViewEnterStagger("view-archive-list", "albumGrid");
+  /* 卡片排好后按顺序（从新到老）依次入场 */
+  renderAlbumGrid().then(() => {
+    Array.from($("albumGrid").querySelectorAll(".album-card"))
+      .sort((x, y) => x.dataset.index - y.dataset.index)
+      .forEach((el, i) => playFxAnim(el, "fx-page-enter", 180 + i * 60, true));
+  });
 }
 
 function openMiniReview() {
