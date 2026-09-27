@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>花舞之街 · 薰风花语町</title>
+
+  <!-- 分享卡片（og-image.jpg：站点根目录，1200×630） -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="花舞之街 · 薰风花语町">
+  <meta property="og:description" content="最终幻想14莫古力区梦羽宝境花街网站试运行！">
+  <meta property="og:url" content="https://swayingsussurrusstreet.dpdns.org/">
+  <meta property="og:site_name" content="花舞之街 · 薰风花语町">
+  <meta property="og:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="花舞之街 · 薰风花语町">
+  <meta name="twitter:description" content="最终幻想14莫古力区梦羽宝境花街网站试运行！">
+  <meta name="twitter:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
+
+  <link rel="icon" type="image/png" href="assets/site/favicon.png">
+
+  <!-- 开屏图、标题毛笔字优先下载 -->
+  <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
+  <link rel="preload" as="font" type="font/woff2" href="assets/site/brush.woff2" crossorigin>
+
+  <!-- 关键样式：开屏图和"样式表加载前"的状态，不依赖 style.css -->
+  <style>
+    body { margin: 0; background: #1c1830; }
+    html.css-wait body { visibility: hidden; }
+    html.boot-pending body > header,
+    html.boot-pending body > main,
+    html.boot-pending body > footer { display: none; }
+
+    #bootOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      height: 100vh;
+      height: 100dvh;
+      z-index: 600;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+    }
+    html.boot-pending #bootOverlay { display: flex; }
+    #bootImageBtn {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      background: none;
+      padding: 0;
+      margin: 0;
+      line-height: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;   /* 去掉移动端点击高亮 */
+      -webkit-touch-callout: none;                /* 禁止长按弹出"保存图片" */
+      touch-action: manipulation;
+    }
+    #bootImage {
+      display: block;
+      width: min(56vw, 280px);
+      height: auto;
+      filter: drop-shadow(0 8px 30px rgba(0, 0, 0, .35));
+      transition: transform .2s ease;
+      -webkit-user-drag: none;
+      user-select: none;
+      pointer-events: none;                       /* 点击统一交给外层按钮 */
+    }
+    #bootImageBtn:hover #bootImage { transform: scale(1.04); }
+    #bootImage.is-spinning { animation: bootSpin 1s ease-in-out; }
+    @keyframes bootSpin { from { transform: rotate(0deg); } to { transform: rotate(720deg); } }
+
+    /* 点击后主程序仍在加载时显示的提示 */
+    #bootHint {
+      min-height: 1.5em;
+      color: #c9bfe0;
+      font: 600 .9rem/1.5 "Noto Serif SC", "Songti SC", serif;
+      letter-spacing: .12em;
+      opacity: 0;
+      transition: opacity .3s ease;
+    }
+    #bootOverlay.is-waiting #bootHint { opacity: 1; animation: bootPulse 1.4s ease-in-out infinite; }
+    @keyframes bootPulse { 50% { opacity: .45; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      #bootImage.is-spinning, #bootOverlay.is-waiting #bootHint { animation: none; }
+    }
+  </style>
+
+  <!-- 版本号与样式表加载
+       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260928」
+         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260928"> 几处），访客就会拿到新文件
+       · 新访客（未访问过）：先显示开屏图，style.css 和字体在后台加载，不阻塞首屏
+       · 老访客：样式表加载完成前隐藏页面，避免闪现无样式内容
+       · 按访客本地时间定昼夜（HJ_START_DAY，main.js 沿用），当前这套天空和最新活动卡片的底图提前下载
+       · 正文字体（Google Fonts）用 fetch 取回再插进页面：不拖慢页面加载，国内连不上时也只是在后台失败 -->
+  <script>
+    window.HJ_VERSION = "20260928";
+    (function () {
+      var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
+      var root = document.documentElement;
+
+      var fresh = true;
+      try { fresh = !localStorage.getItem("hj_visited"); } catch (e) {}
+      /* 拿着购票链接（#ti 或旧长链接）或问卷链接（#survey）直接进来的新访客：不弹开屏图，直接看对应页面，
+         也不记 hj_visited（下次从首页进来仍会看到开屏图）。hash 要和 config.js 里的 TICKET_HASH 等一致 */
+      var h = location.hash;
+      var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd" || h === "#survey";
+      root.classList.add(fresh && !ticketLanding ? "boot-pending" : "css-wait");
+      /* 购票页「不显示网站标题」：按上次读到的设置先把标题藏起来，免得先闪一下（ticket.js 的 TICKET_LOOK_KEY） */
+      if (h !== "#survey" && ticketLanding) {
+        try { if ((localStorage.getItem("hj_ticket_look") || "").charAt(0) === "1") root.classList.add("hj-ticket-bare"); } catch (e) {}
+      }
+
+      function addStylesheet(href, onDone) {
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        if (onDone) link.onload = link.onerror = onDone;
+        document.head.appendChild(link);
+      }
+
+      function markCssReady() {
+        root.classList.remove("css-wait");
+        root.classList.add("css-ready");
+        document.dispatchEvent(new Event("hj:cssready"));
+      }
+
+      addStylesheet("style.css?v=" + window.HJ_VERSION, markCssReady);
+
+      var hour = new Date().getHours();
+      window.HJ_START_DAY = hour >= 6 && hour < 18;
+      var mode = window.HJ_START_DAY ? "day" : "night";
+      ["assets/site/sky-" + mode + ".webp", "assets/site/tile-latest-" + mode + ".webp"].forEach(function (href) {
+        var link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "image";
+        link.href = href;
+        document.head.appendChild(link);
+      });
+
+      if (window.fetch) {
+        fetch(FONT_CSS).then(function (res) { return res.ok ? res.text() : ""; }).then(function (css) {
+          if (!css) return;
+          var style = document.createElement("style");
+          style.textContent = css;
+          document.head.appendChild(style);
+        }).catch(function () {});
+      }
+      setTimeout(function () {   // 兜底：样式表迟迟不返回时也要把页面露出来
+        if (!root.classList.contains("css-ready")) markCssReady();
+      }, 8000);
+    })();
+  </script>
+  <noscript><link rel="stylesheet" href="style.css"></noscript>
+</head>
+
+<body>
+
+<!-- 开屏图（仅新访客显示） -->
+<div id="bootOverlay">
+  <button type="button" id="bootImageBtn" aria-label="点击进入花街">
+    <img id="bootImage" src="boot-moguri-v2.webp" alt="" draggable="false" fetchpriority="high">
+  </button>
+  <p id="bootHint" role="status" aria-live="polite">正在进入花街…</p>
+</div>
+
+<script>
+/* 开屏控制：主程序在文件末尾，下载较慢时用户可能先点了开屏图。
+   这里立即响应点击（旋转动画），等"动画结束 + 样式表就绪 + 主程序就绪"三者都满足后再进入。 */
+(function () {
+  var root = document.documentElement;
+  var fresh = root.classList.contains("boot-pending");
+  var clicked = false, spun = false, done = false, onEnter = null;
+
+  window.HJ_BOOT = {
+    /* 主程序初始化完成后调用；fn 为进入站点后要执行的动作 */
+    appReady: function (fn) {
+      onEnter = fn;
+      tryEnter();
+    }
+  };
+  if (!fresh) return;
+
+  var overlay = document.getElementById("bootOverlay");
+  var btn = document.getElementById("bootImageBtn");
+  var img = document.getElementById("bootImage");
+
+  function tryEnter() {
+    if (done || !clicked || !spun) return;
+    if (!onEnter || !root.classList.contains("css-ready")) {
+      overlay.classList.add("is-waiting");
+      return;
+    }
+    done = true;
+    root.classList.remove("boot-pending");
+    overlay.style.display = "none";
+    onEnter();
+  }
+
+  function enter() {
+    if (clicked) return;
+    clicked = true;
+    try { localStorage.setItem("hj_visited", "1"); } catch (e) {}
+    btn.disabled = true;
+    img.classList.add("is-spinning");
+    /* 用定时器而非 animationend：部分手机浏览器会跳过动画 */
+    setTimeout(function () { spun = true; tryEnter(); }, 1000);
+  }
+
+  document.addEventListener("hj:cssready", tryEnter);
+  /* 部分内置浏览器（微信 / QQ）对 click 支持不稳定，同时监听 touchend */
+  btn.addEventListener("click", enter);
+  btn.addEventListener("touchend", function (e) {
+    e.preventDefault();   // 防止随后补发的 click 重复触发
+    enter();
+  }, { passive: false });
+})();
+</script>
+
+<div id="skyBase"></div>
+<div id="skyFade"></div>
+<div id="fxLayer" aria-hidden="true"></div>
+<div id="fxClickLayer" aria-hidden="true"></div>
+
+<header class="site-header">
+  <!-- 右上角圆形按钮，从右往左：更多 / 昼夜 / 特效 / 时钟 / 音量（位置由 .hb-slot-N 决定） -->
+  <button class="daynight-toggle more-toggle hb-slot-1" id="moreToggle" type="button"
+          aria-haspopup="true" aria-expanded="false" aria-label="更多功能" title="更多功能">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <button class="daynight-toggle hb-slot-2" id="dayNightToggle" aria-label="切换白天黑夜">
+    <svg class="ico ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+    <svg class="ico ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  </button>
+  <button class="daynight-toggle fx-toggle hb-slot-3" id="fxToggle" aria-label="切换动态效果">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+  </button>
+  <!-- 时钟：切换时间条显隐 -->
+  <button class="daynight-toggle clock-toggle hb-slot-4" id="clockToggle" type="button" aria-pressed="false"
+          aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+  </button>
+  <!-- 音量：打开竖条音量弹层 -->
+  <button class="daynight-toggle sound-toggle hb-slot-5" id="soundToggle" type="button"
+          aria-haspopup="true" aria-expanded="false" aria-label="音量（未静音）" title="音量（未静音）">
+    <span class="hj-sound-icon" aria-hidden="true">
+      <svg class="ico ico-vol-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+      <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+    </span>
+  </button>
+
+  <!-- 音量弹层：界面不显示数值，数值仅通过 aria 提供给读屏 -->
+  <div class="vol-panel" id="volPanel" hidden>
+    <div class="vol-track" id="volTrack" tabindex="0" role="slider"
+         aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
+      <div class="vol-fill" id="volFill"></div>
+      <div class="vol-thumb" id="volThumb"></div>
+    </div>
+  </div>
+
+  <!-- 「更多」下拉：按钮由脚本根据 HJ_MORE_FEATURES 生成 -->
+  <div class="more-panel" id="morePanel" aria-label="更多功能"></div>
+
+  <!-- 日历小组件：打开后常驻页面，只能点 × 关闭 -->
+  <div class="cal-widget" id="calWidget" hidden>
+    <div class="cal-head" title="拖动移动 · 双击回默认位置">
+      <span class="cal-title" id="calTitle">----</span>
+      <span class="cal-tools">
+        <button class="cal-tool" id="calZoomOut" type="button" aria-label="缩小日历" title="缩小">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+        <button class="cal-tool" id="calZoomIn" type="button" aria-label="放大日历" title="放大">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="cal-tool" id="calClose" type="button" aria-label="关闭日历" title="关闭">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="cal-body">
+      <button class="cal-nav cal-prev" id="calPrev" type="button" aria-label="上个月" title="上个月">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="cal-grid-wrap">
+        <div class="cal-week" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <button class="cal-nav cal-next" id="calNext" type="button" aria-label="下个月" title="下个月">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div class="cal-events" id="calEvents"></div>
+  </div>
+
+  <!-- 闹铃 / 倒计时小组件层：每个已添加的项目生成一个可拖动、可缩放的小组件（脚本生成） -->
+  <div id="alarmWidgetLayer" aria-label="闹铃与倒计时小组件"></div>
+
+  <h1 class="brand">花舞之街 · 薰风花语町</h1>
+  <p class="tagline">莫古力区 · 梦羽宝境<br>
+    花舞之街-高脚孤丘23区扩建区31-45,49号房 及 扩建区公寓1-2号房间<br>
+    薰风花语町-高脚孤丘22区扩建区36,45,49,54-60号房 及 扩建区公寓3-17号房间</p>
+  <!-- 时间条：国服时间（UTC+8）、艾欧泽亚时间、高脚孤丘天气；默认隐藏 -->
+  <p class="hj-clock is-hidden" id="hjClock" role="timer" aria-live="off" aria-label="国服时间与艾欧泽亚时间">
+    <span class="hj-clock-cell">
+      <span class="hj-clock-label">国服</span>
+      <span class="hj-clock-time" id="hjTimeCN">--:--:--</span>
+    </span>
+    <span class="hj-clock-sep" aria-hidden="true"></span>
+    <span class="hj-clock-cell" id="hjClockEt">
+      <span class="hj-clock-label">艾欧泽亚</span>
+      <span class="hj-clock-time"><i class="hj-et-glyph" id="hjEtGlyph" aria-hidden="true">&#9728;</i><span id="hjTimeET">--:--</span></span>
+    </span>
+    <span class="hj-weather" id="hjWeather" aria-label="高脚孤丘天气">
+      <span class="hj-weather-label">高脚孤丘</span>
+      <span class="hj-weather-seq" id="hjWeatherSeq">加载中…</span>
+    </span>
+  </p>
+</header>
+
+<main>
+
+  <!-- ============ 首页 ============ -->
+  <section id="view-home" class="view">
+    <!-- 卡片底图（昼 / 夜）由 main.js 按 config.js 的 TILE_BG 设置，悬停设计图写在 style.css -->
+    <!-- 最新活动：默认显示封面卡片（点卡片进详情，点右下「播放视频」展开视频）；
+         展开后「视频 + 下方按钮」总高度 = 封面卡片高度 -->
+    <div class="tile tile-hero" id="latestTile">
+      <div class="tile-hover-fx"></div>
+      <div class="tile-overlay">
+        <h2>2026莫古力中秋月轮祭</h2>
+        <p>2026年9月26日</p>
+      </div>
+      <button type="button" class="hero-play" id="latestPlayBtn" aria-label="播放活动视频" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+        <span>播放视频</span>
+      </button>
+      <a class="ticket-badge" id="ticketBadge" href="#" target="_blank" rel="noopener" hidden>购票</a>
+      <!-- 购票入口：购票已开放、没勾「（测试）」、不隔离时才出现（ticket.js 的 refreshTicketEntry） -->
+      <button type="button" class="ticket-entry-btn" id="tileTicketEntry" data-ticket-entry hidden aria-label="购票入口">
+        <img src="ticket.webp" alt="" width="360" height="360" loading="lazy" decoding="async" draggable="false">
+      </button>
+    </div>
+
+    <div class="video-block" id="latestVideoBlock" hidden>
+    <div class="video-hero" id="latestVideo">
+      <iframe id="latestVideoFrame" title="花街活动视频"
+              scrolling="no" frameborder="0" allowfullscreen
+              referrerpolicy="strict-origin-when-cross-origin"
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture" hidden></iframe>
+      <!-- 自托管视频（LATEST_VIDEO.src 非空时用这个，B 站外链播放器就不加载了） -->
+      <video id="latestVideoPlayer" controls playsinline preload="metadata"
+             controlslist="nodownload" hidden></video>
+    </div>
+    <div class="video-actions" id="latestVideoActions">
+      <button type="button" class="video-action video-action-primary" id="videoDetailBtn">查看活动详情</button>
+      <a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>看不了？去 B 站看</a>
+      <button type="button" class="video-action" id="videoCloseBtn">收起视频</button>
+      <span class="video-ticket-slot" data-ticket-entry hidden>
+        <button type="button" class="video-action video-action-ticket" id="videoTicketEntry">进入购票</button>
+      </span>
+    </div>
+    </div>
+
+    <div class="tile-grid">
+      <div class="tile tile-sm" id="archiveTile">
+        <div class="tile-hover-fx"></div>
+        <div class="tile-overlay">
+          <h3>往期街区活动</h3>
+        </div>
+      </div>
+      <div class="tile tile-sm" id="miniTile">
+        <div class="tile-hover-fx"></div>
+        <div class="tile-overlay">
+          <h3>小型活动回顾</h3>
+        </div>
+      </div>
+    </div>
+
+    <div class="tile-grid tile-grid-3">
+      <div class="tile tile-sm" id="infoTile">
+        <div class="tile-hover-fx"></div>
+        <div class="tile-overlay">
+          <h3>花街介绍</h3>
+        </div>
+      </div>
+      <div class="tile tile-sm" id="bookingTile">
+        <div class="tile-hover-fx"></div>
+        <div class="tile-overlay">
+          <h3>场地<br>使用登记</h3>
+        </div>
+      </div>
+      <div class="tile tile-sm" id="groupTile">
+        <div class="tile-hover-fx"></div>
+        <div class="tile-overlay">
+          <h3>活动群</h3>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 活动详情（最新活动 / 往期某一届） ============ -->
+  <section id="view-detail" class="view" hidden>
+    <button class="back-btn" id="detailBackBtn" data-back>← 返回</button>
+    <div class="detail-hero" id="detailHero">
+      <h2 id="detailTitle"></h2>
+      <p id="detailMeta"></p>
+      <button type="button" class="hj-like-btn hj-like-detail" id="detailLikeBtn" aria-pressed="false" aria-label="点赞" title="点赞" hidden>
+        <svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        <span>点赞</span><span class="hj-like-count">0</span>
+      </button>
+      <a class="ticket-badge-inline" id="detailTicket" href="#" target="_blank" rel="noopener" hidden>购票 / 报名</a>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn is-active" data-tab="poster">活动介绍</button>
+      <button class="tab-btn" data-tab="manual">游玩手册</button>
+      <button class="tab-btn" data-tab="shops">活动店家</button>
+      <button class="tab-btn" id="reviewTabBtn" data-tab="review">活动回顾</button>
+      <button class="tab-btn" id="feedbackTabBtn" data-tab="feedback" hidden>反馈与建议</button>
+    </div>
+    <div class="tab-panel" id="panel-poster"></div>
+    <div class="tab-panel" id="panel-manual" hidden></div>
+    <div class="tab-panel" id="panel-shops" hidden></div>
+    <div class="tab-panel" id="panel-review" hidden></div>
+    <div class="tab-panel" id="panel-feedback" hidden></div>
+  </section>
+
+  <!-- ============ 小型活动回顾 ============ -->
+  <section id="view-mini-review" class="view" hidden>
+    <button class="back-btn" data-back>← 返回</button>
+    <h2 class="section-title">小型活动回顾</h2>
+    <div class="album-grid" id="miniReviewGrid"></div>
+  </section>
+
+  <!-- ============ 往期活动列表 ============ -->
+  <section id="view-archive-list" class="view" hidden>
+    <button class="back-btn" id="archiveBackBtn" data-back>← 返回</button>
+    <h2 class="section-title">往期街区活动</h2>
+    <div class="album-grid" id="albumGrid"></div>
+  </section>
+
+  <!-- ============ 活动购票（首页入口在购票开放且非测试时出现；也可直接访问 TICKET_HASH） ============ -->
+  <section id="view-ticket" class="view" hidden>
+    <!-- 「与首页隔离」时 ticket.js 给 #view-ticket 加 is-isolated，这个返回按钮就藏起来 -->
+    <button class="back-btn" id="ticketBackBtn" data-back>← 返回</button>
+    <div class="gate-card ticket-card">
+      <h2 id="ticketTitle">活动购票</h2>
+      <p class="hint" id="ticketLimitHint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
+      <div class="ticket-guide-row" id="ticketGuideRow">
+        <button type="button" class="ticket-guide-btn" id="ticketGuideReopenBtn">购票须知</button>
+      </div>
+      <!-- 余票 + 刷新时间 / 定时开关时间：显示哪些由管理页「购票管理」设置，内容由 ticket.js 填 -->
+      <div class="ticket-stock" id="ticketStock"><span id="ticketStockText">今日余票 <b>--</b> 张</span><small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
+      <!-- 停留时间倒计时（管理页「对客户显示剩余时间」打开时才出现） -->
+      <p class="ticket-idle" id="ticketIdle" role="timer" aria-live="off" hidden></p>
+
+      <form id="ticketForm" novalidate autocomplete="off">
+        <div class="ticket-field">
+          <label class="ticket-label is-required" for="ticketContact">联系方式</label>
+          <input type="text" id="ticketContact" maxlength="40" placeholder="">
+        </div>
+
+        <div class="ticket-field">
+          <span class="ticket-label is-required" id="ticketQtyLabel">购票数量</span>
+          <div class="ticket-stepper" role="group" aria-labelledby="ticketQtyLabel">
+            <button type="button" id="ticketQtyMinus" aria-label="减少一张">−</button>
+            <output id="ticketQty" aria-live="polite">1</output>
+            <button type="button" id="ticketQtyPlus" aria-label="增加一张">+</button>
+          </div>
+          <p class="ticket-warn" id="ticketQtyWarn" hidden></p>
+        </div>
+
+        <div id="ticketHolders"></div>
+
+        <div class="ticket-field" id="ticketMessageField">
+          <label class="ticket-label" for="ticketMessage">愿意的话，为活动或者你的艾欧泽亚之旅留一句想说的话吧~</label>
+          <p class="ticket-sub">我们可能在活动中抽选部分留言进行喊话</p>
+          <textarea id="ticketMessage" maxlength="200" placeholder="选填"></textarea>
+          <label class="audience-opt ticket-anon" for="ticketAnonymous">
+            <input type="checkbox" id="ticketAnonymous" checked><span>匿名留言</span>
+          </label>
+        </div>
+
+        <div class="verify-host ticket-verify" id="ticketVerify"></div>
+        <div class="ticket-submit-row">
+          <button type="submit" id="ticketSubmitBtn">提交</button>
+        </div>
+        <p class="form-msg" id="ticketMsg" hidden></p>
+      </form>
+
+      <div class="ticket-result" id="ticketResult" hidden>
+        <h3 id="ticketResultTitle">登记成功</h3>
+        <p class="ticket-result-note" id="ticketResultNote"></p>
+        <dl class="ticket-result-list" id="ticketResultList"></dl>
+        <button type="button" id="ticketSaveImgBtn">截图保存</button>
+        <button type="button" id="ticketAgainBtn" hidden>继续登记</button>
+      </div>
+    </div>
+
+    <div class="gate-card ticket-card">
+      <h2 class="ticket-h-sm">查询我的登记</h2>
+      <p class="hint">填写登记时的联系方式和第一位持票人 id（第一位为待定时填「待定」）</p>
+      <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式">
+      <input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id（不含区服）">
+      <div class="ticket-submit-row"><button type="button" id="ticketLookupBtn">查询</button></div>
+      <p class="form-msg" id="ticketLookupMsg" hidden></p>
+      <div id="ticketLookupList"></div>
+    </div>
+  </section>
+
+  <!-- ============ 场地使用登记（表单由 venue.js 生成） ============ -->
+  <section id="view-venue" class="view" hidden>
+    <button class="back-btn" data-back>← 返回</button>
+    <div class="gate-card ticket-card venue-card">
+      <h2>场地使用登记</h2>
+      <p class="hint venue-intro" id="venueIntro"></p>
+      <p class="ticket-blocked" id="venueBlocked" hidden></p>
+      <form id="venueForm" novalidate autocomplete="off">
+        <div class="venue-form" id="venueFields"></div>
+        <div class="venue-submit" data-venue-submit>
+          <div class="verify-host ticket-verify" id="venueVerify"></div>
+          <div class="ticket-submit-row">
+            <button type="submit" id="venueSubmitBtn">提交</button>
+          </div>
+          <p class="form-msg" id="venueMsg" hidden></p>
+        </div>
+      </form>
+      <div class="ticket-result venue-result" id="venueResult" hidden>
+        <h3 id="venueResultTitle">登记成功</h3>
+        <p class="ticket-result-note" id="venueResultNote"></p>
+        <dl class="ticket-result-list" id="venueResultList"></dl>
+        <button type="button" id="venueAgainBtn">再登记一个日期</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 内部入口 ============ -->
+  <section id="view-internal" class="view" hidden>
+
+    <div class="gate-card" id="internalGate">
+      <h2>内部入口</h2>
+      <p class="hint">部队 / 管理使用，需要密码</p>
+      <label for="internalPassword" class="visually-hidden">密码</label>
+      <div class="password-field">
+        <input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
+      </div>
+      <label class="password-show-label">
+        <input type="checkbox" id="internalPasswordShow"> 显示密码
+      </label>
+      <button id="internalSubmit">进入</button>
+      <p class="form-msg" id="internalMsg" hidden></p>
+    </div>
+
+    <div id="internalBoard" hidden>
+      <div class="admin-pills" id="adminPills" hidden>
+        <button type="button" class="tab-btn" data-admin-panel="lockdownPanel">分享功能开关</button>
+        <button type="button" class="tab-btn" data-admin-panel="captchaPanel">机器人验证</button>
+        <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
+        <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
+        <button type="button" class="tab-btn" data-admin-panel="venueAdminPanel">场地预约</button>
+        <button type="button" class="tab-btn" data-admin-panel="surveyAdminPanel">活动问卷</button>
+        <button type="button" class="tab-btn" data-admin-panel="feedbackAdminPanel">反馈建议箱<span class="fb-pill-badge" id="feedbackPillBadge" hidden></span></button>
+        <button type="button" class="tab-btn" data-admin-panel="postAnnouncementPanel">发布公告</button>
+        <button type="button" class="tab-btn" data-admin-panel="popupAdminPanel">弹窗公告</button>
+      </div>
+      <!-- 管理面板由 admin.js 放进这里（隐藏），点上方胶囊按钮时搬进弹窗 -->
+      <div id="adminPanelStash" hidden></div>
+      <h2 class="section-title">公告板</h2>
+      <div id="announcementList"></div>
+    </div>
+
+    <!-- 查看购票情况（只读）：输入查看密码后进入，「购票管理」面板以只读方式搬到这里（见 admin.js） -->
+    <div id="ticketViewBoard" hidden>
+      <!-- 管理员打开了「只读端显示活动问卷」时才出现：在购票情况和活动问卷（只读）之间切换 -->
+      <div class="admin-pills" id="viewerPills" hidden>
+        <button type="button" class="tab-btn is-active" data-viewer-panel="ticketAdminPanel">购票情况</button>
+        <button type="button" class="tab-btn" data-viewer-panel="surveyAdminPanel">活动问卷</button>
+      </div>
+      <div id="ticketViewHost"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer><a href="#" class="footer-link" id="siteAboutLink" role="button" aria-haspopup="dialog">花街档案 · 玩家个人站 · 内容以活动群公告为准</a></footer>
+
+<div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
+  <button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
+  <img id="lightboxImg" alt="">
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="info-overlay" id="captchaOverlay" role="dialog" aria-modal="true" aria-label="验证" hidden>
+  <div class="gate-card captcha-card">
+    <button class="info-close" id="captchaClose" aria-label="关闭">×</button>
+    <h2>先验证一下</h2>
+    <p class="hint">确认不是机器人</p>
+    <!-- 验证组件挂载点：自动验证（Cloudflare）+ 手动验证（狒科生 / 文科生 / 理科生）由 verify.js 渲染 -->
+    <div class="verify-host" id="captchaVerify"></div>
+    <p class="form-msg" id="captchaMsg" hidden></p>
+  </div>
+</div>
+
+<div class="info-overlay" id="adminModalOverlay" role="dialog" aria-modal="true" aria-label="管理功能" hidden>
+  <div class="admin-modal">
+    <button class="info-close" id="adminModalClose" aria-label="关闭">×</button>
+    <div id="adminModalHost"></div>
+  </div>
+</div>
+
+<div class="info-overlay" id="ticketNoticeOverlay" role="alertdialog" aria-modal="true" aria-labelledby="ticketNoticeText" hidden>
+  <div class="gate-card ticket-notice">
+    <p id="ticketNoticeText"></p>
+    <button type="button" id="ticketNoticeClose">知道了</button>
+  </div>
+</div>
+
+<!-- 首页弹窗公告：内容在管理页「弹窗公告」里设置 -->
+<div class="info-overlay" id="sitePopupOverlay" role="dialog" aria-modal="true" aria-labelledby="sitePopupTitle" hidden>
+  <div class="info-box site-popup-box" id="sitePopupBox">
+    <button class="info-close" id="sitePopupClose" aria-label="关闭">×</button>
+    <h2 class="info-title site-popup-title" id="sitePopupTitle">公告</h2>
+    <img class="site-popup-image" id="sitePopupImage" alt="" data-lightbox hidden>
+    <div class="site-popup-body" id="sitePopupBody"></div>
+    <div class="site-popup-actions">
+      <button type="button" class="video-action" id="sitePopupMuteBtn">今天不再显示</button>
+      <button type="button" class="video-action video-action-primary" id="sitePopupOkBtn">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 网站说明：首页底部那行小字点开。三个子页：关于网站 / 反馈与建议 / 分享网站 -->
+<div class="info-overlay" id="siteAboutOverlay" role="dialog" aria-modal="true" aria-label="网站说明" hidden>
+  <div class="info-box about-box" id="siteAboutBox">
+    <button class="info-close" id="siteAboutClose" aria-label="关闭">×</button>
+    <h2 class="info-title">网站说明</h2>
+    <div class="tabs about-tabs">
+      <button class="tab-btn is-active" type="button" data-about-tab="about">关于网站</button>
+      <button class="tab-btn" type="button" data-about-tab="feedback">反馈与建议</button>
+      <button class="tab-btn" type="button" data-about-tab="share">分享网站</button>
+    </div>
+
+    <div class="tab-panel about-panel" id="aboutPanelAbout">
+      <div class="about-text">
+        <p>网站个人爱发电产物，孩子不懂事建着玩的。</p>
+        <dl class="about-list">
+          <dt>点赞</dt>
+          <dd>可以重复点赞，每日最多 10 次</dd>
+          <dt>图片</dt>
+          <dd>电脑端鼠标左键放大图片，鼠标右键缩小图片，长按拖拽图片。活动介绍中相册的图片打开即原图。</dd>
+        </dl>
+        <p class="about-sub">右上方</p>
+        <dl class="about-list">
+          <dt>音量按钮</dt>
+          <dd>对于外链视频（b站视频）无法生效，仅在静音时对视频静音</dd>
+          <dt>动画按钮</dt>
+          <dd>页面特效，按钮动画等均会产生变化，电脑端默认开启，手机端默认关闭，请根据设备性能自行开关</dd>
+        </dl>
+        <dl class="about-list">
+          <dt>验证功能</dt>
+          <dd>国内玩家，网络连接不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
+          <dt>场地使用登记</dt>
+          <dd>如果您需要使用花街场地进行活动，欢迎填写该问卷</dd>
+        </dl>
+        <p>网站仍在试运行，有想法和建议欢迎点击旁边的<button type="button" class="about-inline-link" data-about-goto="feedback">“反馈与建议”</button>按钮。</p>
+        <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
+      </div>
+    </div>
+
+    <div class="tab-panel about-panel" id="aboutPanelFeedback" hidden>
+      <form class="about-form" id="feedbackForm" novalidate autocomplete="off">
+        <div class="about-field">
+          <label class="about-label is-required" for="feedbackCategory">问卷类别</label>
+          <select id="feedbackCategory">
+            <option value="">请选择</option>
+            <option value="bug">bug反馈</option>
+            <option value="experience">体验反馈</option>
+            <option value="feature">功能建议</option>
+            <option value="join">加入花街</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div class="about-field">
+          <label class="about-label is-required" for="feedbackContent">内容</label>
+          <p class="about-hint" id="feedbackContentHint">说说遇到的问题或想法吧</p>
+          <textarea id="feedbackContent" maxlength="1000" placeholder="请填写"></textarea>
+          <p class="about-count"><span id="feedbackCount">0</span> / 1000</p>
+        </div>
+        <div class="about-field">
+          <label class="audience-opt about-check" for="feedbackWantContact">
+            <input type="checkbox" id="feedbackWantContact"><span>留下联系方式（方便我们回复你）</span>
+          </label>
+          <input type="text" id="feedbackContact" maxlength="60" placeholder="QQ / 游戏 id@服务器 / 邮箱 均可" hidden>
+        </div>
+        <div class="verify-host about-verify" id="feedbackVerify"></div>
+        <div class="about-submit-row">
+          <button type="submit" class="share-site-btn" id="feedbackSubmitBtn">提交</button>
+        </div>
+        <p class="form-msg" id="feedbackMsg" hidden></p>
+      </form>
+      <div class="about-done" id="feedbackDone" hidden>
+        <p class="about-done-title">收到啦，谢谢你的反馈！</p>
+        <p class="about-hint">我们会认真看每一条留言。</p>
+        <button type="button" class="share-site-btn" id="feedbackAgainBtn">再写一条</button>
+      </div>
+    </div>
+
+    <div class="tab-panel about-panel" id="aboutPanelShare" hidden>
+      <p class="about-hint about-center">把下面这段话发给朋友，一起来花街逛逛吧~</p>
+      <p class="about-share-text" id="aboutShareText"></p>
+      <div class="group-btn-row">
+        <button type="button" class="share-site-btn" id="shareSiteBtn">分享网站</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 购票须知：点首页购票入口时先弹出，确认后进入购票页；购票页右上的「购票须知」可随时再打开 -->
+<div class="info-overlay" id="ticketGuideOverlay" role="dialog" aria-modal="true" aria-labelledby="ticketGuideTitle" hidden>
+  <div class="info-box guide-box" id="ticketGuideBox">
+    <button class="info-close" id="ticketGuideClose" aria-label="关闭">×</button>
+    <div class="guide-scroll" id="ticketGuideScroll" tabindex="-1">
+      <!-- 正文由 ticket.js 渲染：管理页「购票管理 → 购票须知」编辑过就用那份，否则用 TICKET_GUIDE_DEFAULT -->
+      <div id="ticketGuideContent"></div>
+    </div>
+    <div class="guide-actions">
+      <button type="button" class="share-site-btn guide-copy-btn" id="ticketGuideCopyBtn">复制群号</button>
+      <button type="button" class="share-site-btn guide-ok-btn" id="ticketGuideOkBtn">我已阅读，进入购票</button>
+    </div>
+  </div>
+</div>
+
+<div class="info-overlay" id="groupOverlay" role="dialog" aria-modal="true" aria-label="加入活动群" hidden>
+  <div class="info-box group-box">
+    <button class="info-close" id="groupClose" aria-label="关闭">×</button>
+    <h2 class="info-title">加入活动群</h2>
+    <div class="group-btn-row">
+      <button type="button" class="share-site-btn" id="copyGroupBtn">复制群号</button>
+    </div>
+    <img src="assets/site/group-qr.jpg" alt="花舞之街·薰风花语町 QQ群二维码" loading="lazy" decoding="async">
+  </div>
+</div>
+
+<!-- 闹铃 / 倒计时面板：全部数据保存在本地（localStorage），不经过 Worker -->
+<div class="info-overlay" id="alarmOverlay" role="dialog" aria-modal="true" aria-label="闹铃与倒计时" hidden>
+  <div class="gate-card alarm-card">
+    <button class="info-close" id="alarmClose" aria-label="关闭">×</button>
+    <h2>闹铃</h2>
+    <p class="hint">闹铃与倒计时保存在本机浏览器里，页面开着才会响铃</p>
+
+    <div class="tabs alarm-tabs">
+      <button class="tab-btn is-active" type="button" data-alarm-tab="alarm">闹铃</button>
+      <button class="tab-btn" type="button" data-alarm-tab="countdown">倒计时</button>
+    </div>
+
+    <!-- 子类型一：闹铃（到点响铃） -->
+    <div class="tab-panel alarm-panel" id="alarmPanelAlarm">
+      <div class="alarm-field">
+        <label class="alarm-label" for="almName">名字（可不填）</label>
+        <input id="almName" type="text" maxlength="12" placeholder="">
+      </div>
+      <div class="alarm-field">
+        <span class="alarm-label">时间类型</span>
+        <div class="alarm-seg" id="almZoneSeg">
+          <label class="is-active"><input type="radio" name="almZone" value="cn" checked><span>国服时间</span></label>
+          <label><input type="radio" name="almZone" value="et"><span>艾欧泽亚时间</span></label>
+        </div>
+        <p class="alarm-hint" id="almNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
+      </div>
+      <div class="alarm-field">
+        <label class="alarm-label" for="almTime">响铃时间</label>
+        <input id="almTime" type="time" value="20:00">
+        <label class="alarm-check" for="almRepeat">
+          <input type="checkbox" id="almRepeat">
+          <span id="almRepeatText">每小时重复</span>
+        </label>
+        <p class="alarm-hint" id="almRepeatHint"></p>
+      </div>
+      <div class="alarm-field alarm-row2">
+        <div>
+          <label class="alarm-label" for="almSound">铃声</label>
+          <select id="almSound"></select>
+        </div>
+        <div>
+          <label class="alarm-label" for="almPlaySec">播放时长</label>
+          <select id="almPlaySec"></select>
+        </div>
+        <button type="button" id="almPreview">试听</button>
+      </div>
+      <button type="button" class="alarm-add" id="almAddAlarm">添加闹铃</button>
+      <div class="alarm-list-head">已添加的闹铃</div>
+      <div class="alarm-list" id="almListAlarm"></div>
+    </div>
+
+    <!-- 子类型二：倒计时（倒数结束响铃） -->
+    <div class="tab-panel alarm-panel" id="alarmPanelCountdown" hidden>
+      <div class="alarm-field">
+        <label class="alarm-label" for="cdName">名字（可不填）</label>
+        <input id="cdName" type="text" maxlength="12" placeholder="">
+      </div>
+      <div class="alarm-field">
+        <span class="alarm-label">时间类型</span>
+        <div class="alarm-seg" id="cdZoneSeg">
+          <label class="is-active"><input type="radio" name="cdZone" value="cn" checked><span>国服时间</span></label>
+          <label><input type="radio" name="cdZone" value="et"><span>艾欧泽亚时间</span></label>
+        </div>
+        <p class="alarm-hint" id="cdNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
+      </div>
+      <div class="alarm-field" id="cdCnWrap">
+        <span class="alarm-label">倒计时时长（国服时间，最短 30 秒）</span>
+        <div class="alarm-dur-row">
+          <input type="number" id="cdCnH" min="0" max="99" step="1" value="0" aria-label="时"><span>时</span>
+          <input type="number" id="cdCnM" min="0" max="59" step="1" value="5" aria-label="分"><span>分</span>
+          <input type="number" id="cdCnS" min="0" max="59" step="1" value="0" aria-label="秒"><span>秒</span>
+        </div>
+        <p class="alarm-hint" id="cdCnHint"></p>
+      </div>
+      <div class="alarm-field" id="cdEtWrap" hidden>
+        <span class="alarm-label">倒计时时长（艾欧泽亚时间，最短 15 分钟）</span>
+        <div class="alarm-dur-row">
+          <input type="number" id="cdEtH" min="0" max="23" step="1" value="0" aria-label="艾欧泽亚时"><span>时</span>
+          <input type="number" id="cdEtM" min="0" max="59" step="1" value="20" aria-label="艾欧泽亚分"><span>分</span>
+        </div>
+        <p class="alarm-hint" id="cdEtHint"></p>
+      </div>
+      <label class="alarm-check" for="cdLoop">
+        <input type="checkbox" id="cdLoop">
+        <span>倒计时结束后自动循环</span>
+      </label>
+      <div class="alarm-field alarm-row2 alarm-row2-gap">
+        <div>
+          <label class="alarm-label" for="cdSound">铃声</label>
+          <select id="cdSound"></select>
+        </div>
+        <div>
+          <label class="alarm-label" for="cdPlaySec">播放时长</label>
+          <select id="cdPlaySec"></select>
+        </div>
+        <button type="button" id="cdPreview">试听</button>
+      </div>
+      <button type="button" class="alarm-add" id="cdAdd">添加倒计时</button>
+      <div class="alarm-list-head">已添加的倒计时</div>
+      <div class="alarm-list" id="almListCountdown"></div>
+    </div>
+
+    <p class="form-msg" id="alarmMsg" hidden></p>
+  </div>
+</div>
+
+<div class="info-overlay" id="infoOverlay" role="dialog" aria-modal="true" aria-label="花街介绍" hidden>
+  <div class="info-box" id="infoBox">
+    <button class="info-close" id="infoClose" aria-label="关闭">×</button>
+    <h2 class="info-title">花街</h2>
+    <div class="tabs info-tabs">
+      <button class="tab-btn is-active" data-info-tab="intro">介绍</button>
+      <button class="tab-btn" data-info-tab="gallery">相册</button>
+    </div>
+    <div class="tab-panel" id="infoPanelIntro">
+      <div class="info-text">
+        <p>“花舞之街”是《最终幻想14》2021年3月由热心玩家在冒险者住宅区建成的街区，坐落在梦羽宝境高脚孤丘23区扩建区北区，建成之初就受到玩家的广泛讨论，使得当时开服仅一年的梦羽宝境服务器动态限制创建角色，公寓房间爆满，随后每年都会开展各类演奏，rp，游街，演出，话剧等各类街区活动。</p>
+        <p>“薰风花语町”是于2024年正式成立的街区，坐落在梦羽宝境高脚孤丘22区扩建区南区，在2023年就尝试开展街区游园会，2024年底的跨年盛典是两条街区第一次同步开展的大型街区活动。</p>
+        <p>目前花街仍会不定期举办各类大中小型活动，我们也在尝试各种新的活动形式和宣发形式，本网站就是其中一种尝试，希望通过各种活动能带给大家温情的回忆。我们热切欢迎大家随时来花街逛一逛，欢迎任何有脑洞，有热情，有想法，愿意做点什么的个人或店家与我们联系合作，谢谢大家的支持，祝大家玩得开心！</p>
+        <p class="info-date">热情的花街小员</p>
+      </div>
+    </div>
+    <div class="tab-panel" id="infoPanelGallery" hidden>
+      <p class="gallery-credit">特别感谢：摄影老师-阿兹萨@梦羽宝境、北雾南黛@梦羽宝境<br>双击图片可设置为背景</p>
+      <div class="tab-gallery info-gallery-grid" id="infoGalleryGrid"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- 脚本：顺序不能乱（后面的文件要用前面的函数 / 常量）；?v= 和开头的 HJ_VERSION 保持一致 -->
+<script src="verify.js?v=20260928"></script>
+<script src="config.js?v=20260928"></script>
+<script src="main.js?v=20260928"></script>
+<script src="ticket.js?v=20260928"></script>
+<script src="venue.js?v=20260928"></script>
+<script src="survey.js?v=20260928"></script>
+<script>initApp();</script>
+
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
