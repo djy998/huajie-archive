@@ -57,20 +57,62 @@
       -webkit-tap-highlight-color: transparent;   /* 去掉移动端点击高亮 */
       -webkit-touch-callout: none;                /* 禁止长按弹出"保存图片" */
       touch-action: manipulation;
+      transition: transform .2s ease;
     }
+    #bootImageBtn:hover { transform: scale(1.04); }
+    /* 两层旋转叠加：外层 #bootSpinner 一直缓慢自转（点击前后速度不变），
+       内层图片在点击时快速转两圈（无论动画模式开关） */
+    #bootSpinner { display: block; animation: bootIdle 36s linear infinite; pointer-events: none; }
+    @keyframes bootIdle { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     #bootImage {
       display: block;
       width: min(56vw, 280px);
       height: auto;
       filter: drop-shadow(0 8px 30px rgba(0, 0, 0, .35));
-      transition: transform .2s ease;
       -webkit-user-drag: none;
       user-select: none;
       pointer-events: none;                       /* 点击统一交给外层按钮 */
     }
-    #bootImageBtn:hover #bootImage { transform: scale(1.04); }
     #bootImage.is-spinning { animation: bootSpin 1s ease-in-out; }
     @keyframes bootSpin { from { transform: rotate(0deg); } to { transform: rotate(720deg); } }
+
+    /* 点击后的爆发特效（动画模式关闭时不生成）：白天花叶四散，夜晚星点飞散 + 周围大量星点快速闪烁。
+       特效层挂在 body 上、盖在网站之上，进站后还会飘完最后一段再移除 */
+    #bootFx { position: fixed; inset: 0; z-index: 650; pointer-events: none; overflow: hidden; }
+    .boot-petal, .boot-star, .boot-twinkle { position: absolute; will-change: transform, opacity; }
+    .boot-petal {
+      background: center / contain no-repeat;
+      filter: drop-shadow(0 1px 2px rgba(60, 42, 10, .3));
+      animation: bootPetal 1.3s cubic-bezier(.2, .7, .3, 1) both;
+    }
+    @keyframes bootPetal {
+      0%   { transform: translate(-50%, -50%) scale(.4) rotate(0deg); opacity: 0; }
+      10%  { opacity: 1; }
+      55%  { transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(1) rotate(calc(var(--br) * .6)); }
+      75%  { opacity: .9; }
+      100% { transform: translate(calc(-50% + var(--bx) * 1.12), calc(-50% + var(--by) * 1.12 + 46px)) scale(.75) rotate(var(--br)); opacity: 0; }
+    }
+    .boot-star {
+      border-radius: 50%;
+      background: #fff4d6;
+      box-shadow: 0 0 7px 2px rgba(255, 244, 214, .8);
+      animation: bootStar .9s ease-out both;
+    }
+    @keyframes bootStar {
+      0%   { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+      8%   { opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(.2); opacity: 0; }
+    }
+    .boot-twinkle {
+      border-radius: 50%;
+      background: #fff4d6;
+      box-shadow: 0 0 5px 1px rgba(255, 244, 214, .7);
+      animation: bootTwinkle .45s ease-in-out both;
+    }
+    @keyframes bootTwinkle {
+      0%, 100% { transform: translate(-50%, -50%) scale(.4); opacity: 0; }
+      50%      { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+    }
 
     /* 点击后主程序仍在加载时显示的提示 */
     #bootHint {
@@ -85,27 +127,28 @@
     @keyframes bootPulse { 50% { opacity: .45; } }
 
     @media (prefers-reduced-motion: reduce) {
-      #bootImage.is-spinning, #bootOverlay.is-waiting #bootHint { animation: none; }
+      #bootSpinner, #bootImage.is-spinning, #bootOverlay.is-waiting #bootHint { animation: none; }
     }
   </style>
 
   <!-- 版本号与样式表加载
-       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260928j」
-         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260928j"> 几处），访客就会拿到新文件
+       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260928l」
+         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260928l"> 几处），访客就会拿到新文件
        · 新访客（未访问过）：先显示开屏图，style.css 和字体在后台加载，不阻塞首屏
        · 老访客：样式表加载完成前隐藏页面，避免闪现无样式内容
        · 按访客本地时间定昼夜（HJ_START_DAY，main.js 沿用），当前这套天空和最新活动卡片的底图提前下载
        · 正文字体（Google Fonts）用 fetch 取回再插进页面：不拖慢页面加载，国内连不上时也只是在后台失败 -->
   <script>
-    window.HJ_VERSION = "20260928j";
+    window.HJ_VERSION = "20260928l";
     (function () {
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
 
+      /* 初见标记：开屏图换新时把键名换掉（hj_visited → hj_visited_2），所有访客就会再看到一次开屏图 */
       var fresh = true;
-      try { fresh = !localStorage.getItem("hj_visited"); } catch (e) {}
+      try { fresh = !localStorage.getItem("hj_visited_2"); } catch (e) {}
       /* 拿着购票链接（#ti 或旧长链接）或问卷链接（#survey）直接进来的新访客：不弹开屏图，直接看对应页面，
-         也不记 hj_visited（下次从首页进来仍会看到开屏图）。hash 要和 config.js 里的 TICKET_HASH 等一致 */
+         也不记初见标记（下次从首页进来仍会看到开屏图）。hash 要和 config.js 里的 TICKET_HASH 等一致 */
       var h = location.hash;
       var ticketLanding = h === "#ti" || h === "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd" || h === "#survey";
       root.classList.add(fresh && !ticketLanding ? "boot-pending" : "css-wait");
@@ -162,18 +205,76 @@
 <!-- 开屏图（仅新访客显示） -->
 <div id="bootOverlay">
   <button type="button" id="bootImageBtn" aria-label="点击进入花街">
-    <img id="bootImage" src="boot-moguri-v2.webp" alt="" draggable="false" fetchpriority="high">
+    <span id="bootSpinner"><img id="bootImage" src="boot-moguri-v2.webp" alt="" draggable="false" fetchpriority="high"></span>
   </button>
   <p id="bootHint" role="status" aria-live="polite">正在进入花街…</p>
 </div>
 
 <script>
 /* 开屏控制：主程序在文件末尾，下载较慢时用户可能先点了开屏图。
-   这里立即响应点击（旋转动画），等"动画结束 + 样式表就绪 + 主程序就绪"三者都满足后再进入。 */
+   这里立即响应点击（快速转两圈 + 爆发特效），等"动画播完 + 样式表就绪 + 主程序就绪"三者都满足后再进入。 */
 (function () {
   var root = document.documentElement;
   var fresh = root.classList.contains("boot-pending");
   var clicked = false, spun = false, done = false, onEnter = null;
+
+  /* 动画模式开关：和 main.js 的 getDefaultFxEnabled() 同一规则（手动切换过以其为准，
+     否则桌面端且未开启"减弱动态"时开启）；键名同 main.js 的 STORE.fx */
+  function fxOn() {
+    var stored = null;
+    try { stored = localStorage.getItem("hj_fx_enabled"); } catch (e) {}
+    if (stored !== null) return stored === "1";
+    var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return !reduce && window.innerWidth > 760;
+  }
+
+  /* 白天爆出的花叶贴图，和 config.js 的 DAY_FX_LEAVES 相同（ar = 宽 / 高） */
+  var LEAVES = [[1.6, "01"], [1.1, "02"], [0.807, "03"], [1.257, "04"], [1.086, "05"],
+                [0.949, "06"], [0.864, "07"], [1.517, "08"], [0.568, "09"]];
+  var leafSrc = function (n) { return "assets/site/leaf-" + n + ".webp"; };
+  var rand = function (a, b) { return a + Math.random() * (b - a); };
+
+  /* 爆发特效：以莫古力为中心，粒子从一圈环上向外飞散 */
+  function burst(anchor) {
+    var box = anchor.getBoundingClientRect();
+    var cx = box.left + box.width / 2, cy = box.top + box.height / 2, r = box.width * 0.42;
+    var layer = document.createElement("div");
+    layer.id = "bootFx";
+    layer.setAttribute("aria-hidden", "true");
+    var add = function (cls, x, y, size, css) {
+      var el = document.createElement("span");
+      el.className = cls;
+      el.style.cssText = "left:" + x.toFixed(1) + "px;top:" + y.toFixed(1) + "px;width:" + size[0].toFixed(1)
+        + "px;height:" + size[1].toFixed(1) + "px;" + css;
+      layer.appendChild(el);
+    };
+    var i, a, d, s;
+    if (window.HJ_START_DAY) {
+      for (i = 0; i < 100; i++) {
+        var leaf = LEAVES[Math.floor(Math.random() * LEAVES.length)];
+        a = Math.random() * Math.PI * 2; d = rand(90, 330); s = rand(15, 31);
+        add("boot-petal", cx + Math.cos(a) * r * rand(.5, 1), cy + Math.sin(a) * r * rand(.5, 1), [s, s / leaf[0]],
+          "background-image:url('" + leafSrc(leaf[1]) + "');--bx:" + (Math.cos(a) * d).toFixed(1) + "px;--by:"
+          + (Math.sin(a) * d).toFixed(1) + "px;--br:" + rand(-200, 200).toFixed(0) + "deg;animation-duration:"
+          + rand(1.05, 1.6).toFixed(2) + "s;animation-delay:" + (i < 60 ? 0 : rand(.12, .3)).toFixed(2) + "s");
+      }
+    } else {
+      for (i = 0; i < 60; i++) {   // 飞散的星点
+        a = Math.random() * Math.PI * 2; d = rand(80, 300); s = rand(3, 6.5);
+        add("boot-star", cx + Math.cos(a) * r * rand(.6, 1), cy + Math.sin(a) * r * rand(.6, 1), [s, s],
+          "--bx:" + (Math.cos(a) * d).toFixed(1) + "px;--by:" + (Math.sin(a) * d).toFixed(1) + "px;animation-duration:"
+          + rand(.7, 1.15).toFixed(2) + "s;animation-delay:" + (i < 36 ? 0 : rand(.1, .25)).toFixed(2) + "s");
+      }
+      for (i = 0; i < 120; i++) {   // 周围快速闪烁的星点
+        a = Math.random() * Math.PI * 2; d = r * rand(.7, 2.6); s = rand(2, 4.5);
+        add("boot-twinkle", cx + Math.cos(a) * d, cy + Math.sin(a) * d, [s, s],
+          "animation-duration:" + rand(.3, .6).toFixed(2) + "s;animation-delay:" + rand(0, .7).toFixed(2)
+          + "s;animation-iteration-count:" + (1 + Math.floor(Math.random() * 3)));
+      }
+    }
+    document.body.appendChild(layer);
+    setTimeout(function () { if (layer.parentNode) layer.parentNode.removeChild(layer); }, 2400);
+  }
 
   window.HJ_BOOT = {
     /* 主程序初始化完成后调用；fn 为进入站点后要执行的动作 */
@@ -203,11 +304,22 @@
   function enter() {
     if (clicked) return;
     clicked = true;
-    try { localStorage.setItem("hj_visited", "1"); } catch (e) {}
+    try {
+      localStorage.setItem("hj_visited_2", "1");
+      localStorage.removeItem("hj_visited");   // 旧版的初见标记
+    } catch (e) {}
     btn.disabled = true;
     img.classList.add("is-spinning");
-    /* 用定时器而非 animationend：部分手机浏览器会跳过动画 */
-    setTimeout(function () { spun = true; tryEnter(); }, 1000);
+    var fx = fxOn();
+    if (fx) burst(btn);
+    /* 用定时器而非 animationend：部分手机浏览器会跳过动画。有特效时多留一会儿让粒子飞出去 */
+    setTimeout(function () { spun = true; tryEnter(); }, fx ? 1200 : 1000);
+  }
+
+  /* 白天且开着动画模式：开屏图下载完后顺手把花叶贴图也取好，点击时不会空着飞 */
+  if (window.HJ_START_DAY && fxOn()) {
+    var preloadLeaves = function () { LEAVES.forEach(function (l) { new Image().src = leafSrc(l[1]); }); };
+    if (img.complete) preloadLeaves(); else img.addEventListener("load", preloadLeaves);
   }
 
   document.addEventListener("hj:cssready", tryEnter);
@@ -881,12 +993,12 @@
 
 
 <!-- 脚本：顺序不能乱（后面的文件要用前面的函数 / 常量）；?v= 和开头的 HJ_VERSION 保持一致 -->
-<script src="verify.js?v=20260928j"></script>
-<script src="config.js?v=20260928j"></script>
-<script src="main.js?v=20260928j"></script>
-<script src="ticket.js?v=20260928j"></script>
-<script src="venue.js?v=20260928j"></script>
-<script src="survey.js?v=20260928j"></script>
+<script src="verify.js?v=20260928l"></script>
+<script src="config.js?v=20260928l"></script>
+<script src="main.js?v=20260928l"></script>
+<script src="ticket.js?v=20260928l"></script>
+<script src="venue.js?v=20260928l"></script>
+<script src="survey.js?v=20260928l"></script>
 <script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->

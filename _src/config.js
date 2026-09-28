@@ -65,7 +65,7 @@ const INFO_GALLERY = Array.from({ length: 39 }, (_, i) =>
   `infogal/info-${String(i + 1).padStart(2, "0")}.webp`
 );
 
-/* 白天飘落的花叶贴图；ar = 宽 / 高 */
+/* 白天飘落的花叶贴图；ar = 宽 / 高（开屏图的爆花特效在 index.html 里另有一份同样的列表，增删时两边一起改） */
 const DAY_FX_LEAVES = [
   { ar: 1.6,   src: "assets/site/leaf-01.webp" },  // 红枫＋绿枫（一枝）
   { ar: 1.1,   src: "assets/site/leaf-02.webp" },  // 白玉兰花瓣
