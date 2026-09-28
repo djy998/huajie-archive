@@ -132,14 +132,14 @@
   </style>
 
   <!-- 版本号与样式表加载
-       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260929a」
-         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260929a"> 几处），访客就会拿到新文件
+       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260928n」
+         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260928n"> 几处），访客就会拿到新文件
        · 新访客（未访问过）：先显示开屏图，style.css 和字体在后台加载，不阻塞首屏
        · 老访客：样式表加载完成前隐藏页面，避免闪现无样式内容
        · 按访客本地时间定昼夜（HJ_START_DAY，main.js 沿用），当前这套天空和最新活动卡片的底图提前下载
        · 正文字体（Google Fonts）用 fetch 取回再插进页面：不拖慢页面加载，国内连不上时也只是在后台失败 -->
   <script>
-    window.HJ_VERSION = "20260929a";
+    window.HJ_VERSION = "20260928n";
     (function () {
       var FONT_CSS = "https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap";
       var root = document.documentElement;
@@ -433,15 +433,6 @@
       <span class="hj-weather-label">高脚孤丘</span>
       <span class="hj-weather-seq" id="hjWeatherSeq">加载中…</span>
     </span>
-    <!-- 特殊天象与钓场之王：下一次出现还要等多久（现实时间），由 main.js 每秒刷新 -->
-    <span class="hj-omen" id="hjOmen">
-      <span class="hj-omen-item" id="hjOmenRainbow" title="彩虹：每个 ET 月 27 日 12:00 至次月 6 日 12:00，ET 8:00 / 16:00 雨后转为碧空、晴朗或阴云时出现，持续约 1 分半（现实）">
-        <span class="hj-omen-name">彩虹</span><span class="hj-omen-state">--:--</span>
-      </span>
-      <span class="hj-omen-item" id="hjOmenFish" title="枪鼻头（高脚孤丘钓场之王）：ET 21:00–24:00，阴云或薄雾时可钓">
-        <img src="weather/%E6%9E%AA%E9%BC%BB%E5%A4%B4.png" alt="枪鼻头" decoding="async" width="18" height="18"><span class="hj-omen-state">--:--</span>
-      </span>
-    </span>
   </p>
 </header>
 
@@ -570,7 +561,12 @@
   <section id="view-ticket" class="view" hidden>
     <!-- 「与首页隔离」时 ticket.js 给 #view-ticket 加 is-isolated，这个返回按钮就藏起来 -->
     <button class="back-btn" id="ticketBackBtn" data-back>← 返回</button>
-    <div class="gate-card ticket-card">
+    <!-- 购票 / 查询登记 两个标签页（切换在 ticket.js 的 selectTicketTab） -->
+    <div class="tabs ticket-tabs">
+      <button type="button" class="tab-btn is-active" data-ticket-tab="buy">购票</button>
+      <button type="button" class="tab-btn" data-ticket-tab="lookup">查询登记</button>
+    </div>
+    <div class="gate-card ticket-card" id="ticketBuyCard">
       <h2 id="ticketTitle">活动购票</h2>
       <p class="hint" id="ticketLimitHint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
       <div class="ticket-guide-row" id="ticketGuideRow">
@@ -624,7 +620,7 @@
       </div>
     </div>
 
-    <div class="gate-card ticket-card">
+    <div class="gate-card ticket-card" id="ticketLookupCard" hidden>
       <h2 class="ticket-h-sm">查询我的登记</h2>
       <p class="hint">填写登记时的联系方式和第一位持票人 id（第一位为待定时填「待定」）</p>
       <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式">
@@ -709,7 +705,14 @@
 
 </main>
 
-<footer><a href="#" class="footer-link" id="siteAboutLink" role="button" aria-haspopup="dialog">花街档案 · 玩家个人站 · 内容以活动群公告为准</a></footer>
+<footer>
+  <!-- 整块是一个链接，点开「网站说明」 -->
+  <a href="#" class="footer-link" id="siteAboutLink" role="button" aria-haspopup="dialog">
+    <span class="footer-line">花街档案 · 玩家个人站 · 内容以活动群公告为准</span>
+    <span class="footer-copy">© 2026 花舞之街 · 薰风花语町 · Swaying &amp; Sussurrus Street</span>
+    <span class="footer-copy">网站所引用的FFXIV相关资料与图像：Copyright (C) 2010 - 2026 SQUARE ENIX CO., LTD. All Rights Reserved.</span>
+  </a>
+</footer>
 
 <div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
   <button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
@@ -1002,12 +1005,12 @@
 
 
 <!-- 脚本：顺序不能乱（后面的文件要用前面的函数 / 常量）；?v= 和开头的 HJ_VERSION 保持一致 -->
-<script src="verify.js?v=20260929a"></script>
-<script src="config.js?v=20260929a"></script>
-<script src="main.js?v=20260929a"></script>
-<script src="ticket.js?v=20260929a"></script>
-<script src="venue.js?v=20260929a"></script>
-<script src="survey.js?v=20260929a"></script>
+<script src="verify.js?v=20260928n"></script>
+<script src="config.js?v=20260928n"></script>
+<script src="main.js?v=20260928n"></script>
+<script src="ticket.js?v=20260928n"></script>
+<script src="venue.js?v=20260928n"></script>
+<script src="survey.js?v=20260928n"></script>
 <script>initApp();</script>
 
 <!-- Cloudflare Web Analytics -->

@@ -542,7 +542,7 @@
         +   '<span class="verify-sub">（诗、词、曲都算，写其中一句即可）</span></p>'
         + '<div class="verify-row">'
         +   '<input type="text" class="verify-input" maxlength="40" autocomplete="off" spellcheck="false"'
-        +     ' aria-label="含有指定字的诗句" placeholder="例：夜来风雨声，花落知多少">'
+        +     ' aria-label="含有指定字的诗句">'
         +   '<button type="button" class="verify-ok" data-act="submit">确认</button>'
         + "</div>"
         + '<div class="verify-hint-wrap">'

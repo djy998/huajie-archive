@@ -994,8 +994,6 @@ function applyStarlight(value) {
   writeStarlightLocal(hjStarlight);
   refreshStarlightStatus();
   hjRenderWeather(true);
-  hjResetOmens();
-  hjRenderOmens();
 }
 
 
@@ -1673,6 +1671,46 @@ function applyTileBackgrounds(isDay) {
 
 function setSky(isDay) {
   $("skyBase").style.backgroundImage = `url('${SKY_IMAGES[isDay ? "day" : "night"]}')`;
+}
+
+/* 页面里卡片的底图模式 ----------------------------------------------------------
+   卡片不高于屏幕：底图整张铺满卡片（和弹窗一样）；高于屏幕：加 .is-tall，
+   底图改成跟随屏幕的水印（样式见 style.css「弹窗与表单卡片共用的底」）。
+   卡片高度会随内容变（购票开没开、查询结果、问卷展开），所以用 ResizeObserver 盯着，
+   页面里新插进来的卡片（活动问卷、只读的购票管理面板）由 MutationObserver 补登记。
+   切换留 48px 余量，手机地址栏伸缩导致屏幕高度微变时不会来回跳 */
+const CARD_TALL_MARGIN = 48;
+const cardSizeWatcher = window.ResizeObserver
+  ? new ResizeObserver((entries) => entries.forEach((e) => updateCardBackdrop(e.target))) : null;
+const watchedCards = new WeakSet();
+
+function updateCardBackdrop(card) {
+  const h = card.offsetHeight, vh = window.innerHeight;
+  const tall = card.classList.contains("is-tall");
+  if (!tall && h > vh + CARD_TALL_MARGIN) card.classList.add("is-tall");
+  else if (tall && h < vh - CARD_TALL_MARGIN) card.classList.remove("is-tall");
+}
+
+function refreshCardBackdrops() {
+  document.querySelectorAll(".view .gate-card").forEach((card) => {
+    if (cardSizeWatcher && !watchedCards.has(card)) {
+      watchedCards.add(card);
+      cardSizeWatcher.observe(card);
+    }
+    updateCardBackdrop(card);
+  });
+}
+
+function initCardBackdrops() {
+  let queued = false;
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; refreshCardBackdrops(); });
+  };
+  window.addEventListener("resize", queue);
+  new MutationObserver(queue).observe(document.querySelector("main") || document.body, { childList: true, subtree: true });
+  refreshCardBackdrops();
 }
 
 /* 页面加载完、浏览器空闲时，把另一套昼夜底图和弹窗底图先下载好，切换时交叉淡入不闪白 */
@@ -2609,7 +2647,6 @@ function hjClockTick() {
   $("hjEtGlyph").textContent = t.etNight ? "☾" : "☀";   // ☾ / ☀
   $("hjClockEt").classList.toggle("is-night", t.etNight);
   hjRenderWeather();
-  hjRenderOmens();
 }
 
 /* 刷新时机对准「下一个整秒」和「下一个 ET 整分」中较早的那个，ET 一跳分钟页面就跟着跳；
@@ -2715,102 +2752,6 @@ function hjRenderWeather(force) {
       + `<img src="${hjWeatherIcon(w.name)}" alt="${w.name}" loading="lazy" decoding="async" width="18" height="18">`
       + `<span class="hj-wx-name">${w.name}</span></span>`;
   }).join(arrow);
-}
-
-/* 特殊天象与钓场之王（时间条第三行）------------------------------------------------
-   都由高脚孤丘的天气推算，只显示下一次还要等多久（现实时间）。
-   1 个天气时段 = 8 ET 小时 = 现实 1400 秒，时段从 ET 0 / 8 / 16 时开始。
-   - 彩虹（与灰机 wiki 天气预报一致）：只在每个 ET 月 27 日 12:00 ~ 次月 6 日 12:00 之间；
-     ET 16:00 换天气时，8–16 时是「小雨」、16 时起是碧空 / 晴朗 / 阴云；
-     ET 8:00 换天气时，前一天 16–24 时是「小雨」、8 时起是碧空 / 晴朗 / 阴云（中间 0–8 时不论）。
-     0:00 换天气在夜里，不出彩虹。ET x:10 出现，持续 30 ET 分钟（现实约 1 分 27 秒）。
-     ET 1 个月 = 32 天，日期由 ET 天数推出。
-   - 枪鼻头（高脚孤丘钓场的钓场之王）：ET 21:00–24:00，且 16–24 时这段天气为阴云或薄雾。
-   星芒节覆盖时段内天气当作小雪，两者都不会出现。 */
-const HJ_PERIOD_MS = 8 * ET_HOUR_SECONDS * 1000;
-const HJ_OMEN_SCAN_PERIODS = 3 * 24 * 30 * 3;       // 往后最多找约 30 天（现实）
-const HJ_RAINBOW_AFTER = ["碧空", "晴朗", "阴云"];
-const HJ_RAINBOW_OFFSET_MS = 10 * ET_MINUTE_MS;     // ET x:10 出现
-const HJ_RAINBOW_LEN_MS = 30 * ET_MINUTE_MS;
-const HJ_FISH_WEATHERS = ["阴云", "薄雾"];
-const HJ_FISH_OFFSET_MS = 5 * ET_HOUR_SECONDS * 1000;   // 16:00 起第 5 个 ET 小时 = 21:00
-
-const HJ_RAINBOW_SEASON = [26 * 24 + 12, 5 * 24 + 12];   // 月内第几个 ET 小时：27 日 12:00 起、6 日 12:00 止
-
-const hjPeriodWeatherName = (p) => hjGobletWeatherAt(p * HJ_PERIOD_MS / 1000).name;
-
-/* 第 p 个时段开始时是 ET 当月的第几个小时（1 日 0:00 = 0） */
-const hjPeriodMonthHour = (p) => (Math.floor(p / 3) % 32) * 24 + (p % 3) * 8;
-
-/* 第 p 个时段里的彩虹 / 枪鼻头窗口，没有就返回 null */
-function hjRainbowIn(p) {
-  const slot = p % 3;   // 0 / 1 / 2 = ET 0 / 8 / 16 时开始
-  if (slot === 0) return null;
-  const mh = hjPeriodMonthHour(p);
-  if (mh < HJ_RAINBOW_SEASON[0] && mh >= HJ_RAINBOW_SEASON[1]) return null;
-  const rainP = slot === 1 ? p - 2 : p - 1;
-  const start = p * HJ_PERIOD_MS + HJ_RAINBOW_OFFSET_MS;
-  if (hjStarlightActiveAt(rainP * HJ_PERIOD_MS) || hjStarlightActiveAt(start)) return null;
-  if (hjPeriodWeatherName(rainP) !== "小雨" || !HJ_RAINBOW_AFTER.includes(hjPeriodWeatherName(p))) return null;
-  return { start, end: start + HJ_RAINBOW_LEN_MS };
-}
-function hjSpearnoseIn(p) {
-  if (p % 3 !== 2) return null;
-  const start = p * HJ_PERIOD_MS + HJ_FISH_OFFSET_MS;
-  const end = (p + 1) * HJ_PERIOD_MS;
-  if (hjStarlightActiveAt(start) || hjStarlightActiveAt(end - 1)) return null;
-  return HJ_FISH_WEATHERS.includes(hjPeriodWeatherName(p)) ? { start, end } : null;
-}
-
-function hjNextWindow(find, now) {
-  const p0 = Math.floor(now / HJ_PERIOD_MS);
-  for (let p = p0; p < p0 + HJ_OMEN_SCAN_PERIODS; p++) {
-    const w = find(p);
-    if (w && w.end > now) return w;
-  }
-  return null;
-}
-
-/* 现实时长：1 小时内 mm:ss，超过显示 h:mm:ss，超过一天再加「x天」 */
-function hjFormatWait(ms) {
-  const total = Math.max(0, Math.ceil(ms / 1000));
-  const d = Math.floor(total / 86400);
-  const h = Math.floor(total / 3600) % 24;
-  const m = Math.floor(total / 60) % 60;
-  const s = total % 60;
-  const ms2 = `${pad2(m)}:${pad2(s)}`;
-  if (d) return `${d}天${pad2(h)}:${ms2}`;
-  return h ? `${h}:${ms2}` : ms2;
-}
-
-/* 窗口只在过期或星芒节设置变化时重新查找，每秒只刷新文字 */
-const hjOmenCache = {};   // key → { w: 窗口或 null, at: 查找时刻 }
-function hjResetOmens() { delete hjOmenCache.rainbow; delete hjOmenCache.fish; }
-
-function hjOmenWindow(key, find, now) {
-  const c = hjOmenCache[key];
-  const stale = !c || (c.w ? now >= c.w.end : now - c.at > 60000) || now < c.at;
-  if (stale) hjOmenCache[key] = { w: hjNextWindow(find, now), at: now };
-  return hjOmenCache[key].w;
-}
-
-function hjPaintOmen(itemId, w, now, liveText) {
-  const item = $(itemId);
-  if (!item) return;
-  const live = !!w && now >= w.start;
-  const text = !w ? "近期不会出现"
-    : live ? liveText(w)
-    : `将在 ${hjFormatWait(w.start - now)} 后出现`;
-  item.classList.toggle("is-live", live);
-  const state = item.querySelector(".hj-omen-state");
-  if (state.textContent !== text) state.textContent = text;
-}
-
-function hjRenderOmens() {
-  const now = hjNow();
-  hjPaintOmen("hjOmenRainbow", hjOmenWindow("rainbow", hjRainbowIn, now), now, () => "天象出现！");
-  hjPaintOmen("hjOmenFish", hjOmenWindow("fish", hjSpearnoseIn, now), now,
-    (w) => `现在会咬钩！持续 ${hjFormatWait(w.end - now)}`);
 }
 
 
@@ -3888,6 +3829,7 @@ function initA11yModals() {
 /* 启动 ------------------------------------------------------------------------- */
 function initApp() {
   initDayNight();   // 最先设卡片底图和天空，其余初始化期间图片就开始下载了
+  initCardBackdrops();
   renderHome();
   initHomeVideo();
   initTabs();

@@ -334,33 +334,6 @@ body.day-mode .hj-weather { color: var(--day-brown-soft); }
 body.day-mode .hj-weather-seq { color: var(--day-text); }
 body.day-mode .hj-weather-arrow { opacity: .6; }
 
-/* 特殊天象与钓场之王：时间条第三行，放不下时两项各占一行 */
-.hj-omen {
-  flex-basis: 100%;
-  display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
-  gap: 3px 18px;
-  margin-top: 2px;
-  font-size: .76rem;
-  letter-spacing: .06em;
-  color: var(--text-mute);
-}
-.hj-omen-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.hj-omen-name { font-size: .72rem; letter-spacing: .12em; opacity: .9; }
-.hj-omen-item img {
-  width: 18px; height: 18px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,.18));
-}
-.hj-omen-state {
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-.hj-omen-item.is-live .hj-omen-state { color: var(--accent); font-weight: 700; }
-body.day-mode .hj-omen { color: var(--day-brown-soft); }
-body.day-mode .hj-omen-state { color: var(--day-text); }
-body.day-mode .hj-omen-item.is-live .hj-omen-state { color: var(--day-brown); }
-
 
 /* =============================================================================
    5. 头部：音量弹层、「更多」下拉、日历小组件
@@ -1872,17 +1845,18 @@ body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
 
-/* 页面里的长卡片（购票、场地使用登记、活动问卷、内部入口等）：底图按整张卡片铺会被放得很大，
-   所以卡片本身只留色层，底图做成一层屏幕高的水印，用 position: sticky 贴着屏幕跟随滚动，
+/* 页面里的卡片（购票、查询登记、场地使用登记、活动问卷、内部入口等）：
+   不高于屏幕时和弹窗一样整张铺满；高于屏幕时（main.js 的 updateCardBackdrop 加 .is-tall）
+   整张铺会被放得很大，所以卡片本身只留色层，底图做成一层屏幕高的水印，用 position: sticky 贴着屏幕跟随滚动，
    滚到哪里都是完整的一张图、大小不变（sticky 在手机上也稳定，不用 background-attachment: fixed）。
-   opacity = 1 − 色层不透明度，和上面弹窗的观感一致 */
+   水印的 opacity = 1 − 色层不透明度，和整张铺满时观感一致 */
 .view .gate-card {
   isolation: isolate;
   overflow: hidden;
   overflow: clip;
-  background-image: linear-gradient(var(--info-tint), var(--info-tint));
 }
-.view .gate-card::before {
+.view .gate-card.is-tall { background-image: linear-gradient(var(--info-tint), var(--info-tint)); }
+.view .gate-card.is-tall::before {
   content: "";
   display: block;
   position: -webkit-sticky;
@@ -2291,8 +2265,6 @@ body.day-mode footer { color: var(--day-title); }
   .hj-clock { margin-top: 14px; gap: 4px 9px; font-size: .74rem; padding: 0 4px; }
   .hj-weather { margin-top: 5px; gap: 3px 4px; font-size: .72rem; }
   .hj-wx img { width: 16px; height: 16px; }
-  .hj-omen { gap: 2px 12px; font-size: .72rem; }
-  .hj-omen-item img { width: 16px; height: 16px; }
 
   .cal-widget { top: 96px; right: 8px; width: min(288px, calc(100vw - 16px)); }
 
@@ -3402,6 +3374,15 @@ footer .footer-link {
 footer .footer-link:hover,
 footer .footer-link:focus-visible { text-decoration: underline; }
 footer .footer-link:focus-visible { outline: none; }
+/* 页脚三行居中，整块点开「网站说明」；后两行（版权）小一点、淡一点 */
+footer .footer-link { display: inline-block; max-width: 100%; }
+footer .footer-line { display: block; }
+footer .footer-copy { display: block; margin-top: 6px; font-size: .68rem; line-height: 1.6; opacity: .75; }
+footer .footer-copy + .footer-copy { margin-top: 2px; }
+
+/* 购票页：购票 / 查询登记 标签 */
+.ticket-tabs { justify-content: center; max-width: 600px; margin: 0 auto 4px; }
+.ticket-tabs .tab-btn { min-width: 104px; }
 
 /* 弹窗外壳沿用 .info-box（和花街介绍同一套底色），只把宽度收窄一些 */
 .about-box { max-width: 640px; padding: 42px 36px 36px; }

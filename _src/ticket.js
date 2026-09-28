@@ -386,12 +386,24 @@ function setTicketMode(mode, blockedText = "") {
   blocked.textContent = blockedText;
 }
 
+/* 购票 / 查询登记 两个标签页 -------------------------------------------------------- */
+function selectTicketTab(tab) {
+  document.querySelectorAll("#view-ticket [data-ticket-tab]").forEach((b) => {
+    const active = b.dataset.ticketTab === tab;
+    b.classList.toggle("is-active", active);
+    b.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  $("ticketBuyCard").hidden = tab !== "buy";
+  $("ticketLookupCard").hidden = tab !== "lookup";
+}
+
 /* 进入购票页 --------------------------------------------------------------------- */
 let ticketViewSession = 0;   // 每次进入购票页 +1：进页面时的状态请求回来得晚、人已经离开了，就别再动页面
 async function openTicketView() {
   const session = ++ticketViewSession;
   applyCachedTicketLook();   // 先按上次的设置摆好（标题 / 返回按钮），状态回来后再按最新的改
   showView("view-ticket");
+  selectTicketTab("buy");   // 每次进来先看购票
   $("ticketTitle").textContent = ticketFullTitle();
   document.title = `${ticketFullTitle()} · 花舞之街`;
   if (!$("ticketResult").hidden) clearTicketForm();   // 再次进入购票页 → 回到空白表单
@@ -819,6 +831,13 @@ function initTicket() {
     if (e.target === e.currentTarget) closeTicketNotice();
   });
   $("ticketLookupBtn").addEventListener("click", lookupTicket);
+  document.querySelectorAll("#view-ticket [data-ticket-tab]").forEach((b) => {
+    b.addEventListener("click", () => {
+      selectTicketTab(b.dataset.ticketTab);
+      playEnterAnim(b.dataset.ticketTab === "buy" ? $("ticketBuyCard") : $("ticketLookupCard"));
+    });
+  });
+  initA11yTabs($("view-ticket"));
   initTicketCaptcha();
   $("ticketLookupName").addEventListener("keydown", (e) => {
     if (e.key === "Enter") lookupTicket();
