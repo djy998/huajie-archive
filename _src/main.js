@@ -2308,7 +2308,7 @@ function initHeaderPanels() {
 /* 日历小组件 -------------------------------------------------------------------
    - 打开后常驻页面（点外面、按 Esc 不关闭），只能用 × 关闭
    - 月份范围：2021-01 ~ 当前月 + 12
-   - 开合、缩放、月份、拖动位置均保存在本地
+   - 开合、缩放、拖动位置保存在本地；月份不保存，每次打开都回到今天所在的月份
    - 活动标注写在 config.js 的 HJ_CAL_ITEMS；HJ_CAL_EVENTS 是按天展开后的索引（日格横条用它）
    - 控制台调试：HJ_CAL.items.push({ date: "2026-09-26", label: "测试" }); HJ_CAL.refresh() */
 const HJ_CAL_MIN = { y: 2021, m: 1 };
@@ -2440,7 +2440,6 @@ function renderCal() {
 
 function calShift(dir) {
   calGoTo(calState.y, calState.m + dir);
-  storage.set(STORE.calYm, `${calState.y}-${calState.m}`);
   renderCal();
 }
 
@@ -2457,7 +2456,16 @@ function calZoomStep(dir) {
   return HJ_CAL_ZOOMS[clamp((i === -1 ? 2 : i) + dir, 0, HJ_CAL_ZOOMS.length - 1)];
 }
 
+/* 从关着到打开：不管之前翻到哪个月，都回到今天 */
+function calGoToday() {
+  const now = new Date();
+  calGoTo(now.getFullYear(), now.getMonth() + 1);
+  calState.pick = "";
+  renderCal();
+}
+
 function openCalWidget(open) {
+  if (open && $("calWidget").hidden) calGoToday();
   $("calWidget").hidden = !open;
   storage.set(STORE.calOpen, open ? "1" : "0");
 }
@@ -2516,13 +2524,12 @@ function initCalDrag() {
   });
 }
 
-/* 从本地恢复：月份、缩放、位置、开合 */
+/* 从本地恢复：缩放、位置、开合（月份总是从今天开始） */
 function initCalWidget() {
   const now = new Date();
   calState.y = now.getFullYear();
   calState.m = now.getMonth() + 1;
-  const ym = (storage.get(STORE.calYm) || "").split("-").map(Number);
-  if (ym.length === 2 && ym.every(Number.isFinite)) calGoTo(ym[0], ym[1]);
+  storage.remove(STORE.calYm);   // 以前版本存过的月份，清掉
 
   const z = Number(storage.get(STORE.calZoom));
   setCalZoom(HJ_CAL_ZOOMS.includes(z) ? z : 1);
