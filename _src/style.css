@@ -61,8 +61,11 @@
   --day-brown: #5b3610;
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
+  /* 第一类玻璃胶囊的文字色：夜间奶油白，白天绿 */
+  --pill-ink: var(--cream);
 }
 body.day-mode {
+  --pill-ink: #245f28;
   --accent: var(--lantern);
   --accent-soft: var(--lantern-soft);
   --accent-ink: #3a2508;
@@ -901,7 +904,7 @@ main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: .08em;
-  color: var(--cream);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.06) 46%, rgba(255,255,255,.12) 100%),
     rgba(20,16,36,.42);
@@ -927,7 +930,7 @@ main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
 }
 .hero-play:active { transform: scale(.97); }
 body.day-mode .hero-play {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.32) 100%),
     rgba(255,249,235,.5);
@@ -1005,7 +1008,7 @@ body.day-mode .video-block {
   padding: 9px 22px;
   border-radius: 999px;
   font-size: .88rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
     rgba(22,17,40,.3);
@@ -1026,7 +1029,7 @@ a.video-action[hidden] { display: none; }
 /* 主操作：同样是玻璃，靠强调色的描边和文字区分出主次 */
 .video-action-primary {
   font-weight: 600;
-  color: var(--accent-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.1) 100%),
     rgba(22,17,40,.4);
@@ -1034,7 +1037,7 @@ a.video-action[hidden] { display: none; }
 }
 .video-action-primary:hover { color: var(--accent-soft); border-color: var(--accent-soft); filter: none; }
 body.day-mode .video-action-primary {
-  color: var(--accent-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.07) 50%, rgba(255,255,255,.15) 100%),
     rgba(48,34,18,.34);
@@ -1042,7 +1045,7 @@ body.day-mode .video-action-primary {
 }
 body.day-mode .video-action-primary:hover { color: #fff6e0; border-color: var(--accent-soft); }
 body.day-mode .video-action:not(.video-action-primary) {
-  color: var(--day-title);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.14) 100%),
     rgba(48,34,18,.22);
@@ -1138,7 +1141,7 @@ body.day-mode .tile-hint { color: var(--day-title); }
   padding: 8px 18px;
   border-radius: 999px;
   font-size: .85rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
     rgba(22,17,40,.26);
@@ -1166,7 +1169,7 @@ body.day-mode .tile-hint { color: var(--day-title); }
 }
 /* 白天天空很亮：烟熏玻璃底压暗背景，保证浅黄描边可见 */
 body.day-mode .back-btn {
-  color: var(--day-title);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.14) 100%),
     rgba(48,34,18,.22);
@@ -1238,7 +1241,7 @@ body.day-mode .detail-hero p { color: var(--day-title); }
   font-size: .85rem;
   font-weight: 600;
   text-decoration: none;
-  color: var(--accent-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
     rgba(22,17,40,.38);
@@ -1264,7 +1267,7 @@ body.day-mode .detail-hero p { color: var(--day-title); }
   box-shadow: 0 2px 6px rgba(8,6,18,.24), inset 0 2px 7px rgba(8,6,18,.26);
 }
 body.day-mode .ticket-badge-inline {
-  color: #fff6e0;
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
     rgba(48,34,18,.44);
@@ -1283,7 +1286,7 @@ body.day-mode .ticket-badge-inline:hover { color: #fff; border-color: #fff6e0; }
   padding: 9px 20px;
   border-radius: 999px;
   font-size: .86rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 50%, rgba(255,255,255,.06) 100%),
     rgba(42,35,68,.32);
@@ -1322,7 +1325,7 @@ body.day-mode .ticket-badge-inline:hover { color: #fff; border-color: #fff6e0; }
 }
 .tab-btn.is-active:hover { border-color: rgba(255,255,255,.48); }
 body.day-mode .tab-btn {
-  color: var(--day-title);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.12) 100%),
     rgba(74,48,20,.2);
@@ -1547,7 +1550,7 @@ body.day-mode .audience-opt:hover { color: var(--day-ink); }
   border-radius: 999px;
   font-size: .92rem;
   font-weight: 600;
-  color: var(--cream);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.07) 100%),
     rgba(22,17,40,.34);
@@ -1578,7 +1581,7 @@ body.day-mode .audience-opt:hover { color: var(--day-ink); }
 /* 白天：金色卡片上用暖色玻璃（和验证面板、公告小按钮同一质感）。
    两个描边胶囊按钮（取消编辑、清除覆盖）除外，它们有自己的白天样式。 */
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn) {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
     rgba(255,250,238,.3);
@@ -1606,7 +1609,7 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
   padding: 10px 22px;
   border-radius: 999px;
   font-size: .88rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.03) 50%, rgba(255,255,255,.06) 100%),
     rgba(22,17,40,.22);
@@ -1634,7 +1637,7 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
 }
 #cancelEditAnnouncementBtn[hidden] { display: none; }
 body.day-mode #cancelEditAnnouncementBtn {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
     rgba(255,250,238,.3);
@@ -1649,10 +1652,10 @@ body.day-mode #cancelEditAnnouncementBtn {
 #starlightClearBtn {
   padding: 10px 22px;
   font-size: .88rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
 }
 body.day-mode #starlightClearBtn {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 52%, rgba(255,255,255,.2) 100%),
     rgba(255,250,238,.3);
@@ -1721,7 +1724,7 @@ body.day-mode .announcement .body { color: var(--day-text); }
   padding: 5px 16px;
   border-radius: 999px;
   font-size: .78rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.02) 52%, rgba(255,255,255,.06) 100%),
     rgba(42,35,68,.28);
@@ -1752,7 +1755,7 @@ body.day-mode .announcement .body { color: var(--day-text); }
 .announcement-delete-btn:hover { border-color: #e08e84; }
 body.day-mode .announcement-edit-btn,
 body.day-mode .announcement-delete-btn {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.1) 52%, rgba(255,255,255,.18) 100%),
     rgba(255,250,238,.32);
@@ -1770,7 +1773,7 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 .pill-btn-outline {
   padding: 8px 20px;
   font-size: .85rem;
-  color: var(--text-soft);
+  color: var(--pill-ink);
 }
 .announcement-image-preview { position: relative; display: inline-block; }
 .announcement-image-preview[hidden] { display: none; }
@@ -1976,7 +1979,7 @@ body.day-mode .info-close:hover { color: var(--day-ink); }
   border-radius: 999px;
   font-size: .92rem;
   font-weight: 600;
-  color: var(--cream);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
     rgba(26,21,46,.34);
@@ -2003,7 +2006,7 @@ body.day-mode .info-close:hover { color: var(--day-ink); }
   box-shadow: 0 2px 5px rgba(10,7,22,.3), inset 0 2px 6px rgba(9,6,20,.32);
 }
 body.day-mode .share-site-btn {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
     rgba(255,249,235,.4);
@@ -2165,7 +2168,7 @@ body.day-mode #captchaOverlay #captchaClose:hover { color: var(--day-ink); borde
   font-family: inherit;
   font-size: .85rem;
   line-height: 1;
-  color: var(--cream);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%),
     rgba(26,21,46,.34);
@@ -2221,7 +2224,7 @@ body.day-mode #captchaOverlay #captchaClose:hover { color: var(--day-ink); borde
 .hj-like-chip .ico-heart { width: 13px; height: 13px; }
 
 body.day-mode .hj-like-btn {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(158deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,.14) 46%, rgba(255,255,255,.24) 100%),
     rgba(255,249,235,.4);
@@ -2716,7 +2719,7 @@ body.day-mode .verify-host { --verify-ink: var(--day-brown); }
 .verify-host button.verify-mini:not(#_) {
   font-family: inherit;
   font-weight: 500;
-  color: var(--text-soft);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.11) 0%, rgba(255,255,255,.02) 50%, rgba(255,255,255,.06) 100%),
     rgba(42,35,68,.32);
@@ -2837,7 +2840,7 @@ body.day-mode .verify-host { --verify-ink: var(--day-brown); }
   padding: 0;
   font-size: .95rem;
   font-weight: 500;
-  color: var(--cream);
+  color: var(--pill-ink);
   border-radius: 12px;
 }
 
@@ -2868,7 +2871,7 @@ body.day-mode .verify-done { color: var(--day-brown); }
   padding: 5px 14px;
   font-size: .78rem;
   font-weight: 400;
-  color: var(--text-mute);
+  color: var(--pill-ink);
 }
 
 /* 白天模式：金色卡片上用暖色玻璃，和公告的编辑 / 删除小按钮同一质感 */
@@ -2886,7 +2889,7 @@ body.day-mode .verify-host button.verify-ok:not(#_),
 body.day-mode .verify-host button.verify-switch-btn:not(#_),
 body.day-mode .verify-host button.verify-char:not(#_),
 body.day-mode .verify-host button.verify-mini:not(#_) {
-  color: var(--day-brown);
+  color: var(--pill-ink);
   background:
     linear-gradient(165deg, rgba(255,255,255,.36) 0%, rgba(255,255,255,.1) 52%, rgba(255,255,255,.18) 100%),
     rgba(255,250,238,.3);
@@ -2909,7 +2912,7 @@ body.day-mode .verify-host button.verify-mini:not(#_):hover {
     inset 0 1px 0 rgba(255,255,255,.7),
     inset 0 -4px 8px rgba(140,95,25,.08);
 }
-body.day-mode .verify-host button.verify-mini:not(#_) { color: var(--day-brown-soft); }
+body.day-mode .verify-host button.verify-mini:not(#_) { color: var(--pill-ink); }
 body.day-mode .verify-host button.verify-tab.is-on:not(#_) {
   color: var(--accent-ink);
   background:
