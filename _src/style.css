@@ -61,13 +61,13 @@
   --day-brown: #5b3610;
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
-  /* 第一类玻璃胶囊：夜间奶油白文字；白天褐色文字 + 绿色描边（--pill-edge，悬停加深为 --pill-edge-hi） */
+  /* 第一类玻璃胶囊：夜间奶油白文字；白天褐色文字 + 金黄色描边（--pill-edge，和右上角圆按钮悬停时的描边同色；悬停加深为 --pill-edge-hi） */
   --pill-ink: var(--cream);
 }
 body.day-mode {
   --pill-ink: var(--day-brown);
-  --pill-edge: rgba(62,138,54,.85);
-  --pill-edge-hi: #2d7a2a;
+  --pill-edge: var(--lantern);
+  --pill-edge-hi: #d9903a;
   --accent: var(--lantern);
   --accent-soft: var(--lantern-soft);
   --accent-ink: #3a2508;
@@ -1196,7 +1196,7 @@ body.day-mode .tile-hint { color: var(--day-title); }
   transform: translateY(.5px) scale(.985);
   box-shadow: 0 2px 5px rgba(8,6,18,.24), inset 0 2px 6px rgba(8,6,18,.26);
 }
-/* 白天：直接压在天空上的胶囊（返回、标签、视频按钮）用黄绿色文字 + 淡烟熏玻璃底，保证在亮天空上看得清；描边和其他按钮一样是绿色 */
+/* 白天：直接压在天空上的胶囊（返回、标签、视频按钮）用黄绿色文字 + 淡烟熏玻璃底，保证在亮天空上看得清；描边和其他按钮一样是金黄色 */
 body.day-mode .back-btn {
   color: var(--day-title);
   background:
@@ -1877,12 +1877,13 @@ body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
 
-/* 白天：金色窗口（弹窗、表单卡片、管理面板）里的按钮和标签：黄绿色描边 + 褐色文字。
+/* 白天：金色窗口（弹窗、表单卡片、管理面板）里的按钮和标签：金黄色描边 + 褐色文字。
+   窗口底色本身是金色，描边用深一档的金黄才看得出来。
    描边颜色靠变量传下去，窗口里用 var(--pill-edge) 的按钮都会跟着变；
    标签（.tab-btn）在天空上是黄绿色文字 + 烟熏玻璃，放进金色窗口时改回褐色文字 + 浅色玻璃 */
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {
-  --pill-edge: #b7c334;
-  --pill-edge-hi: #8e9a16;
+  --pill-edge: #d18a2c;
+  --pill-edge-hi: #a8661a;
 }
 body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, :active) {
   color: var(--pill-ink);
