@@ -334,6 +334,33 @@ body.day-mode .hj-weather { color: var(--day-brown-soft); }
 body.day-mode .hj-weather-seq { color: var(--day-text); }
 body.day-mode .hj-weather-arrow { opacity: .6; }
 
+/* 特殊天象与钓场之王：时间条第三行，放不下时两项各占一行 */
+.hj-omen {
+  flex-basis: 100%;
+  display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
+  gap: 3px 18px;
+  margin-top: 2px;
+  font-size: .76rem;
+  letter-spacing: .06em;
+  color: var(--text-mute);
+}
+.hj-omen-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.hj-omen-name { font-size: .72rem; letter-spacing: .12em; opacity: .9; }
+.hj-omen-item img {
+  width: 18px; height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.18));
+}
+.hj-omen-state {
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.hj-omen-item.is-live .hj-omen-state { color: var(--accent); font-weight: 700; }
+body.day-mode .hj-omen { color: var(--day-brown-soft); }
+body.day-mode .hj-omen-state { color: var(--day-text); }
+body.day-mode .hj-omen-item.is-live .hj-omen-state { color: var(--day-brown); }
+
 
 /* =============================================================================
    5. 头部：音量弹层、「更多」下拉、日历小组件
@@ -2264,6 +2291,8 @@ body.day-mode footer { color: var(--day-title); }
   .hj-clock { margin-top: 14px; gap: 4px 9px; font-size: .74rem; padding: 0 4px; }
   .hj-weather { margin-top: 5px; gap: 3px 4px; font-size: .72rem; }
   .hj-wx img { width: 16px; height: 16px; }
+  .hj-omen { gap: 2px 12px; font-size: .72rem; }
+  .hj-omen-item img { width: 16px; height: 16px; }
 
   .cal-widget { top: 96px; right: 8px; width: min(288px, calc(100vw - 16px)); }
 
