@@ -45,7 +45,20 @@ const TILE_BG = {
   },
 };
 const SKY_IMAGES = { day: "assets/site/sky-day.webp", night: "assets/site/sky-night.webp" };
-const INFO_BG_IMAGE = "assets/site/info-bg.webp";   // 花街介绍弹窗的背景图
+/* 弹窗与表单卡片的底图（花街介绍、公告、验证、购票 / 问卷 / 场地登记、管理面板等共用）；
+   换了同名图片记得把 ?v= 数字 +1 */
+const INFO_BG_IMAGE = "assets/site/info-bg.webp?v=2";
+
+/* 花街介绍 ·「花舞之街记录」页的 B 站外链视频（字段同 LATEST_EVENT.review.video；cover 是点击播放前的封面） */
+const INFO_RECORD_VIDEO = {
+  bvid: "BV1554y1h7By",
+  aid: 844834734,
+  cid: 315146059,
+  page: 1,
+  danmaku: false,
+  title: "花舞之街记录",
+  cover: "infogal/info-29.webp",
+};
 
 /* 花街介绍 · 相册：infogal/info-01.webp ~ info-39.webp */
 const INFO_GALLERY = Array.from({ length: 39 }, (_, i) =>
@@ -377,7 +390,17 @@ const ARCHIVE_EVENTS = [
     cover: "assets/gallery/gallery-035.webp",
     tabs: ["poster", "review"],
     poster: { images: ["assets/gallery/gallery-036.jpg"] },
-    review: { note: "莫古正在考古中……" }
+    review: {
+      video: {
+        bvid: "BV1aY411a7n7",
+        aid: 252898582,
+        cid: 476134860,
+        page: 1,
+        danmaku: false,
+        title: "活动回顾视频",
+        cover: "assets/gallery/gallery-035.webp",
+      },
+    }
   }
 ];
 

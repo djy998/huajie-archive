@@ -646,12 +646,14 @@ function stopTabVideos(root) {
 }
 
 function initTabVideos() {
-  $("view-detail").addEventListener("click", (e) => {
+  const onClick = (e) => {
     const btn = e.target.closest("[data-tab-video-play]");
     if (!btn) return;
     const box = btn.closest(".tab-video");
     if (box) playTabVideo(box);
-  });
+  };
+  $("view-detail").addEventListener("click", onClick);
+  $("infoBox").addEventListener("click", onClick);   // 花街介绍 ·「花舞之街记录」
 }
 
 /* 跳转磁贴：和首页磁贴同一套样式（背景图 + 底部渐变 + 文字），整块可点 */
@@ -1037,11 +1039,19 @@ function switchInfoTab(tab) {
   });
   $("infoPanelIntro").hidden = tab !== "intro";
   $("infoPanelGallery").hidden = tab !== "gallery";
+  $("infoPanelRecord").hidden = tab !== "record";
   if (tab === "gallery") renderInfoGallery();
+  renderInfoRecord(tab === "record");
+}
+
+/* 「花舞之街记录」：每次切进来重画一次封面（详情页换活动时会清空视频登记表），切走就把播放器卸掉 */
+function renderInfoRecord(show) {
+  const panel = $("infoPanelRecord");
+  stopTabVideos(panel);
+  if (show) panel.innerHTML = renderTabVideo(INFO_RECORD_VIDEO) || EMPTY_NOTE;
 }
 
 function openInfoModal() {
-  $("infoBox").style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);
   $("infoOverlay").hidden = false;
   switchInfoTab("intro");
   playFadeOnly($("infoBox"));
@@ -1049,6 +1059,7 @@ function openInfoModal() {
 }
 
 function closeInfoModal() {
+  stopTabVideos($("infoBox"));
   $("infoOverlay").hidden = true;
   firstBootInfoOpen = false;
   setTimeout(maybeShowSitePopup, 0);   // 新访客：花街介绍关掉以后再弹公告，不叠在一起
@@ -1662,7 +1673,7 @@ function setSky(isDay) {
   $("skyBase").style.backgroundImage = `url('${SKY_IMAGES[isDay ? "day" : "night"]}')`;
 }
 
-/* 页面加载完、浏览器空闲时，把另一套昼夜底图和花街介绍的背景先下载好，切换时交叉淡入不闪白 */
+/* 页面加载完、浏览器空闲时，把另一套昼夜底图和弹窗底图先下载好，切换时交叉淡入不闪白 */
 function preloadDayNightImages(isDay) {
   const other = isDay ? "night" : "day";
   const urls = [...Object.values(TILE_BG[other]), SKY_IMAGES[other], INFO_BG_IMAGE];
@@ -1736,6 +1747,7 @@ function initDayNight() {
   document.body.classList.toggle("day-mode", isDay);
   setSky(isDay);
   applyTileBackgrounds(isDay);
+  document.documentElement.style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);   // 弹窗 / 表单卡片共用的底图
   preloadDayNightImages(isDay);
 
   // 动画进行中 1 秒内忽略重复点击

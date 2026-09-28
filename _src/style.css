@@ -1442,13 +1442,11 @@ body.day-mode .review-photo {
   padding: 36px 32px;
   border-radius: var(--radius);
   text-align: center;
-  background: var(--panel);
 }
 .gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--lantern-soft); margin-bottom: 10px; }
 .gate-card .hint { color: var(--text-mute); font-size: .85rem; margin-bottom: 22px; }
 .admin-card { margin-bottom: 30px; }
 .admin-card h2 { font-size: 1.3rem; }
-body.day-mode .gate-card { background: #e8b563; }
 body.day-mode .gate-card h2 { color: var(--day-brown); }
 body.day-mode .gate-card .hint { color: var(--day-brown-soft); }
 
@@ -1831,7 +1829,23 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 .info-overlay[hidden] { display: none; }
 #captchaOverlay { z-index: 250; }   /* 验证弹窗盖在其它弹窗之上 */
 
-/* 弹窗面板：--info-photo 为背景照片，--info-tint 为其上的色层 */
+/* 弹窗与表单卡片共用的底：--info-photo 为底图（main.js 按 INFO_BG_IMAGE 设在根元素上），--info-tint 为其上的色层 */
+.info-box,
+.gate-card,
+.admin-modal {
+  --info-tint: rgba(18,14,30,.82);
+  background-color: var(--panel);
+  background-image:
+    linear-gradient(var(--info-tint), var(--info-tint)),
+    var(--info-photo, none);
+  background-size: cover;
+  background-position: center;
+}
+body.day-mode .info-box,
+body.day-mode .gate-card,
+body.day-mode .admin-modal { background-color: #e8b563; --info-tint: rgba(232,181,99,.9); }
+
+/* 弹窗面板 */
 .info-box {
   position: relative;
   width: 100%;
@@ -1840,12 +1854,6 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
   overflow-y: auto;
   padding: 46px 42px;
   border-radius: var(--radius);
-  background: var(--panel);
-  background-size: cover;
-  background-position: center;
-  background-image:
-    linear-gradient(var(--info-tint, rgba(18,14,30,.82)), var(--info-tint, rgba(18,14,30,.82))),
-    var(--info-photo, none);
   box-shadow:
     0 2px 10px rgba(6,4,14,.3),
     0 30px 70px rgba(0,0,0,.5),
@@ -1858,7 +1866,6 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
 .gallery-credit { margin: 2px 0 16px; font-size: .86rem; line-height: 2; text-align: center; color: var(--text-mute); }
 
-body.day-mode .info-box { background-color: #e8b563; --info-tint: rgba(232,181,99,.9); }
 body.day-mode .info-title { color: var(--day-brown); }
 body.day-mode .info-date,
 body.day-mode .gallery-credit { color: var(--day-brown-soft); }
@@ -2922,7 +2929,6 @@ body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color:
   overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: var(--radius);
-  background: var(--panel);
   padding: 0;
   /* 玻璃边框画在弹窗本身上（和 .gate-card 同一套阴影），里面的面板不再另画边框，免得双重边框 */
   box-shadow:
@@ -2940,7 +2946,6 @@ body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color:
   padding: 34px 30px 30px;
 }
 body.day-mode .admin-modal {
-  background: #e8b563;
   box-shadow:
     0 2px 8px rgba(96,64,16,.14),
     0 18px 40px rgba(96,64,16,.2),
