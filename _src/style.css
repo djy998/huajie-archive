@@ -1074,10 +1074,10 @@ body.day-mode .video-action-primary {
 }
 body.day-mode .video-action-primary:hover { color: var(--day-ink); border-color: var(--pill-edge-hi); }
 body.day-mode .video-action:not(.video-action-primary) {
-  color: var(--pill-ink);
+  color: var(--day-title);
   background:
     linear-gradient(165deg, rgba(255,255,255,.21) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.1) 100%),
-    rgba(255,249,235,.17);
+    rgba(48,34,18,.17);
   border-color: var(--pill-edge);
 }
 .tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
@@ -1196,12 +1196,12 @@ body.day-mode .tile-hint { color: var(--day-title); }
   transform: translateY(.5px) scale(.985);
   box-shadow: 0 2px 5px rgba(8,6,18,.24), inset 0 2px 6px rgba(8,6,18,.26);
 }
-/* 白天：和其他胶囊按钮一样，浅色透明玻璃 + 绿色描边 + 褐色文字 */
+/* 白天：直接压在天空上的胶囊（返回、标签、视频按钮）用黄绿色文字 + 淡烟熏玻璃底，保证在亮天空上看得清；描边和其他按钮一样是绿色 */
 body.day-mode .back-btn {
-  color: var(--pill-ink);
+  color: var(--day-title);
   background:
     linear-gradient(165deg, rgba(255,255,255,.21) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.1) 100%),
-    rgba(255,249,235,.17);
+    rgba(48,34,18,.17);
   border-color: var(--pill-edge);
   box-shadow:
     0 3px 10px rgba(70,48,12,.18),
@@ -1354,10 +1354,10 @@ body.day-mode .ticket-badge-inline:hover { color: var(--day-ink); border-color: 
 }
 .tab-btn.is-active:hover { border-color: rgba(255,255,255,.48); }
 body.day-mode .tab-btn {
-  color: var(--pill-ink);
+  color: var(--day-title);
   background:
     linear-gradient(165deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
-    rgba(255,249,235,.15);
+    rgba(74,48,20,.15);
   border-color: var(--pill-edge);
   box-shadow:
     0 3px 10px rgba(96,64,16,.14),
