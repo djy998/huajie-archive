@@ -1877,6 +1877,29 @@ body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
 
+/* 白天：金色窗口（弹窗、表单卡片、管理面板）里的按钮和标签：黄绿色描边 + 褐色文字。
+   描边颜色靠变量传下去，窗口里用 var(--pill-edge) 的按钮都会跟着变；
+   标签（.tab-btn）在天空上是黄绿色文字 + 烟熏玻璃，放进金色窗口时改回褐色文字 + 浅色玻璃 */
+body.day-mode :is(.info-box, .gate-card, .admin-modal) {
+  --pill-edge: #b7c334;
+  --pill-edge-hi: #8e9a16;
+}
+body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, :active) {
+  color: var(--pill-ink);
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.09) 52%, rgba(255,255,255,.15) 100%),
+    rgba(255,250,238,.23);
+  border-color: var(--pill-edge);
+  box-shadow:
+    0 3px 10px rgba(96,60,10,.14),
+    inset 0 1px 0 rgba(255,255,255,.66),
+    inset 0 -4px 8px rgba(140,95,25,.08);
+}
+body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, :active):hover {
+  color: var(--day-ink);
+  border-color: var(--pill-edge-hi);
+}
+
 /* 页面里的卡片（购票、查询登记、场地使用登记、活动问卷、内部入口等）：
    不高于屏幕时和弹窗一样整张铺满；高于屏幕时（main.js 的 updateCardBackdrop 加 .is-tall）
    整张铺会被放得很大，所以卡片本身只留色层，底图做成一层屏幕高的水印，用 position: sticky 贴着屏幕跟随滚动，
