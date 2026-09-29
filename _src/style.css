@@ -3203,7 +3203,9 @@ body.day-mode .ticket-card select option { color: var(--day-ink); background: #f
 
 /* 白天模式（弹窗） */
 body.day-mode .alarm-label { color: var(--day-ink); }
-body.day-mode .alarm-card input::placeholder { color: var(--text-mute); }
+/* 白天模式的占位文字用灰色：--text-mute 是夜间模式那套灰紫，白天用会太紫，
+   这里跟站内其它文本框的默认占位色保持一致 */
+body.day-mode .alarm-card input::placeholder { color: #757575; }
 body.day-mode .alarm-card input[type="time"],
 body.day-mode .alarm-dur-row input[type="number"] { color-scheme: light; }
 body.day-mode .alarm-seg label {
