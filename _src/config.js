@@ -45,6 +45,9 @@ const TILE_BG = {
   },
 };
 const SKY_IMAGES = { day: "assets/site/sky-day.webp", night: "assets/site/sky-night.webp" };
+/* 竖屏（手机）用的天空：从上面两张图中间裁出来的窄版，文件小一半多（tools/make-thumbs.py 生成）。
+   index.html 开头的脚本按「sky-昼夜-p.webp」的名字提前下载，改名的话两边一起改 */
+const SKY_IMAGES_PORTRAIT = { day: "assets/site/sky-day-p.webp", night: "assets/site/sky-night-p.webp" };
 /* 弹窗与表单卡片的底图（花街介绍、公告、验证、购票 / 问卷 / 场地登记、管理面板等共用）；
    换了同名图片记得把 ?v= 数字 +1 */
 const INFO_BG_IMAGE = "assets/site/info-bg.webp?v=2";
@@ -60,7 +63,7 @@ const INFO_RECORD_VIDEO = {
   cover: "infogal/info-29.webp",
 };
 
-/* 花街介绍 · 相册：infogal/info-01.webp ~ info-39.webp */
+/* 花街介绍 · 相册：infogal/info-01.webp ~ info-39.webp（格子里显示 resized/720/ 下的缩略图，点开看原图） */
 const INFO_GALLERY = Array.from({ length: 39 }, (_, i) =>
   `infogal/info-${String(i + 1).padStart(2, "0")}.webp`
 );

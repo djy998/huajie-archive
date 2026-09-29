@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(process.argv[2] || here);
 const OUT = resolve(process.argv[3] || join(here, ".."));
 
-const SCRIPTS = ["verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js"];
+const SCRIPTS = ["verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "sw.js"];
 
 const minifyJs = async (code, target = "esnext") =>
   (await transform(code, { loader: "js", minify: true, charset: "utf8", legalComments: "none", target })).code.trim();

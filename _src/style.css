@@ -257,8 +257,15 @@ body.day-mode .daynight-toggle:active {
 body.day-mode #dayNightToggle .ico-moon { display: none; }
 body.day-mode #dayNightToggle .ico-sun { display: block; }
 
+/* 动画按钮：完整 = 两颗星亮；轻量 = 只剩大的那颗；关闭 = 整体变暗 */
 .fx-toggle { opacity: .4; }
 .fx-toggle.is-active { opacity: 1; color: var(--accent); }
+.fx-toggle .fx-ico-extra { transition: opacity .2s ease; }
+.fx-toggle.is-lite .fx-ico-extra { opacity: 0; }
+
+/* 昼夜：新一套图片还在下载时图标呼吸闪烁 */
+#dayNightToggle.is-busy .ico { animation: hjBusy 1s ease-in-out infinite; }
+@keyframes hjBusy { 50% { opacity: .35; } }
 
 .clock-toggle { opacity: .4; }
 .clock-toggle.is-active { opacity: 1; color: var(--accent); }
@@ -748,6 +755,9 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); }
   0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
   100% { transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(.2); opacity: 0; }
 }
+/* 轻量档：粒子不加投影、不预先分图层 */
+body.fx-lite .fx-burst-petal { filter: none; will-change: auto; }
+body.fx-lite .fx-burst-star { will-change: auto; }
 
 /* 飘落层 -------------------------------------------------------------------- */
 #fxLayer { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
@@ -2378,6 +2388,7 @@ body.day-mode footer { color: var(--day-title); }
   * { transition: none !important; }
 
   .fx-leaf, .fx-leaf-sway, .fx-leaf-flip, .fx-leaf-flipx, .fx-leaf-face { animation: none; }
+  #dayNightToggle.is-busy .ico { animation: none; opacity: .5; }
   .fx-leaf { opacity: var(--op, .8); }
   body.custom-bg .site-header::before { animation: none; }
 

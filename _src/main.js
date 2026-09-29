@@ -28,7 +28,7 @@ const MUSIC_VOLUME = 0.55;    // 默认音量 0~1
 
 /* localStorage 键名汇总 */
 const STORE = {
-  fx:          "hj_fx_enabled",
+  fxLevel:     "hj_fx_level",      // 动画档位 full / lite / off（index.html 开头按同一个键读取默认值）
   volume:      "hj_volume",        // 音量百分比 0~100，0 = 静音
   soundOn:     "hj_sound_on",
   captchaOkAt: "hj_captcha_ok_at",
@@ -91,6 +91,45 @@ function formatCnLabel(ms) {
 }
 /* 国服日期 + N 天 → "YYYY-MM-DD" */
 const cnDate = (days = 0) => new Date(Date.now() + CN_TZ_OFFSET_MS + days * 86400000).toISOString().slice(0, 10);
+
+/* 缩小版图片 ----------------------------------------------------------------------
+   _src/tools/make-thumbs.py 按原图路径生成 resized/720/…（缩略图、卡片）和 resized/1280/…（页面里直接显示的大图），
+   一律 .webp。页面里先用缩小版，点开大图时再看原图；某张图还没生成缩小版（404）时自动换回原图：
+   <img> 带 data-orig，背景图用 setBgResized / data-bg */
+function resizedSrc(src, width) {
+  const m = /^([^?#:]+)\.(?:jpe?g|png|webp)(\?[^#]*)?$/i.exec(src || "");
+  if (!m || m[1].startsWith("/")) return src;
+  return `resized/${width}/${m[1]}.webp${m[2] || ""}`;
+}
+
+function setBgResized(el, src, width) {
+  if (!el) return;
+  if (!src) { el.style.backgroundImage = ""; return; }
+  const small = resizedSrc(src, width);
+  el.style.backgroundImage = `url('${small}')`;
+  if (small === src) return;
+  const probe = new Image();
+  probe.onerror = () => { if (el.style.backgroundImage.includes(small)) el.style.backgroundImage = `url('${src}')`; };
+  probe.src = small;
+}
+
+/* 模板里写 data-bg="原图" data-bg-w="720"，插进页面后调用一次 */
+function applyBgs(root) {
+  (root || document).querySelectorAll("[data-bg]").forEach((el) => {
+    setBgResized(el, el.dataset.bg, Number(el.dataset.bgW) || 720);
+    el.removeAttribute("data-bg");
+  });
+}
+
+/* <img data-orig="原图">：缩小版读不到时换回原图（error 事件不冒泡，在捕获阶段统一接住） */
+function initResizedFallback() {
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== "IMG" || !img.dataset.orig || img.dataset.fallback) return;
+    img.dataset.fallback = "1";
+    img.src = img.dataset.orig;
+  }, true);
+}
 
 /* 表单提示语：传空串即隐藏 */
 function setMsg(el, text) {
@@ -613,7 +652,7 @@ function renderTabVideo(video, fallbackCover) {
 function tabVideoFacadeHtml(title, cover) {
   return `
     <button type="button" class="tab-video-facade" data-tab-video-play aria-label="播放：${escapeHtml(title)}"
-      ${cover ? `style="background-image:url('${escapeHtml(cover)}')"` : ""}>
+      ${cover ? `data-bg="${escapeHtml(cover)}" data-bg-w="1280"` : ""}>
       <span class="hero-play tab-video-play">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
         <span>播放视频</span>
@@ -642,6 +681,7 @@ function stopTabVideos(root) {
     const video = tabVideos.get(box.id) || {};
     box.classList.remove("is-playing");
     box.querySelector(".tab-video-frame").innerHTML = tabVideoFacadeHtml(video.title || "活动视频", box.dataset.cover);
+    applyBgs(box);
   });
 }
 
@@ -660,7 +700,7 @@ function initTabVideos() {
 function renderTabTileLink(l) {
   return `
     <a class="tile tab-tile-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
-      style="background-image:url('${escapeHtml(l.image)}')">
+      data-bg="${escapeHtml(l.image)}" data-bg-w="720">
       <div class="tile-overlay">
         <h3>${escapeHtml(l.label || "查看详情")}</h3>
         <span class="tile-hint">点击前往 B 站观看 ↗</span>
@@ -692,7 +732,7 @@ function renderTabContent(tab) {
   }
   if (tab.images && tab.images.length) {
     html += secTitle("images") + `<div class="tab-gallery">`
-      + tab.images.map((src) => `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" data-lightbox>`).join("")
+      + tab.images.map((src) => `<img src="${escapeHtml(resizedSrc(src, 1280))}" data-orig="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" data-lightbox data-lightbox-src="${escapeHtml(src)}">`).join("")
       + `</div>`;
   }
   if (tab.text) {
@@ -739,7 +779,7 @@ function openDetail(data) {
   else if (data.id) setRoute("#event-" + data.id);
 
   $("detailBackBtn").style.display = "";
-  $("detailHero").style.backgroundImage = data.cover ? `url('${data.cover}')` : "";
+  setBgResized($("detailHero"), data.cover, 1280);
   $("detailTitle").textContent = data.title;
   $("detailMeta").textContent = [data.dateLabel, data.location].filter(Boolean).join(" · ");
   setupDetailLike(data);
@@ -754,6 +794,7 @@ function openDetail(data) {
   $("panel-manual").innerHTML = renderTabContent(data.manual);
   $("panel-shops").innerHTML = renderShopsPanel(data.areas);
   $("panel-review").innerHTML = renderTabContent(data.review);
+  applyBgs($("view-detail"));
 
   $("feedbackTabBtn").hidden = !data.isLatest;
   if (data.isLatest) {
@@ -797,16 +838,29 @@ function openLatestSurvey() {
 const MASONRY_MIN_COL = 260;
 const MASONRY_GAP = 20;
 const imageRatios = {};   // 图片地址 → 宽高比（加载过一次就记住）
+const ratioProbes = new Set();   // 量完尺寸后图片继续下载完（卡片背景直接用），期间留着引用
 
+/* 宽高比从缩略图量（和原图一样），缩略图没有再量原图；量到尺寸就返回，不用等整张图下载完 */
 function loadImageRatio(src) {
   if (imageRatios[src]) return Promise.resolve(imageRatios[src]);
-  return new Promise((resolve) => {
+  const measure = (url) => new Promise((resolve) => {
     const img = new Image();
-    const done = (r) => { imageRatios[src] = r; resolve(r); };
-    img.onload = () => done(img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 4 / 3);
-    img.onerror = () => done(4 / 3);
-    img.src = src;
+    let timer = 0, settled = false;
+    const finish = (r) => {
+      clearInterval(timer);
+      if (!settled) { settled = true; resolve(r); }
+    };
+    const check = () => { if (img.naturalWidth && img.naturalHeight) finish(img.naturalWidth / img.naturalHeight); };
+    ratioProbes.add(img);
+    img.onload = () => { check(); finish(0); ratioProbes.delete(img); };
+    img.onerror = () => { finish(0); ratioProbes.delete(img); };
+    img.src = url;
+    timer = setInterval(check, 60);
   });
+  const small = resizedSrc(src, 720);
+  return measure(small)
+    .then((r) => r || (small !== src ? measure(src) : 0))
+    .then((r) => (imageRatios[src] = r || 4 / 3));
 }
 
 function masonryColCount(grid) {
@@ -860,8 +914,8 @@ function renderAlbumGrid() {
   grid.replaceChildren();
   return Promise.all(ARCHIVE_EVENTS.map((ev) => loadImageRatio(ev.cover))).then((ratios) => {
     grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
-      <div class="album-card" data-index="${i}"
-        style="aspect-ratio:${ratios[i]};background-image:url('${escapeHtml(ev.cover)}')">
+      <div class="album-card" data-index="${i}" style="aspect-ratio:${ratios[i]}"
+        data-bg="${escapeHtml(ev.cover)}" data-bg-w="720">
         <div class="overlay">
           <span class="year">${escapeHtml(ev.year)}</span>
           <div class="title">${escapeHtml(ev.title)}</div>
@@ -869,6 +923,7 @@ function renderAlbumGrid() {
         ${likeBtnHtml("act:" + ev.id)}
       </div>
     `).join("");
+    applyBgs(grid);
     grid.querySelectorAll(".album-card").forEach((card) => {
       card.addEventListener("click", () => openDetail(ARCHIVE_EVENTS[Number(card.dataset.index)]));
     });
@@ -901,7 +956,8 @@ function renderMiniReviews() {
       <div class="review-item" data-index="${i}">
         <button type="button" class="review-photo" style="aspect-ratio:${ratios[i]}"
           data-lightbox data-lightbox-src="${escapeHtml(item.full || item.image)}">
-          <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
+          <img src="${escapeHtml(resizedSrc(item.image, 720))}" data-orig="${escapeHtml(item.image)}"
+            alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
         </button>
         ${likeBtnHtml(likeKeyFromSrc("mini", item.image))}
         ${item.caption ? `<p class="review-caption">${escapeHtml(item.caption)}</p>` : ""}
@@ -993,9 +1049,9 @@ function applyStarlight(value) {
   hjStarlight = isValidRange(value) ? { start: value.start, end: value.end } : null;
   writeStarlightLocal(hjStarlight);
   refreshStarlightStatus();
-  hjRenderWeather(true);
   hjResetOmens();
-  hjRenderOmens();
+  hjWeatherLastKey = "";   // 天气条下次显示时一定重画
+  hjClockTick();
 }
 
 
@@ -1026,7 +1082,8 @@ function renderInfoGallery() {
   const grid = $("infoGalleryGrid");
   grid.innerHTML = INFO_GALLERY.map((src) => `
     <div class="gallery-cell">
-      <img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" data-lightbox="gallery">
+      <img src="${escapeHtml(resizedSrc(src, 720))}" data-orig="${escapeHtml(src)}" alt="" loading="lazy" decoding="async"
+        data-lightbox="gallery" data-lightbox-src="${escapeHtml(src)}">
       ${likeBtnHtml(likeKeyFromSrc("info", src))}
     </div>
   `).join("");
@@ -1050,7 +1107,9 @@ function switchInfoTab(tab) {
 function renderInfoRecord(show) {
   const panel = $("infoPanelRecord");
   stopTabVideos(panel);
-  if (show) panel.innerHTML = renderTabVideo(INFO_RECORD_VIDEO) || EMPTY_NOTE;
+  if (!show) return;
+  panel.innerHTML = renderTabVideo(INFO_RECORD_VIDEO) || EMPTY_NOTE;
+  applyBgs(panel);
 }
 
 function openInfoModal() {
@@ -1309,6 +1368,7 @@ function initSiteAbout() {
    - 长图（高度超过宽度 LB_LONG_RATIO 倍的海报等）：自动按页面宽度显示、上下滚动看，不缩放
    页面里带 data-lightbox 属性的元素点击即打开；data-lightbox="gallery" 为相册模式，
    data-lightbox-src 可指定图片地址（默认取元素自身的 src）。
+   页面里显示的是缩小版时，先把已经下载好的缩小版放大显示，原图下载好了再无缝换上。
    ============================================================================= */
 
 const LB_ZOOM_STEP = 2.5;
@@ -1319,6 +1379,7 @@ const LB_LONG_RATIO = 2.5;
 let lightboxMode = "normal";
 let lbLong = false;   // 当前是长图（滚动查看，不缩放）
 let lbState = null;
+let lbSeq = 0;        // 每次打开 / 关闭 +1，丢弃过期的原图加载
 
 function resetLightboxTransform() {
   lbState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0, moved: false };
@@ -1342,14 +1403,26 @@ function setLightboxLong(long) {
   }
 }
 
-function openLightbox(src, mode) {
+function openLightbox(src, mode, preview) {
   lightboxMode = mode === "gallery" ? "gallery" : "normal";
   const img = $("lightboxImg");
+  const seq = ++lbSeq;
   setLightboxLong(false);
   img.onload = () => {
-    if (lightboxMode !== "gallery" && img.naturalWidth && img.naturalHeight / img.naturalWidth > LB_LONG_RATIO) setLightboxLong(true);
+    if (!lbLong && lightboxMode !== "gallery" && img.naturalWidth && img.naturalHeight / img.naturalWidth > LB_LONG_RATIO) setLightboxLong(true);
   };
-  img.src = src;
+  if (preview && preview !== src) {
+    img.src = preview;
+    const full = new Image();
+    full.onload = () => {
+      const swap = () => { if (seq === lbSeq) img.src = src; };
+      if (full.decode) full.decode().then(swap, swap);
+      else swap();
+    };
+    full.src = src;
+  } else {
+    img.src = src;
+  }
   $("lightboxOverlay").hidden = false;
   resetLightboxTransform();
   if (lightboxMode === "gallery") img.style.cursor = "default";
@@ -1357,6 +1430,7 @@ function openLightbox(src, mode) {
 }
 
 function closeLightbox() {
+  lbSeq++;
   $("lightboxOverlay").hidden = true;
   $("lightboxImg").onload = null;
   $("lightboxImg").removeAttribute("src");
@@ -1431,7 +1505,9 @@ function initLightbox() {
   document.addEventListener("click", (e) => {
     const trigger = e.target.closest("[data-lightbox]");
     if (!trigger) return;
-    openLightbox(trigger.dataset.lightboxSrc || trigger.src, trigger.dataset.lightbox);
+    const shown = trigger.tagName === "IMG" ? trigger : trigger.querySelector("img");
+    const preview = shown && shown.complete && shown.naturalWidth ? shown.currentSrc || shown.src : "";
+    openLightbox(trigger.dataset.lightboxSrc || trigger.src, trigger.dataset.lightbox, preview);
   });
 
   $("lightboxClose").addEventListener("click", closeLightbox);
@@ -1651,6 +1727,16 @@ function initCaptcha() {
    10. 视觉特效：昼夜切换、飘落花叶 / 星星、点击爆花
    ============================================================================= */
 
+/* 动画档位：full 完整（飘落、悬停设计图等全部特效）/ lite 轻量（只保留点击、翻页等一次性的短动画）/ off 关闭。
+   fxEnabled = 不是「关闭」，翻页、弹窗这类一次性动画看它 */
+const FX_LEVELS = ["full", "lite", "off"];
+const FX_LEVEL_NAMES = { full: "完整", lite: "轻量", off: "关闭" };
+const FX_LEVEL_TOASTS = {
+  full: "动画：完整",
+  lite: "动画：轻量（只保留点击和翻页时的短动画）",
+  off: "动画：关闭",
+};
+let fxLevel = "full";
 let fxEnabled = true;
 const DAYNIGHT_FADE_MS = 900;
 
@@ -1671,8 +1757,43 @@ function applyTileBackgrounds(isDay) {
   forEachTile((el, id) => setTileBg(el, bg[id]));
 }
 
+/* 竖屏（手机）的天空只看得到中间一窄条，用裁窄的版本；横竖屏切换时跟着换 */
+const skyPortraitMq = window.matchMedia ? window.matchMedia("(max-aspect-ratio: 4/5)") : null;
+let skyPortraitMissing = false;   // 裁窄的天空图读不到（还没生成 / 没上传）时退回原图
+function skyUrl(isDay) {
+  const portrait = skyPortraitMq && skyPortraitMq.matches && !skyPortraitMissing && typeof SKY_IMAGES_PORTRAIT !== "undefined";
+  return (portrait ? SKY_IMAGES_PORTRAIT : SKY_IMAGES)[isDay ? "day" : "night"];
+}
+
 function setSky(isDay) {
-  $("skyBase").style.backgroundImage = `url('${SKY_IMAGES[isDay ? "day" : "night"]}')`;
+  const url = skyUrl(isDay);
+  $("skyBase").style.backgroundImage = `url('${url}')`;
+  if (skyPortraitMissing || typeof SKY_IMAGES_PORTRAIT === "undefined" || !Object.values(SKY_IMAGES_PORTRAIT).includes(url)) return;
+  const probe = new Image();
+  probe.onerror = () => {
+    skyPortraitMissing = true;
+    if (!document.body.classList.contains("custom-bg")) setSky(isDayMode());
+  };
+  probe.src = url;
+}
+
+/* 某一套昼夜要用的图：天空 + 首页六张卡片 */
+const dayNightUrls = (isDay) => [skyUrl(isDay), ...Object.values(TILE_BG[isDay ? "day" : "night"])];
+
+/* 等一组图片下载并解码好（最多等 maxMs），用于切换昼夜前 */
+function whenImagesReady(urls, maxMs) {
+  const warm = window.HJ_BOOT && window.HJ_BOOT.warm;
+  const all = Promise.all(urls.map((u) => (warm ? warm(u) : Promise.resolve())));
+  return Promise.race([all, new Promise((r) => setTimeout(r, maxMs))]);
+}
+
+/* 首页卡片底图都到齐的时刻（预取等它之后才开始，不和首页抢带宽） */
+let homeImagesReady = Promise.resolve();
+
+/* 慢网络 / 省流量模式 */
+function isSlowNetwork() {
+  const c = navigator.connection;
+  return !!c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || ""));
 }
 
 /* 页面里卡片的底图模式 ----------------------------------------------------------
@@ -1712,21 +1833,19 @@ function initCardBackdrops() {
   };
   window.addEventListener("resize", queue);
   new MutationObserver(queue).observe(document.querySelector("main") || document.body, { childList: true, subtree: true });
-  refreshCardBackdrops();
+  queue();   // 第一次量高度放到下一帧，不在启动时强制排版
 }
 
-/* 页面加载完、浏览器空闲时，把另一套昼夜底图和弹窗底图先下载好，切换时交叉淡入不闪白 */
+/* 进站后、浏览器空闲时先把弹窗底图备好；电脑上顺便把另一套昼夜底图也下载好。
+   手机 / 慢网络不预先下载另一套（省流量，也不和正在看的内容抢带宽），点切换按钮时现取，取好再交叉淡入 */
 function preloadDayNightImages(isDay) {
-  const other = isDay ? "night" : "day";
-  const urls = [...Object.values(TILE_BG[other]), SKY_IMAGES[other], INFO_BG_IMAGE];
-  const run = () => urls.forEach((url) => { new Image().src = url; });
-  const whenIdle = () => (window.requestIdleCallback ? requestIdleCallback(run, { timeout: 5000 }) : setTimeout(run, 1000));
-  if (document.readyState === "complete") whenIdle();
-  else window.addEventListener("load", whenIdle, { once: true });
+  const eager = window.innerWidth > 760 && !(skyPortraitMq && skyPortraitMq.matches) && !isSlowNetwork();
+  const urls = [INFO_BG_IMAGE, ...(eager ? dayNightUrls(!isDay) : [])];
+  window.HJ_LATE(() => urls.forEach((url) => { new Image().src = url; }));
 }
 
 function crossfadeSky(isDay, duration) {
-  const uri = SKY_IMAGES[isDay ? "day" : "night"];
+  const uri = skyUrl(isDay);
   const fade = $("skyFade");
   fade.style.backgroundImage = `url('${uri}')`;
   fade.style.transitionDuration = duration + "ms";
@@ -1759,8 +1878,7 @@ function crossfadeTileBackgrounds(isDay, duration) {
   });
 }
 
-function toggleDayNight() {
-  const willBeDay = !isDayMode();
+function applyDayNight(willBeDay) {
   const body = document.body;
   body.classList.remove("custom-bg");   // 回到默认天空，撤掉标题区毛玻璃
 
@@ -1784,13 +1902,41 @@ function toggleDayNight() {
   hjMusic.followDayNight();
 }
 
+/* 切换昼夜：新一套图片先下载解码好（已缓存时几乎是立即）再切，最多等 2.5 秒；等待期间按钮呼吸闪烁 */
+let dayNightBusy = false;
+function toggleDayNight() {
+  if (dayNightBusy) return;
+  const willBeDay = !isDayMode();
+  const btn = $("dayNightToggle");
+  dayNightBusy = true;
+  const slow = setTimeout(() => btn.classList.add("is-busy"), 150);
+  whenImagesReady(dayNightUrls(willBeDay), 2500).then(() => {
+    clearTimeout(slow);
+    btn.classList.remove("is-busy");
+    dayNightBusy = false;
+    applyDayNight(willBeDay);
+  });
+}
+
 function initDayNight() {
   const isDay = window.HJ_START_DAY ?? (() => { const h = new Date().getHours(); return h >= 6 && h < 18; })();
   document.body.classList.toggle("day-mode", isDay);
   setSky(isDay);
-  applyTileBackgrounds(isDay);
+  /* 开屏期间：卡片底图排在天空、标题字体、弹窗底图之后再下载，下载完顺手解码好 */
+  window.HJ_BOOT.afterAssets(() => {
+    const urls = Object.values(TILE_BG[isDayMode() ? "day" : "night"]);
+    applyTileBackgrounds(isDayMode());
+    homeImagesReady = whenImagesReady(urls, 15000);
+  });
   document.documentElement.style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);   // 弹窗 / 表单卡片共用的底图
   preloadDayNightImages(isDay);
+
+  /* 横竖屏切换：天空换成对应的版本（换成相册里的自定义背景时不动） */
+  const onOrientation = () => { if (!document.body.classList.contains("custom-bg")) setSky(isDayMode()); };
+  if (skyPortraitMq) {
+    if (skyPortraitMq.addEventListener) skyPortraitMq.addEventListener("change", onOrientation);
+    else if (skyPortraitMq.addListener) skyPortraitMq.addListener(onOrientation);
+  }
 
   // 动画进行中 1 秒内忽略重复点击
   let locked = false;
@@ -1915,19 +2061,21 @@ function renderNightFx() {
   $("fxLayer").appendChild(frag);
 }
 
+/* 飘落花叶 / 星光只在「完整」档 */
 function applyFx() {
-  if (!fxEnabled) clearFx();
+  if (fxLevel !== "full") clearFx();
   else if (isDayMode()) renderDayFx();
   else renderNightFx();
 }
 
-/* 特效开关 ------------------------------------------------------------------- */
+/* 动画档位 ------------------------------------------------------------------- */
 
-/* 默认值：用户手动切换过则以其为准；否则桌面端且未开启"减弱动态"时开启 */
-function getDefaultFxEnabled() {
-  const stored = storage.get(STORE.fx);
-  if (stored !== null) return stored === "1";
-  return !prefersReducedMotion() && window.innerWidth > 760;
+/* 默认档位由 index.html 开头的脚本算好（HJ_FX_LEVEL）：手动选过的为准；
+   否则开了系统"减弱动态效果"→ 关闭，电脑 → 完整，手机 → 轻量 */
+function getDefaultFxLevel() {
+  if (FX_LEVELS.includes(window.HJ_FX_LEVEL)) return window.HJ_FX_LEVEL;
+  if (prefersReducedMotion()) return "off";
+  return window.innerWidth > 760 ? "full" : "lite";
 }
 
 function clearAllFxEnterClasses() {
@@ -1939,26 +2087,45 @@ function clearAllFxEnterClasses() {
 }
 
 function syncFxToggle() {
-  $("fxToggle").classList.toggle("is-active", fxEnabled);
-  document.body.classList.toggle("fx-hover-enabled", fxEnabled);
+  const btn = $("fxToggle");
+  const label = `动画：${FX_LEVEL_NAMES[fxLevel]}（点击切换）`;
+  btn.classList.toggle("is-active", fxEnabled);
+  btn.classList.toggle("is-lite", fxLevel === "lite");
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+  document.body.classList.toggle("fx-hover-enabled", fxLevel === "full");   // 悬停设计图只在完整档（也就不下载那几张图）
+  document.body.classList.toggle("fx-lite", fxLevel === "lite");
   applyFx();
   if (!fxEnabled) clearAllFxEnterClasses();
 }
 
-function initFxToggle() {
-  fxEnabled = getDefaultFxEnabled();
+function setFxLevel(level) {
+  fxLevel = level;
+  fxEnabled = level !== "off";
+  window.HJ_FX_LEVEL = level;
+  storage.set(STORE.fxLevel, level);
+  storage.remove("hj_fx_enabled");
   syncFxToggle();
-  playPageEnterStagger();
+}
+
+function initFxToggle() {
+  fxLevel = getDefaultFxLevel();
+  fxEnabled = fxLevel !== "off";
+  syncFxToggle();
+  /* 开屏图还在时，各区块的入场动画留到进站那一刻再播（initApp 末尾） */
+  if (!document.documentElement.classList.contains("boot-pending")) playPageEnterStagger();
+  /* 完整 → 轻量 → 关闭 → 完整 */
   $("fxToggle").addEventListener("click", () => {
-    fxEnabled = !fxEnabled;
-    storage.set(STORE.fx, fxEnabled ? "1" : "0");
-    syncFxToggle();
+    const next = FX_LEVELS[(FX_LEVELS.indexOf(fxLevel) + 1) % FX_LEVELS.length];
+    setFxLevel(next);
+    showToast(FX_LEVEL_TOASTS[next]);
   });
 }
 
 /* 点击爆花 ------------------------------------------------------------------- */
 
 const BURST_COUNT = 7;
+const BURST_COUNT_LITE = 4;
 const BURST_THROTTLE_MS = 150;
 const BURST_FALLBACK_EMOJI = ["🌸", "🌼", "🌿", "🍃"];
 const FX_EXCLUDED_TARGETS =
@@ -1970,8 +2137,9 @@ function spawnClickBurst(x, y) {
   const layer = $("fxClickLayer");
   if (layer.children.length > 60) layer.innerHTML = "";
   const isDay = isDayMode();
+  const count = fxLevel === "full" ? BURST_COUNT : BURST_COUNT_LITE;
 
-  for (let i = 0; i < BURST_COUNT; i++) {
+  for (let i = 0; i < count; i++) {
     const el = document.createElement("span");
     const angle = Math.random() * Math.PI * 2;
     const dist = 26 + Math.random() * 46;
@@ -2483,7 +2651,9 @@ function renderCalEvents() {
   });
 }
 
+let calEventsBuilt = false;
 function renderCal() {
+  if (!calEventsBuilt) { buildCalEvents(); calEventsBuilt = true; }   // 先建事件索引，日格上才有活动横条
   $("calTitle").textContent = `${calState.y}年${calState.m}月`;
   renderCalGrid();
   renderCalEvents();
@@ -2601,8 +2771,7 @@ function initCalWidget() {
   }
 
   initCalDrag();
-  buildCalEvents();   // 先建事件索引再渲染，否则第一次画出来的日格上没有活动横条
-  renderCal();
+  /* 日格和事件索引等打开时再画（openCalWidget → calGoToday → renderCal） */
   if (storage.get(STORE.calOpen) === "1") openCalWidget(true);
 }
 
@@ -2642,7 +2811,10 @@ function hjReadClocks(now = hjNow()) {
   };
 }
 
+const hjClockShown = () => !$("hjClock").classList.contains("is-hidden");
+
 function hjClockTick() {
+  if (!hjClockShown()) return;   // 时间条收着时不算天气和天象
   const t = hjReadClocks();
   $("hjTimeCN").textContent = t.cn;
   $("hjTimeET").textContent = t.et;
@@ -3944,8 +4116,43 @@ function initA11yModals() {
   });
 }
 
+/* 离线缓存与预取（进站后、浏览器空闲时）----------------------------------------------
+   sw.js：打开过的页面、脚本、图片存进浏览器缓存，下次打开（尤其网络差时）直接从本机读取。
+   预取：把进站后最常点的内容先悄悄下载好——最新活动的横幅和海报（缩小版）、花街相册的前几张缩略图；
+   一张接一张地取，不和访客正在看的内容抢带宽；慢网络 / 省流量模式下不预取 */
+function initOfflineCache() {
+  const sw = "serviceWorker" in navigator && window.isSecureContext ? navigator.serviceWorker : null;
+  const controlled = !sw ? Promise.resolve()
+    : sw.register(`sw.js?v=${window.HJ_VERSION || ""}`)
+      .then(() => (sw.controller ? null : new Promise((r) => {
+        sw.addEventListener("controllerchange", r, { once: true });
+        setTimeout(r, 4000);
+      })))
+      .catch(() => {});
+  if (isSlowNetwork()) return;
+  const poster = (LATEST_EVENT.poster && LATEST_EVENT.poster.images) || [];
+  const urls = [
+    LATEST_EVENT.cover && resizedSrc(LATEST_EVENT.cover, 1280),
+    ...poster.map((src) => resizedSrc(src, 1280)),
+    ...INFO_GALLERY.slice(0, 6).map((src) => resizedSrc(src, 720)),
+  ].filter(Boolean);
+  Promise.all([controlled, homeImagesReady]).then(() => {
+    const next = () => {
+      const url = urls.shift();
+      if (!url || document.hidden) return;
+      const img = new Image();
+      img.fetchPriority = "low";
+      img.onload = img.onerror = () => setTimeout(next, 150);
+      img.src = url;
+    };
+    next();
+  });
+}
+
 /* 启动 ------------------------------------------------------------------------- */
 function initApp() {
+  const booting = document.documentElement.classList.contains("boot-pending");
+  initResizedFallback();
   initDayNight();   // 最先设卡片底图和天空，其余初始化期间图片就开始下载了
   initCardBackdrops();
   renderHome();
@@ -3986,12 +4193,16 @@ function initApp() {
   initHashRoute();
   initSitePopup();
   loadSiteState();   // 异步：分享 / 验证开关、星芒节、弹窗公告（开着就弹，等开屏图 / 花街介绍都关掉以后）
+  window.HJ_LATE(initOfflineCache);
 
-  // 通知开屏脚本：主程序已就绪。新访客点击开屏图后自动弹出花街介绍
-  window.HJ_BOOT.appReady(() => {
+  /* 通知开屏脚本：主程序已就绪。新访客点击开屏图后，页面各区块依次入场并自动弹出花街介绍；
+     进站前等花街介绍的底图解码好（标题字体、天空由开屏脚本自己等） */
+  const boot = window.HJ_BOOT;
+  boot.appReady(() => {
+    playPageEnterStagger();
     /* 拿着购票链接直接进来的访客：购票页自己会弹「购票须知」，这里就别再叠一层花街介绍 */
     if (!$("view-ticket").hidden) return;
     firstBootInfoOpen = true;
     openInfoModal();
-  });
+  }, booting ? [boot.warm(INFO_BG_IMAGE, true)] : []);
 }
