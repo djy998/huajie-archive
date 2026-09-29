@@ -8,12 +8,13 @@
      4. 首页 / 活动详情 / 相册    12. 点赞
      5. 站点开关、验证开关、星芒节 13. 闹铃与倒计时（纯本地）
      6. 花街介绍 / 活动群弹窗      14. 首页弹窗公告
-     7. 网站说明（关于 / 反馈 / 分享） 15. 无障碍与启动
-     8. 大图预览
+     7. 网站说明（关于 / 反馈 / 分享） 15. 花语（听得花间语）
+     8. 大图预览                  16. 无障碍与启动
    脚本加载顺序（index.html 底部）：verify.js → config.js → main.js → ticket.js → venue.js → survey.js → initApp()
      · config.js：站点常量与活动内容（平时改内容只改它）
      · ticket.js：访客购票；venue.js：场地使用登记；survey.js：活动问卷
      · admin.js：管理页，进入 #internal 时才按需加载
+     · huayu.js：花语的压缩与换字（数据较大），打开「听得花间语」或管理页「花语加密」时才按需加载
    这些文件共用本脚本的全局函数 / 常量（$、callWorker、showToast…），顺序不能乱。
    后端是 Cloudflare Worker（config.js 的 WORKER_URL），密码、公告、订单都在 Worker + D1。
    ============================================================================= */
@@ -370,20 +371,24 @@ function openTicketViewSafe() {
   showToast("购票页面没加载出来，刷新一下页面再试");
 }
 
-/* 管理页（#internal）的脚本 admin.js 按需加载：普通访客用不到，不下载（版本号跟 index.html 的 HJ_VERSION） */
-let adminJsPromise = null;
+/* 按需加载的脚本（版本号跟 index.html 的 HJ_VERSION）：普通访客用不到就不下载。
+   ready() 为真表示已经加载并初始化好；失败了允许下次重试 */
+const lateScripts = {};
 
-function loadAdminJs() {
-  if (window.HJ_ADMIN_READY) return Promise.resolve();
-  adminJsPromise ??= new Promise((resolve, reject) => {
+function loadLateScript(file, ready) {
+  if (ready()) return Promise.resolve();
+  lateScripts[file] ??= new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = `admin.js?v=${window.HJ_VERSION || ""}`;
-    s.onload = () => (window.HJ_ADMIN_READY ? resolve() : reject(new Error("admin.js init failed")));
-    s.onerror = () => { s.remove(); reject(new Error("admin.js load failed")); };
+    s.src = `${file}?v=${window.HJ_VERSION || ""}`;
+    s.onload = () => (ready() ? resolve() : reject(new Error(`${file} init failed`)));
+    s.onerror = () => { s.remove(); reject(new Error(`${file} load failed`)); };
     document.head.appendChild(s);
-  }).catch((e) => { adminJsPromise = null; throw e; });   // 失败了允许下次重试
-  return adminJsPromise;
+  }).catch((e) => { delete lateScripts[file]; throw e; });
+  return lateScripts[file];
 }
+
+/* 管理页（#internal）的脚本 admin.js */
+const loadAdminJs = () => loadLateScript("admin.js", () => !!window.HJ_ADMIN_READY);
 
 function openInternalView() {
   showView("view-internal");
@@ -2473,22 +2478,27 @@ function initVolSlider() {
 
 /* 「更多」下拉 -----------------------------------------------------------------
    圆形图标按钮在「更多」下方竖排展开。新增功能：在 HJ_MORE_FEATURES 加一项，
-   并在 onMoreItemClick 里处理；dev 不为 false 的项视为开发中。 */
+   并在 onMoreItemClick 里处理；dev 不为 false 的项视为开发中；shown() 返回假时不显示。
+   花语的图标是四瓣的月见草（和开屏图同一种花） */
+const HUAYU_PETAL = "M12 11.2C8.9 9.6 7 5.9 8.9 3.9c1.1-1.1 2.5-.8 3.1.5.6-1.3 2-1.6 3.1-.5 1.9 2 0 5.7-3.1 7.3z";
 const HJ_MORE_FEATURES = [
   { id: "alarm",    label: "闹铃",   dev: false, icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
   { id: "calendar", label: "日历", dev: false, icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
+  { id: "huayu",    label: "听得花间语", dev: false, shown: () => huayuMode === "open" || huayuMode === "decrypt",
+    icon: [0, 90, 180, 270].map((a) => `<path transform="rotate(${a} 12 12)" d="${HUAYU_PETAL}"/>`).join("") },
 ];
 
 function onMoreItemClick(id) {
   if (id === "calendar") openCalWidget(true);
   else if (id === "alarm") openAlarmModal(true);
+  else if (id === "huayu") openHuayuModal();
   else showToast("功能正在开发中~");
   openMorePanel(false);
 }
 
 function renderMorePanel() {
   const panel = $("morePanel");
-  panel.innerHTML = HJ_MORE_FEATURES.map((f) => {
+  panel.innerHTML = HJ_MORE_FEATURES.filter((f) => !f.shown || f.shown()).map((f) => {
     const title = f.label + (f.dev === false ? "" : "（开发中）");
     return `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${title}">`
       + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg></button>`;
@@ -4013,11 +4023,199 @@ function initSitePopup() {
 }
 
 /* =============================================================================
-   15. 无障碍与启动
+   15. 花语（「更多」里的「听得花间语」）
+   压缩和换字在 huayu.js（第一次打开时加载，window.HJHuayu），加密在 Worker，密钥只在后端：
+     写：明文 → HJHuayu.compress → huayu_seal → HJHuayu.toFlowers →「听花语：……」
+     听：花语 → HJHuayu.fromFlowers → huayu_open → HJHuayu.decompress → 明文
+   访客端开关在管理页「花语加密」，启动时随 get_site_state 读回（huayuMode）：
+     open 完全开放（能写能听）/ decrypt 仅开放解密（只能听）/ off 彻底关闭（「更多」里不显示）
+   管理员用自定义密钥写的花语，访客要自己填密钥才听得懂（寻宝、彩蛋用）。网站不保存输入的内容。
+   ============================================================================= */
+const HUAYU_VISITOR_MAX = 5000;   // 访客一次最多写多少字
+let huayuMode = null;             // null = 还不知道（Worker 没有花语功能时一直是 null，按钮不显示）
+let huayuBusy = false;
+let huayuResultCopy = "";
+
+const loadHuayuJs = () => loadLateScript("huayu.js", () => !!window.HJHuayu);
+
+const HUAYU_ERRORS = {
+  empty: "先写点什么吧",
+  not_huayu: "没找到花语：花语以「听花语」开头，整段都是花草树木的字",
+  broken: "这段花语不完整，可能复制时漏了几个字",
+  version: "这段花语来自更新的版本，刷新页面再试",
+  bad_key: "听不懂：这段花语被改动过，或者不是本站写的",
+  bad_custom_key: "密钥不对，再想想？",
+  need_key: "这段花语设了密钥，填上密钥再听",
+  closed: "花语暂未开放",
+  closed_seal: "现在只能听花语，暂时不能写",
+  too_long: `太长啦，一次最多写 ${HUAYU_VISITOR_MAX} 字`,
+  rate_limited: "操作太频繁了，歇一会儿再试",
+  no_js: "花语字典没加载出来，检查一下网络后重新打开",
+};
+
+function huayuErrorText(data, fallback) {
+  if (!data) return "连接失败，检查一下网络后再试";
+  if (data.error === "unknown action") return HUAYU_ERRORS.closed;
+  return HUAYU_ERRORS[data.error] || fallback || "出了点问题，稍后再试";
+}
+
+/* 开关变了：更新「更多」里的按钮；弹窗开着时同步界面 */
+function applyHuayuMode(mode) {
+  const next = ["open", "decrypt", "off"].includes(mode) ? mode : null;
+  if (next === huayuMode) return;
+  huayuMode = next;
+  renderMorePanel();
+  if (!$("huayuOverlay").hidden) syncHuayuUi();
+}
+
+/* get_site_state 没带花语开关时（Worker 版本不一致）单独问一次 */
+async function refreshHuayuMode() {
+  const data = await callWorker({ action: "huayu_state" });
+  if (data && data.ok) applyHuayuMode(data.mode);
+}
+
+function syncHuayuUi() {
+  const canWrite = huayuMode === "open";
+  const ready = !!window.HJHuayu;
+  $("huayuHint").textContent = !ready ? "花语字典加载中…"
+    : canWrite ? "写下想说的话化作花语，或把收到的花语贴进来听听"
+      : "把收到的花语贴进来，听听花在说什么";
+  $("huayuInputLabel").textContent = canWrite ? "想说的话 / 花语" : "花语";
+  $("huayuInput").placeholder = canWrite ? "写点什么，或者粘贴以「听花语：」开头的花语" : "粘贴以「听花语：」开头的花语";
+  $("huayuSealBtn").hidden = !canWrite;
+  $("huayuOpenBtn").disabled = $("huayuSealBtn").disabled = !ready || huayuBusy;
+  syncHuayuInput();
+}
+
+/* 输入变化：字数；像是设了密钥的花语时提前露出密钥框；像花语时「听」排在前面 */
+function syncHuayuInput() {
+  const text = $("huayuInput").value;
+  const H = window.HJHuayu;
+  const looks = !!(H && text && H.looksLike(text));
+  const n = H ? H.countChars(text) : text.length;
+  $("huayuCount").textContent = !text ? "" : looks ? `花语 ${H.extractBody(text).length} 字` : `${n} 字`;
+  $("huayuCount").classList.toggle("is-over", !looks && n > HUAYU_VISITOR_MAX);
+  if (looks) {
+    const info = H.fromFlowers(text);
+    if (info.ok && info.kind === 1) $("huayuKeyRow").hidden = false;
+  } else {
+    $("huayuKeyRow").hidden = true;
+  }
+  $("huayuCard").classList.toggle("is-writing", !looks && !!text);
+}
+
+function showHuayuResult(label, text, meta, copyLabel) {
+  $("huayuResultLabel").textContent = label;
+  $("huayuResultMeta").textContent = meta || "";
+  $("huayuResultText").textContent = text;
+  $("huayuCopyBtn").textContent = copyLabel;
+  huayuResultCopy = text;
+  $("huayuResult").hidden = false;
+  playFadeOnly($("huayuResult"));
+  $("huayuResult").scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+}
+
+async function withHuayuBusy(btn, fn) {
+  if (huayuBusy) return;
+  huayuBusy = true;
+  const label = btn.textContent;
+  btn.textContent = "……";
+  syncHuayuUi();
+  try { await fn(); } finally {
+    huayuBusy = false;
+    btn.textContent = label;
+    syncHuayuUi();
+  }
+}
+
+async function huayuSeal() {
+  const H = window.HJHuayu;
+  const msg = $("huayuMsg");
+  const text = $("huayuInput").value;
+  setMsg(msg, "");
+  if (!text.trim()) { setMsg(msg, HUAYU_ERRORS.empty); return; }
+  if (text.includes("听花语") && H.fromFlowers(text).ok) { setMsg(msg, "这已经是花语啦，点「听花解语」听听它在说什么"); return; }
+  const n = H.countChars(text);
+  if (n > HUAYU_VISITOR_MAX) { setMsg(msg, HUAYU_ERRORS.too_long); return; }
+  const data = await callWorker({ action: "huayu_seal", ...H.compress(text) });
+  if (!data || !data.ok) {
+    if (data && data.error === "closed") {
+      applyHuayuMode(data.mode);
+      setMsg(msg, data.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
+    } else setMsg(msg, huayuErrorText(data));
+    return;
+  }
+  const flowers = H.toFlowers(data);
+  showHuayuResult("花语", flowers, `原文 ${n} 字 → 花语 ${H.countChars(flowers)} 字`, "复制花语");
+}
+
+async function huayuOpen() {
+  const H = window.HJHuayu;
+  const msg = $("huayuMsg");
+  setMsg(msg, "");
+  const input = $("huayuInput").value;
+  if (!input.trim()) { setMsg(msg, "先把花语粘贴进来吧"); return; }
+  const info = H.fromFlowers(input);
+  if (!info.ok) { setMsg(msg, HUAYU_ERRORS[info.error]); return; }
+  const key = $("huayuKey").value.trim();
+  if (info.kind === 1 && !key) {
+    $("huayuKeyRow").hidden = false;
+    setMsg(msg, HUAYU_ERRORS.need_key);
+    $("huayuKey").focus();
+    return;
+  }
+  const data = await callWorker({
+    action: "huayu_open", head: info.head, tag: info.tag, data: info.data, n: info.n,
+    ...(info.kind === 1 ? { key } : {}),
+  });
+  if (!data || !data.ok) {
+    if (data && data.error === "closed") applyHuayuMode(data.mode);
+    setMsg(msg, data && data.error === "bad_key" && info.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(data));
+    return;
+  }
+  let text;
+  try { text = H.decompress(data); } catch (e) { setMsg(msg, HUAYU_ERRORS.broken); return; }
+  showHuayuResult("花在说", text, info.kind === 1 ? "密钥花语" : "", "复制原文");
+}
+
+function openHuayuModal() {
+  $("huayuOverlay").hidden = false;
+  syncHuayuUi();
+  playFadeOnly($("huayuCard"));
+  if (window.HJHuayu) return;
+  loadHuayuJs().then(syncHuayuUi, (e) => {
+    console.error("[花语]", e);
+    $("huayuHint").textContent = HUAYU_ERRORS.no_js;
+  });
+}
+
+function closeHuayuModal() {
+  $("huayuOverlay").hidden = true;
+}
+
+function initHuayu() {
+  $("huayuClose").addEventListener("click", closeHuayuModal);
+  closeOnBackdrop($("huayuOverlay"), closeHuayuModal);
+  $("huayuInput").addEventListener("input", () => {
+    syncHuayuInput();
+    setMsg($("huayuMsg"), "");
+  });
+  $("huayuSealBtn").addEventListener("click", (e) => withHuayuBusy(e.currentTarget, huayuSeal));
+  $("huayuOpenBtn").addEventListener("click", (e) => withHuayuBusy(e.currentTarget, huayuOpen));
+  $("huayuKey").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("huayuOpenBtn").click();
+  });
+  $("huayuCopyBtn").addEventListener("click", () => {
+    copyText(huayuResultCopy, "已复制", "复制失败，请长按文字手动复制");
+  });
+}
+
+/* =============================================================================
+   16. 无障碍与启动
    ============================================================================= */
 
-/* 启动时一次取齐：分享功能开关、机器人验证开关、星芒节、弹窗公告、服务器时间。
-   读不到时各项维持默认（验证开着、分享功能开着、星芒节用本地缓存、不弹公告） */
+/* 启动时一次取齐：分享功能开关、机器人验证开关、星芒节、弹窗公告、花语开关、服务器时间。
+   读不到时各项维持默认（验证开着、分享功能开着、星芒节用本地缓存、不弹公告、不显示花语按钮） */
 async function loadSiteState() {
   const sentAt = Date.now();
   const data = await callWorker({ action: "get_site_state" });
@@ -4031,6 +4229,8 @@ async function loadSiteState() {
   applyCaptchaEnabled(data.captcha !== false);
   applyStarlight(data.starlight);
   applySitePopup(data.popup);
+  if (data.huayu === undefined) refreshHuayuMode();
+  else applyHuayuMode(data.huayu);
   hjClockTick();
 }
 
@@ -4068,6 +4268,7 @@ const A11Y_MODALS = [
   { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: () => closeTicketNotice() },   // ticket.js
   { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: () => closeAdminPanel() },         // admin.js
   { overlay: "alarmOverlay",    closeBtn: "alarmClose",    close: closeAlarmModal },
+  { overlay: "huayuOverlay",    closeBtn: "huayuClose",    close: closeHuayuModal },
   { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: () => closeSitePopup() },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
@@ -4188,11 +4389,12 @@ function initApp() {
   initHeaderPanels();
   initCalWidget();
   initAlarm();
+  initHuayu();
   initClock();
   initClockToggle();
   initHashRoute();
   initSitePopup();
-  loadSiteState();   // 异步：分享 / 验证开关、星芒节、弹窗公告（开着就弹，等开屏图 / 花街介绍都关掉以后）
+  loadSiteState();   // 异步：分享 / 验证 / 花语开关、星芒节、弹窗公告（开着就弹，等开屏图 / 花街介绍都关掉以后）
   window.HJ_LATE(initOfflineCache);
 
   /* 通知开屏脚本：主程序已就绪。新访客点击开屏图后，页面各区块依次入场并自动弹出花街介绍；

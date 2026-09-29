@@ -14,6 +14,7 @@
      10. 内部入口与公告板              22. 活动问卷
      11. 弹窗                         23. 活动回顾、首页弹窗公告
      12. 点赞按钮                     24. 购票页开关、轮次、订单与售票统计
+                                     25. 花语（听得花间语 / 花语加密）
    约定：暗色（夜晚）为默认样式，白天样式统一写成 body.day-mode 前缀并紧跟在组件后面。
    开屏图样式在 index.html 的 \3c style> 中（需要在本文件加载前生效）。
    修改本文件后，记得把 index.html 里的版本号 HJ_VERSION 改成新的日期。
@@ -458,6 +459,7 @@ body.day-mode .vol-track { background: rgba(90,60,20,.18); }
 .more-panel.is-open .more-item { animation: hjMoreDrop .28s cubic-bezier(.34,1.35,.64,1) backwards; }
 .more-panel.is-open .more-item:nth-child(1) { animation-delay: .02s; }
 .more-panel.is-open .more-item:nth-child(2) { animation-delay: .09s; }
+.more-panel.is-open .more-item:nth-child(3) { animation-delay: .16s; }
 @keyframes hjMoreDrop {
   from { opacity: 0; transform: translateY(-10px) scale(.85); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -2107,9 +2109,10 @@ body.day-mode .share-site-btn:active {
 
 /* 人机验证卡片（四种验证方式的界面由 verify.js 生成，样式见第 11 节末） */
 .captcha-card { position: relative; user-select: none; -webkit-user-select: none; }   /* 验证弹窗的文字一律不可选中 */
-/* 验证卡片、闹铃卡片都在 .gate-card 内，关闭按钮会被主按钮样式覆盖；用双 ID 提高特指度还原为圆形关闭按钮 */
+/* 验证、闹铃、花语卡片都在 .gate-card 内，关闭按钮会被主按钮样式覆盖；用双 ID 提高特指度还原为圆形关闭按钮 */
 #captchaOverlay #captchaClose,
-#alarmOverlay #alarmClose {
+#alarmOverlay #alarmClose,
+#huayuOverlay #huayuClose {
   width: 36px; height: 36px;
   padding: 0;
   border-radius: 50%;
@@ -2128,7 +2131,8 @@ body.day-mode .share-site-btn:active {
   transition: color .2s, border-color .2s, background .25s, box-shadow .25s, transform .2s;
 }
 #captchaOverlay #captchaClose:hover,
-#alarmOverlay #alarmClose:hover {
+#alarmOverlay #alarmClose:hover,
+#huayuOverlay #huayuClose:hover {
   color: var(--cream);
   border-color: var(--accent);
   transform: translateY(-1px);
@@ -2137,9 +2141,12 @@ body.day-mode .share-site-btn:active {
 #captchaOverlay #captchaClose:active,
 #captchaOverlay #captchaClose.is-closing,
 #alarmOverlay #alarmClose:active,
-#alarmOverlay #alarmClose.is-closing { transform: scale(.93); }
+#alarmOverlay #alarmClose.is-closing,
+#huayuOverlay #huayuClose:active,
+#huayuOverlay #huayuClose.is-closing { transform: scale(.93); }
 body.day-mode #captchaOverlay #captchaClose,
-body.day-mode #alarmOverlay #alarmClose {
+body.day-mode #alarmOverlay #alarmClose,
+body.day-mode #huayuOverlay #huayuClose {
   color: var(--day-lilac);
   background:
     linear-gradient(160deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
@@ -2148,7 +2155,8 @@ body.day-mode #alarmOverlay #alarmClose {
   box-shadow: 0 2px 8px rgba(96,60,10,.14), inset 0 1px 0 rgba(255,255,255,.65);
 }
 body.day-mode #captchaOverlay #captchaClose:hover,
-body.day-mode #alarmOverlay #alarmClose:hover { color: var(--day-cream); border-color: var(--accent); }
+body.day-mode #alarmOverlay #alarmClose:hover,
+body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-color: var(--accent); }
 
 /* 大图预览 */
 .lightbox-overlay {
@@ -2426,7 +2434,9 @@ body.day-mode footer { color: var(--day-title); }
   #captchaOverlay #captchaClose:hover,
   #captchaOverlay #captchaClose:active,
   #alarmOverlay #alarmClose:hover,
-  #alarmOverlay #alarmClose:active { transform: none; }
+  #alarmOverlay #alarmClose:active,
+  #huayuOverlay #huayuClose:hover,
+  #huayuOverlay #huayuClose:active { transform: none; }
 }
 
 
@@ -3464,10 +3474,14 @@ body.day-mode .info-close.is-closing,
 #captchaOverlay #captchaClose.is-closing,
 #alarmOverlay #alarmClose:active,
 #alarmOverlay #alarmClose.is-closing,
+#huayuOverlay #huayuClose:active,
+#huayuOverlay #huayuClose.is-closing,
 body.day-mode #captchaOverlay #captchaClose:active,
 body.day-mode #captchaOverlay #captchaClose.is-closing,
 body.day-mode #alarmOverlay #alarmClose:active,
 body.day-mode #alarmOverlay #alarmClose.is-closing,
+body.day-mode #huayuOverlay #huayuClose:active,
+body.day-mode #huayuOverlay #huayuClose.is-closing,
 .lightbox-close:active,
 .lightbox-close.is-closing {
   color: var(--accent-ink);
@@ -4793,4 +4807,88 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 @media (max-width: 640px) {
   .ta-group { padding: 16px 10px 6px; }
   .ta-orders .tt-acts { flex-direction: column; align-items: flex-start; }
+}
+
+
+/* =============================================================================
+   25. 花语：「听得花间语」弹窗（.huayu-card 复用 .gate-card 与闹铃卡片的表单样式）+ 管理页「花语加密」
+   ============================================================================= */
+.huayu-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  text-align: left;
+}
+.huayu-card h2, .huayu-card > .hint { text-align: center; }
+.huayu-card textarea { min-height: 120px; margin-bottom: 4px; }
+.huayu-count { min-height: 1.3em; margin: 0 6px 10px; text-align: right; font-size: .76rem; color: var(--text-mute); }
+.huayu-count.is-over { color: #e08e84; }
+.huayu-key { margin-bottom: 16px; }
+.huayu-key[hidden] { display: none; }
+.huayu-card .huayu-key input:not([type="checkbox"]) { margin-bottom: 0; }
+.huayu-btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.huayu-btns button[hidden] { display: none; }
+.huayu-card.is-writing #huayuSealBtn { order: -1; }   /* 输入的不是花语时，「寄语花间」排在前面 */
+.huayu-card .form-msg { text-align: center; }
+
+/* 结果：花字用衬线体、字距稍宽；原文照原样换行 */
+.huayu-result {
+  margin-top: 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.04);
+}
+.huayu-result[hidden] { display: none; }
+.huayu-result-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.huayu-result-label { font-size: .9rem; font-weight: 700; letter-spacing: .12em; color: var(--lantern-soft); }
+.huayu-result-meta { font-size: .76rem; color: var(--text-mute); }
+.huayu-result-text {
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-bottom: 14px;
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.9;
+  letter-spacing: .08em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--cream);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.huayu-note { margin: 18px 0 0; font-size: .74rem; text-align: center; color: var(--text-mute); }
+
+body.day-mode .huayu-count,
+body.day-mode .huayu-result-meta,
+body.day-mode .huayu-note { color: var(--day-lilac); }
+body.day-mode .huayu-count.is-over { color: #a03a26; }
+body.day-mode .huayu-result { background: rgba(255,252,240,.42); border-color: rgba(138,90,28,.28); }
+body.day-mode .huayu-result-label { color: var(--day-gold); }
+body.day-mode .huayu-result-text { color: var(--day-cream); }
+
+/* ---- 管理页「花语加密」：分组框沿用购票管理的 .ta-group ---- */
+.huayu-admin .alarm-seg { margin-bottom: 12px; }
+.huayu-admin .ta-group-hint { margin: 0 auto 12px; text-align: center; }
+.hy-key-row { display: flex; align-items: center; gap: 10px; }
+.gate-card .hy-key-row input:not([type="checkbox"]) { flex: 1; min-width: 0; margin-bottom: 0; }
+.gate-card .hy-key-row button { flex: none; padding: 10px 22px; }
+.hy-key-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 12px 4px 14px; }
+.hy-old-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin: -2px 0 12px; font-size: .8rem; color: var(--text-mute); }
+.hy-old-row button[hidden] { display: none; }
+.gate-card .hy-custom-key { margin: 0 0 14px; }
+.gate-card .hy-custom-key[hidden] { display: none; }
+.huayu-admin .ta-group textarea { min-height: 130px; margin-bottom: 4px; }
+.huayu-admin .huayu-result { text-align: left; }
+.huayu-admin .form-msg { text-align: center; }
+body.day-mode .hy-old-row { color: var(--day-lilac); }
+
+@media (max-width: 640px) {
+  .huayu-result-text { max-height: 200px; }
+  .hy-key-row { flex-wrap: wrap; }
+  .gate-card .hy-key-row button { flex: 1; }
 }

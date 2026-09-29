@@ -12,10 +12,12 @@
      6. 场地预约（表单与文字对照在 venue.js）
      7. 活动问卷（题目定义在 survey.js）
      8. 首页弹窗公告
-     9. 管理面板的页面结构（HTML）
+     9. 花语加密
+    10. 管理面板的页面结构（HTML）
    依赖 main.js（$、callWorker、setMsg、showToast、escapeHtml、copyText、openCaptcha、workerBase、
-   workerImageUrl、formatCnTime…）、ticket.js（formatHolder、minutesToHHMM、renderGuideMarkup…）、
-   venue.js、survey.js。
+   workerImageUrl、formatCnTime、loadHuayuJs、applyHuayuMode、alarmSegSync…）、
+   ticket.js（formatHolder、minutesToHHMM、renderGuideMarkup…）、venue.js、survey.js；
+   花语的压缩与换字在 huayu.js（window.HJHuayu，打开「花语加密」时加载）。
    ============================================================================= */
 
 /* =============================================================================
@@ -377,6 +379,7 @@ const ADMIN_PANEL_REFRESH = {
   feedbackAdminPanel: () => refreshFeedbackAdmin(),
   venueAdminPanel: () => refreshVenueAdmin(),
   popupAdminPanel: () => refreshPopupAdmin(),
+  huayuAdminPanel: () => refreshHuayuAdmin(),
   surveyAdminPanel: () => {
     if (window.HJ_SURVEY_READY) return refreshSurveyAdmin();
     $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
@@ -2823,7 +2826,204 @@ function initPopupAdmin() {
 }
 
 /* =============================================================================
-   9. 管理面板的页面结构
+   9. 花语加密（首页「听得花间语」的后台）
+   访客端开关和站点密钥都存在 Worker（huayu_admin_get / huayu_admin_set）。
+   换站点密钥时 Worker 自动保留最近 5 个旧密钥，以前的花语仍能解开；「清除旧密钥」之后就解不开了。
+   转换：管理员不受访客端开关限制，还可以用自定义密钥加密（访客听这种花语时要自己填密钥，适合寻宝、彩蛋）。
+   ============================================================================= */
+const HUAYU_ADMIN_MAX = 20000;
+const HUAYU_MODE_NAME = { open: "完全开放", decrypt: "仅开放解密", off: "彻底关闭" };
+const HUAYU_MODE_NOTE = {
+  open: "访客可以写花语，也可以听花语",
+  decrypt: "访客只能听花语（把花语还原成原文），不能写",
+  off: "首页「更多」里不显示花语按钮，访客的请求一律拒绝",
+};
+const HUAYU_ADMIN_ERRORS = {
+  auth: "密码失效了，请重新登录内部入口",
+  bad_key: "解不开：密钥不对，或者花语被改动过",
+  need_key: "这段花语用的是自定义密钥，先把密钥填上",
+  bad_key_input: "密钥不能为空，最长 128 个字",
+  bad_mode: "开关的值不对，刷新页面再试",
+  no_key: "还没有站点密钥，先在上面设置一个",
+  too_long: "太长了，压缩后超过了 64KB",
+  bad_input: "内容有问题，刷新页面再试",
+};
+const huayuAdmin = { clearArmedAt: 0, resultCopy: "" };
+
+function renderHuayuAdmin(d) {
+  document.querySelectorAll("#huayuModeSeg input").forEach((r) => { r.checked = r.value === d.mode; });
+  alarmSegSync("huayuModeSeg");
+  $("huayuModeNote").textContent = HUAYU_MODE_NOTE[d.mode] || "";
+  $("huayuAdminStatus").textContent = `当前状态：${HUAYU_MODE_NAME[d.mode] || d.mode}`
+    + (d.updatedAt ? `（${formatCnTime(d.updatedAt)} 更新）` : "");
+  const input = $("huayuKeyInput");
+  if (document.activeElement !== input) input.value = d.key || "";
+  $("huayuOldText").textContent = d.oldCount ? `保留着 ${d.oldCount} 个旧密钥，用它们写的花语仍能解开` : "没有保留旧密钥";
+  $("huayuClearOldBtn").hidden = !d.oldCount;
+  applyHuayuMode(d.mode);   // 管理员自己这页「更多」里的花语按钮也跟着变
+}
+
+async function refreshHuayuAdmin() {
+  $("huayuAdminStatus").textContent = "当前状态：读取中…";
+  setMsg($("huayuSettingMsg"), "");
+  loadHuayuJs().catch(() => {});   // 下面的转换要用，先加载着
+  const data = await callWorker({ action: "huayu_admin_get", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    $("huayuAdminStatus").textContent = "当前状态：" + adminErr(data, "读取失败，请重新登录内部入口后再试");
+    return;
+  }
+  renderHuayuAdmin(data);
+}
+
+async function saveHuayuAdmin(patch, okMsg, btn) {
+  const msg = $("huayuSettingMsg");
+  setMsg(msg, "");
+  if (btn) btn.disabled = true;
+  const data = await callWorker({ action: "huayu_admin_set", password: internalAdminPassword, ...patch });
+  if (btn) btn.disabled = false;
+  if (!data || !data.ok) {
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", HUAYU_ADMIN_ERRORS));
+    return false;
+  }
+  renderHuayuAdmin(data);
+  showToast(okMsg);
+  return true;
+}
+
+function syncHuayuAdminKeySeg() {
+  alarmSegSync("huayuAdminKeySeg");
+  const custom = $("huayuAdminKeySeg").querySelector("input:checked").value === "custom";
+  $("huayuAdminCustomKey").hidden = !custom;
+  return custom;
+}
+
+/* 输入框：字数；贴进来的是自定义密钥写的花语时自动切到「自定义密钥」 */
+function syncHuayuAdminInput() {
+  const text = $("huayuAdminInput").value;
+  const H = window.HJHuayu;
+  if (!H || !text) { $("huayuAdminCount").textContent = text ? `${text.length} 字` : ""; return; }
+  if (!H.looksLike(text)) { $("huayuAdminCount").textContent = `${H.countChars(text)} 字`; return; }
+  $("huayuAdminCount").textContent = `花语 ${H.extractBody(text).length} 字`;
+  const info = H.fromFlowers(text);
+  if (info.ok && info.kind === 1) {
+    $("huayuAdminKeySeg").querySelector('input[value="custom"]').checked = true;
+    syncHuayuAdminKeySeg();
+  }
+}
+
+function showHuayuAdminResult(label, text, meta, copyLabel) {
+  $("huayuAdminResultLabel").textContent = label;
+  $("huayuAdminResultMeta").textContent = meta;
+  $("huayuAdminResultText").textContent = text;
+  $("huayuAdminCopyBtn").textContent = copyLabel;
+  huayuAdmin.resultCopy = text;
+  $("huayuAdminResult").hidden = false;
+}
+
+async function huayuAdminConvert(dir, btn) {
+  const msg = $("huayuAdminMsg");
+  setMsg(msg, "");
+  try {
+    await loadHuayuJs();
+  } catch (e) {
+    setMsg(msg, "花语脚本 huayu.js 没有加载成功（没上传或被缓存挡住），刷新页面再试");
+    return;
+  }
+  const H = window.HJHuayu;
+  const input = $("huayuAdminInput").value;
+  const custom = syncHuayuAdminKeySeg();
+  const key = $("huayuAdminCustomKey").value.trim();
+  if (!input.trim()) { setMsg(msg, "先输入要转换的内容"); return; }
+  if (custom && !key) { setMsg(msg, "选了自定义密钥，先把密钥填上"); $("huayuAdminCustomKey").focus(); return; }
+  btn.disabled = true;
+  try {
+    if (dir === "seal") {
+      const n = H.countChars(input);
+      if (n > HUAYU_ADMIN_MAX) { setMsg(msg, `太长了，一次最多 ${HUAYU_ADMIN_MAX} 字`); return; }
+      const data = await callWorker({
+        action: "huayu_seal", password: internalAdminPassword, ...H.compress(input), ...(custom ? { key } : {}),
+      });
+      if (!data || !data.ok) { setMsg(msg, adminErr(data, "加密失败", HUAYU_ADMIN_ERRORS)); return; }
+      const flowers = H.toFlowers(data);
+      showHuayuAdminResult("花语", flowers,
+        `原文 ${n} 字 → 花语 ${H.countChars(flowers)} 字 · ${custom ? "自定义密钥" : "站点密钥"}`, "复制花语");
+      return;
+    }
+    const info = H.fromFlowers(input);
+    if (!info.ok) { setMsg(msg, HUAYU_ERRORS[info.error]); return; }
+    if (info.kind === 1 && !custom) {
+      $("huayuAdminKeySeg").querySelector('input[value="custom"]').checked = true;
+      syncHuayuAdminKeySeg();
+      setMsg(msg, HUAYU_ADMIN_ERRORS.need_key);
+      $("huayuAdminCustomKey").focus();
+      return;
+    }
+    const data = await callWorker({
+      action: "huayu_open", password: internalAdminPassword,
+      head: info.head, tag: info.tag, data: info.data, n: info.n, ...(info.kind === 1 ? { key } : {}),
+    });
+    if (!data || !data.ok) { setMsg(msg, adminErr(data, "解密失败", HUAYU_ADMIN_ERRORS)); return; }
+    let text;
+    try { text = H.decompress(data); } catch (e) { setMsg(msg, HUAYU_ERRORS.broken); return; }
+    const used = info.kind === 1 ? "自定义密钥" : data.old ? "旧的站点密钥" : "当前站点密钥";
+    showHuayuAdminResult("原文", text,
+      `花语 ${H.extractBody(input).length} 字 → 原文 ${H.countChars(text)} 字 · ${used}`, "复制原文");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initHuayuAdmin() {
+  $("huayuModeSeg").addEventListener("change", async (e) => {
+    const mode = e.target.value;
+    alarmSegSync("huayuModeSeg");
+    $("huayuModeNote").textContent = HUAYU_MODE_NOTE[mode] || "";
+    const ok = await saveHuayuAdmin({ mode }, `花语访客端：${HUAYU_MODE_NAME[mode]}`);
+    if (!ok) refreshHuayuAdmin();   // 没存上就按后端的状态改回去
+  });
+  $("huayuKeyShow").addEventListener("change", (e) => {
+    $("huayuKeyInput").type = e.target.checked ? "text" : "password";
+  });
+  $("huayuKeySaveBtn").addEventListener("click", (e) => {
+    const key = $("huayuKeyInput").value.trim();
+    if (!key) { setMsg($("huayuSettingMsg"), "密钥不能为空"); return; }
+    saveHuayuAdmin({ key }, "站点密钥已保存", e.currentTarget);
+  });
+  $("huayuKeyInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("huayuKeySaveBtn").click();
+  });
+  $("huayuKeyRandomBtn").addEventListener("click", (e) => {
+    saveHuayuAdmin({ randomKey: true }, "已换成一个随机密钥", e.currentTarget);
+  });
+  /* 清除旧密钥：点两次才生效（4 秒内） */
+  $("huayuClearOldBtn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    if (Date.now() - huayuAdmin.clearArmedAt > 4000) {
+      huayuAdmin.clearArmedAt = Date.now();
+      btn.textContent = "再点一次确认清除";
+      setTimeout(() => {
+        if (Date.now() - huayuAdmin.clearArmedAt >= 4000) btn.textContent = "清除旧密钥";
+      }, 4100);
+      return;
+    }
+    huayuAdmin.clearArmedAt = 0;
+    btn.textContent = "清除旧密钥";
+    saveHuayuAdmin({ clearOld: true }, "旧密钥已清除", btn);
+  });
+  $("huayuAdminKeySeg").addEventListener("change", syncHuayuAdminKeySeg);
+  $("huayuAdminInput").addEventListener("input", () => {
+    syncHuayuAdminInput();
+    setMsg($("huayuAdminMsg"), "");
+  });
+  $("huayuAdminSealBtn").addEventListener("click", (e) => huayuAdminConvert("seal", e.currentTarget));
+  $("huayuAdminOpenBtn").addEventListener("click", (e) => huayuAdminConvert("open", e.currentTarget));
+  $("huayuAdminCopyBtn").addEventListener("click", () => {
+    copyText(huayuAdmin.resultCopy, "已复制", "复制失败，请手动选中复制");
+  });
+}
+
+/* =============================================================================
+   10. 管理面板的页面结构
    普通访客的页面里不需要这些，加载本文件时才放进 #adminPanelStash（mountAdminPanels）
    ============================================================================= */
 const ADMIN_PANELS_HTML = `
@@ -3240,6 +3440,66 @@ const ADMIN_PANELS_HTML = `
   </div>
   <p class="form-msg" id="popupAdminMsg" hidden></p>
 </div>
+<div class="gate-card admin-card huayu-admin" id="huayuAdminPanel" hidden>
+  <h2>花语加密</h2>
+  <p class="hint">首页右上角「更多」里的花朵按钮「听得花间语」。明文在浏览器里压缩后交给后端加密、换成花字；<br>密钥只保存在后端（Worker），网站不保存任何明文和花语。</p>
+  <p class="hint" id="huayuAdminStatus">当前状态：读取中…</p>
+
+  <section class="ta-group">
+    <h3 class="ta-group-title">访客端</h3>
+    <div class="alarm-seg" id="huayuModeSeg">
+      <label><input type="radio" name="huayuMode" value="open"><span>完全开放</span></label>
+      <label><input type="radio" name="huayuMode" value="decrypt"><span>仅开放解密</span></label>
+      <label><input type="radio" name="huayuMode" value="off"><span>彻底关闭</span></label>
+    </div>
+    <p class="ta-group-hint" id="huayuModeNote"></p>
+  </section>
+
+  <section class="ta-group">
+    <h3 class="ta-group-title">站点密钥</h3>
+    <p class="ta-group-hint">访客写的花语、这里选「站点密钥」写的花语都用它加密。<br>换了密钥以后，以前的花语仍能用旧密钥解开（最多保留 5 个）。</p>
+    <div class="hy-key-row">
+      <input type="password" id="huayuKeyInput" maxlength="128" autocomplete="off" spellcheck="false" placeholder="站点密钥">
+      <button type="button" id="huayuKeySaveBtn">保存</button>
+    </div>
+    <div class="hy-key-tools">
+      <label class="audience-opt" for="huayuKeyShow"><input type="checkbox" id="huayuKeyShow"><span>显示密钥</span></label>
+      <button type="button" id="huayuKeyRandomBtn" class="pill-btn-outline">换成随机密钥</button>
+    </div>
+    <div class="hy-old-row">
+      <span id="huayuOldText"></span>
+      <button type="button" id="huayuClearOldBtn" class="pill-btn-outline" hidden>清除旧密钥</button>
+    </div>
+    <p class="form-msg" id="huayuSettingMsg" hidden></p>
+  </section>
+
+  <section class="ta-group">
+    <h3 class="ta-group-title">转换</h3>
+    <p class="ta-group-hint">不受访客端开关限制。选「自定义密钥」写的花语，访客要自己填上密钥才听得懂（寻宝、彩蛋用）。</p>
+    <textarea id="huayuAdminInput" maxlength="60000" spellcheck="false" placeholder="明文或花语"></textarea>
+    <p class="popup-admin-count" id="huayuAdminCount"></p>
+    <div class="alarm-seg" id="huayuAdminKeySeg">
+      <label class="is-active"><input type="radio" name="huayuAdminKey" value="site" checked><span>站点密钥</span></label>
+      <label><input type="radio" name="huayuAdminKey" value="custom"><span>自定义密钥</span></label>
+    </div>
+    <input type="text" id="huayuAdminCustomKey" class="hy-custom-key" maxlength="128" autocomplete="off" spellcheck="false" placeholder="自定义密钥" hidden>
+    <div class="popup-admin-btns">
+      <button type="button" id="huayuAdminSealBtn">加密</button>
+      <button type="button" id="huayuAdminOpenBtn">解密</button>
+    </div>
+    <p class="form-msg" id="huayuAdminMsg" hidden></p>
+    <div class="huayu-result" id="huayuAdminResult" hidden>
+      <div class="huayu-result-head">
+        <span class="huayu-result-label" id="huayuAdminResultLabel"></span>
+        <span class="huayu-result-meta" id="huayuAdminResultMeta"></span>
+      </div>
+      <div class="huayu-result-text" id="huayuAdminResultText"></div>
+      <div class="huayu-btns">
+        <button type="button" id="huayuAdminCopyBtn">复制</button>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
   <h2>发布公告</h2>
   <textarea id="announcementText" placeholder="写点什么…"></textarea>
@@ -3290,4 +3550,5 @@ else console.error("[活动问卷] survey.js 没有加载成功，管理页的�
 initPostAnnouncement();
 initAnnouncementImageUpload();
 initPopupAdmin();
+initHuayuAdmin();
 window.HJ_ADMIN_READY = true;

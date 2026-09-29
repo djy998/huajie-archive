@@ -13,7 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(process.argv[2] || here);
 const OUT = resolve(process.argv[3] || join(here, ".."));
 
-const SCRIPTS = ["verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "sw.js"];
+const SCRIPTS = ["verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "huayu.js", "sw.js"];
 
 const minifyJs = async (code, target = "esnext") =>
   (await transform(code, { loader: "js", minify: true, charset: "utf8", legalComments: "none", target })).code.trim();
@@ -27,6 +27,11 @@ async function buildScript(name) {
   let code = await readFile(join(SRC, name), "utf8");
   if (name === "admin.js") {
     code = code.replace(/(const ADMIN_PANELS_HTML = `)([\s\S]*?)(`;)/, (_, a, html, b) => a + dedentHtml(html) + b);
+  }
+  /* 花语：字频、二元表、花字表在 huayu-data.json，填进 huayu.js 的占位处 */
+  if (name === "huayu.js") {
+    const data = JSON.stringify(JSON.parse(await readFile(join(SRC, "huayu-data.json"), "utf8")));
+    code = code.replace("/*@@HUAYU_DATA@@*/ null", () => data);
   }
   return minifyJs(code);
 }
