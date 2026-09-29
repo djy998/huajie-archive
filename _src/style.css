@@ -66,6 +66,11 @@
      夜间紫色 / 灰紫色的字（正文、说明、选项）→ 白天近黑的墨绿 --day-body（原 #3a481f，觉得太浅就往更黑调，如 #141a0c）；
      例外：输入框里的默认提示文字（占位文字）白天不单独指定颜色，和夜间用同一套灰色。 */
   --day-body: #1e2810;   /* 白天正文那档深绿：加深到几乎发黑（旧值 #3a481f） */
+  /* 金色卡片里的两档文字色（对调后的结果）：
+     --day-head 近黑绿 → 标题 / 强调；--day-copy 深棕 → 正文、说明、选项。
+     按钮、标签、天空背景上的文字不参与对调，继续用 --day-brown / --day-body。 */
+  --day-head: #1e2810;
+  --day-copy: #5b3610;
   /* 第一类玻璃胶囊：夜间奶油白文字；白天褐色文字 + 金黄色描边（--pill-edge，和右上角圆按钮悬停时的描边同色；悬停加深为 --pill-edge-hi） */
   --pill-ink: var(--cream);
 }
@@ -1484,8 +1489,8 @@ body.day-mode .review-photo {
 .gate-card .hint { color: var(--text-mute); font-size: .85rem; margin-bottom: 22px; }
 .admin-card { margin-bottom: 30px; }
 .admin-card h2 { font-size: 1.3rem; }
-body.day-mode .gate-card h2 { color: var(--day-brown); }
-body.day-mode .gate-card .hint { color: var(--day-body); }
+body.day-mode .gate-card h2 { color: var(--day-head); }
+body.day-mode .gate-card .hint { color: var(--day-copy); }
 
 /* 文本输入（排除复选框，否则复选框会被撑满整行） */
 .gate-card input:not([type="checkbox"]) {
@@ -1749,8 +1754,8 @@ body.day-mode .starlight-sep { color: var(--day-body); }
 }
 body.day-mode .announcement { background: #e8b563; }
 body.day-mode .announcement .date,
-body.day-mode .announcement-audience { color: var(--day-body); }
-body.day-mode .announcement .body { color: var(--day-body); }
+body.day-mode .announcement-audience { color: var(--day-copy); }
+body.day-mode .announcement .body { color: var(--day-copy); }
 
 /* 公告的编辑 / 删除小按钮 */
 .announcement-admin-btns { margin-top: 12px; display: flex; gap: 10px; }
@@ -1953,10 +1958,10 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
 .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
 .gallery-credit { margin: 2px 0 16px; font-size: .86rem; line-height: 2; text-align: center; color: var(--text-mute); }
 
-body.day-mode .info-title { color: var(--day-brown); }
+body.day-mode .info-title { color: var(--day-head); }
 body.day-mode .info-date,
-body.day-mode .gallery-credit { color: var(--day-body); }
-body.day-mode .info-text p { color: var(--day-body); }
+body.day-mode .gallery-credit { color: var(--day-copy); }
+body.day-mode .info-text p { color: var(--day-copy); }
 
 /* 白天：卡片类表面的投影换暖棕色 */
 body.day-mode .detail-hero,
@@ -2688,23 +2693,23 @@ body.day-mode .ticket-table .tt-msg small,
 body.day-mode .ticket-table .tt-empty,
 body.day-mode .ticket-lookup-item.is-void .tli-head { color: var(--day-body); }
 body.day-mode .ticket-admin-key,
-body.day-mode .ticket-admin-list-head { color: var(--day-body); }
+body.day-mode .ticket-admin-list-head { color: var(--day-copy); }
 body.day-mode .ticket-stock,
 body.day-mode .tas-item,
 body.day-mode .ticket-result-list,
-body.day-mode .ticket-lookup-item { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-body); }
+body.day-mode .ticket-lookup-item { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-copy); }
 body.day-mode .ticket-stock b,
 body.day-mode .ticket-blocked,
 body.day-mode .ticket-result h3,
 body.day-mode .tli-head,
-body.day-mode .ticket-warn { color: var(--day-brown); }
+body.day-mode .ticket-warn { color: var(--day-head); }
 body.day-mode .ticket-holder .th-warn { color: #c0392b; }
 body.day-mode .tas-item b,
 body.day-mode .ticket-result-list dd,
 body.day-mode .ticket-notice p,
 body.day-mode .ticket-stepper output { color: var(--day-ink); }
 body.day-mode .ticket-result-note,
-body.day-mode .tli-body { color: var(--day-body); }
+body.day-mode .tli-body { color: var(--day-copy); }
 body.day-mode .ticket-card select,
 body.day-mode .ticket-admin select { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
 body.day-mode .ticket-stepper {
@@ -2726,9 +2731,9 @@ body.day-mode .gate-card .ticket-stepper button:not(#_):disabled { color: var(--
 body.day-mode .ticket-table-wrap { border-color: #c98f3a; background: rgba(255,252,240,.4); }
 body.day-mode .ticket-table th { background: rgba(255,252,240,.5); color: var(--day-body); }
 body.day-mode .ticket-table th, body.day-mode .ticket-table td { border-color: rgba(138,90,28,.3); }
-body.day-mode .ticket-table td { color: var(--day-body); }
+body.day-mode .ticket-table td { color: var(--day-copy); }
 body.day-mode .ticket-table tr.is-over td { color: #b0261b; }
-body.day-mode .ticket-table tr.is-void td { color: var(--day-body); }
+body.day-mode .ticket-table tr.is-void td { color: var(--day-copy); }
 body.day-mode .ticket-table .tt-act.is-void { color: #b0261b; }
 body.day-mode .ticket-table .tt-act.is-restore { color: #2f7d4a; }
 body.day-mode .ticket-table .is-dup { color: #b85a00; }
@@ -2767,7 +2772,7 @@ body.day-mode .gate-card button#ticketPendingBtn.is-on:hover { color: #fff6e0; b
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-body.day-mode .verify-host { --verify-ink: var(--day-brown); }
+body.day-mode .verify-host { --verify-ink: var(--day-head); }
 .verify-host[hidden] { display: none; }
 
 /* 题面的 canvas：算式和飞花令的令字都画成图，DOM 里不留文字 */
@@ -2928,7 +2933,7 @@ body.day-mode .verify-host { --verify-ink: var(--day-brown); }
   background: var(--accent);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
 }
-body.day-mode .verify-done { color: var(--day-brown); }
+body.day-mode .verify-done { color: var(--day-head); }
 
 /* 小按钮：换一题 / 提示 / 返回自动验证 */
 .verify-actions { margin-top: 12px; text-align: center; }
@@ -2940,14 +2945,14 @@ body.day-mode .verify-done { color: var(--day-brown); }
 }
 
 /* 白天模式：金色卡片上用暖色玻璃，和公告的编辑 / 删除小按钮同一质感 */
-body.day-mode .verify-tip { color: var(--day-body); }
+body.day-mode .verify-tip { color: var(--day-copy); }
 body.day-mode .verify-tip.is-error { color: #a83a2e; }
-body.day-mode .verify-tip.is-note { color: var(--day-brown); }
-body.day-mode .verify-q { color: var(--day-body); }
+body.day-mode .verify-tip.is-note { color: var(--day-head); }
+body.day-mode .verify-q { color: var(--day-copy); }
 body.day-mode .verify-sub,
 body.day-mode .verify-hint-note,
 body.day-mode .verify-tabs-label,
-body.day-mode .verify-job-fallback { color: var(--day-body); }
+body.day-mode .verify-job-fallback { color: var(--day-copy); }
 body.day-mode .verify-host button.verify-tab:not(#_),
 body.day-mode .verify-host button.verify-opt:not(#_),
 body.day-mode .verify-host button.verify-ok:not(#_),
@@ -3217,7 +3222,7 @@ body.day-mode .alarm-seg label.is-active { color: #fff6e0; background: #8a5a1c; 
 body.day-mode .alarm-check { color: var(--day-body); }
 body.day-mode .alarm-check:hover { color: var(--day-ink); }
 body.day-mode .alarm-hint,
-body.day-mode .alarm-empty { color: var(--day-body); }
+body.day-mode .alarm-empty { color: var(--day-copy); }
 body.day-mode .alarm-list-head { color: var(--day-body); }
 body.day-mode .alarm-list-head { border-top-color: rgba(122,84,32,.3); }
 body.day-mode .alarm-card select {
@@ -3232,7 +3237,7 @@ body.day-mode .alarm-dur-row input[type="number"] { background: #f6e3bb; color: 
 body.day-mode .alarm-dur-row span { color: var(--day-body); }
 body.day-mode .alarm-item { background: rgba(255,252,240,.42); border-color: rgba(138,90,28,.28); }
 body.day-mode .alarm-item-name { color: var(--day-ink); }
-body.day-mode .alarm-item-sub { color: var(--day-body); }
+body.day-mode .alarm-item-sub { color: var(--day-copy); }
 body.day-mode .alarm-item-live { color: #9a4a12; }
 body.day-mode .alarm-item-btns button.is-danger { color: #a03a26; border-color: rgba(160,58,38,.45); }
 
@@ -3586,17 +3591,17 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 /* 白天模式 */
 body.day-mode .about-text p,
 body.day-mode .about-list dd,
-body.day-mode .about-share-text { color: var(--day-body); }
-body.day-mode .about-text .about-sub { color: var(--day-body); }
+body.day-mode .about-share-text { color: var(--day-copy); }
+body.day-mode .about-text .about-sub { color: var(--day-copy); }
 body.day-mode .about-hint,
-body.day-mode .about-count { color: var(--day-body); }
+body.day-mode .about-count { color: var(--day-copy); }
 body.day-mode .about-list dt,
 body.day-mode .about-text .about-thanks,
-body.day-mode .about-done-title { color: var(--day-brown); }
+body.day-mode .about-done-title { color: var(--day-head); }
 body.day-mode .about-label { color: var(--day-ink); }
 body.day-mode .about-list,
 body.day-mode .about-share-text { background: rgba(255,252,240,.5); border-color: #c98f3a; }
-body.day-mode .about-inline-link { color: var(--day-brown); }
+body.day-mode .about-inline-link { color: var(--day-head); }
 body.day-mode .about-inline-link:hover { color: var(--day-ink); }
 body.day-mode .about-form select,
 body.day-mode .about-form textarea,
@@ -3620,7 +3625,7 @@ body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0
 /* 购票页：余票后面的「每日 xx:xx 刷新」 */
 .ticket-reset-hint { display: block; margin-top: 1px; font-size: .72rem; line-height: 1.6; text-align: center; white-space: pre-line; color: var(--text-mute); }
 .ticket-reset-hint[hidden] { display: none; }
-body.day-mode .ticket-reset-hint { color: var(--day-body); }
+body.day-mode .ticket-reset-hint { color: var(--day-copy); }
 .ticket-stock:has(.ticket-reset-hint:not([hidden])) { border-radius: 18px; text-align: center; }
 /* 刷新时间和定时开关时间可能有两行；余票不显示时只剩小字那几行 */
 .ticket-stock[hidden], #ticketStockText[hidden] { display: none; }
@@ -3638,7 +3643,7 @@ body.day-mode .ticket-reset-hint { color: var(--day-body); }
 /* 购票管理：标题输入框更宽 */
 .gate-card .ticket-title-edit input { width: 260px; max-width: 58vw; }
 .ticket-title-preview { color: var(--text-mute); }
-body.day-mode .ticket-title-preview { color: var(--day-body); }
+body.day-mode .ticket-title-preview { color: var(--day-copy); }
 
 /* 反馈建议箱（管理员） */
 .admin-pills .fb-pill-badge {
@@ -3682,9 +3687,9 @@ body.day-mode .ticket-title-preview { color: var(--day-body); }
 body.day-mode .fb-item { background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .fb-head,
 body.day-mode .fb-contact,
-body.day-mode .fb-empty { color: var(--day-body); }
+body.day-mode .fb-empty { color: var(--day-copy); }
 body.day-mode .fb-body { color: var(--day-ink); }
-body.day-mode .fb-contact b { color: var(--day-body); }
+body.day-mode .fb-contact b { color: var(--day-copy); }
 body.day-mode .fb-state { color: #2f7d4a; }
 body.day-mode .feedback-admin .fb-actions button.is-void:not(#_) { color: #b0261b; }
 .gate-card .ticket-limit-edit input[type="time"] { width: 150px; color-scheme: dark; }
@@ -3864,7 +3869,7 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 
 body.day-mode .guide-eyebrow { color: var(--day-body); }
 body.day-mode .guide-price-label { color: var(--day-body); }
 body.day-mode .guide-h,
-body.day-mode .guide-sign { color: var(--day-brown); border-color: rgba(138,90,28,.35); }
+body.day-mode .guide-sign { color: var(--day-head); border-color: rgba(138,90,28,.35); }
 body.day-mode .guide-price,
 body.day-mode .guide-way { background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .guide-price:first-child { border-color: #8a5a1c; background: rgba(255,244,214,.7); }
@@ -3873,15 +3878,15 @@ body.day-mode .guide-way h4,
 body.day-mode .guide-qa dt { color: var(--day-ink); }
 body.day-mode .guide-qa u,
 body.day-mode .guide-way u { color: var(--day-ink); }
-body.day-mode .guide-price-name { color: var(--day-body); }
+body.day-mode .guide-price-name { color: var(--day-copy); }
 body.day-mode .guide-price-num small,
 body.day-mode .guide-price-time,
 body.day-mode .guide-way p,
 body.day-mode .guide-steps li,
 body.day-mode .guide-qa dd p,
-body.day-mode .guide-end { color: var(--day-body); }
+body.day-mode .guide-end { color: var(--day-copy); }
 body.day-mode .guide-qa dd { border-color: rgba(138,90,28,.35); }
-body.day-mode .guide-steps li::marker { color: var(--day-brown); }
+body.day-mode .guide-steps li::marker { color: var(--day-head); }
 body.day-mode .guide-actions { background: rgba(232,181,99,.92); border-color: rgba(138,90,28,.3); }
 
 @media (max-width: 640px) {
@@ -3968,10 +3973,10 @@ body.day-mode .gate-card input[type="radio"]:checked::after { background: #8a5a1
 .venue-result .ticket-result-list dd { white-space: pre-wrap; }
 .gate-card #venueAgainBtn { margin-top: 18px; }
 
-body.day-mode .venue-choice { color: var(--day-body); background: rgba(255,252,240,.45); border-color: #c98f3a; }
+body.day-mode .venue-choice { color: var(--day-copy); background: rgba(255,252,240,.45); border-color: #c98f3a; }
 body.day-mode .venue-choice:hover { color: var(--day-ink); border-color: #8a5a1c; }
 body.day-mode .venue-choice:has(input:checked) { color: var(--day-ink); border-color: #8a5a1c; background: rgba(255,246,224,.85); }
-body.day-mode .venue-place-title { color: var(--day-brown); }
+body.day-mode .venue-place-title { color: var(--day-head); }
 
 /* ---- 管理页「场地预约」 ---- */
 .gate-card.venue-admin { text-align: center; }
@@ -4008,16 +4013,16 @@ body.day-mode .venue-place-title { color: var(--day-brown); }
 
 body.day-mode .venue-edit { background: rgba(255,252,240,.35); border-color: #8a5a1c; }
 body.day-mode .venue-edit-title,
-body.day-mode .venue-date { color: var(--day-brown); }
-body.day-mode .venue-item.is-past:not(.is-void) .venue-date { color: var(--day-body); }
+body.day-mode .venue-date { color: var(--day-head); }
+body.day-mode .venue-item.is-past:not(.is-void) .venue-date { color: var(--day-copy); }
 body.day-mode .venue-tag { color: var(--day-body); border-color: #c98f3a; }
 body.day-mode .venue-tag.is-void { color: #b0261b; border-color: #b0261b; }
 body.day-mode .venue-tags .venue-purpose { color: var(--day-ink); background: rgba(255,252,240,.6); border-color: #c98f3a; }
 body.day-mode .venue-chip { color: #6b4310; background: rgba(255,246,224,.8); border-color: #c98f3a; }
 body.day-mode .venue-kv dt { color: var(--day-body); }
 body.day-mode .venue-kv dd { color: var(--day-ink); }
-body.day-mode .venue-note { color: var(--day-body); background: rgba(255,246,224,.7); border-left-color: #8a5a1c; }
-body.day-mode .venue-note b { color: var(--day-brown); }
+body.day-mode .venue-note { color: var(--day-copy); background: rgba(255,246,224,.7); border-left-color: #8a5a1c; }
+body.day-mode .venue-note b { color: var(--day-head); }
 body.day-mode .feedback-admin .fb-actions button.is-restore:not(#_) { color: #2f7d4a; }
 
 @media (max-width: 640px) {
@@ -4172,10 +4177,10 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-done-more { font-size: .85rem; line-height: 1.8; color: var(--text-soft); }
 
 /* 白天 */
-body.day-mode .survey-draft-note { color: var(--day-body); background: rgba(255,252,240,.45); border-color: #c98f3a; }
+body.day-mode .survey-draft-note { color: var(--day-copy); background: rgba(255,252,240,.45); border-color: #c98f3a; }
 body.day-mode .survey-card button.survey-link:not(#_) { color: var(--day-brown); background: none; border: 0; box-shadow: none; }
 body.day-mode .survey-card button.survey-link:not(#_):hover { color: var(--day-ink); }
-body.day-mode .survey-sec-title { color: var(--day-brown); }
+body.day-mode .survey-sec-title { color: var(--day-head); }
 body.day-mode .survey-sec-title::after { background: rgba(138,90,28,.35); }
 body.day-mode .survey-sec-no { color: #fff6e0; background: #8a5a1c; }
 body.day-mode .survey-choice-text small,
@@ -4187,7 +4192,7 @@ body.day-mode .survey-scale-opt:hover span { color: var(--day-ink); border-color
 body.day-mode .survey-scale-opt input:checked + span { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
 body.day-mode .survey-scale-opt input:focus-visible + span { outline-color: #8a5a1c; }
 body.day-mode .survey-q.is-card { background: rgba(255,252,240,.3); border-color: #c98f3a; }
-body.day-mode .survey-card-title { color: var(--day-brown); }
+body.day-mode .survey-card-title { color: var(--day-head); }
 body.day-mode .survey-sublabel,
 body.day-mode .survey-done-more { color: var(--day-body); }
 body.day-mode .survey-err { color: #b0261b; }
@@ -4254,7 +4259,7 @@ body.day-mode .survey-submit { border-top-color: rgba(138,90,28,.35); }
 .survey-item .venue-kv dt { white-space: normal; max-width: 15em; }
 
 body.day-mode .sv-stat-sec,
-body.day-mode .sv-stat-meta b { color: var(--day-brown); }
+body.day-mode .sv-stat-meta b { color: var(--day-head); }
 body.day-mode .sv-overview { background: rgba(255,246,224,.55); border-color: #c98f3a; }
 body.day-mode .sv-ov-item { border-bottom-color: rgba(138,90,28,.3); }
 body.day-mode .sv-ov-item dt,
@@ -4265,18 +4270,18 @@ body.day-mode .sv-bar-n,
 body.day-mode .sv-hist-n,
 body.day-mode .sv-texts li { color: var(--day-ink); }
 body.day-mode .sv-ov-item.is-empty dd b,
-body.day-mode .sv-stat-title small { color: var(--day-body); }
+body.day-mode .sv-stat-title small { color: var(--day-copy); }
 body.day-mode .sv-ov-item dd small,
 body.day-mode .sv-stat-meta,
 body.day-mode .sv-bar-n small,
 body.day-mode .sv-hist-k,
-body.day-mode .sv-text-id { color: var(--day-body); }
+body.day-mode .sv-text-id { color: var(--day-copy); }
 body.day-mode .sv-stat { background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .sv-bar,
 body.day-mode .sv-hist-bar { background: rgba(138,90,28,.12); }
 body.day-mode .sv-bar i,
 body.day-mode .sv-hist-bar i { background: #8a5a1c; }
-body.day-mode .sv-texts summary { color: var(--day-brown); }
+body.day-mode .sv-texts summary { color: var(--day-head); }
 body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
 
 @media (max-width: 640px) {
@@ -4373,8 +4378,8 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
 .site-popup-body[hidden] { display: none; }
 .site-popup-body a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 .site-popup-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
-body.day-mode .site-popup-body { color: var(--day-body); }
-body.day-mode .site-popup-body a { color: var(--day-brown); }
+body.day-mode .site-popup-body { color: var(--day-copy); }
+body.day-mode .site-popup-body a { color: var(--day-head); }
 body.day-mode .site-popup-image { background: rgba(255,252,240,.35); }
 
 /* 管理页「弹窗公告」 */
@@ -4389,7 +4394,7 @@ body.day-mode .site-popup-image { background: rgba(255,252,240,.35); }
 .popup-admin-btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
 #popupAdminPanel .form-msg { text-align: center; }
 body.day-mode .popup-admin-label { color: var(--day-body); }
-body.day-mode .popup-admin-count { color: var(--day-body); }
+body.day-mode .popup-admin-count { color: var(--day-copy); }
 
 @media (max-width: 640px) {
   .site-popup-box { padding: 34px 20px 24px; }
@@ -4532,14 +4537,14 @@ html.hj-ticket-bare #fxToggle { right: 70px; }
 }
 .ticket-idle[hidden] { display: none; }
 .ticket-idle.is-urgent { color: #e08e84; font-weight: 600; }
-body.day-mode .ticket-idle { color: var(--day-brown); }
+body.day-mode .ticket-idle { color: var(--day-head); }
 body.day-mode .ticket-idle.is-urgent { color: #b0261b; }
 
 /* ---- 查询我的登记：部分作废的持票人、重复提示 ---- */
 .tli-void { color: var(--text-mute); }
 .tli-void s { text-decoration-thickness: 1px; }
 .tli-note { margin-top: 6px; font-size: .8rem; color: #ffa257; }
-body.day-mode .tli-void { color: var(--day-body); }
+body.day-mode .tli-void { color: var(--day-copy); }
 body.day-mode .tli-note { color: #b85a00; }
 
 /* ---- 购票须知：可编辑正文的几种写法 ---- */
@@ -4551,9 +4556,9 @@ body.day-mode .tli-note { color: #b85a00; }
   .guide-prices.guide-n-1, .guide-ways.guide-n-1 { grid-template-columns: 1fr; }
   .guide-prices.guide-n-3, .guide-ways.guide-n-3 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 }
-body.day-mode .guide-p { color: var(--day-body); }
+body.day-mode .guide-p { color: var(--day-copy); }
 body.day-mode .guide-hr { border-color: rgba(138,90,28,.35); }
-body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a { color: var(--day-brown); }
+body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a { color: var(--day-head); }
 
 /* ---- 购票管理：子标签、分组 ---- */
 .ticket-admin-tabs { justify-content: center; margin-bottom: 18px; }
@@ -4603,7 +4608,7 @@ body.day-mode .ticket-admin .tt-act.is-restore:not(#_) { color: #2f7d4a; }
 }
 .ta-round p { margin: 0; }
 .tas-item b small { margin-left: 6px; font-size: .72rem; font-weight: 400; color: var(--text-mute); }
-body.day-mode .tas-item b small { color: var(--day-body); }
+body.day-mode .tas-item b small { color: var(--day-copy); }
 .ta-round b { color: var(--cream); }
 .ta-round small { margin-left: 8px; color: var(--text-mute); }
 
@@ -4649,9 +4654,9 @@ body.day-mode .tas-item b small { color: var(--day-body); }
 .tt-unpicked { color: var(--text-mute); }
 .ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #6fd08c; font-weight: 600; }
 .ta-orders tr.is-void td.tt-pick-cell { text-decoration: none; }
-body.day-mode .ta-orders .tt-note { color: var(--day-brown); }
+body.day-mode .ta-orders .tt-note { color: var(--day-head); }
 body.day-mode .ta-orders .tt-h-void,
-body.day-mode .tt-unpicked { color: var(--day-body); }
+body.day-mode .tt-unpicked { color: var(--day-copy); }
 body.day-mode .tt-picked,
 body.day-mode .ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #2f7d4a; }
 
@@ -4674,7 +4679,7 @@ body.day-mode .ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #2f
 body.day-mode .ta-field > span,
 body.day-mode .te-holder.is-void,
 body.day-mode .ta-partial-row.is-void { color: var(--day-body); }
-body.day-mode .ta-partial-row { color: var(--day-body); }
+body.day-mode .ta-partial-row { color: var(--day-copy); }
 
 /* ---- 售票统计 ---- */
 .ta-stats { text-align: left; }
@@ -4696,7 +4701,7 @@ body.day-mode .ta-partial-row { color: var(--day-body); }
 .ta-list-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 22px 0 10px; font-size: .84rem; color: var(--text-mute); }
 .ta-list-head .ta-stat-title { margin: 0; }
 .ta-unpicked summary { margin: 0 0 8px; cursor: pointer; font-size: .84rem; color: var(--accent-soft); }
-body.day-mode .ta-unpicked summary { color: var(--day-brown); }
+body.day-mode .ta-unpicked summary { color: var(--day-head); }
 .gate-card .ta-copy-fallback { min-height: 160px; margin-top: 10px; font-size: .82rem; }
 .ta-copy-fallback[hidden] { display: none; }
 .ta-log { margin: 6px 0 12px; }
@@ -4704,7 +4709,7 @@ body.day-mode .ta-unpicked summary { color: var(--day-brown); }
 .ta-log-ops small { margin-left: 8px; color: var(--text-mute); }
 body.day-mode .ta-group { background: rgba(255,252,240,.18); border-color: rgba(138,90,28,.35); }
 body.day-mode .ta-group-title,
-body.day-mode .ta-stat-title { color: var(--day-brown); }
+body.day-mode .ta-stat-title { color: var(--day-head); }
 body.day-mode .ta-group-hint,
 body.day-mode .ta-footnote,
 body.day-mode .ta-empty,
@@ -4713,16 +4718,16 @@ body.day-mode .ta-point-unit,
 body.day-mode .ta-sellout td small,
 body.day-mode .ta-orders .tt-round,
 body.day-mode .ta-guide-help,
-body.day-mode .ta-log-ops small { color: var(--day-body); }
+body.day-mode .ta-log-ops small { color: var(--day-copy); }
 body.day-mode .ta-guide summary span { color: var(--day-body); }
-body.day-mode .ta-round { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-body); }
+body.day-mode .ta-round { background: rgba(255,252,240,.5); border-color: #c98f3a; color: var(--day-copy); }
 body.day-mode .ta-sub-title,
-body.day-mode .ta-dc { color: var(--day-body); }
+body.day-mode .ta-dc { color: var(--day-copy); }
 body.day-mode .ta-round b { color: var(--day-ink); }
-body.day-mode .ta-log-ops { color: var(--day-body); }
-body.day-mode .ta-round small { color: var(--day-body); }
-body.day-mode .ta-guide summary { color: var(--day-brown); }
-body.day-mode .ta-guide-help code { background: rgba(255,255,255,.4); color: var(--day-body); }
+body.day-mode .ta-log-ops { color: var(--day-copy); }
+body.day-mode .ta-round small { color: var(--day-copy); }
+body.day-mode .ta-guide summary { color: var(--day-head); }
+body.day-mode .ta-guide-help code { background: rgba(255,255,255,.4); color: var(--day-copy); }
 body.day-mode .ta-guide-preview { background: rgba(255,252,240,.55); border-color: #c98f3a; }
 body.day-mode .ta-chart { --ta-bar: #7a4a14; }
 body.day-mode .ta-chart .ta-axis { fill: var(--day-brown-soft); }
@@ -4743,4 +4748,4 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
   .ta-orders .tt-acts { flex-direction: column; align-items: flex-start; }
 }
 /* 购票管理里的说明小字（定时开关说明、下一次刷新说明等）：白天模式金底上用深棕色才看得清 */
-body.day-mode .ticket-sched-note { color: var(--day-body); }
+body.day-mode .ticket-sched-note { color: var(--day-copy); }
