@@ -68,7 +68,7 @@
      输入框里的占位文字：夜间浅紫，白天灰色。
      窗口里的玻璃胶囊按钮不按这张表走，和天空上的按钮一样用 --pill-ink；红、绿这类状态色各自单独配。 */
   --day-cream: #1e2810;
-  --day-gold: #3a2508;
+  --day-gold: #3d3934;
   --day-lilac: #5b3610;
   /* 第一类玻璃胶囊：夜间奶油白文字；白天褐色文字 + 金黄色描边（--pill-edge，和右上角圆按钮悬停时的描边同色；悬停加深为 --pill-edge-hi） */
   --pill-ink: var(--cream);
@@ -1229,6 +1229,7 @@ body.day-mode .back-btn:hover {
 }
 
 .section-title { font-family: var(--brush); font-size: 2rem; color: var(--lantern-soft); margin-bottom: 20px; }
+body.day-mode .section-title { color: var(--day-title); }   /* 和顶部「花舞之街 · 薰风花语町」同色 */
 
 .empty-note {
   padding: 40px 20px;
@@ -2010,7 +2011,6 @@ body.day-mode .info-box {
   -webkit-backdrop-filter: blur(7px) saturate(1.15);
   backdrop-filter: blur(7px) saturate(1.15);
   transition: color .2s, border-color .2s, background .25s, box-shadow .25s, transform .2s;
-  --close-ring: var(--accent);   /* 点击动画的光环色，见下 */
 }
 .info-close:hover {
   color: var(--cream);
@@ -2018,9 +2018,9 @@ body.day-mode .info-box {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(8,6,18,.26), inset 0 1px 0 rgba(255,255,255,.2);
 }
-.info-close:active { transform: scale(.93); }
+.info-close:active,
+.info-close.is-closing { transform: scale(.93); }
 body.day-mode .info-close {
-  --close-ring: var(--pill-edge-hi);
   color: var(--day-lilac);
   background:
     linear-gradient(160deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
@@ -2029,31 +2029,6 @@ body.day-mode .info-close {
   box-shadow: 0 2px 8px rgba(96,60,10,.14), inset 0 1px 0 rgba(255,255,255,.65);
 }
 body.day-mode .info-close:hover { color: var(--day-cream); }
-
-/* 点击 × 的动画：main.js 给按钮加上 .is-closing，放完（.26s）再关窗。
-   × 转过四分之一圈，中途按下去一点再弹回；同时从按钮边上扩散出一圈淡淡的光环（--close-ring） */
-.info-close::after,
-.lightbox-close::after {
-  content: "";
-  position: absolute; inset: -1px;
-  border: 2px solid var(--close-ring);
-  border-radius: 50%;
-  opacity: 0;
-  pointer-events: none;
-}
-.info-close.is-closing,
-.lightbox-close.is-closing { animation: hjCloseSpin .26s cubic-bezier(.3,.7,.4,1) both; }
-.info-close.is-closing::after,
-.lightbox-close.is-closing::after { animation: hjCloseRing .26s ease-out both; }
-@keyframes hjCloseSpin {
-  0%   { transform: rotate(0) scale(1); }
-  40%  { transform: rotate(40deg) scale(.84); }
-  100% { transform: rotate(90deg) scale(1); }
-}
-@keyframes hjCloseRing {
-  from { opacity: .75; transform: scale(.92); }
-  to   { opacity: 0; transform: scale(1.75); }
-}
 
 /* 活动群弹窗：「分享网站」「复制群号」并排放在二维码上方 */
 .group-box img { width: 100%; border-radius: var(--radius-sm); display: block; }
@@ -2150,7 +2125,9 @@ body.day-mode .share-site-btn:active {
   box-shadow: 0 4px 10px rgba(8,6,18,.26), inset 0 1px 0 rgba(255,255,255,.2);
 }
 #captchaOverlay #captchaClose:active,
-#alarmOverlay #alarmClose:active { transform: scale(.93); }
+#captchaOverlay #captchaClose.is-closing,
+#alarmOverlay #alarmClose:active,
+#alarmOverlay #alarmClose.is-closing { transform: scale(.93); }
 body.day-mode #captchaOverlay #captchaClose,
 body.day-mode #alarmOverlay #alarmClose {
   color: var(--day-lilac);
@@ -2217,7 +2194,6 @@ body.day-mode #alarmOverlay #alarmClose:hover { color: var(--day-cream); border-
   -webkit-backdrop-filter: blur(9px) saturate(1.18);
   backdrop-filter: blur(9px) saturate(1.18);
   transition: background .2s, transform .2s, box-shadow .25s;
-  --close-ring: rgba(255,255,255,.7);
 }
 .lightbox-close:hover {
   transform: translateY(-1px);
@@ -2229,7 +2205,8 @@ body.day-mode #alarmOverlay #alarmClose:hover { color: var(--day-cream); border-
     inset 0 1px 0 rgba(255,255,255,.36),
     inset 0 -5px 10px rgba(0,0,0,.18);
 }
-.lightbox-close:active {
+.lightbox-close:active,
+.lightbox-close.is-closing {
   transform: scale(.93);
   box-shadow: 0 2px 6px rgba(0,0,0,.35), inset 0 2px 7px rgba(0,0,0,.3);
 }
@@ -2439,10 +2416,6 @@ body.day-mode footer { color: var(--day-title); }
   #captchaOverlay #captchaClose:active,
   #alarmOverlay #alarmClose:hover,
   #alarmOverlay #alarmClose:active { transform: none; }
-  .info-close.is-closing,
-  .lightbox-close.is-closing,
-  .info-close.is-closing::after,
-  .lightbox-close.is-closing::after { animation: none; }
 }
 
 
@@ -3446,6 +3419,7 @@ body.day-mode .alm-meta { border-top-color: rgba(122,84,32,.25); color: var(--da
    特指度很高，单靠类选择器盖不住）。这里只改颜色，位移仍由各自原有的 :active 负责，
    以免破坏「减弱动态效果」里对 transform 的关闭。
    红色危险按钮和开关的开启态本来就是实心，排除在外，避免按一下变成强调色。
+   窗口右上角的 × 同样填色；点完到关窗之间（main.js 加的 .is-closing）保持按下的样子。
    ============================================================================= */
 .gate-card button:not(.ticket-btn-danger, .ticket-switch.is-on):active,
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn, .ticket-btn-danger, .ticket-switch.is-on):active,
@@ -3470,7 +3444,21 @@ body.day-mode .video-action:active,
 .back-btn:active,
 body.day-mode .back-btn:active,
 .ticket-badge-inline:active,
-body.day-mode .ticket-badge-inline:active {
+body.day-mode .ticket-badge-inline:active,
+.info-close:active,
+.info-close.is-closing,
+body.day-mode .info-close:active,
+body.day-mode .info-close.is-closing,
+#captchaOverlay #captchaClose:active,
+#captchaOverlay #captchaClose.is-closing,
+#alarmOverlay #alarmClose:active,
+#alarmOverlay #alarmClose.is-closing,
+body.day-mode #captchaOverlay #captchaClose:active,
+body.day-mode #captchaOverlay #captchaClose.is-closing,
+body.day-mode #alarmOverlay #alarmClose:active,
+body.day-mode #alarmOverlay #alarmClose.is-closing,
+.lightbox-close:active,
+.lightbox-close.is-closing {
   color: var(--accent-ink);
   background:
     linear-gradient(168deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.07) 42%, rgba(0,0,0,.04) 76%, rgba(0,0,0,.1) 100%),
@@ -4473,6 +4461,7 @@ body.day-mode .popup-admin-count { color: var(--day-lilac); }
   background: linear-gradient(90deg, rgba(255,214,153,.4), rgba(255,214,153,0));
 }
 body.day-mode .tab-sec-title { color: var(--day-title); }
+body.custom-bg.day-mode .section-title,
 body.custom-bg.day-mode .tab-sec-title { text-shadow: 0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34); }
 body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91,54,16,.45), rgba(91,54,16,0)); }
 

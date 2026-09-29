@@ -3886,7 +3886,7 @@ function initA11yTabs(container) {
 }
 
 /* 弹窗：按 Esc 关闭最上层（按此顺序检查），打开时焦点移到关闭按钮 */
-const CLOSE_ANIM_MS = 260;   // 点 × 的动画时长，和 style.css 的 hjCloseSpin 一致
+const CLOSE_PRESS_MS = 160;   // 点 × 后保持「按下」样子的时长，看清反馈再关窗
 const A11Y_MODALS = [
   { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
   { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
@@ -3925,8 +3925,9 @@ function initA11yModals() {
     }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
   });
 
-  /* 右上角的圆形 ×：点下去先放一小段动画（style.css 的 .is-closing）再关窗；Esc、点遮罩照旧立刻关。
-     在捕获阶段拦下这次点击，动画放完调用表里的 close（和按钮本身的点击处理一样） */
+  /* 右上角的圆形 ×：和其他按钮一样按下时填成实心强调色；点完先保持这个样子一小会儿（style.css 的 .is-closing）再关窗，
+     不然窗口一下就没了、看不到反馈。Esc、点遮罩照旧立刻关。
+     在捕获阶段拦下这次点击，时间到了调用表里的 close（和按钮本身的点击处理一样） */
   A11Y_MODALS.forEach(({ overlay, closeBtn, close }) => {
     const btn = $(closeBtn);
     if (!btn.matches(".info-close, .lightbox-close")) return;
@@ -3938,7 +3939,7 @@ function initA11yModals() {
       setTimeout(() => {
         if (!$(overlay).hidden) close();
         btn.classList.remove("is-closing");
-      }, CLOSE_ANIM_MS);
+      }, CLOSE_PRESS_MS);
     }, true);
   });
 }
