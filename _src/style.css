@@ -3600,8 +3600,10 @@ body.day-mode .about-form select,
 body.day-mode .about-form textarea,
 body.day-mode .about-form input:not([type="checkbox"]) { background-color: #f6e3bb; color: var(--day-ink); border-color: #c98f3a; color-scheme: light; }
 body.day-mode .about-form select option { color: var(--day-ink); background: #f6e3bb; }
+/* 白天模式的占位文字用灰色：--text-mute 是夜间模式那套灰紫，白天用会太紫，
+   这里跟站内其它文本框的默认占位色保持一致 */
 body.day-mode .about-form input::placeholder,
-body.day-mode .about-form textarea::placeholder { color: var(--text-mute); }
+body.day-mode .about-form textarea::placeholder { color: #757575; }
 body.day-mode .about-form input[type="checkbox"] { background: #f6e3bb; border-color: #c98f3a; }
 body.day-mode .about-form input[type="checkbox"]:checked { background: #8a5a1c; border-color: #8a5a1c; }
 body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0; }
