@@ -1162,10 +1162,10 @@ function onInfoTextCopy(e) {
   }
 }
 
-/* 点击遮罩空白处关闭弹窗 */
+/* 点击遮罩空白处关闭弹窗（遮罩带 data-close-only-x 时不关：只能点 ×） */
 function closeOnBackdrop(overlay, close) {
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
+    if (e.target === overlay && !overlay.dataset.closeOnlyX) close();
   });
 }
 
@@ -4024,25 +4024,30 @@ function initSitePopup() {
 
 /* =============================================================================
    15. 花语（「更多」里的「听得花间语」）
-   压缩和换字在 huayu.js（第一次打开时加载，window.HJHuayu），加密在 Worker，密钥只在后端：
-     写：明文 → HJHuayu.compress → huayu_seal → HJHuayu.toFlowers →「听花语：……」
-     听：花语 → HJHuayu.fromFlowers → huayu_open → HJHuayu.decompress → 明文
-   访客端开关在管理页「花语加密」，启动时随 get_site_state 读回（huayuMode）：
-     open 完全开放（能写能听）/ decrypt 仅开放解密（只能听）/ off 彻底关闭（「更多」里不显示）
+   压缩、换字 / 组句在 huayu.js（第一次打开时加载，window.HJHuayu），加密在 Worker，密钥只在后端。
+   花语有两代：一代是「听花语：」+ 一串草木字（最短），二代是一段像散文的句子；
+   写的时候用管理页「花语加密」里选定的那一代（启动时随 get_site_state 读回 huayuAlgo），
+   听的时候自动认出是哪一代，两代都能解。
+   访客端开关也在那里（huayuMode）：open 完全开放（能写能听）/ decrypt 仅开放解密（只能听）/ off 彻底关闭（「更多」里不显示）。
    管理员用自定义密钥写的花语，访客要自己填密钥才听得懂（寻宝、彩蛋用）。网站不保存输入的内容。
+   弹窗只能点右上角的 × 关（点遮罩、按 Esc 都不关），免得写了一半的话被误关掉。
    ============================================================================= */
 const HUAYU_VISITOR_MAX = 5000;   // 访客一次最多写多少字
+const HUAYU_DETECT_NOW = 4000;    // 输入框超过这么长（多半是粘贴的长花语）就等停手再认是不是花语
 let huayuMode = null;             // null = 还不知道（Worker 没有花语功能时一直是 null，按钮不显示）
+let huayuAlgo = 2;                // 写花语用第几代（管理页选定）
 let huayuBusy = false;
 let huayuResultCopy = "";
+let huayuDetectTimer = 0;
 
 const loadHuayuJs = () => loadLateScript("huayu.js", () => !!window.HJHuayu);
 
 const HUAYU_ERRORS = {
   empty: "先写点什么吧",
-  not_huayu: "没找到花语：花语以「听花语」开头，整段都是花草树木的字",
+  not_huayu: "没找到花语：一代花语以「听花语：」开头，二代花语是一段花的句子，要整段完整粘贴",
   broken: "这段花语不完整，可能复制时漏了几个字",
   version: "这段花语来自更新的版本，刷新页面再试",
+  unsupported: "这个浏览器太旧，解不开这段花语，换个浏览器试试",
   bad_key: "听不懂：这段花语被改动过，或者不是本站写的",
   bad_custom_key: "密钥不对，再想想？",
   need_key: "这段花语设了密钥，填上密钥再听",
@@ -4050,17 +4055,17 @@ const HUAYU_ERRORS = {
   closed_seal: "现在只能听花语，暂时不能写",
   too_long: `太长啦，一次最多写 ${HUAYU_VISITOR_MAX} 字`,
   rate_limited: "操作太频繁了，歇一会儿再试",
+  net: "连接失败，检查一下网络后再试",
   no_js: "花语字典没加载出来，检查一下网络后重新打开",
 };
 
-function huayuErrorText(data, fallback) {
-  if (!data) return "连接失败，检查一下网络后再试";
-  if (data.error === "unknown action") return HUAYU_ERRORS.closed;
-  return HUAYU_ERRORS[data.error] || fallback || "出了点问题，稍后再试";
-}
+const huayuErrorText = (res) => (res && res.error === "unknown action" ? HUAYU_ERRORS.closed
+  : HUAYU_ERRORS[res && res.error] || "出了点问题，稍后再试");
 
-/* 开关变了：更新「更多」里的按钮；弹窗开着时同步界面 */
-function applyHuayuMode(mode) {
+/* 开关变了：更新「更多」里的按钮；弹窗开着时同步界面。state = { mode, algo }（只给 mode 字符串也行） */
+function applyHuayuMode(state) {
+  const { mode, algo } = typeof state === "object" && state ? state : { mode: state };
+  if ([1, 2].includes(Number(algo))) huayuAlgo = Number(algo);
   const next = ["open", "decrypt", "off"].includes(mode) ? mode : null;
   if (next === huayuMode) return;
   huayuMode = next;
@@ -4071,7 +4076,7 @@ function applyHuayuMode(mode) {
 /* get_site_state 没带花语开关时（Worker 版本不一致）单独问一次 */
 async function refreshHuayuMode() {
   const data = await callWorker({ action: "huayu_state" });
-  if (data && data.ok) applyHuayuMode(data.mode);
+  if (data && data.ok) applyHuayuMode(data);
 }
 
 function syncHuayuUi() {
@@ -4081,26 +4086,29 @@ function syncHuayuUi() {
     : canWrite ? "写下想说的话化作花语，或把收到的花语贴进来听听"
       : "把收到的花语贴进来，听听花在说什么";
   $("huayuInputLabel").textContent = canWrite ? "想说的话 / 花语" : "花语";
-  $("huayuInput").placeholder = canWrite ? "写点什么，或者粘贴以「听花语：」开头的花语" : "粘贴以「听花语：」开头的花语";
+  $("huayuInput").placeholder = canWrite ? "写点什么，或者粘贴收到的花语" : "粘贴收到的花语";
   $("huayuSealBtn").hidden = !canWrite;
   $("huayuOpenBtn").disabled = $("huayuSealBtn").disabled = !ready || huayuBusy;
   syncHuayuInput();
 }
 
-/* 输入变化：字数；像是设了密钥的花语时提前露出密钥框；像花语时「听」排在前面 */
+/* 输入变化：字数；像是设了密钥的花语时提前露出密钥框；像花语时「听」排在前面。
+   很长的一段停手 0.3 秒再认，免得每改一个字都把整段读一遍 */
 function syncHuayuInput() {
+  clearTimeout(huayuDetectTimer);
+  if ($("huayuInput").value.length > HUAYU_DETECT_NOW) huayuDetectTimer = setTimeout(syncHuayuInputNow, 300);
+  else syncHuayuInputNow();
+}
+
+function syncHuayuInputNow() {
   const text = $("huayuInput").value;
   const H = window.HJHuayu;
-  const looks = !!(H && text && H.looksLike(text));
+  const info = H && text ? H.detect(text) : null;
+  const looks = !!(info && info.ok);
   const n = H ? H.countChars(text) : text.length;
-  $("huayuCount").textContent = !text ? "" : looks ? `花语 ${H.extractBody(text).length} 字` : `${n} 字`;
+  $("huayuCount").textContent = !text ? "" : looks ? `${H.ALGO_NAMES[info.algo]}花语` : `${n} 字`;
   $("huayuCount").classList.toggle("is-over", !looks && n > HUAYU_VISITOR_MAX);
-  if (looks) {
-    const info = H.fromFlowers(text);
-    if (info.ok && info.kind === 1) $("huayuKeyRow").hidden = false;
-  } else {
-    $("huayuKeyRow").hidden = true;
-  }
+  $("huayuKeyRow").hidden = !(looks && info.kind === 1);
   $("huayuCard").classList.toggle("is-writing", !looks && !!text);
 }
 
@@ -4134,19 +4142,25 @@ async function huayuSeal() {
   const text = $("huayuInput").value;
   setMsg(msg, "");
   if (!text.trim()) { setMsg(msg, HUAYU_ERRORS.empty); return; }
-  if (text.includes("听花语") && H.fromFlowers(text).ok) { setMsg(msg, "这已经是花语啦，点「听花解语」听听它在说什么"); return; }
-  const n = H.countChars(text);
-  if (n > HUAYU_VISITOR_MAX) { setMsg(msg, HUAYU_ERRORS.too_long); return; }
-  const data = await callWorker({ action: "huayu_seal", ...H.compress(text) });
-  if (!data || !data.ok) {
-    if (data && data.error === "closed") {
-      applyHuayuMode(data.mode);
-      setMsg(msg, data.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
-    } else setMsg(msg, huayuErrorText(data));
+  const already = H.detect(text);   // 整段就是花语（二代句式对得上，或带着「听花语」）时提醒一下
+  if (already.ok && (already.algo === 2 || text.includes(H.MARK))) {
+    setMsg(msg, "这已经是花语啦，点「听花解语」听听它在说什么");
     return;
   }
-  const flowers = H.toFlowers(data);
-  showHuayuResult("花语", flowers, `原文 ${n} 字 → 花语 ${H.countChars(flowers)} 字`, "复制花语");
+  if (H.countChars(text) > HUAYU_VISITOR_MAX) { setMsg(msg, HUAYU_ERRORS.too_long); return; }
+  let res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
+  if (!res.ok && res.error === "algo_changed" && res.algo) {   // 管理员刚换了算法：换成新的再写一次
+    huayuAlgo = res.algo;
+    res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
+  }
+  if (!res.ok) {
+    if (res.error === "closed") {
+      applyHuayuMode(res.mode);
+      setMsg(msg, res.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
+    } else setMsg(msg, huayuErrorText(res));
+    return;
+  }
+  showHuayuResult("花语", res.text, `原文 ${res.plainChars} 字 → 花语 ${res.cipherChars} 字`, "复制花语");
 }
 
 async function huayuOpen() {
@@ -4155,27 +4169,18 @@ async function huayuOpen() {
   setMsg(msg, "");
   const input = $("huayuInput").value;
   if (!input.trim()) { setMsg(msg, "先把花语粘贴进来吧"); return; }
-  const info = H.fromFlowers(input);
-  if (!info.ok) { setMsg(msg, HUAYU_ERRORS[info.error]); return; }
   const key = $("huayuKey").value.trim();
-  if (info.kind === 1 && !key) {
-    $("huayuKeyRow").hidden = false;
-    setMsg(msg, HUAYU_ERRORS.need_key);
-    $("huayuKey").focus();
+  const res = await H.decrypt(input, { post: callWorker, key });
+  if (!res.ok) {
+    if (res.error === "need_key") {
+      $("huayuKeyRow").hidden = false;
+      $("huayuKey").focus();
+    }
+    if (res.error === "closed") applyHuayuMode(res.mode);
+    setMsg(msg, res.error === "bad_key" && res.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(res));
     return;
   }
-  const data = await callWorker({
-    action: "huayu_open", head: info.head, tag: info.tag, data: info.data, n: info.n,
-    ...(info.kind === 1 ? { key } : {}),
-  });
-  if (!data || !data.ok) {
-    if (data && data.error === "closed") applyHuayuMode(data.mode);
-    setMsg(msg, data && data.error === "bad_key" && info.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(data));
-    return;
-  }
-  let text;
-  try { text = H.decompress(data); } catch (e) { setMsg(msg, HUAYU_ERRORS.broken); return; }
-  showHuayuResult("花在说", text, info.kind === 1 ? "密钥花语" : "", "复制原文");
+  showHuayuResult("花在说", res.text, res.kind === 1 ? "密钥花语" : "", "复制原文");
 }
 
 function openHuayuModal() {
@@ -4194,8 +4199,7 @@ function closeHuayuModal() {
 }
 
 function initHuayu() {
-  $("huayuClose").addEventListener("click", closeHuayuModal);
-  closeOnBackdrop($("huayuOverlay"), closeHuayuModal);
+  $("huayuClose").addEventListener("click", closeHuayuModal);   // 只有 × 能关（遮罩带 data-close-only-x）
   $("huayuInput").addEventListener("input", () => {
     syncHuayuInput();
     setMsg($("huayuMsg"), "");
@@ -4257,7 +4261,7 @@ function initA11yTabs(container) {
   });
 }
 
-/* 弹窗：按 Esc 关闭最上层（按此顺序检查），打开时焦点移到关闭按钮 */
+/* 弹窗：按 Esc 关闭最上层（按此顺序检查；遮罩带 data-close-only-x 的只能点 × 关），打开时焦点移到关闭按钮 */
 const CLOSE_PRESS_MS = 160;   // 点 × 后保持「按下」样子的时长，看清反馈再关窗
 const A11Y_MODALS = [
   { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
@@ -4288,7 +4292,7 @@ function initA11yModals() {
     const firstOpen = (id) => !$(id).hidden && A11Y_MODALS.find((m) => m.overlay === id);
     const top = firstOpen("lightboxOverlay") || firstOpen("sitePopupOverlay")
       || A11Y_MODALS.find((m) => !$(m.overlay).hidden);
-    if (top) top.close();
+    if (top && !$(top.overlay).dataset.closeOnlyX) top.close();   // 只能点 × 的弹窗，Esc 也不关
   });
 
   A11Y_MODALS.forEach(({ overlay, closeBtn }) => {

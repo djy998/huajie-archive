@@ -28,12 +28,21 @@ async function buildScript(name) {
   if (name === "admin.js") {
     code = code.replace(/(const ADMIN_PANELS_HTML = `)([\s\S]*?)(`;)/, (_, a, html, b) => a + dedentHtml(html) + b);
   }
-  /* 花语：字频、二元表、花字表在 huayu-data.json，填进 huayu.js 的占位处 */
-  if (name === "huayu.js") {
-    const data = JSON.stringify(JSON.parse(await readFile(join(SRC, "huayu-data.json"), "utf8")));
-    code = code.replace("/*@@HUAYU_DATA@@*/ null", () => data);
-  }
+  /* 花语：huayu/ 下的各个模块按顺序拼在入口 huayu.js 前面，字模型的数据填进 zi.js 的占位处 */
+  if (name === "huayu.js") code = await bundleHuayu(code);
   return minifyJs(code);
+}
+
+/* 花语的各个模块（顺序不能乱：后面的用到前面的） */
+const HUAYU_PARTS = ["util.js", "zi.js", "v1.js", "v2-lexicon.js", "v2-compress.js", "v2-sentence.js", "v2.js"];
+
+async function bundleHuayu(entry) {
+  const parts = [];
+  for (const f of HUAYU_PARTS) parts.push(await readFile(join(SRC, "huayu", f), "utf8"));
+  const data = JSON.stringify(JSON.parse(await readFile(join(SRC, "huayu", "zi-data.json"), "utf8")));
+  parts[HUAYU_PARTS.indexOf("zi.js")] = parts[HUAYU_PARTS.indexOf("zi.js")].replace("/*@@ZI_DATA@@*/ null", () => data);
+  /* 整个包进一个函数里：模块之间照常互相引用，又不会在访客页面上多出一堆全局变量 */
+  return `(() => {\n${parts.join("\n")}\n${entry}\n})();`;
 }
 
 async function buildHtml(html) {
