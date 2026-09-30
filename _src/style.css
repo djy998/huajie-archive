@@ -15,6 +15,7 @@
      11. 弹窗                         23. 活动回顾、首页弹窗公告
      12. 点赞按钮                     24. 购票页开关、轮次、订单与售票统计
                                      25. 花语（听得花间语 / 花语加密）
+                                     26. 圆角下拉与日期选择
    约定：暗色（夜晚）为默认样式，白天样式统一写成 body.day-mode 前缀并紧跟在组件后面。
    开屏图样式在 index.html 的 \3c style> 中（需要在本文件加载前生效）。
    修改本文件后，记得把 index.html 里的版本号 HJ_VERSION 改成新的日期。
@@ -4892,3 +4893,236 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
   .hy-key-row { flex-wrap: wrap; }
   .gate-card .hy-key-row button { flex: 1; }
 }
+
+
+/* =============================================================================
+   26. 圆角下拉与日期选择（main.js 第 16 节）：代替浏览器自带的方角下拉列表和日期面板，
+   外观跟日历小组件一致（毛玻璃圆角卡片、周一起始的月历、今天绿圈）。弹层挂在 body 下，盖在所有弹窗上面
+   ============================================================================= */
+.hj-pop {
+  position: fixed; left: 0; top: 0; z-index: 1000;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  font-size: .9rem;
+  color: var(--cream);
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.1) 0%, rgba(255,255,255,.02) 46%, rgba(255,255,255,.05) 100%),
+    rgba(30,24,52,.95);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(10,7,22,.45), inset 0 1px 0 rgba(255,255,255,.18);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  animation: hjPopIn .16s ease-out;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hj-pop[hidden] { display: none; }
+@keyframes hjPopIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hj-pop { animation: none; } }
+.hj-pop button { font-family: inherit; }
+.hj-pop .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- 下拉列表 ---- */
+.hj-pop-select { min-width: 140px; max-width: min(420px, calc(100vw - 16px)); }
+.hj-opt-list {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.25) transparent;
+}
+.hj-opt {
+  position: relative;
+  padding: 8px 16px 8px 32px;
+  border-radius: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.hj-opt.in-group { padding-left: 40px; }
+.hj-opt:hover,
+.hj-opt.is-active { background: rgba(255,255,255,.1); }
+.hj-opt.is-selected { font-weight: 700; color: var(--accent-soft); }
+.hj-opt.is-selected::before {   /* 对勾 */
+  content: "";
+  position: absolute; left: 13px; top: 50%;
+  width: 9px; height: 5px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-70%) rotate(-45deg);
+}
+.hj-opt.in-group.is-selected::before { left: 21px; }
+.hj-opt.is-disabled { opacity: .4; cursor: default; }
+.hj-opt.is-disabled:hover { background: none; }
+.hj-opt-group {
+  padding: 8px 14px 4px;
+  font-size: .78em;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text-mute);
+}
+
+/* ---- 日期 / 时间 ---- */
+.hj-pop-date { padding: 12px 12px 10px; }
+.hj-date-main { display: flex; gap: 12px; }
+.hj-date-cal { width: 252px; }
+.hj-date-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 8px; }
+.hj-date-title {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 999px;
+  font-size: .95rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--cream);
+  background: none;
+  cursor: pointer;
+}
+.hj-date-title:hover { background: rgba(255,255,255,.1); }
+.hj-date-title .ico { width: 12px; height: 12px; opacity: .7; }
+.hj-date-navs { display: flex; gap: 6px; }
+.hj-date-nav {
+  width: 28px; height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-soft);
+  background: rgba(255,255,255,.06);
+  cursor: pointer;
+}
+.hj-date-nav:hover { border-color: var(--accent); color: var(--cream); }
+.hj-date-nav:disabled { opacity: .3; cursor: default; border-color: rgba(255,255,255,.18); }
+.hj-date-week, .hj-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.hj-date-week span {
+  padding: 4px 0;
+  text-align: center;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  color: #b9b0d6;
+}
+.hj-date-week span:nth-child(6),
+.hj-date-week span:last-child { color: #d98a94; }
+.hj-day, .hj-month, .hj-time-cell {
+  border: none;
+  font-weight: 600;
+  color: var(--cream);
+  background: none;
+  cursor: pointer;
+}
+.hj-day {
+  justify-self: center;
+  width: 32px; height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: .85rem;
+  line-height: 1;
+}
+.hj-day:hover, .hj-month:hover, .hj-time-cell:hover { background: rgba(255,255,255,.1); }
+.hj-day.is-out { opacity: .35; }
+.hj-day.is-today, .hj-month.is-today { box-shadow: inset 0 0 0 2px #2f8a57; }   /* 今天：绿圈（日历小组件里是实心绿） */
+.hj-day.is-pick, .hj-month.is-pick, .hj-time-cell.is-pick {
+  color: var(--accent-ink);
+  background: var(--accent);
+  opacity: 1;
+}
+.hj-day:disabled, .hj-month:disabled { opacity: .2; cursor: default; background: none; }
+.hj-month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px 0 2px; }
+.hj-month { height: 44px; border-radius: 14px; font-size: .88rem; }
+
+.hj-time { display: flex; flex-direction: column; min-width: 112px; }
+.hj-date-cal + .hj-time { padding-left: 12px; border-left: 1px dashed rgba(255,255,255,.18); }
+.hj-time-label { margin: 6px 0 12px; text-align: center; font-size: .85rem; font-weight: 700; letter-spacing: .08em; color: var(--text-soft); }
+.hj-time-cols { flex: none; display: flex; align-items: stretch; gap: 2px; height: 236px; }
+.hj-pop-date:not(:has(.hj-date-cal)) .hj-time-cols { height: 200px; }
+.hj-time-col {
+  flex: 1;
+  min-height: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 18px, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(transparent, #000 18px, #000 calc(100% - 18px), transparent);
+}
+.hj-time-col::-webkit-scrollbar { display: none; }
+.hj-time-cell { flex: none; width: 44px; height: 30px; padding: 0; border-radius: 10px; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.hj-time-sep { align-self: center; font-weight: 700; color: var(--text-mute); }
+
+.hj-date-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed rgba(255,255,255,.18);
+}
+.hj-date-btn {
+  padding: 6px 14px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  background: rgba(255,255,255,.06);
+  cursor: pointer;
+}
+.hj-date-btn:first-child { margin-right: auto; }
+.hj-date-btn:hover { border-color: var(--accent); color: var(--cream); }
+.hj-date-btn:disabled { opacity: .35; cursor: default; }
+.hj-date-btn.is-main { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 420px) {
+  .hj-date-main { flex-direction: column; }
+  .hj-date-cal + .hj-time { padding: 10px 0 0; border-left: none; border-top: 1px dashed rgba(255,255,255,.18); }
+  .hj-date-cal + .hj-time .hj-time-cols { height: 120px; }
+}
+
+/* 日期框右端仍显示浏览器的小图标，但点它（和点框里别处一样）弹的是上面这个面板 */
+html.hj-pick-date input[type="date"],
+html.hj-pick-date input[type="datetime-local"],
+html.hj-pick-date input[type="time"] { cursor: pointer; }
+html.hj-pick-date input[type="date"]::-webkit-calendar-picker-indicator,
+html.hj-pick-date input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html.hj-pick-date input[type="time"]::-webkit-calendar-picker-indicator { pointer-events: none; }
+
+body.day-mode .hj-pop {
+  color: #4a2c0a;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.25) 46%, rgba(255,255,255,.35) 100%),
+    rgba(250,238,210,.96);
+  border-color: rgba(255,255,255,.6);
+  box-shadow: 0 12px 30px rgba(96,64,16,.25), inset 0 1px 0 rgba(255,255,255,.75);
+}
+body.day-mode .hj-opt-list { scrollbar-color: rgba(122,84,32,.35) transparent; }
+body.day-mode .hj-opt:hover,
+body.day-mode .hj-opt.is-active,
+body.day-mode .hj-date-title:hover,
+body.day-mode .hj-day:hover,
+body.day-mode .hj-month:hover,
+body.day-mode .hj-time-cell:hover { background: rgba(122,84,32,.12); }
+body.day-mode .hj-opt.is-selected { color: #8a4f0c; }
+body.day-mode .hj-opt.is-disabled:hover,
+body.day-mode .hj-day:disabled,
+body.day-mode .hj-month:disabled { background: none; }
+body.day-mode .hj-opt-group,
+body.day-mode .hj-time-label { color: #7a5a2e; }
+body.day-mode .hj-date-title,
+body.day-mode .hj-day,
+body.day-mode .hj-month,
+body.day-mode .hj-time-cell { color: #4a2c0a; }
+body.day-mode .hj-date-week span { color: #7a5a2e; }
+body.day-mode .hj-date-week span:nth-child(6),
+body.day-mode .hj-date-week span:last-child { color: #b8556a; }
+body.day-mode .hj-day.is-pick,
+body.day-mode .hj-month.is-pick,
+body.day-mode .hj-time-cell.is-pick { color: #3a2508; background: var(--lantern); }
+body.day-mode .hj-date-nav,
+body.day-mode .hj-date-btn { color: #6b4a24; background: rgba(122,84,32,.06); border-color: rgba(122,84,32,.25); }
+body.day-mode .hj-date-nav:hover,
+body.day-mode .hj-date-btn:hover { color: #4a2c0a; border-color: #d9903a; }
+body.day-mode .hj-date-btn.is-main { color: #3a2508; background: var(--lantern); border-color: #d9903a; }
+body.day-mode .hj-date-cal + .hj-time,
+body.day-mode .hj-date-foot { border-color: rgba(122,84,32,.22); }

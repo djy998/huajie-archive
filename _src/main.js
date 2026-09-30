@@ -9,7 +9,8 @@
      5. 站点开关、验证开关、星芒节 13. 闹铃与倒计时（纯本地）
      6. 花街介绍 / 活动群弹窗      14. 首页弹窗公告
      7. 网站说明（关于 / 反馈 / 分享） 15. 花语（听得花间语）
-     8. 大图预览                  16. 无障碍与启动
+     8. 大图预览                  16. 圆角下拉与日期选择
+                                  17. 无障碍与启动
    脚本加载顺序（index.html 底部）：verify.js → config.js → main.js → ticket.js → venue.js → survey.js → initApp()
      · config.js：站点常量与活动内容（平时改内容只改它）
      · ticket.js：访客购票；venue.js：场地使用登记；survey.js：活动问卷
@@ -4215,7 +4216,426 @@ function initHuayu() {
 }
 
 /* =============================================================================
-   16. 无障碍与启动
+   16. 圆角下拉与日期选择
+   网页里所有的下拉框（<select>）和日期 / 日期时间 / 时间框，用鼠标点开时弹出和日历小组件同一风格的圆角弹层，
+   代替浏览器自带的方角列表和日期面板。控件本身不换：值、表单校验、input / change 事件都照旧，
+   后加进页面的控件（管理页、购票表单等）也自动生效（事件挂在 document 上）。
+   · 触屏上照旧用系统自带的选择器（手机上的滚轮 / 底部列表更顺手）；
+   · 日期类只在 Chromium 内核（Chrome、Edge 等）上替换，其它浏览器的日期面板拦不干净，保持原样；
+   · 日期框仍可以直接键盘输入；「今天」按国服日期算（全站的日期、时间都按国服时间理解）；
+   · 弹层开着时：Esc 只关弹层；点弹层外面只关弹层，这一下不会点到别处（和原生下拉一样）。
+   ============================================================================= */
+const PICK_WEEK = ["一", "二", "三", "四", "五", "六", "日"];
+const PICK_DATE_TYPES = ["date", "datetime-local", "time"];
+const pick = { pop: null, anchor: null, kind: "", pointer: "mouse", start: "", items: [], active: -1, y: 0, m: 0, months: false };
+
+const pickDateOn = () => !!navigator.userAgentData;   // Chromium 才有
+const pickableSelect = (el) => el instanceof HTMLSelectElement && !el.multiple && el.size <= 1 && !el.disabled;
+const pickableDate = (el) => el instanceof HTMLInputElement && PICK_DATE_TYPES.includes(el.type)
+  && !el.disabled && !el.readOnly && pickDateOn();
+
+function pickPopEl() {
+  if (pick.pop) return pick.pop;
+  const pop = document.createElement("div");
+  pop.className = "hj-pop";
+  pop.hidden = true;
+  pop.addEventListener("mousedown", (e) => e.preventDefault());   // 点弹层不抢走控件的焦点
+  pop.addEventListener("click", onPickClick);
+  document.body.appendChild(pop);
+  pick.pop = pop;
+  return pop;
+}
+
+/* 贴着控件放：下面放得下放下面，否则放上面；左右不出屏幕 */
+function placePick() {
+  const { pop, anchor } = pick;
+  if (!anchor) return;
+  if (!anchor.isConnected || !anchor.getClientRects().length) { closePick(); return; }
+  const r = anchor.getBoundingClientRect();
+  const { vw, vh } = viewportSize();
+  if (r.bottom < 0 || r.top > vh) { closePick(); return; }
+  const below = vh - r.bottom - 14, above = r.top - 14;
+  const list = pop.querySelector(".hj-opt-list");
+  if (list) list.style.maxHeight = `${clamp(Math.max(below, above), 120, 320)}px`;
+  if (pick.kind === "select") pop.style.minWidth = `${Math.round(r.width)}px`;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const top = h <= below || below >= above ? r.bottom + 6 : r.top - 6 - h;
+  pop.style.left = `${clamp(r.left, 8, Math.max(8, vw - w - 8))}px`;
+  pop.style.top = `${Math.max(8, top)}px`;
+}
+
+function openPick(anchor, kind) {
+  closePick();
+  const pop = pickPopEl();
+  pick.anchor = anchor;
+  pick.kind = kind;
+  pick.start = anchor.value;
+  const cs = getComputedStyle(anchor);
+  pop.style.fontFamily = cs.fontFamily;
+  pop.style.minWidth = "";
+  pop.className = `hj-pop hj-pop-${kind === "select" ? "select" : "date"}`;
+  if (kind === "select") renderSelectPick();
+  else {
+    /* 没填过：从今天所在的月份开始；今天不在可选范围里时，从最近能选的那个月开始 */
+    let d = pickParts().date || cnDate(0);
+    if (pickMin() && d < pickMin()) d = pickMin();
+    if (pickMax() && d > pickMax()) d = pickMax();
+    pick.y = +d.slice(0, 4);
+    pick.m = +d.slice(5, 7);
+    pick.months = false;
+    renderDatePick();
+  }
+  pop.hidden = false;
+  anchor.setAttribute("aria-expanded", "true");
+  placePick();
+  pop.querySelectorAll(".hj-time-col").forEach(centerPickedTime);
+  pop.querySelector(".hj-opt.is-active")?.scrollIntoView({ block: "nearest" });
+}
+
+function closePick() {
+  const { pop, anchor } = pick;
+  if (!anchor) return;
+  pick.anchor = null;
+  pop.hidden = true;
+  pop.innerHTML = "";
+  anchor.removeAttribute("aria-expanded");
+  /* 日期时间 / 时间：选的过程中只发 input，关上时值变了才发一次 change（免得改一次存一次） */
+  if (pick.kind !== "select" && pick.kind !== "date" && anchor.value !== pick.start) {
+    anchor.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+function pickSetValue(v, change) {
+  const el = pick.anchor;
+  if (el.value === v) return;
+  el.value = v;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  if (change) el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/* ---- 下拉框 ---- */
+function renderSelectPick() {
+  const sel = pick.anchor;
+  const items = [];
+  let html = "";
+  const addOpt = (o, inGroup) => {
+    if (o.hidden) return;
+    const off = o.disabled || (inGroup && o.parentElement.disabled);
+    const cls = ["hj-opt"];
+    if (inGroup) cls.push("in-group");
+    if (off) cls.push("is-disabled");
+    if (o.selected) cls.push("is-selected", "is-active");
+    html += `<div class="${cls.join(" ")}" role="option" aria-selected="${o.selected}" data-i="${items.length}">${escapeHtml(o.label)}</div>`;
+    items.push(o);
+  };
+  for (const node of sel.children) {
+    if (node.tagName === "OPTGROUP") {
+      html += `<div class="hj-opt-group">${escapeHtml(node.label)}</div>`;
+      for (const o of node.children) addOpt(o, true);
+    } else if (node.tagName === "OPTION") addOpt(node, false);
+  }
+  pick.items = items;
+  pick.active = items.findIndex((o) => o.selected);
+  pick.pop.innerHTML = `<div class="hj-opt-list" role="listbox">${html || '<div class="hj-opt-group">（没有选项）</div>'}</div>`;
+}
+
+function pickSelectChoose(i) {
+  const o = pick.items[i];
+  const sel = pick.anchor;
+  if (!o || o.disabled || o.parentElement.disabled) return;
+  closePick();
+  if (!o.selected) {
+    o.selected = true;
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  sel.focus();
+}
+
+function pickSelectMove(to) {
+  const opts = [...pick.pop.querySelectorAll(".hj-opt")];
+  const ok = (i) => opts[i] && !opts[i].classList.contains("is-disabled");
+  let i = to;
+  if (!ok(i)) {
+    const dir = to > pick.active ? 1 : -1;
+    while (i >= 0 && i < opts.length && !ok(i)) i += dir;
+    if (!ok(i)) return;
+  }
+  opts.forEach((el, k) => el.classList.toggle("is-active", k === i));
+  pick.active = i;
+  opts[i].scrollIntoView({ block: "nearest" });
+}
+
+/* ---- 日期 / 日期时间 / 时间 ---- */
+const pickHasDate = () => pick.kind !== "time";
+const pickHasTime = () => pick.kind !== "date";
+
+/* 控件的值 → { date: "YYYY-MM-DD" | "", h, m }（时间没填时是 -1） */
+function pickParts() {
+  const v = pick.anchor.value;
+  const date = (/^\d{4}-\d{2}-\d{2}/.exec(v) || [""])[0];
+  const t = /(\d{2}):(\d{2})/.exec(pick.kind === "time" ? v : v.slice(11));
+  return { date, h: t ? +t[1] : -1, m: t ? +t[2] : -1 };
+}
+
+function pickCompose({ date, h, m }) {
+  const hm = `${pad2(Math.max(h, 0))}:${pad2(Math.max(m, 0))}`;
+  if (pick.kind === "date") return date;
+  if (pick.kind === "time") return hm;
+  return date ? `${date}T${hm}` : "";
+}
+
+const pickMin = () => (pick.anchor.min || "").slice(0, 10);
+const pickMax = () => (pick.anchor.max || "").slice(0, 10);
+const pickDayOk = (key) => (!pickMin() || key >= pickMin()) && (!pickMax() || key <= pickMax());
+
+function pickNavOk(dir) {
+  const y = pick.y, m = pick.m;
+  if (pick.months) {
+    const edge = dir < 0 ? `${y - 1}-12-31` : `${y + 1}-01-01`;
+    return dir < 0 ? !pickMin() || edge >= pickMin() : !pickMax() || edge <= pickMax();
+  }
+  const d = new Date(y, m - 1 + dir, 1);
+  const first = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
+  const last = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())}`;
+  return (!pickMin() || last >= pickMin()) && (!pickMax() || first <= pickMax());
+}
+
+const PICK_CHEVRON = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+
+function renderDatePick() {
+  const parts = pickParts();
+  let cal = "";
+  if (pickHasDate()) {
+    const title = pick.months ? `${pick.y}年` : `${pick.y}年${pick.m}月`;
+    cal += `<div class="hj-date-head">
+      <button type="button" class="hj-date-title" data-act="mode" title="${pick.months ? "回到日期" : "选月份"}">${title}${PICK_CHEVRON(pick.months ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6")}</button>
+      <span class="hj-date-navs">
+        <button type="button" class="hj-date-nav" data-act="prev" aria-label="${pick.months ? "上一年" : "上个月"}"${pickNavOk(-1) ? "" : " disabled"}>${PICK_CHEVRON("M14.5 5l-7 7 7 7")}</button>
+        <button type="button" class="hj-date-nav" data-act="next" aria-label="${pick.months ? "下一年" : "下个月"}"${pickNavOk(1) ? "" : " disabled"}>${PICK_CHEVRON("M9.5 5l7 7-7 7")}</button>
+      </span>
+    </div>`;
+    const today = cnDate(0);
+    if (pick.months) {
+      let cells = "";
+      for (let m = 1; m <= 12; m++) {
+        const first = `${pick.y}-${pad2(m)}-01`, last = `${pick.y}-${pad2(m)}-${pad2(new Date(pick.y, m, 0).getDate())}`;
+        const ok = (!pickMin() || last >= pickMin()) && (!pickMax() || first <= pickMax());
+        const cls = ["hj-month"];
+        if (today.slice(0, 7) === first.slice(0, 7)) cls.push("is-today");
+        if (parts.date.slice(0, 7) === first.slice(0, 7)) cls.push("is-pick");
+        cells += `<button type="button" class="${cls.join(" ")}" data-month="${m}"${ok ? "" : " disabled"}>${m}月</button>`;
+      }
+      cal += `<div class="hj-month-grid">${cells}</div>`;
+    } else {
+      const firstWeekday = (new Date(pick.y, pick.m - 1, 1).getDay() + 6) % 7;   // 周一起始，和日历小组件一样
+      let cells = "";
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(pick.y, pick.m - 1, 1 - firstWeekday + i);
+        const key = calKey(d);
+        const cls = ["hj-day"];
+        if (d.getMonth() !== pick.m - 1) cls.push("is-out");
+        if (key === today) cls.push("is-today");
+        if (key === parts.date) cls.push("is-pick");
+        cells += `<button type="button" class="${cls.join(" ")}" data-date="${key}"${pickDayOk(key) ? "" : " disabled"}>${d.getDate()}</button>`;
+      }
+      cal += `<div class="hj-date-week" aria-hidden="true">${PICK_WEEK.map((w) => `<span>${w}</span>`).join("")}</div>
+        <div class="hj-date-grid">${cells}</div>`;
+    }
+    cal = `<div class="hj-date-cal">${cal}</div>`;
+  }
+  let time = "";
+  if (pickHasTime()) {
+    const col = (name, n, cur) => {
+      let s = "";
+      for (let i = 0; i < n; i++) s += `<button type="button" class="hj-time-cell${i === cur ? " is-pick" : ""}" data-${name}="${i}">${pad2(i)}</button>`;
+      return `<div class="hj-time-col" data-col="${name}">${s}</div>`;
+    };
+    time = `<div class="hj-time">
+      <div class="hj-time-label">时间</div>
+      <div class="hj-time-cols">${col("hour", 24, parts.h)}<span class="hj-time-sep">:</span>${col("minute", 60, parts.m)}</div>
+    </div>`;
+  }
+  const foot = [];
+  if (!pick.anchor.required) foot.push('<button type="button" class="hj-date-btn" data-act="clear">清除</button>');
+  if (pickHasDate()) foot.push(`<button type="button" class="hj-date-btn" data-act="today"${pickDayOk(cnDate(0)) ? "" : " disabled"}>今天</button>`);
+  if (pickHasTime()) foot.push('<button type="button" class="hj-date-btn is-main" data-act="done">完成</button>');
+  pick.pop.innerHTML = `<div class="hj-date-main">${cal}${time}</div><div class="hj-date-foot">${foot.join("")}</div>`;
+}
+
+/* 翻月、切换月份视图后重画；时间列滚到选中的那一格 */
+function rerenderDatePick() {
+  renderDatePick();
+  pick.pop.querySelectorAll(".hj-time-col").forEach(centerPickedTime);
+  placePick();
+}
+
+function centerPickedTime(col) {
+  const cell = col.querySelector(".is-pick") || col.firstElementChild;
+  col.scrollTop = cell.offsetTop - col.offsetTop - (col.clientHeight - cell.offsetHeight) / 2;
+}
+
+function pickDateSet(parts, close) {
+  pickSetValue(pickCompose(parts), pick.kind === "date");
+  if (close) { const el = pick.anchor; closePick(); el.focus(); return; }
+  /* 不整个重画：时间列保持滚动位置 */
+  const now = pickParts();
+  pick.pop.querySelectorAll(".hj-day, .hj-month").forEach((b) => {
+    b.classList.toggle("is-pick", b.dataset.date ? b.dataset.date === now.date
+      : `${pick.y}-${pad2(+b.dataset.month)}` === now.date.slice(0, 7));
+  });
+  pick.pop.querySelectorAll("[data-hour]").forEach((b) => b.classList.toggle("is-pick", +b.dataset.hour === now.h));
+  pick.pop.querySelectorAll("[data-minute]").forEach((b) => b.classList.toggle("is-pick", +b.dataset.minute === now.m));
+}
+
+function onPickClick(e) {
+  if (!pick.anchor) return;
+  if (pick.kind === "select") {
+    const opt = e.target.closest(".hj-opt");
+    if (opt) pickSelectChoose(+opt.dataset.i);
+    return;
+  }
+  const btn = e.target.closest("button");
+  if (!btn || btn.disabled) return;
+  const parts = pickParts();
+  const { act } = btn.dataset;
+  if (act === "prev" || act === "next") {
+    const dir = act === "prev" ? -1 : 1;
+    if (pick.months) pick.y += dir;
+    else {
+      const d = new Date(pick.y, pick.m - 1 + dir, 1);
+      pick.y = d.getFullYear();
+      pick.m = d.getMonth() + 1;
+    }
+    rerenderDatePick();
+  } else if (act === "mode") {
+    pick.months = !pick.months;
+    rerenderDatePick();
+  } else if (btn.dataset.month) {
+    pick.m = +btn.dataset.month;
+    pick.months = false;
+    rerenderDatePick();
+  } else if (btn.dataset.date) {
+    const { date } = btn.dataset;
+    if (pick.kind === "date") { pickDateSet({ ...parts, date }, true); return; }
+    const [y, m] = date.split("-").map(Number);
+    const flip = y !== pick.y || m !== pick.m;   // 点了露出来的上 / 下个月的日子：翻过去
+    pick.y = y;
+    pick.m = m;
+    if (!flip) { pickDateSet({ ...parts, date }, false); return; }
+    pickSetValue(pickCompose({ ...parts, date }));
+    rerenderDatePick();
+  } else if (btn.dataset.hour || btn.dataset.minute) {
+    const next = { ...parts, date: parts.date || cnDate(0) };
+    if (btn.dataset.hour) next.h = +btn.dataset.hour;
+    if (btn.dataset.minute) next.m = +btn.dataset.minute;
+    if (next.h < 0) next.h = 0;
+    if (next.m < 0) next.m = 0;
+    pickDateSet(next, false);
+  } else if (act === "today") {
+    const today = cnDate(0);
+    pick.y = +today.slice(0, 4);
+    pick.m = +today.slice(5, 7);
+    pick.months = false;
+    if (pick.kind === "date") { pickDateSet({ ...parts, date: today }, true); return; }
+    pickSetValue(pickCompose({ ...parts, date: today }));
+    rerenderDatePick();
+  } else if (act === "clear") {
+    pickSetValue("", pick.kind === "date");
+    const el = pick.anchor;
+    closePick();
+    el.focus();
+  } else if (act === "done") {
+    const el = pick.anchor;
+    closePick();
+    el.focus();
+  }
+}
+
+/* 弹层开着时的按键；返回 true 表示已处理（不再传给页面，免得 Esc 把外面的弹窗也关了） */
+function onPickKey(e) {
+  if (e.key === "Escape") { const el = pick.anchor; closePick(); el.focus(); return true; }
+  if (e.key === "Tab") { closePick(); return false; }
+  if (pick.kind !== "select") {
+    if (e.key === "Enter" && pickHasTime()) { const el = pick.anchor; closePick(); el.focus(); return true; }
+    return false;   // 其余按键照常改日期框里的数字
+  }
+  const n = pick.items.length;
+  if (e.key === "ArrowDown") pickSelectMove(Math.min(pick.active + 1, n - 1));
+  else if (e.key === "ArrowUp") pickSelectMove(Math.max(pick.active - 1, 0));
+  else if (e.key === "Home") pickSelectMove(0);
+  else if (e.key === "End") pickSelectMove(n - 1);
+  else if (e.key === "PageDown") pickSelectMove(Math.min(pick.active + 8, n - 1));
+  else if (e.key === "PageUp") pickSelectMove(Math.max(pick.active - 8, 0));
+  else if (e.key === "Enter" || e.key === " ") pickSelectChoose(pick.active);
+  else return e.key.length === 1;   // 打字不改选中项，免得弹层和框里对不上
+  return true;
+}
+
+/* 点弹层外面关掉后，吞掉随后这一下 click，别让它点到下面的按钮、遮罩 */
+function swallowNextClick() {
+  const eat = (e) => { e.preventDefault(); e.stopPropagation(); };
+  document.addEventListener("click", eat, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener("click", eat, { capture: true }), 600);
+}
+
+function initPickers() {
+  if (pickDateOn()) document.documentElement.classList.add("hj-pick-date");
+  document.addEventListener("pointerdown", (e) => {
+    pick.pointer = e.pointerType || "mouse";
+    if (pick.anchor && !pick.pop.contains(e.target) && e.target !== pick.anchor) {
+      closePick();
+      swallowNextClick();
+    }
+  }, true);
+  document.addEventListener("mousedown", (e) => {
+    const t = e.target;
+    if (e.button !== 0 || pick.pointer === "touch" || !pickableSelect(t)) return;
+    e.preventDefault();   // 不弹浏览器自带的列表
+    t.focus();
+    if (pick.anchor === t) closePick();
+    else openPick(t, "select");
+  }, true);
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if (pick.pointer === "touch" || !pickableDate(t)) return;
+    if (pick.anchor !== t) { openPick(t, t.type); return; }
+    /* 再点右端的日历图标：收起 */
+    const r = t.getBoundingClientRect();
+    if (e.clientX > r.right - parseFloat(getComputedStyle(t).paddingRight) - 28) closePick();
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (pick.anchor) {
+      if (onPickKey(e)) { e.preventDefault(); e.stopPropagation(); }
+      return;
+    }
+    const t = e.target;
+    const openKey = e.key === "F4" || (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp"));
+    if (pickableSelect(t) && (openKey || e.key === " ")) {
+      e.preventDefault();
+      openPick(t, "select");
+    } else if (pickableDate(t) && openKey) {
+      e.preventDefault();
+      openPick(t, t.type);
+    }
+  }, true);
+  /* 在日期框里直接打字：弹层跟着改 */
+  document.addEventListener("input", (e) => {
+    if (e.isTrusted && e.target === pick.anchor && pick.kind !== "select") {
+      const d = pickParts().date;
+      if (d) { pick.y = +d.slice(0, 4); pick.m = +d.slice(5, 7); pick.months = false; }
+      rerenderDatePick();
+    }
+  }, true);
+  document.addEventListener("scroll", (e) => {
+    if (pick.anchor && !pick.pop.contains(e.target)) placePick();
+  }, true);
+  window.addEventListener("resize", () => closePick());
+  window.addEventListener("blur", () => closePick());
+}
+
+/* =============================================================================
+   17. 无障碍与启动
    ============================================================================= */
 
 /* 启动时一次取齐：分享功能开关、机器人验证开关、星芒节、弹窗公告、花语开关、服务器时间。
@@ -4394,6 +4814,7 @@ function initApp() {
   initCalWidget();
   initAlarm();
   initHuayu();
+  initPickers();
   initClock();
   initClockToggle();
   initHashRoute();
