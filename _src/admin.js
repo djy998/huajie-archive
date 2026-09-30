@@ -437,7 +437,7 @@ async function refreshLockdownStatus() {
   }
   siteLockdown = !!data.value;
   status.textContent = data.value
-    ? "当前状态：已关闭（纯静态展示，联系方式 / 活动群 / 场地登记 / 活动问卷 / 点赞都不可用）"
+    ? "当前状态：已关闭（纯静态展示，复制附言 / 活动群 / 场地登记 / 活动问卷 / 点赞都不可用）"
     : "当前状态：已开启（正常运行）";
   $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
   $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
@@ -3058,14 +3058,14 @@ function initHuayuAdmin() {
 const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card" id="lockdownPanel" hidden>
   <h2>分享功能开关</h2>
-  <p class="hint">关闭后网页变成纯静态展示：复制花街介绍不再附联系方式，活动群、场地使用登记、活动问卷、点赞都会提示「功能未开放」。</p>
+  <p class="hint">关闭后网页变成纯静态展示：复制花街介绍不再附末尾那段话，活动群、场地使用登记、活动问卷、点赞都会提示「功能未开放」。</p>
   <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
   <button id="lockdownToggleBtn">切换</button>
   <p class="form-msg" id="lockdownMsg" hidden></p>
 </div>
 <div class="gate-card admin-card" id="captchaPanel" hidden>
   <h2>机器人验证开关</h2>
-  <p class="hint">关闭后全站取消人机验证：活动群、花街介绍、复制联系方式、场地使用登记、活动问卷都不再弹验证，Worker 端也一律放行。<br>仅用于压力测试，测完记得开回来。</p>
+  <p class="hint">关闭后全站取消人机验证：活动群、花街介绍、复制附言、场地使用登记、活动问卷都不再弹验证，Worker 端也一律放行。<br>仅用于压力测试，测完记得开回来。</p>
   <p class="hint" id="captchaStatus">当前状态：加载中…</p>
   <button id="captchaToggleBtn">切换</button>
   <p class="form-msg" id="captchaSwitchMsg" hidden></p>

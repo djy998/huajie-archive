@@ -11,7 +11,7 @@ const WORKER_URL = "/api/";
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
 
 const GROUP_QQ = "453278026";
-const CONTACT_QQ = "1316816234";   // 验证通过后复制花街介绍时附带的合作联系方式
+const INFO_COPY_TAIL = "若你懂麦穗，便懂希望；若你懂苍穹，便懂年华。有人说桂花树代表叹息，其实它只是在掌心酝酿清风。你我走过山间，芦苇呆呆飘荡，屋檐也勇敢了起来。有人说雏菊代表一生，其实它只是在巷口找寻清风。";   // 验证通过后复制花街介绍时附在末尾的一段话
 const SHARE_TEXT = "ff14莫古力区梦羽花街网站试运行中！https://swayingsussurrusstreet.dpdns.org/";
 
 /* 直达链接（index.html 开头的脚本里也写了这几个 hash，改的话两边一起改）

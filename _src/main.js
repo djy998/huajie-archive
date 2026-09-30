@@ -185,7 +185,7 @@ function syncServerClock(serverNow, sentAt, receivedAt) {
 }
 
 /* 分享功能开关：siteLockdown = true 表示分享功能已关闭（纯静态展示），
-   这时活动群、复制联系方式、场地登记、问卷、点赞都不可用 */
+   这时活动群、复制附言、场地登记、问卷、点赞都不可用 */
 const STATIC_MODE_MSG = "功能未开放，敬请谅解~";
 let siteLockdown = false;
 
@@ -1079,7 +1079,7 @@ function refreshStarlightStatus() {
    6. 花街介绍 / 活动群弹窗
    ============================================================================= */
 
-let firstBootInfoOpen = false;   // 首次进入时自动弹出的这次花街介绍：复制不附联系方式
+let firstBootInfoOpen = false;   // 首次进入时自动弹出的这次花街介绍：复制不附末尾那段话
 let infoGalleryRendered = false;
 
 function renderInfoGallery() {
@@ -1122,7 +1122,7 @@ function openInfoModal() {
   $("infoOverlay").hidden = false;
   switchInfoTab("intro");
   playFadeOnly($("infoBox"));
-  isLockedDown();   // 复制时要不要附联系方式看它
+  isLockedDown();   // 复制时要不要附末尾那段话看它
 }
 
 function closeInfoModal() {
@@ -1150,13 +1150,13 @@ async function copyText(text, okMsg, fallbackMsg) {
   }
 }
 
-/* 复制花街介绍文字：人机验证通过后 5 分钟内（或验证总开关关着时）附带合作联系方式；
+/* 复制花街介绍文字：人机验证通过后 5 分钟内（或验证总开关关着时）附上 INFO_COPY_TAIL 那段话；
    开屏自动弹出的那次、分享功能关闭时不附 */
 function onInfoTextCopy(e) {
   const selection = window.getSelection().toString();
   if (!selection || siteLockdown || firstBootInfoOpen) return;
   if (!captchaOn || isCaptchaFresh()) {
-    e.clipboardData.setData("text/plain", `${selection}\n\n合作联系QQ${CONTACT_QQ}`);
+    e.clipboardData.setData("text/plain", `${selection}\n\n${INFO_COPY_TAIL}`);
     e.preventDefault();
   } else {
     openCaptcha("copy_verify");
@@ -1623,7 +1623,7 @@ function initLightbox() {
    -----------------------------------------------------------------------------
    验证界面（Cloudflare 自动验证 + 狒科生 / 文科生 / 理科生三种手动验证）在 verify.js，这里只管衔接：
    - 通过后把凭证交给 Worker 确认（verify_turnstile），再执行排队中的动作
-     （打开活动群 / 花街介绍、复制附联系方式、密码连错后的再验证）
+     （打开活动群 / 花街介绍、复制附言、密码连错后的再验证）
    - 通过后 5 分钟内免验证（存本地，刷新仍有效）；密码连错触发的验证不享受这个窗口
    - 表单里的验证（购票 / 场地登记 / 问卷 / 反馈）不走弹窗，凭证随表单一起交给 Worker
    ============================================================================= */
