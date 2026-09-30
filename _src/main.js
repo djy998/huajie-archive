@@ -220,8 +220,9 @@ const prefersReducedMotion = () =>
      (空) 首页  #latest 最新活动  #previous 往期列表  #event-<id> 往期详情
      #mini-review 小型活动回顾  #internal 内部入口  #venue 场地使用登记
      #survey 最新活动详情页，直接打开「反馈与建议」（活动问卷）
-   另有独立地址 /activity/：最新活动详情页，没有「← 返回」，地址栏保持 /activity/ 不变
-   （activity/index.html 由 build.mjs 生成，和首页是同一个页面，<base> 指回站点根目录）
+   带 # 的视图一律有「← 返回」。另有两个不带返回的独立地址，地址栏保持不变：
+     /activity/ 最新活动（对应 #latest）  /previous/ 往期列表（对应 #previous）
+   （activity/index.html、previous/index.html 由 build.mjs 生成，和首页是同一个页面，<base> 指回站点根目录）
    ============================================================================= */
 
 /* 页面进入动画 ------------------------------------------------------------- */
@@ -286,22 +287,17 @@ function playPageEnterStagger() {
 
 /* 路由 --------------------------------------------------------------------- */
 
-/* /activity/ 独立入口：在这个地址上只显示最新活动；去别的视图时地址换回站点根目录下的 #…，
-   浏览器后退回到 /activity/ 时再显示最新活动 */
+/* 独立入口（/activity/、/previous/）：在这个地址上只显示对应的视图、不带返回按钮；
+   去别的视图时地址换回站点根目录下的 #…，浏览器后退回到独立地址时再显示它 */
+const STANDALONE_PAGES = {
+  activity: { hash: "#latest", open: () => openLatestEvent() },
+  previous: { hash: "#previous", open: () => openArchiveList() },
+};
 const SITE_ROOT = new URL(".", document.baseURI).pathname;
 const pagePath = () => location.pathname.replace(/index\.html$/, "");
-const ACTIVITY_PATH = document.documentElement.dataset.page === "activity" ? pagePath() : null;
-const onActivityPage = () => !!ACTIVITY_PATH && pagePath() === ACTIVITY_PATH;
-
-/* 冷启动直达：通过分享链接或二维码直接打开某个子视图时，「← 返回」没有意义，先隐藏；
-   之后在站内跳转到其它视图即恢复。 */
-let coldEntryView = null;
-
-function hideColdEntryBack() {
-  if (!coldEntryView) return;
-  const btn = $(coldEntryView)?.querySelector(".back-btn");
-  if (btn) btn.style.display = "none";
-}
+const STANDALONE = STANDALONE_PAGES[document.documentElement.dataset.page] || null;
+const STANDALONE_PATH = STANDALONE ? pagePath() : null;
+const onStandalonePage = () => !!STANDALONE && pagePath() === STANDALONE_PATH;
 
 /* 切换视图时直接跳回顶部：html 设了 scroll-behavior: smooth，临时关掉，免得每次换页都慢慢滚上去 */
 function scrollToTopInstant() {
@@ -316,7 +312,7 @@ const PAGE_DOC_TITLE = document.title;
 const BASE_DOC_TITLE = document.documentElement.dataset.siteTitle || PAGE_DOC_TITLE;
 function showView(id) {
   if (id !== "view-ticket") {
-    document.title = onActivityPage() ? PAGE_DOC_TITLE : BASE_DOC_TITLE;
+    document.title = onStandalonePage() ? PAGE_DOC_TITLE : BASE_DOC_TITLE;
     /* 离开购票页：恢复网站标题（购票页可能设了不显示），停掉停留时间计时（ticket.js） */
     document.documentElement.classList.remove("hj-ticket-bare");
     if (typeof stopTicketIdle === "function") stopTicketIdle();
@@ -327,17 +323,15 @@ function showView(id) {
   if (id !== "view-detail") stopTabVideos();   // 离开详情页：活动回顾里的视频停掉
   if (id === "view-home") setTimeout(maybeShowSitePopup, 0);   // 回到首页：弹窗公告（每次打开网站只弹一次）
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.id !== id; });
-  if (coldEntryView && id !== coldEntryView) coldEntryView = null;
-  else hideColdEntryBack();
   scrollToTopInstant();
   playEnterAnim($(id));
 }
 
 function setRoute(hash) {
   const target = hash || "";
-  if (onActivityPage()) {
-    if (target === "#latest") return;   // 本来就在最新活动页，地址不变
-    /* 离开 /activity/：换成站点根目录下的地址，并照常走一遍 hashchange */
+  if (onStandalonePage()) {
+    if (target === STANDALONE.hash) return;   // 本来就在这一页，地址不变
+    /* 离开独立地址：换成站点根目录下的地址，并照常走一遍 hashchange */
     history.pushState(null, "", SITE_ROOT + target);
     setTimeout(() => window.dispatchEvent(new HashChangeEvent("hashchange")), 0);
     return;
@@ -356,14 +350,14 @@ let routedPath = null;
 function routeFromHash() {
   closeAllModals();
   let hash = location.hash;
-  if (onActivityPage() && hash && hash !== "#") {
-    /* /activity/#latest → /activity/；/activity/#其它 → 站点根目录下的 #其它 */
-    history.replaceState(null, "", hash === "#latest" ? ACTIVITY_PATH : SITE_ROOT + hash);
-    if (hash === "#latest") hash = "";
+  if (onStandalonePage() && hash && hash !== "#") {
+    /* /activity/#latest → /activity/；/activity/#其它 → 站点根目录下的 #其它（/previous/ 同理） */
+    history.replaceState(null, "", hash === STANDALONE.hash ? STANDALONE_PATH : SITE_ROOT + hash);
+    if (hash === STANDALONE.hash) hash = "";
   }
   routedPath = location.pathname;
-  if (onActivityPage()) {
-    openLatestEvent();
+  if (onStandalonePage()) {
+    STANDALONE.open();
   } else if (hash === "#internal") {
     openInternalView();
   } else if (hash === TICKET_HASH) {
@@ -438,28 +432,16 @@ function openInternalView() {
 }
 
 function initHashRoute() {
-  const coldDeepLink = !!location.hash && location.hash !== "#";
   routeFromHash();
-  if (coldDeepLink) {
-    const landing = document.querySelector(".view:not([hidden])");
-    /* 购票页、场地登记页、问卷、最新活动（#latest）例外：大家多半是拿着链接直接进来的，「← 返回」回首页正好有用，不隐藏
-       （不要返回按钮的最新活动页用 /activity/） */
-    const keepBack = landing && (landing.id === "view-ticket" || landing.id === "view-venue" ||
-      location.hash === SURVEY_HASH || location.hash === "#latest");
-    if (landing && !keepBack && landing.querySelector(".back-btn")) {
-      coldEntryView = landing.id;
-      hideColdEntryBack();
-    }
-  }
   window.addEventListener("hashchange", routeFromHash);
-  /* 在 /activity/ 和站点根目录之间前进 / 后退：只换了路径时不会触发 hashchange */
+  /* 在独立地址和站点根目录之间前进 / 后退：只换了路径时不会触发 hashchange */
   window.addEventListener("popstate", () => { if (location.pathname !== routedPath) routeFromHash(); });
-  /* /activity/ 上 <base> 指向站点根目录，页面里的 href="#…" 会变成整页跳转，这里改成站内切换 */
-  if (ACTIVITY_PATH) {
+  /* 独立地址上 <base> 指向站点根目录，页面里的 href="#…" 会变成整页跳转，这里改成站内切换 */
+  if (STANDALONE) {
     document.addEventListener("click", (e) => {
       const a = e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
         ? null : e.target.closest?.("a[href^='#']");
-      if (!a || (a.target && a.target !== "_self") || !onActivityPage()) return;
+      if (!a || (a.target && a.target !== "_self") || !onStandalonePage()) return;
       e.preventDefault();
       setRoute(a.getAttribute("href") === "#" ? "" : a.getAttribute("href"));
     });
@@ -825,7 +807,7 @@ function openDetail(data) {
   else if (data.isLatest) setRoute("#latest");
   else if (data.id) setRoute("#event-" + data.id);
 
-  $("detailBackBtn").style.display = data.isLatest && onActivityPage() ? "none" : "";
+  $("detailBackBtn").style.display = data.isLatest && onStandalonePage() && STANDALONE.hash === "#latest" ? "none" : "";
   setBgResized($("detailHero"), data.cover, 1280);
   $("detailTitle").textContent = data.title;
   $("detailMeta").textContent = [data.dateLabel, data.location].filter(Boolean).join(" · ");
@@ -982,7 +964,7 @@ function renderAlbumGrid() {
 
 function openArchiveList() {
   setRoute("#previous");
-  $("archiveBackBtn").style.display = "";
+  $("archiveBackBtn").style.display = onStandalonePage() ? "none" : "";
   showView("view-archive-list");
   playViewEnterStagger("view-archive-list", "albumGrid");
   renderAlbumGrid().then(() => playMasonryEnter($("albumGrid")));

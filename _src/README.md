@@ -96,7 +96,8 @@ GitHub Pages 不会发布以下划线开头的文件夹，所以访客打开网�
    node build.mjs
    ```
    会覆盖根目录下的 index.html、style.css、sw.js 和各个 .js。
-   同时生成 `activity/index.html`（最新活动的独立入口 /activity/：和首页是同一个页面，直接显示最新活动、没有「← 返回」，地址栏不跳成 /#latest）。
+   同时生成 `activity/index.html`、`previous/index.html`：独立入口 /activity/（最新活动）和 /previous/（往期列表），
+   和首页是同一个页面，直接显示对应内容、没有「← 返回」，地址栏不会跳成 /#latest、/#previous。带 # 的页面一律有「← 返回」。
 4. 把 `_src/` 和根目录下变了的文件一起上传到 GitHub。
 
 新活动名等标题里出现了新汉字时，可以跑一次 `python tools/make-brush-font.py` 更新毛笔字；

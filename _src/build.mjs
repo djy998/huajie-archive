@@ -80,21 +80,27 @@ for (const name of SCRIPTS) await emit(name, (await buildScript(name)) + "\n");
 await emit("style.css", (await minifyCss(await readFile(join(SRC, "style.css"), "utf8"))) + "\n");
 const html = await buildHtml(await readFile(join(SRC, "index.html"), "utf8"));
 await emit("index.html", html);
-await emitActivityPage(html);
-/* /activity/：最新活动的独立入口（没有「← 返回」，地址栏保持 /activity/）。
-   就是同一个首页，只是 <html data-page="activity"> 让 main.js 直接显示最新活动，
+await emitStandalonePages(html);
+/* 独立入口 /activity/（最新活动）、/previous/（往期列表）：没有「← 返回」，地址栏保持不变。
+   就是同一个首页，只是 <html data-page="…"> 让 main.js 直接显示对应视图（见 main.js 的 STANDALONE_PAGES），
    <base href="../"> 让页面里的相对地址（脚本、样式、图片）照旧指向站点根目录 */
-async function emitActivityPage(html) {
+async function emitStandalonePages(html) {
+  const STANDALONE_PAGES = [
+    { dir: "activity", title: "最新活动" },
+    { dir: "previous", title: "往期的活动" },
+  ];
   const SITE_TITLE = "花舞之街 · 薰风花语町";
-  const out = html
-    .replace(/<html([^>]*)>/, `<html$1 data-page="activity" data-site-title="${SITE_TITLE}">`)
-    .replace(/(<meta charset="UTF-8">)/, `$1\n<base href="../">`)
-    .replace(`<title>${SITE_TITLE}</title>`, `<title>最新活动 · ${SITE_TITLE}</title>`)
-    .replace(/(<meta property="og:url" content="[^"]*?)\/?"/, `$1/activity/"`);
-  if (!out.includes('data-page="activity"') || !out.includes('<base href="../">')) throw new Error("activity/index.html 生成失败");
-  await mkdir(join(OUT, "activity"), { recursive: true });
-  await writeFile(join(OUT, "activity", "index.html"), out);
-  report.push(`${"activity/index.html"}（由 index.html 生成）`);
+  for (const { dir, title } of STANDALONE_PAGES) {
+    const out = html
+      .replace(/<html([^>]*)>/, `<html$1 data-page="${dir}" data-site-title="${SITE_TITLE}">`)
+      .replace(/(<meta charset="UTF-8">)/, `$1\n<base href="../">`)
+      .replace(`<title>${SITE_TITLE}</title>`, `<title>${title} · ${SITE_TITLE}</title>`)
+      .replace(/(<meta property="og:url" content="[^"]*?)\/?"/, `$1/${dir}/"`);
+    if (!out.includes(`data-page="${dir}"`) || !out.includes('<base href="../">')) throw new Error(`${dir}/index.html 生成失败`);
+    await mkdir(join(OUT, dir), { recursive: true });
+    await writeFile(join(OUT, dir, "index.html"), out);
+    report.push(`${dir}/index.html（由 index.html 生成）`);
+  }
 }
 
 console.log(`源码：${SRC}\n输出：${OUT}\n` + report.join("\n"));
