@@ -5,7 +5,7 @@
      node build.mjs
    也可以指定目录：node build.mjs <源码目录> <输出目录> */
 import { transform } from "esbuild";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -78,5 +78,23 @@ async function emit(name, content) {
 
 for (const name of SCRIPTS) await emit(name, (await buildScript(name)) + "\n");
 await emit("style.css", (await minifyCss(await readFile(join(SRC, "style.css"), "utf8"))) + "\n");
-await emit("index.html", await buildHtml(await readFile(join(SRC, "index.html"), "utf8")));
+const html = await buildHtml(await readFile(join(SRC, "index.html"), "utf8"));
+await emit("index.html", html);
+await emitActivityPage(html);
+/* /activity/：最新活动的独立入口（没有「← 返回」，地址栏保持 /activity/）。
+   就是同一个首页，只是 <html data-page="activity"> 让 main.js 直接显示最新活动，
+   <base href="../"> 让页面里的相对地址（脚本、样式、图片）照旧指向站点根目录 */
+async function emitActivityPage(html) {
+  const SITE_TITLE = "花舞之街 · 薰风花语町";
+  const out = html
+    .replace(/<html([^>]*)>/, `<html$1 data-page="activity" data-site-title="${SITE_TITLE}">`)
+    .replace(/(<meta charset="UTF-8">)/, `$1\n<base href="../">`)
+    .replace(`<title>${SITE_TITLE}</title>`, `<title>最新活动 · ${SITE_TITLE}</title>`)
+    .replace(/(<meta property="og:url" content="[^"]*?)\/?"/, `$1/activity/"`);
+  if (!out.includes('data-page="activity"') || !out.includes('<base href="../">')) throw new Error("activity/index.html 生成失败");
+  await mkdir(join(OUT, "activity"), { recursive: true });
+  await writeFile(join(OUT, "activity", "index.html"), out);
+  report.push(`${"activity/index.html"}（由 index.html 生成）`);
+}
+
 console.log(`源码：${SRC}\n输出：${OUT}\n` + report.join("\n"));

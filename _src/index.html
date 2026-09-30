@@ -156,8 +156,8 @@
   </style>
 
   <!-- 版本号、动画档位与加载顺序
-       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260930g」
-         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260930g"> 几处），访客就会拿到新文件
+       · HJ_VERSION：所有 js / css 共用的缓存版本号。发布新版本时，把本文件里所有的「20260930h」
+         一起替换成新的日期（这里一处 + 页面底部 <script src="…?v=20260930h"> 几处），访客就会拿到新文件
        · HJ_FX_LEVEL：动画档位 full 完整 / lite 轻量 / off 关闭，开屏脚本和 main.js 共用
        · 新访客（未访问过）：先显示开屏图；style.css、脚本随后下载，天空、标题字体、卡片底图等
          由开屏脚本在等待点击和旋转的时间里下载并解码好（见 <body> 开头的开屏控制）
@@ -165,7 +165,7 @@
        · 按访客本地时间定昼夜（HJ_START_DAY，main.js 沿用）；竖屏（手机）用裁窄的天空图（HJ_SKY_PORTRAIT）
        · HJ_LATE(fn)：不影响进站的事（正文字体、访问统计、离线缓存）排到进站后、浏览器空闲时再做 -->
   <script>
-    window.HJ_VERSION = "20260930g";
+    window.HJ_VERSION = "20260930h";
     (function () {
       var root = document.documentElement;
       var store = {
@@ -1277,12 +1277,12 @@
 
 
 <!-- 脚本：顺序不能乱（后面的文件要用前面的函数 / 常量）；?v= 和开头的 HJ_VERSION 保持一致 -->
-<script src="verify.js?v=20260930g"></script>
-<script src="config.js?v=20260930g"></script>
-<script src="main.js?v=20260930g"></script>
-<script src="ticket.js?v=20260930g"></script>
-<script src="venue.js?v=20260930g"></script>
-<script src="survey.js?v=20260930g"></script>
+<script src="verify.js?v=20260930h"></script>
+<script src="config.js?v=20260930h"></script>
+<script src="main.js?v=20260930h"></script>
+<script src="ticket.js?v=20260930h"></script>
+<script src="venue.js?v=20260930h"></script>
+<script src="survey.js?v=20260930h"></script>
 <script>initApp();</script>
 </body>
 </html>
