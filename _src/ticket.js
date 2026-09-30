@@ -289,7 +289,7 @@ function renderTicketHolders() {
     server: row.querySelector(".th-server").value,
     pending: !!row.querySelector(".th-pending")?.checked,
   }));
-  const options = `<option value="">选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
+  const options = `<option value="" disabled selected hidden>选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
     `<optgroup label="【${g.dc}】">${g.servers.map((s) => `<option value="${s}">${s}</option>`).join("")}</optgroup>`
   ).join("");
 

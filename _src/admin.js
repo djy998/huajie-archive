@@ -896,7 +896,7 @@ function renderTicketOrders() {
 
 /* ---- 编辑订单（订单表上方的编辑框）---- */
 function ticketServerOptions(selected) {
-  return `<option value="">选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
+  return `<option value="" disabled selected hidden>选择区服</option>` + TICKET_SERVER_GROUPS.map((g) =>
     `<optgroup label="【${g.dc}】">${g.servers.map((s) => `<option value="${s}"${s === selected ? " selected" : ""}>${s}</option>`).join("")}</optgroup>`
   ).join("");
 }
