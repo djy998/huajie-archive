@@ -1,103 +1,102 @@
-/* =============================================================================
-   花舞之街 · 薰风花语町 —— 页面主脚本 main.js
-   -----------------------------------------------------------------------------
-   目录
-     1. 常量                      9. 人机验证（弹窗）
-     2. 通用工具                  10. 视觉特效（昼夜、飘落、点击爆花）
-     3. 视图切换与路由            11. 头部工具：音量、更多、日历、时间条、天气
-     4. 首页 / 活动详情 / 相册    12. 点赞
-     5. 站点开关、验证开关、星芒节 13. 闹铃与倒计时（纯本地）
-     6. 花街介绍 / 活动群弹窗      14. 首页弹窗公告
-     7. 网站说明（关于 / 反馈 / 分享） 15. 花语（听得花间语）
-     8. 大图预览                  16. 圆角下拉与日期选择
-                                  17. 无障碍与启动
-   脚本加载顺序（index.html 底部）：verify.js → config.js → main.js → ticket.js → venue.js → survey.js → initApp()
-     · config.js：站点常量与活动内容（平时改内容只改它）
-     · ticket.js：访客购票；venue.js：场地使用登记；survey.js：活动问卷
-     · admin.js：管理页，进入 #internal 时才按需加载
-     · huayu.js：花语的压缩与换字（数据较大），打开「听得花间语」或管理页「花语加密」时才按需加载
-   这些文件共用本脚本的全局函数 / 常量（$、callWorker、showToast…），顺序不能乱。
-   后端是 Cloudflare Worker（config.js 的 WORKER_URL），密码、公告、订单都在 Worker + D1。
-   ============================================================================= */
+/* 花舞之街 · 主程序。window.HJ 由 boot.js 提供，admin.js、huayu.js 按需加载 */
 
-/* =============================================================================
-   1. 常量
-   ============================================================================= */
-const TILE_IDS = Object.keys(TILE_BG.day);
-
-const MUSIC_FADE_MS = 700;    // 淡入淡出时长
-const MUSIC_VOLUME = 0.55;    // 默认音量 0~1
-
-/* localStorage 键名汇总 */
+/* ==== 1. 常量与工具 ==== */
 const STORE = {
-  fxLevel:     "hj_fx_level",      // 动画档位 full / lite / off（index.html 开头按同一个键读取默认值）
-  volume:      "hj_volume",        // 音量百分比 0~100，0 = 静音
-  soundOn:     "hj_sound_on",
+  fxLevel: "hj_fx_level",
+  volume: "hj_volume",
   captchaOkAt: "hj_captcha_ok_at",
-  // 手动验证偏好（方式 / 时间）由 verify.js 自己用 hj_captcha_mode、hj_captcha_manual_at 记录
-  pwFails:     "hj_pw_fail_count",
-  starlight:   "hj_starlight",
-  calOpen:     "hj_cal_open",
-  calZoom:     "hj_cal_zoom",
-  calYm:       "hj_cal_ym",
-  calXy:       "hj_cal_xy",
-  alarmItems:  "hj_alarm_items",   // 闹铃 / 倒计时（纯本地，见第 13 节）
+  pwFails: "hj_pw_fail_count",
+  starlight: "hj_starlight",
+  calOpen: "hj_cal_open",
+  calZoom: "hj_cal_zoom",
+  calXy: "hj_cal_xy",
+  alarms: "hj_alarm_items",
+  popupMute: "hj_popup_mute",
+  popupSeen: "hj_popup_seen",
+  ticketLook: "hj_ticket_look",
+  ticketGuideAck: "hj_ticket_guide_ack",
+  surveyDraft: "hj_survey_draft_",
+  surveyDone: "hj_survey_done_",
 };
-
-
-/* =============================================================================
-   2. 通用工具
-   ============================================================================= */
 
 const $ = (id) => document.getElementById(id);
 
-/* localStorage 读写：隐私模式等环境下可能抛错，统一吞掉 */
-const storage = {
-  get(key) {
-    try { return localStorage.getItem(key); } catch (e) { return null; }
-  },
-  set(key, value) {
-    try { localStorage.setItem(key, String(value)); } catch (e) {}
-  },
-  remove(key) {
-    try { localStorage.removeItem(key); } catch (e) {}
-  },
-};
+/* 隐私模式下 Web Storage 会抛错 */
+function webStore(name) {
+  const area = () => window[name];
+  return {
+    get(key) { try { return area().getItem(key); } catch (e) { return null; } },
+    set(key, value) { try { area().setItem(key, String(value)); } catch (e) {} },
+    remove(key) { try { area().removeItem(key); } catch (e) {} },
+    json(key) { try { return JSON.parse(this.get(key) || "null"); } catch (e) { return null; } },
+  };
+}
+const storage = webStore("localStorage");
+const session = webStore("sessionStorage");
 
 const pad2 = (n) => (n < 10 ? "0" : "") + n;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const randomItem = (list) => list[Math.floor(Math.random() * list.length)];
+const isDayMode = () => document.body.classList.contains("day-mode");
+const prefersReducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+
+/* 已转义文本中的网址转为链接，句尾标点不计入 */
+function linkify(html) {
+  return html.replace(/https?:\/\/[^\s<>"'，。；、）！？]+/g, (m) => {
+    const url = m.replace(/(?:&quot;|&#039;).*$/, "").replace(/[.,;:!?)\]]+$/, "");
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${url}</a>${m.slice(url.length)}`;
+  });
 }
 
-/* 国服时间（UTC+8，无夏令时）换算 -----------------------------------------------
-   定时开关、刷新点、星芒节等时间一律按国服时间理解，和访客电脑的时区无关。
-   datetime-local 控件给的是「本地时区」的字面时间，所以必须显式按 +08:00 解析 / 格式化 */
+/* 站内时间一律按国服时间（UTC+8） */
 const CN_TZ_OFFSET_MS = 8 * 3600 * 1000;
-/* "2026-09-20T12:00"（datetime-local 的值）→ epoch 毫秒；格式不对返回 0 */
+/* "2026-09-20T12:00" → epoch 毫秒，格式不对为 0 */
 function cnLocalToEpoch(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value || ""));
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - CN_TZ_OFFSET_MS : 0;
 }
-/* epoch 毫秒 → "2026-09-20T12:00"（填回 datetime-local）；0 → "" */
 const epochToCnLocal = (ms) => (ms ? new Date(ms + CN_TZ_OFFSET_MS).toISOString().slice(0, 16) : "");
-/* epoch 毫秒 → "2026-09-20 12:00" */
 const formatCnTime = (ms) => (ms ? epochToCnLocal(ms).replace("T", " ") : "");
-/* epoch 毫秒 → "2026年9月20日 12:00" */
+const formatCnSeconds = (ms) => (ms ? new Date(ms + CN_TZ_OFFSET_MS).toISOString().slice(0, 19).replace("T", " ") : "");
 function formatCnLabel(ms) {
   const d = new Date(ms + CN_TZ_OFFSET_MS);
   return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
+const formatCnClock = (ms) => new Date(ms + CN_TZ_OFFSET_MS).toISOString().slice(11, 19);
 /* 国服日期 + N 天 → "YYYY-MM-DD" */
 const cnDate = (days = 0) => new Date(Date.now() + CN_TZ_OFFSET_MS + days * 86400000).toISOString().slice(0, 10);
+const ymdKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+/* 时长：hh:mm:ss，不足 1 小时为 mm:ss */
+function formatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const mmss = `${pad2(Math.floor(total / 60) % 60)}:${pad2(total % 60)}`;
+  return h ? `${pad2(h)}:${mmss}` : mmss;
+}
 
-/* 缩小版图片 ----------------------------------------------------------------------
-   _src/tools/make-thumbs.py 按原图路径生成 resized/720/…（缩略图、卡片）和 resized/1280/…（页面里直接显示的大图），
-   一律 .webp。页面里先用缩小版，点开大图时再看原图；某张图还没生成缩小版（404）时自动换回原图：
-   <img> 带 data-orig，背景图用 setBgResized / data-bg */
+/* 等待时长：mm:ss / h:mm:ss / x天hh:mm:ss */
+function formatWait(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const days = Math.floor(total / 86400);
+  const h = Math.floor(total / 3600) % 24;
+  const mmss = `${pad2(Math.floor(total / 60) % 60)}:${pad2(total % 60)}`;
+  return days ? `${days}天${pad2(h)}:${mmss}` : h ? `${h}:${mmss}` : mmss;
+}
+
+/* 按 Worker 时间校准本机时钟：1 ET 分钟仅约 2.9 秒 */
+let hjClockOffset = 0;
+const hjNow = () => Date.now() + hjClockOffset;
+
+function syncServerClock(serverNow, sentAt, receivedAt) {
+  const rtt = receivedAt - sentAt;
+  if (!Number.isFinite(serverNow) || rtt < 0 || rtt > 5000) return;
+  hjClockOffset = Math.round(serverNow + rtt / 2 - receivedAt);
+}
+
+/* 缩小版图片 resized/<宽度>/<原路径>.webp（tools/make-thumbs.py 生成），不存在时退回原图 */
 function resizedSrc(src, width) {
   const m = /^([^?#:]+)\.(?:jpe?g|png|webp)(\?[^#]*)?$/i.exec(src || "");
   if (!m || m[1].startsWith("/")) return src;
@@ -115,7 +114,7 @@ function setBgResized(el, src, width) {
   probe.src = small;
 }
 
-/* 模板里写 data-bg="原图" data-bg-w="720"，插进页面后调用一次 */
+/* 模板里的 data-bg="原图" data-bg-w="宽度" */
 function applyBgs(root) {
   (root || document).querySelectorAll("[data-bg]").forEach((el) => {
     setBgResized(el, el.dataset.bg, Number(el.dataset.bgW) || 720);
@@ -123,17 +122,17 @@ function applyBgs(root) {
   });
 }
 
-/* <img data-orig="原图">：缩小版读不到时换回原图（error 事件不冒泡，在捕获阶段统一接住） */
+/* <img data-orig>：缩小版加载失败时换回原图 */
 function initResizedFallback() {
   document.addEventListener("error", (e) => {
     const img = e.target;
-    if (!img || img.tagName !== "IMG" || !img.dataset.orig || img.dataset.fallback) return;
+    if (img.tagName !== "IMG" || !img.dataset.orig || img.dataset.fallback) return;
     img.dataset.fallback = "1";
     img.src = img.dataset.orig;
   }, true);
 }
 
-/* 表单提示语：传空串即隐藏 */
+/* 提示文字，空串即隐藏 */
 function setMsg(el, text) {
   if (!el) return;
   el.textContent = text || "";
@@ -149,17 +148,50 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-/* Worker 的绝对地址（WORKER_URL 允许写成 "/api/" 这样的同源相对路径） */
+async function copyText(text, okMsg, fallbackMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(okMsg);
+  } catch (e) {
+    showToast(fallbackMsg);
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+}
+
+/* 点遮罩关闭弹窗；带 data-close-only-x 的只能点 × */
+function closeOnBackdrop(overlay, close) {
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay && !overlay.dataset.closeOnlyX) close();
+  });
+}
+
+function markTabs(buttons, isActive) {
+  buttons.forEach((b) => {
+    const on = isActive(b);
+    b.classList.toggle("is-active", on);
+    b.setAttribute("aria-selected", String(on));
+  });
+}
+
+/* Worker ------------------------------------------------------------------------ */
 const workerBase = () => new URL(WORKER_URL, location.href).href;
 
-/* 公告配图地址：D1 里存的是完整地址，统一改写到当前 WORKER_URL 上，后端换域名也不影响显示 */
+/* 公告配图统一指向当前的 WORKER_URL */
 function workerImageUrl(url) {
   const m = /\/image\/(announcements\/[\w-]+\.(?:webp|jpg|png))$/.exec(url || "");
   return m ? new URL(`image/${m[1]}`, workerBase()).href : url;
 }
 
-/* 调用 Worker（POST JSON）。连不上或返回的不是 JSON 时得到 null；
-   Worker 的业务错误（含限流 429）照常返回 { ok: false, error } */
+/* 连不上或返回的不是 JSON 时为 null；业务错误为 { ok: false, error } */
 async function callWorker(payload) {
   try {
     const res = await fetch(workerBase(), {
@@ -173,122 +205,23 @@ async function callWorker(payload) {
   }
 }
 
-/* 服务器时间校准：访客电脑的时钟常有几秒误差，而 1 艾欧泽亚分钟只有现实 2.9 秒，
-   差 3 秒时间条就慢 1 分钟。启动时用 Worker 回的服务器时间算出偏差，时钟、天气、闹铃、购票入口都用 hjNow() */
-let hjClockOffset = 0;
-const hjNow = () => Date.now() + hjClockOffset;
-
-function syncServerClock(serverNow, sentAt, receivedAt) {
-  const rtt = receivedAt - sentAt;
-  if (!Number.isFinite(serverNow) || rtt < 0 || rtt > 5000) return;
-  hjClockOffset = Math.round(serverNow + rtt / 2 - receivedAt);
+/* 按需加载的脚本；失败后允许重试 */
+const lateScripts = {};
+function loadLateScript(file, ready) {
+  if (ready()) return Promise.resolve();
+  lateScripts[file] ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `${file}?v=${HJ.version}`;
+    s.onload = () => (ready() ? resolve() : reject(new Error(`${file} init failed`)));
+    s.onerror = () => { s.remove(); reject(new Error(`${file} load failed`)); };
+    document.head.appendChild(s);
+  }).catch((e) => { delete lateScripts[file]; throw e; });
+  return lateScripts[file];
 }
 
-/* 分享功能开关：siteLockdown = true 表示分享功能已关闭（纯静态展示），
-   这时活动群、复制附言、场地登记、问卷、点赞都不可用 */
-const STATIC_MODE_MSG = "功能未开放，敬请谅解~";
-let siteLockdown = false;
 
-async function isLockedDown() {
-  const data = await callWorker({ action: "get_lockdown" });
-  if (data) siteLockdown = !!data.value;
-  return data ? !!data.value : siteLockdown;
-}
-
-/* 需要联网互动的功能在静态模式下一律拦掉；顺手刷新一次开关状态 */
-async function blockedByStaticMode() {
-  if (siteLockdown) {
-    showToast(STATIC_MODE_MSG);
-    isLockedDown();   // 后台再确认一次，管理员刚开启时下次点击即恢复
-    return true;
-  }
-  if (await isLockedDown()) {
-    showToast(STATIC_MODE_MSG);
-    return true;
-  }
-  return false;
-}
-
-const isDayMode = () => document.body.classList.contains("day-mode");
-const prefersReducedMotion = () =>
-  !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-
-/* =============================================================================
-   3. 视图切换与路由
-   每个视图对应一个 hash，前进 / 后退可正确还原：
-     (空) 首页  #latest 最新活动  #previous 往期列表  #event-<id> 往期详情
-     #mini-review 小型活动回顾  #internal 内部入口  #venue 场地使用登记
-     #survey 最新活动详情页，直接打开「反馈与建议」（活动问卷）
-   带 # 的视图一律有「← 返回」。另有两个不带返回的独立地址，地址栏保持不变：
-     /activity/ 最新活动（对应 #latest）  /previous/ 往期列表（对应 #previous）
-   （activity/index.html、previous/index.html 由 build.mjs 生成，和首页是同一个页面，<base> 指回站点根目录）
-   ============================================================================= */
-
-/* 页面进入动画 ------------------------------------------------------------- */
-
-/* 动画结束后移除类名：否则 animation-fill-mode:both 会一直锁住 transform，
-   导致之后 hover 上浮失效 */
-function clearAnimClassOnEnd(el, className) {
-  const handler = (e) => {
-    if (e.target !== el || e.animationName !== "fxPageEnter") return;
-    el.classList.remove(className);
-    el.style.animationDelay = "";
-    el.removeEventListener("animationend", handler);
-  };
-  el.addEventListener("animationend", handler);
-}
-
-/* 重播一次动画（移除类 → 强制回流 → 加回类）；特效关闭时只清理样式 */
-function playFxAnim(el, className, delayMs, autoClean) {
-  if (!el) return;
-  el.classList.remove(className);
-  if (delayMs === undefined) {
-    if (!fxEnabled) el.style.animationDelay = "";
-  } else {
-    el.style.animationDelay = fxEnabled ? delayMs + "ms" : "";
-  }
-  if (!fxEnabled) return;
-  void el.offsetWidth;
-  el.classList.add(className);
-  if (autoClean) clearAnimClassOnEnd(el, className);
-}
-
-function playEnterAnim(el) {
-  playFxAnim(el, "fx-page-enter", undefined, true);
-}
-
-function playFadeOnly(el) {
-  playFxAnim(el, "fx-fade-only");
-}
-
-/* 视图内元素依次入场：先是顶层元素，再是网格里的卡片 */
-function playViewEnterStagger(viewId, gridId) {
-  const view = $(viewId);
-  if (!view) return;
-  const topLevel = Array.from(view.children).filter((el) => el.id !== gridId);
-  const grid = gridId ? $(gridId) : null;
-  const gridItems = grid ? Array.from(grid.children) : [];
-  topLevel.forEach((el, i) => playFxAnim(el, "fx-page-enter", i * 90, true));
-  gridItems.forEach((el, i) => playFxAnim(el, "fx-page-enter", topLevel.length * 90 + i * 60, true));
-}
-
-/* 首屏各区块依次入场 */
-function playPageEnterStagger() {
-  const blocks = [
-    document.querySelector(".site-header"),
-    document.querySelector(".tile-hero:not([hidden])") || document.querySelector("#latestVideoBlock:not([hidden])"),
-    document.querySelector("#view-home .tile-grid"),
-    document.querySelector("#view-home .tile-grid.tile-grid-3"),
-    document.querySelector("footer"),
-  ].filter(Boolean);
-  blocks.forEach((el, i) => playFxAnim(el, "fx-page-enter", fxEnabled ? i * 110 : undefined, true));
-}
-
-/* 路由 --------------------------------------------------------------------- */
-
-/* 独立入口（/activity/、/previous/）：在这个地址上只显示对应的视图、不带返回按钮；
-   去别的视图时地址换回站点根目录下的 #…，浏览器后退回到独立地址时再显示它 */
+/* ==== 2. 视图与路由 ==== */
+/* #latest #survey #previous #event-<id> #mini-review #ti #venue #internal；/activity/、/previous/ 为独立入口 */
 const STANDALONE_PAGES = {
   activity: { hash: "#latest", open: () => openLatestEvent() },
   previous: { hash: "#previous", open: () => openArchiveList() },
@@ -298,8 +231,48 @@ const pagePath = () => location.pathname.replace(/index\.html$/, "");
 const STANDALONE = STANDALONE_PAGES[document.documentElement.dataset.page] || null;
 const STANDALONE_PATH = STANDALONE ? pagePath() : null;
 const onStandalonePage = () => !!STANDALONE && pagePath() === STANDALONE_PATH;
+const PAGE_DOC_TITLE = document.title;
+const BASE_DOC_TITLE = document.documentElement.dataset.siteTitle || PAGE_DOC_TITLE;
 
-/* 切换视图时直接跳回顶部：html 设了 scroll-behavior: smooth，临时关掉，免得每次换页都慢慢滚上去 */
+/* 动画结束后移除类名，否则 animation-fill-mode 会锁住 transform，悬停效果失效 */
+function playFxAnim(el, className, delayMs, autoClean) {
+  if (!el) return;
+  el.classList.remove(className);
+  el.style.animationDelay = fxEnabled && delayMs !== undefined ? delayMs + "ms" : "";
+  if (!fxEnabled) return;
+  void el.offsetWidth;
+  el.classList.add(className);
+  if (!autoClean) return;
+  const done = (e) => {
+    if (e.target !== el || e.animationName !== "fxPageEnter") return;
+    el.classList.remove(className);
+    el.style.animationDelay = "";
+    el.removeEventListener("animationend", done);
+  };
+  el.addEventListener("animationend", done);
+}
+
+const playEnterAnim = (el) => playFxAnim(el, "fx-page-enter", undefined, true);
+const playFadeOnly = (el) => playFxAnim(el, "fx-fade-only");
+
+function playViewEnterStagger(viewId, gridId) {
+  const view = $(viewId);
+  const topLevel = Array.from(view.children).filter((el) => el.id !== gridId);
+  const gridItems = gridId ? Array.from($(gridId).children) : [];
+  topLevel.forEach((el, i) => playFxAnim(el, "fx-page-enter", i * 90, true));
+  gridItems.forEach((el, i) => playFxAnim(el, "fx-page-enter", topLevel.length * 90 + i * 60, true));
+}
+
+function playPageEnterStagger() {
+  [
+    document.querySelector(".site-header"),
+    document.querySelector(".tile-hero:not([hidden])") || document.querySelector("#latestVideoBlock:not([hidden])"),
+    document.querySelector("#view-home .tile-grid"),
+    document.querySelector("#view-home .tile-grid-3"),
+    document.querySelector("footer"),
+  ].filter(Boolean).forEach((el, i) => playFxAnim(el, "fx-page-enter", i * 110, true));
+}
+
 function scrollToTopInstant() {
   const root = document.documentElement;
   const prev = root.style.scrollBehavior;
@@ -308,20 +281,19 @@ function scrollToTopInstant() {
   root.style.scrollBehavior = prev;
 }
 
-const PAGE_DOC_TITLE = document.title;
-const BASE_DOC_TITLE = document.documentElement.dataset.siteTitle || PAGE_DOC_TITLE;
 function showView(id) {
   if (id !== "view-ticket") {
     document.title = onStandalonePage() ? PAGE_DOC_TITLE : BASE_DOC_TITLE;
-    /* 离开购票页：恢复网站标题（购票页可能设了不显示），停掉停留时间计时（ticket.js） */
     document.documentElement.classList.remove("hj-ticket-bare");
-    if (typeof stopTicketIdle === "function") stopTicketIdle();
+    window.stopTicketIdle?.();
   }
-  if (id !== "view-home" && homeVideoOpen) setHomeVideoOpen(false);
-  // 回到首页时：设成默认展开（LATEST_VIDEO.defaultOpen）且用户没有手动收起过，才恢复展开（不自动播放）
-  if (id === "view-home" && LATEST_VIDEO.defaultOpen && !homeVideoOpen && !homeVideoUserClosed && hasHomeVideo()) setHomeVideoOpen(true);
-  if (id !== "view-detail") stopTabVideos();   // 离开详情页：活动回顾里的视频停掉
-  if (id === "view-home") setTimeout(maybeShowSitePopup, 0);   // 回到首页：弹窗公告（每次打开网站只弹一次）
+  if (id === "view-home") {
+    if (LATEST_VIDEO.defaultOpen && !homeVideoOpen && !homeVideoUserClosed && hasHomeVideo()) setHomeVideoOpen(true);
+    setTimeout(maybeShowSitePopup, 0);
+  } else if (homeVideoOpen) {
+    setHomeVideoOpen(false);
+  }
+  if (id !== "view-detail") stopTabVideos();
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.id !== id; });
   scrollToTopInstant();
   playEnterAnim($(id));
@@ -330,8 +302,7 @@ function showView(id) {
 function setRoute(hash) {
   const target = hash || "";
   if (onStandalonePage()) {
-    if (target === STANDALONE.hash) return;   // 本来就在这一页，地址不变
-    /* 离开独立地址：换成站点根目录下的地址，并照常走一遍 hashchange */
+    if (target === STANDALONE.hash) return;
     history.pushState(null, "", SITE_ROOT + target);
     setTimeout(() => window.dispatchEvent(new HashChangeEvent("hashchange")), 0);
     return;
@@ -345,269 +316,170 @@ function goHome() {
   showView("view-home");
 }
 
-let routedPath = null;
+const ROUTES = {
+  "#internal": () => openInternalView(),
+  [TICKET_HASH]: () => window.openTicketView?.(),
+  [VENUE_HASH]: () => window.openVenueView?.(),
+  "#latest": () => openLatestEvent(),
+  [SURVEY_HASH]: () => openLatestSurvey(),
+  "#previous": () => openArchiveList(),
+  "#mini-review": () => openMiniReview(),
+};
 
+let routedPath = null;
 function routeFromHash() {
   closeAllModals();
   let hash = location.hash;
   if (onStandalonePage() && hash && hash !== "#") {
-    /* /activity/#latest → /activity/；/activity/#其它 → 站点根目录下的 #其它（/previous/ 同理） */
+    /* /activity/#latest → /activity/；其它 hash 回到站点根目录 */
     history.replaceState(null, "", hash === STANDALONE.hash ? STANDALONE_PATH : SITE_ROOT + hash);
     if (hash === STANDALONE.hash) hash = "";
   }
   routedPath = location.pathname;
-  if (onStandalonePage()) {
-    STANDALONE.open();
-  } else if (hash === "#internal") {
-    openInternalView();
-  } else if (hash === TICKET_HASH) {
-    openTicketViewSafe();
-  } else if (hash === TICKET_HASH_LONG) {
-    history.replaceState(null, "", TICKET_HASH);   // 换成短链接，不产生额外的历史记录
-    openTicketViewSafe();
-  } else if (hash === "#venue") {
-    if (typeof openVenueView === "function") openVenueView();
-    else { showView("view-home"); showToast("登记页没加载出来，刷新一下页面再试"); }
-  } else if (hash === "#latest") {
-    openLatestEvent();
-  } else if (hash === SURVEY_HASH) {
-    openLatestSurvey();
-  } else if (hash === "#previous") {
-    openArchiveList();
-  } else if (hash === "#mini-review") {
-    openMiniReview();
-  } else if (hash.startsWith("#event-")) {
+  if (onStandalonePage()) STANDALONE.open();
+  else if (ROUTES[hash]) ROUTES[hash]();
+  else if (hash.startsWith("#event-")) {
     const ev = ARCHIVE_EVENTS.find((e) => e.id === hash.slice("#event-".length));
     if (ev) openDetail(ev);
     else goHome();
-  } else {
-    showView("view-home");
-  }
-}
-
-/* 购票页在 ticket.js：万一那个文件没传上去 / 被缓存挡住，给句人话，而不是整页报错 */
-function openTicketViewSafe() {
-  if (typeof openTicketView === "function") { openTicketView(); return; }
-  console.error("[购票] ticket.js 没有加载成功");
-  showView("view-home");
-  showToast("购票页面没加载出来，刷新一下页面再试");
-}
-
-/* 按需加载的脚本（版本号跟 index.html 的 HJ_VERSION）：普通访客用不到就不下载。
-   ready() 为真表示已经加载并初始化好；失败了允许下次重试 */
-const lateScripts = {};
-
-function loadLateScript(file, ready) {
-  if (ready()) return Promise.resolve();
-  lateScripts[file] ??= new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = `${file}?v=${window.HJ_VERSION || ""}`;
-    s.onload = () => (ready() ? resolve() : reject(new Error(`${file} init failed`)));
-    s.onerror = () => { s.remove(); reject(new Error(`${file} load failed`)); };
-    document.head.appendChild(s);
-  }).catch((e) => { delete lateScripts[file]; throw e; });
-  return lateScripts[file];
-}
-
-/* 管理页（#internal）的脚本 admin.js */
-const loadAdminJs = () => loadLateScript("admin.js", () => !!window.HJ_ADMIN_READY);
-
-function openInternalView() {
-  showView("view-internal");
-  if (window.HJ_ADMIN_READY) return;
-  const btn = $("internalSubmit");
-  const msg = $("internalMsg");
-  btn.disabled = true;
-  setMsg(msg, "正在加载…");
-  loadAdminJs().then(() => {
-    btn.disabled = false;
-    btn.onclick = null;
-    setMsg(msg, "");
-  }, (e) => {
-    console.error("[管理页]", e);
-    btn.disabled = false;
-    btn.onclick = () => openInternalView();   // 点「进入」重试加载
-    setMsg(msg, "管理页脚本加载失败，检查一下网络后点「进入」重试");
-  });
+  } else showView("view-home");
 }
 
 function initHashRoute() {
   routeFromHash();
   window.addEventListener("hashchange", routeFromHash);
-  /* 在独立地址和站点根目录之间前进 / 后退：只换了路径时不会触发 hashchange */
+  /* 独立入口与根目录之间前进 / 后退只换路径，不触发 hashchange */
   window.addEventListener("popstate", () => { if (location.pathname !== routedPath) routeFromHash(); });
-  /* 独立地址上 <base> 指向站点根目录，页面里的 href="#…" 会变成整页跳转，这里改成站内切换 */
-  if (STANDALONE) {
-    document.addEventListener("click", (e) => {
-      const a = e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
-        ? null : e.target.closest?.("a[href^='#']");
-      if (!a || (a.target && a.target !== "_self") || !onStandalonePage()) return;
-      e.preventDefault();
-      setRoute(a.getAttribute("href") === "#" ? "" : a.getAttribute("href"));
-    });
-  }
+  if (!STANDALONE) return;
+  /* 独立入口的 <base> 指向根目录，href="#…" 会整页跳转，改为站内切换 */
+  document.addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest?.("a[href^='#']");
+    if (!a || (a.target && a.target !== "_self") || !onStandalonePage()) return;
+    e.preventDefault();
+    setRoute(a.getAttribute("href") === "#" ? "" : a.getAttribute("href"));
+  });
+}
+
+function openInternalView() {
+  showView("view-internal");
+  if (HJ.adminReady) return;
+  const btn = $("internalSubmit");
+  const msg = $("internalMsg");
+  btn.disabled = true;
+  setMsg(msg, "加载中…");
+  loadLateScript("admin.js", () => !!HJ.adminReady).then(() => {
+    btn.disabled = false;
+    btn.onclick = null;
+    setMsg(msg, "");
+  }, () => {
+    btn.disabled = false;
+    btn.onclick = () => openInternalView();
+    setMsg(msg, "加载失败，点击重试");
+  });
 }
 
 
-/* =============================================================================
-   4. 首页 / 活动详情 / 相册
-   ============================================================================= */
+/* ==== 3. 首页与活动详情 ==== */
+const EMPTY_NOTE = `<div class="empty-note">内容整理中</div>`;
+const BV_PATTERN = /^BV[0-9A-Za-z]{10}$/;
+const VIDEO_MUTED_TOAST = "站内已静音";
 
-const EMPTY_NOTE = `<div class="empty-note">内容整理中，稍后会补充~</div>`;
-
-function renderHome() {
-  const badge = $("ticketBadge");
-  badge.hidden = !LATEST_EVENT.ticketUrl;
-  if (LATEST_EVENT.ticketUrl) badge.href = LATEST_EVENT.ticketUrl;
-  $("latestTile").classList.toggle("has-ticket", !!LATEST_EVENT.ticketUrl);
-}
-
-/* 手机 / 平板？B 站的 player.html 是给 PC 用的，移动端基本只给一张「非常抱歉…」的错误图，
-   移动端要换 blackboard 的 H5 播放器 */
+/* 移动端用 B 站 H5 播放器，PC 版 player.html 在移动端无法播放 */
 function isMobileUA() {
   const ua = navigator.userAgent || "";
   if (/Android|iPhone|iPad|iPod|Mobile|HarmonyOS|MicroMessenger/i.test(ua)) return true;
-  return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;   // iPadOS 默认把自己报成 Mac
+  return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;   // iPadOS 默认报成 Mac
 }
 
-/* B 站外链播放器地址。官方外链播放器只有 muted 开关（没有音量参数和 JS 接口），
-   所以站内音量条对它只能控制「静音 / 不静音」 */
+/* 外链播放器仅支持 muted；给出 aid + cid 可省去易被风控拦截的查询 */
 function bilibiliPlayerUrl({ bvid, aid = 0, cid = 0, page = 1, start = 0, danmaku = false, autoplay = false, muted = false }) {
-  const params = new URLSearchParams({
-    bvid,
-    autoplay: autoplay ? "1" : "0",
-    danmaku: danmaku ? "1" : "0",
-  });
-  /* aid + cid 一起给，播放器就不用自己再去查一次（那一次查询正是最容易被风控挡下的地方） */
+  const params = new URLSearchParams({ bvid, autoplay: autoplay ? "1" : "0", danmaku: danmaku ? "1" : "0" });
   if (aid) params.set("aid", String(aid));
   if (cid) params.set("cid", String(cid));
   if (start > 0) params.set("t", String(Math.floor(start)));
-
   if (isMobileUA()) {
     params.set("page", String(page));
     params.set("highQuality", "1");
-    params.set("as_wide", "1");     // 铺满容器，不留黑边
+    params.set("as_wide", "1");
     return `https://www.bilibili.com/blackboard/html5mobileplayer.html?${params}`;
   }
-
-  params.set("isOutside", "true");  // 站外嵌入的标记，不带更容易被当成盗链
+  params.set("isOutside", "true");
   params.set("p", String(page));
   params.set("muted", muted ? "1" : "0");
-  params.set("high_quality", "1");  // 尽量使用较高画质（未登录时仍可能受 B 站限制）
+  params.set("high_quality", "1");
   params.set("poster", "1");
   return `https://player.bilibili.com/player.html?${params}`;
 }
 
-/* 最新活动视频 -------------------------------------------------------------------
-   默认显示封面卡片，点卡片进详情，点右下「播放视频」原位展开并自动播放
-   （LATEST_VIDEO.defaultOpen = true 时默认展开，但不自动播放）。
-   离开首页时卸载播放器，免得在后台继续出声 */
+/* 最新活动视频：点「播放视频」原位展开，离开首页时卸载 */
 const hasSelfHostedVideo = () => !!String(LATEST_VIDEO.src || "").trim();
-const hasBiliVideo = () => /^BV[0-9A-Za-z]{10}$/.test(LATEST_VIDEO.bvid || "");
+const hasBiliVideo = () => BV_PATTERN.test(LATEST_VIDEO.bvid || "");
 const hasHomeVideo = () => hasSelfHostedVideo() || hasBiliVideo();
 let homeVideoOpen = false;
-let homeVideoUserClosed = false;   // 用户手动收起过则不再自动展开
-let homeVideoAutoplay = false;     // 当前这次是以自动播放的方式加载的吗
-let homeVideoMuted = false;        // 当前播放器是带着哪种 muted 参数加载的
+let homeVideoUserClosed = false;
+let homeVideoAutoplay = false;
+let homeVideoMuted = false;        // 外链播放器加载时的 muted 参数
 let homeVideoMuteTimer = 0;
 
 function setHomeVideoOpen(open, autoplay = false) {
   homeVideoOpen = open;
   homeVideoAutoplay = open && autoplay;
-  homeVideoMuted = hjSound.muted;            // 跟着站内音量的静音状态加载
+  homeVideoMuted = siteVolume.muted;
   $("latestTile").hidden = open;
   $("latestVideoBlock").hidden = !open;
 
   const frame = $("latestVideoFrame");
   const native = $("latestVideoPlayer");
   const selfHosted = hasSelfHostedVideo();
-
   frame.hidden = selfHosted;
   native.hidden = !selfHosted;
-
   if (selfHosted) {
     frame.src = "about:blank";
     if (open) {
       if (LATEST_VIDEO.poster) native.poster = LATEST_VIDEO.poster;
       if (native.dataset.src !== LATEST_VIDEO.src) {
-        native.src = LATEST_VIDEO.src;
-        native.dataset.src = LATEST_VIDEO.src;
+        native.src = native.dataset.src = LATEST_VIDEO.src;
         if (LATEST_VIDEO.start > 0) {
           native.addEventListener("loadedmetadata", () => {
             try { native.currentTime = LATEST_VIDEO.start; } catch (e) {}
           }, { once: true });
         }
       }
-      hjSound.attach(native);                      // 音量跟着右上角的音量条走
-      if (autoplay) native.play().catch(() => {}); // 浏览器拦了就让访客自己点一下
+      siteVolume.attach(native);
+      if (autoplay) native.play().catch(() => {});
     } else {
       native.pause();
-      hjSound.detach(native);
+      siteVolume.detach(native);
     }
   } else {
-    // 收起时卸载播放器，停止播放和下载
-    frame.src = open
-      ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay, muted: homeVideoMuted })
-      : "about:blank";
+    frame.src = open ? bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay, muted: homeVideoMuted }) : "about:blank";
   }
-
-  /* 用 B 站外链播放器时常驻一个出口：播放器被风控挡掉也能点进 B 站看 */
   const back = $("videoFallbackLink");
-  if (back) {
-    const showBack = open && !selfHosted && hasBiliVideo();
-    back.hidden = !showBack;
-    if (showBack) back.href = `https://www.bilibili.com/video/${LATEST_VIDEO.bvid}`;
-  }
+  const showBack = open && !selfHosted && hasBiliVideo();
+  back.hidden = !showBack;
+  if (showBack) back.href = `https://www.bilibili.com/video/${LATEST_VIDEO.bvid}`;
 }
 
-/* 站内音量的静音状态变了 → 让外链播放器跟上。
-   跨域 iframe 只能靠重新加载来换 muted 参数，所以：
-   - 只在「静音 ⇄ 不静音」真的翻转时才动，音量在 1~100 之间调不会碰播放器；
-   - 拖动音量条会连着触发，等手停下来半秒再重载，避免视频反复重播。 */
+/* 静音状态变化时重新加载外链播放器（跨域 iframe 只能这样换 muted），拖动音量条时防抖 */
 function syncExternalVideoMute() {
-  if (hasSelfHostedVideo()) return;   // 自托管视频由 hjSound 直接调音量，不用重载
-  if (!homeVideoOpen) { homeVideoMuted = hjSound.muted; return; }
-  if (hjSound.muted === homeVideoMuted) return;
+  if (hasSelfHostedVideo()) return;
+  if (!homeVideoOpen) { homeVideoMuted = siteVolume.muted; return; }
+  if (siteVolume.muted === homeVideoMuted) return;
   clearTimeout(homeVideoMuteTimer);
   homeVideoMuteTimer = setTimeout(() => {
-    if (!homeVideoOpen || hjSound.muted === homeVideoMuted) return;
-    homeVideoMuted = hjSound.muted;
-    $("latestVideoFrame").src = bilibiliPlayerUrl({
-      ...LATEST_VIDEO, autoplay: homeVideoAutoplay, muted: homeVideoMuted,
-    });
-    showToast(homeVideoMuted ? "外链视频已跟随静音（播放器重新加载）" : "外链视频已取消静音（播放器重新加载）");
+    if (!homeVideoOpen || siteVolume.muted === homeVideoMuted) return;
+    homeVideoMuted = siteVolume.muted;
+    $("latestVideoFrame").src = bilibiliPlayerUrl({ ...LATEST_VIDEO, autoplay: homeVideoAutoplay, muted: homeVideoMuted });
+    showToast(homeVideoMuted ? "视频已静音" : "视频已取消静音");
   }, 500);
 }
 
-/* 站内音量总线 ------------------------------------------------------------------
-   右上角的音量条是全站唯一的音量入口，所有声音都从这里过：
-   - 背景音乐由 hjMusic 自己按 hjMusic.vol 调（还要配合淡入淡出，所以不进下面这个集合）；
-   - 页面里其它 <audio> / <video> 用 hjSound.attach(el) 登记一下，就会跟着音量条走；
-   - B 站外链播放器是跨域 iframe，只能跟随静音，见 syncExternalVideoMute()。 */
-const hjSound = {
-  media: new Set(),
-  get level() { return hjMusic.vol; },
-  get muted() { return hjMusic.vol <= 0; },
-  attach(el) {
-    if (!el) return el;
-    this.media.add(el);
-    try { el.volume = this.level; } catch (e) {}
-    return el;
-  },
-  detach(el) { this.media.delete(el); },
-  /* 音量变化后由 hjMusic.setVolume 调用，把新音量推给所有声音 */
-  apply() {
-    this.media.forEach((el) => { try { el.volume = this.level; } catch (e) {} });
-    syncExternalVideoMute();
-  },
-};
-
 function openHomeVideo() {
-  if (hjMusic.playing) hjMusic.pause();   // 视频与背景音乐不同时响
+  bgm.pause();
   homeVideoUserClosed = false;
   setHomeVideoOpen(true, true);
-  // 站内是静音状态时视频也会静音加载，提一句免得以为视频坏了
-  if (hjSound.muted) showToast("站内已静音，视频也是静音的（右上角音量条可取消）");
+  if (siteVolume.muted) showToast(VIDEO_MUTED_TOAST);
   playEnterAnim($("latestVideoBlock"));
   $("videoCloseBtn").focus({ preventScroll: true });
 }
@@ -624,56 +496,28 @@ function initHomeVideo() {
   if (!hasHomeVideo()) return;
   $("latestPlayBtn").hidden = false;
   $("latestPlayBtn").addEventListener("click", (e) => {
-    e.stopPropagation();   // 不触发卡片本身的"进入详情"
+    e.stopPropagation();
     openHomeVideo();
   });
   $("videoDetailBtn").addEventListener("click", openLatestEvent);
   $("videoCloseBtn").addEventListener("click", closeHomeVideo);
-  // LATEST_VIDEO.defaultOpen 为 true 时默认展开（仅在首页可见时加载播放器）；默认是收起的封面卡片
   if (LATEST_VIDEO.defaultOpen && !$("view-home").hidden) setHomeVideoOpen(true);
 }
 
-function renderShopsPanel(areas) {
-  if (!areas || !areas.length) return EMPTY_NOTE;
-  return areas.map((area) => `
-    <div class="area-block">
-      ${area.name ? `<h4>${escapeHtml(area.name)}</h4>` : ""}
-      <ul class="shop-list">
-        ${area.shops.map((s) => `
-          <li class="shop-item">
-            <span class="num">${escapeHtml(s.num).replace(/·/g, "·<wbr>")}</span>
-            <span>
-              <span class="name">${escapeHtml(s.name)}</span>
-              <span class="desc">${escapeHtml(s.desc || "")}</span>
-            </span>
-            ${s.price ? `<span class="price">${escapeHtml(s.price)}</span>` : ""}
-          </li>
-        `).join("")}
-      </ul>
-    </div>
-  `).join("");
-}
-
-/* 标签页里的 B 站外链视频 -----------------------------------------------------------
-   先只放一张「点击播放」的封面，点了才加载播放器（自动播放）：
-   - 不点就不去连 B 站，页面打开快，也不会和背景音乐抢声音；
-   - 播放器地址用 bilibiliPlayerUrl()，手机自动换 H5 播放器（和首页视频同一套）；
-   - 切到别的标签 / 离开详情页时 stopTabVideos() 把播放器卸掉，免得在后台继续出声。
-   封面：video.cover，没填就用这一页的第一张图，再没有就用 B 站播放器自己的封面（直接加载不自动播放）。 */
-const tabVideos = new Map();   // 占位元素 id → video 配置
+/* 标签页里的 B 站视频：先显示封面（video.cover 或本页第一张图），点击后才加载播放器 */
+const tabVideos = new Map();   // 元素 id → 视频配置
 let tabVideoSeq = 0;
 
 function renderTabVideo(video, fallbackCover) {
-  if (!video || !/^BV[0-9A-Za-z]{10}$/.test(video.bvid || "")) return "";
+  if (!video || !BV_PATTERN.test(video.bvid || "")) return "";
   const id = `tabVideo${++tabVideoSeq}`;
   tabVideos.set(id, video);
   const cover = video.cover || fallbackCover || "";
-  const title = video.title || "活动视频";
   return `
     <div class="tab-video video-block" id="${id}" data-cover="${escapeHtml(cover)}">
-      <div class="tab-video-frame">${tabVideoFacadeHtml(title, cover)}</div>
+      <div class="tab-video-frame">${tabVideoFacadeHtml(video.title || "活动视频", cover)}</div>
       <div class="video-actions tab-video-actions">
-        <a class="video-action" href="https://www.bilibili.com/video/${escapeHtml(video.bvid)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">看不了？去 B 站看</a>
+        <a class="video-action" href="https://www.bilibili.com/video/${escapeHtml(video.bvid)}/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">在 B 站观看</a>
       </div>
     </div>`;
 }
@@ -692,19 +536,17 @@ function tabVideoFacadeHtml(title, cover) {
 function playTabVideo(box) {
   const video = tabVideos.get(box.id);
   if (!video) return;
-  if (hjMusic.playing) hjMusic.pause();   // 视频与背景音乐不同时响
-  /* 首页视频开着的话先收起来（其实离开首页时已经卸载了，这里兜底） */
-  if (homeVideoOpen) setHomeVideoOpen(false);
+  bgm.pause();
   box.querySelector(".tab-video-frame").innerHTML = `
     <iframe title="${escapeHtml(video.title || "活动视频")}" scrolling="no" frameborder="0" allowfullscreen
       referrerpolicy="strict-origin-when-cross-origin"
       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      src="${escapeHtml(bilibiliPlayerUrl({ ...video, autoplay: true, muted: hjSound.muted }))}"></iframe>`;
+      src="${escapeHtml(bilibiliPlayerUrl({ ...video, autoplay: true, muted: siteVolume.muted }))}"></iframe>`;
   box.classList.add("is-playing");
-  if (hjSound.muted) showToast("站内已静音，视频也是静音的（右上角音量条可取消）");
+  if (siteVolume.muted) showToast(VIDEO_MUTED_TOAST);
 }
 
-/* 卸掉所有正在放的标签页视频，换回封面（root 不传 = 整个详情页） */
+/* 卸载播放器，换回封面 */
 function stopTabVideos(root) {
   (root || document).querySelectorAll(".tab-video.is-playing").forEach((box) => {
     const video = tabVideos.get(box.id) || {};
@@ -716,83 +558,83 @@ function stopTabVideos(root) {
 
 function initTabVideos() {
   const onClick = (e) => {
-    const btn = e.target.closest("[data-tab-video-play]");
-    if (!btn) return;
-    const box = btn.closest(".tab-video");
+    const box = e.target.closest("[data-tab-video-play]")?.closest(".tab-video");
     if (box) playTabVideo(box);
   };
   $("view-detail").addEventListener("click", onClick);
-  $("infoBox").addEventListener("click", onClick);   // 花街介绍 ·「花舞之街记录」
+  $("infoBox").addEventListener("click", onClick);
 }
 
-/* 跳转磁贴：和首页磁贴同一套样式（背景图 + 底部渐变 + 文字），整块可点 */
-function renderTabTileLink(l) {
+/* 标签页：字符串或 { video, links, images, text, note, link, titles }；外链用 noreferrer，否则部分 B 站视频无法打开 */
+const extLink = (url, label, cls) =>
+  `<a class="${cls}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(label || "查看详情")}</a>`;
+
+/* 有图为磁贴，无图为胶囊按钮 */
+function renderTabLink(l) {
+  if (!l.image) return extLink(l.url, l.label, "link-pill tab-link-btn");
   return `
     <a class="tile tab-tile-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
       data-bg="${escapeHtml(l.image)}" data-bg-w="720">
       <div class="tile-overlay">
         <h3>${escapeHtml(l.label || "查看详情")}</h3>
-        <span class="tile-hint">点击前往 B 站观看 ↗</span>
+        <span class="tile-hint">在 B 站观看 ↗</span>
       </div>
     </a>`;
 }
 
-/* 标签页内容：字符串（纯文字，保留换行），或 { video, links, images, text, note, link, titles } 对象，
-   按 视频 → 跳转按钮 → 图片 → 文字 → 居中短句（note）→ 单个链接 的顺序排。titles：各块上方的小标题（可选）。
-   站外链接一律 noreferrer：带着本站 Referer 点进 B 站的部分视频（如直播回放）会显示「视频不见了」 */
 function renderTabContent(tab) {
-  if (typeof tab === "string") {
-    return tab ? `<div class="empty-note empty-note-left">${escapeHtml(tab)}</div>` : EMPTY_NOTE;
-  }
-  if (!tab || (!tab.images && !tab.text && !tab.note && !tab.link && !(tab.links && tab.links.length) && !tab.video)) return EMPTY_NOTE;
-
+  if (typeof tab === "string") return tab ? `<div class="empty-note empty-note-left">${escapeHtml(tab)}</div>` : EMPTY_NOTE;
+  if (!tab || !(tab.video || tab.links?.length || tab.images?.length || tab.text || tab.note || tab.link)) return EMPTY_NOTE;
   const titles = tab.titles || {};
-  const secTitle = (key) => (titles[key] ? `<h3 class="tab-sec-title">${escapeHtml(titles[key])}</h3>` : "");
+  const heading = (key) => (titles[key] ? `<h3 class="tab-sec-title">${escapeHtml(titles[key])}</h3>` : "");
   let html = "";
-  if (tab.video) {
-    const v = renderTabVideo(tab.video, tab.images && tab.images[0]);
-    if (v) html += secTitle("video") + v;
+  const video = tab.video ? renderTabVideo(tab.video, tab.images?.[0]) : "";
+  if (video) html += heading("video") + video;
+  if (tab.links?.length) html += heading("links") + `<div class="tab-links">${tab.links.map(renderTabLink).join("")}</div>`;
+  if (tab.images?.length) {
+    html += heading("images") + `<div class="tab-gallery">` + tab.images.map((src) =>
+      `<img src="${escapeHtml(resizedSrc(src, 1280))}" data-orig="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" data-lightbox data-lightbox-src="${escapeHtml(src)}">`
+    ).join("") + `</div>`;
   }
-  if (tab.links && tab.links.length) {
-    html += secTitle("links") + `<div class="tab-links">`
-      + tab.links.map((l) => l.image ? renderTabTileLink(l)
-        : `<a class="ticket-badge-inline tab-link-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(l.label || "查看详情")}</a>`).join("")
-      + `</div>`;
-  }
-  if (tab.images && tab.images.length) {
-    html += secTitle("images") + `<div class="tab-gallery">`
-      + tab.images.map((src) => `<img src="${escapeHtml(resizedSrc(src, 1280))}" data-orig="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" data-lightbox data-lightbox-src="${escapeHtml(src)}">`).join("")
-      + `</div>`;
-  }
-  if (tab.text) {
-    html += `<div class="empty-note empty-note-left">${escapeHtml(tab.text)}</div>`;
-  }
-  if (tab.note) {
-    html += `<div class="empty-note">${escapeHtml(tab.note)}</div>`;
-  }
-  if (tab.link) {
-    html += `<a class="ticket-badge-inline" href="${escapeHtml(tab.link.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeHtml(tab.link.label || "查看详情")}</a>`;
-  }
+  if (tab.text) html += `<div class="empty-note empty-note-left">${escapeHtml(tab.text)}</div>`;
+  if (tab.note) html += `<div class="empty-note">${escapeHtml(tab.note)}</div>`;
+  if (tab.link) html += extLink(tab.link.url, tab.link.label, "link-pill");
   return html;
 }
 
-/* 详情页标签切换（只作用于详情视图，避免与花街介绍弹窗里的标签互相影响） */
-function selectDetailTab(tab) {
-  const detailView = $("view-detail");
-  detailView.querySelectorAll(".tab-btn").forEach((b) => {
-    const active = b.dataset.tab === tab;
-    b.classList.toggle("is-active", active);
-    b.setAttribute("aria-selected", active ? "true" : "false");
-  });
-  detailView.querySelectorAll(".tab-panel").forEach((p) => {
-    p.hidden = p.id !== "panel-" + tab;
-    if (p.hidden) stopTabVideos(p);   // 切走的那一页里如果有视频在放，停掉
-  });
-  /* 切到「反馈与建议」：活动问卷（survey.js）刷新一次开放状态 */
-  if (tab === "feedback" && window.HJ_SURVEY_READY && typeof onSurveyTabShown === "function") onSurveyTabShown();
+function renderShopsPanel(areas) {
+  if (!areas || !areas.length) return EMPTY_NOTE;
+  return areas.map((area) => `
+    <div class="area-block">
+      ${area.name ? `<h4>${escapeHtml(area.name)}</h4>` : ""}
+      <ul class="shop-list">
+        ${area.shops.map((s) => `
+          <li class="shop-item">
+            <span class="num">${escapeHtml(s.num).replace(/·/g, "·<wbr>")}</span>
+            <span>
+              <span class="name">${escapeHtml(s.name)}</span>
+              <span class="desc">${escapeHtml(s.desc || "")}</span>
+            </span>
+            ${s.price ? `<span class="price">${escapeHtml(s.price)}</span>` : ""}
+          </li>`).join("")}
+      </ul>
+    </div>`).join("");
 }
 
-function initTabs() {
+/* 活动详情 ----------------------------------------------------------------------------- */
+const DETAIL_TABS = ["poster", "manual", "shops", "review", "feedback"];
+
+function selectDetailTab(tab) {
+  const view = $("view-detail");
+  markTabs(view.querySelectorAll(".tab-btn"), (b) => b.dataset.tab === tab);
+  view.querySelectorAll(".tab-panel").forEach((p) => {
+    p.hidden = p.id !== "panel-" + tab;
+    if (p.hidden) stopTabVideos(p);
+  });
+  if (tab === "feedback") window.onSurveyTabShown?.();
+}
+
+function initDetailTabs() {
   $("view-detail").querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       selectDetailTab(btn.dataset.tab);
@@ -801,21 +643,14 @@ function initTabs() {
   });
 }
 
-/* data.route / data.tab：从 #survey 进来时用，保留 #survey 地址、直接打开「反馈与建议」 */
+/* data：LATEST_EVENT 或 ARCHIVE_EVENTS 的一项；route / tab 指定地址和初始标签页 */
 function openDetail(data) {
-  if (data.route) setRoute(data.route);
-  else if (data.isLatest) setRoute("#latest");
-  else if (data.id) setRoute("#event-" + data.id);
-
-  $("detailBackBtn").style.display = data.isLatest && onStandalonePage() && STANDALONE.hash === "#latest" ? "none" : "";
+  setRoute(data.route || (data.isLatest ? "#latest" : "#event-" + data.id));
+  $("detailBackBtn").hidden = !!data.isLatest && onStandalonePage();
   setBgResized($("detailHero"), data.cover, 1280);
   $("detailTitle").textContent = data.title;
   $("detailMeta").textContent = [data.dateLabel, data.location].filter(Boolean).join(" · ");
   setupDetailLike(data);
-
-  const ticket = $("detailTicket");
-  ticket.hidden = !data.ticketUrl;
-  if (data.ticketUrl) ticket.href = data.ticketUrl;
 
   stopTabVideos($("view-detail"));
   tabVideos.clear();
@@ -824,57 +659,36 @@ function openDetail(data) {
   $("panel-shops").innerHTML = renderShopsPanel(data.areas);
   $("panel-review").innerHTML = renderTabContent(data.review);
   applyBgs($("view-detail"));
-
-  $("feedbackTabBtn").hidden = !data.isLatest;
   if (data.isLatest) {
-    /* 活动问卷只建一次、之后原样挂回来：来回切页面，填了一半的内容也不会丢 */
-    if (data.survey && window.HJ_SURVEY_READY && typeof mountSurvey === "function") mountSurvey($("panel-feedback"));
-    else if (data.survey) $("panel-feedback").innerHTML = `<div class="empty-note">问卷没加载出来，刷新一下页面再试</div>`;
+    if (data.survey) window.mountSurvey?.($("panel-feedback"));
     else $("panel-feedback").innerHTML = renderTabContent(data.feedback);
   }
-  /* tabs：只显示列出的标签页（不写就是全部显示）；hideReview 单独隐藏「活动回顾」 */
-  ["poster", "manual", "shops", "review"].forEach((t) => {
-    $("view-detail").querySelector(`.tab-btn[data-tab="${t}"]`).hidden =
-      data.tabs ? !data.tabs.includes(t) : (t === "review" && !!data.hideReview);
+  /* tabs 限定显示的标签页；hideReview 隐藏「活动回顾」；「反馈与建议」仅最新活动 */
+  DETAIL_TABS.forEach((t) => {
+    $("view-detail").querySelector(`.tab-btn[data-tab="${t}"]`).hidden = t === "feedback" ? !data.isLatest
+      : data.tabs ? !data.tabs.includes(t) : t === "review" && !!data.hideReview;
   });
-
-  selectDetailTab(data.tab || (data.tabs && data.tabs[0]) || "poster");
+  selectDetailTab(data.tab || data.tabs?.[0] || "poster");
   showView("view-detail");
 }
 
-function openLatestEvent() {
-  openDetail({
-    ...LATEST_EVENT,
-    title: LATEST_EVENT.title || "敬请期待",
-    isLatest: true,
-  });
-}
+const latestEventData = () => ({ ...LATEST_EVENT, title: LATEST_EVENT.title || "敬请期待", isLatest: true });
+const openLatestEvent = () => openDetail(latestEventData());
+const openLatestSurvey = () => openDetail({ ...latestEventData(), route: SURVEY_HASH, tab: "feedback" });
 
-/* #survey：最新活动详情页，直接打开「反馈与建议」（活动问卷） */
-function openLatestSurvey() {
-  openDetail({
-    ...LATEST_EVENT,
-    title: LATEST_EVENT.title || "敬请期待",
-    isLatest: true,
-    route: SURVEY_HASH,
-    tab: "feedback",
-  });
-}
-
-/* 瀑布流（往期活动相册、小型活动回顾共用）-------------------------------------
-   每张卡片按图片自己的比例显示整张图；列数按宽度自动定（每列至少 260px），
-   卡片按顺序依次放进当前最短的一列，所以从左到右、从上到下读就是列表的顺序，列与列之间也不会留空 */
+/* 瀑布流：卡片按图片比例显示，依次放进最短的一列 */
 const MASONRY_MIN_COL = 260;
 const MASONRY_GAP = 20;
-const imageRatios = {};   // 图片地址 → 宽高比（加载过一次就记住）
-const ratioProbes = new Set();   // 量完尺寸后图片继续下载完（卡片背景直接用），期间留着引用
+const imageRatios = {};
+const ratioProbes = new Set(); // 测量用的 Image 在下载完成前保持引用
 
-/* 宽高比从缩略图量（和原图一样），缩略图没有再量原图；量到尺寸就返回，不用等整张图下载完 */
+/* 取得尺寸即返回，不等图片下载完 */
 function loadImageRatio(src) {
   if (imageRatios[src]) return Promise.resolve(imageRatios[src]);
   const measure = (url) => new Promise((resolve) => {
     const img = new Image();
-    let timer = 0, settled = false;
+    let settled = false;
+    let timer = 0;
     const finish = (r) => {
       clearInterval(timer);
       if (!settled) { settled = true; resolve(r); }
@@ -892,106 +706,86 @@ function loadImageRatio(src) {
     .then((r) => (imageRatios[src] = r || 4 / 3));
 }
 
-function masonryColCount(grid) {
-  return Math.max(1, Math.floor((grid.clientWidth + MASONRY_GAP) / (MASONRY_MIN_COL + MASONRY_GAP)));
-}
+const masonryColCount = (grid) => Math.max(1, Math.floor((grid.clientWidth + MASONRY_GAP) / (MASONRY_MIN_COL + MASONRY_GAP)));
+const masonryItems = (grid) => Array.from(grid.querySelectorAll("[data-index]")).sort((x, y) => x.dataset.index - y.dataset.index);
 
-/* 卡片的高度由 aspect-ratio 决定，不用等图片加载完就能量出来 */
 function layoutMasonry(grid) {
-  const items = Array.from(grid.querySelectorAll("[data-index]"))
-    .sort((x, y) => x.dataset.index - y.dataset.index);
+  const items = masonryItems(grid);
   if (!items.length) return;
   const n = masonryColCount(grid);
-  const cols = Array.from({ length: n }, () => {
-    const col = document.createElement("div");
-    col.className = "album-col";
-    return col;
-  });
+  const cols = Array.from({ length: n }, () => Object.assign(document.createElement("div"), { className: "album-col" }));
   grid.replaceChildren(...cols);
   items.forEach((item) => {
     let target = cols[0];
-    cols.forEach((col) => { if (col.offsetHeight < target.offsetHeight - 1) target = col; });   // 一样高时取最左边
+    cols.forEach((col) => { if (col.offsetHeight < target.offsetHeight - 1) target = col; });
     target.appendChild(item);
   });
   grid.dataset.cols = String(n);
 }
 
-/* 卡片排好后按顺序依次入场 */
-function playMasonryEnter(grid) {
-  Array.from(grid.querySelectorAll("[data-index]"))
-    .sort((x, y) => x.dataset.index - y.dataset.index)
-    .forEach((el, i) => playFxAnim(el, "fx-page-enter", 180 + i * 60, true));
+const playMasonryEnter = (grid) => masonryItems(grid).forEach((el, i) => playFxAnim(el, "fx-page-enter", 180 + i * 60, true));
+
+function initMasonryResize() {
+  let timer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      ["albumGrid", "miniReviewGrid"].forEach((id) => {
+        const grid = $(id);
+        if (grid.closest(".view").hidden || !grid.querySelector("[data-index]")) return;
+        if (String(masonryColCount(grid)) !== grid.dataset.cols) layoutMasonry(grid);
+      });
+    }, 150);
+  });
 }
 
-/* 窗口宽度变化导致列数变了才重排 */
-let masonryResizeTimer = 0;
-window.addEventListener("resize", () => {
-  clearTimeout(masonryResizeTimer);
-  masonryResizeTimer = setTimeout(() => {
-    ["albumGrid", "miniReviewGrid"].forEach((id) => {
-      const grid = $(id);
-      if (!grid || grid.closest(".view").hidden || !grid.querySelector("[data-index]")) return;
-      if (String(masonryColCount(grid)) !== grid.dataset.cols) layoutMasonry(grid);
-    });
-  }, 150);
-});
-
-/* 往期活动相册：标题叠在图片底部，点开进活动详情；
-   右上角的点赞和详情页横幅里的点赞是同一个目标（act:<id>），数字互相同步 */
 function renderAlbumGrid() {
   const grid = $("albumGrid");
   grid.replaceChildren();
   return Promise.all(ARCHIVE_EVENTS.map((ev) => loadImageRatio(ev.cover))).then((ratios) => {
     grid.innerHTML = ARCHIVE_EVENTS.map((ev, i) => `
-      <div class="album-card" data-index="${i}" style="aspect-ratio:${ratios[i]}"
-        data-bg="${escapeHtml(ev.cover)}" data-bg-w="720">
+      <div class="album-card" data-index="${i}" style="aspect-ratio:${ratios[i]}" data-bg="${escapeHtml(ev.cover)}" data-bg-w="720">
         <div class="overlay">
           <span class="year">${escapeHtml(ev.year)}</span>
           <div class="title">${escapeHtml(ev.title)}</div>
         </div>
         ${likeBtnHtml("act:" + ev.id)}
-      </div>
-    `).join("");
+      </div>`).join("");
     applyBgs(grid);
     grid.querySelectorAll(".album-card").forEach((card) => {
       card.addEventListener("click", () => openDetail(ARCHIVE_EVENTS[Number(card.dataset.index)]));
     });
     layoutMasonry(grid);
-    paintLikes();          // 已经拿到过的数字先显示出来
-    refreshLikes(grid);    // 再向服务器取最新的
+    refreshLikes(grid);
   });
 }
 
 function openArchiveList() {
   setRoute("#previous");
-  $("archiveBackBtn").style.display = onStandalonePage() ? "none" : "";
+  $("archiveBackBtn").hidden = onStandalonePage();
   showView("view-archive-list");
   playViewEnterStagger("view-archive-list", "albumGrid");
   renderAlbumGrid().then(() => playMasonryEnter($("albumGrid")));
 }
 
-/* 小型活动回顾：图片下面是点赞和说明；点图片看大图（有 full 就看 full 那张，比如长图海报）；
-   pinLast: true 的固定排在最后 */
+/* 小型活动回顾：full 为点开后的大图，pinLast 排在最后 */
 function renderMiniReviews() {
   const grid = $("miniReviewGrid");
   grid.replaceChildren();
   if (!MINI_REVIEWS.length) {
-    grid.innerHTML = `<div class="empty-note">还没有内容，敬请期待</div>`;
+    grid.innerHTML = `<div class="empty-note">暂无内容</div>`;
     return Promise.resolve();
   }
-  const list = [...MINI_REVIEWS.filter((item) => !item.pinLast), ...MINI_REVIEWS.filter((item) => item.pinLast)];
-  return Promise.all(list.map((item) => loadImageRatio(item.image))).then((ratios) => {
-    grid.innerHTML = list.map((item, i) => `
+  const list = [...MINI_REVIEWS.filter((it) => !it.pinLast), ...MINI_REVIEWS.filter((it) => it.pinLast)];
+  return Promise.all(list.map((it) => loadImageRatio(it.image))).then((ratios) => {
+    grid.innerHTML = list.map((it, i) => `
       <div class="review-item" data-index="${i}">
-        <button type="button" class="review-photo" style="aspect-ratio:${ratios[i]}"
-          data-lightbox data-lightbox-src="${escapeHtml(item.full || item.image)}">
-          <img src="${escapeHtml(resizedSrc(item.image, 720))}" data-orig="${escapeHtml(item.image)}"
-            alt="${escapeHtml(item.caption || "花街活动照片")}" loading="lazy" decoding="async">
+        <button type="button" class="review-photo" style="aspect-ratio:${ratios[i]}" data-lightbox data-lightbox-src="${escapeHtml(it.full || it.image)}">
+          <img src="${escapeHtml(resizedSrc(it.image, 720))}" data-orig="${escapeHtml(it.image)}" alt="${escapeHtml(it.caption || "花街活动照片")}" loading="lazy" decoding="async">
         </button>
-        ${likeBtnHtml(likeKeyFromSrc("mini", item.image))}
-        ${item.caption ? `<p class="review-caption">${escapeHtml(item.caption)}</p>` : ""}
-      </div>
-    `).join("");
+        ${likeBtnHtml(likeKeyFromSrc("mini", it.image))}
+        ${it.caption ? `<p class="review-caption">${escapeHtml(it.caption)}</p>` : ""}
+      </div>`).join("");
     refreshLikes(grid);
     layoutMasonry(grid);
   });
@@ -1009,100 +803,203 @@ function initNav() {
   $("archiveTile").addEventListener("click", openArchiveList);
   $("miniTile").addEventListener("click", openMiniReview);
   $("infoTile").addEventListener("click", () => requestCaptcha("info"));
-  /* 场地使用登记：站内表单（venue.js），hashchange → openVenueView */
   $("bookingTile").addEventListener("click", async () => {
     if (await blockedByStaticMode()) return;
-    if (typeof openVenueView !== "function") { showToast("登记页没加载出来，刷新一下页面再试"); return; }
-    if (location.hash === VENUE_HASH) openVenueView();
+    if (location.hash === VENUE_HASH) window.openVenueView?.();
     else setRoute(VENUE_HASH);
   });
   $("groupTile").addEventListener("click", async () => {
-    if (await blockedByStaticMode()) return;
-    requestCaptcha("group");
+    if (!(await blockedByStaticMode())) requestCaptcha("group");
   });
   document.querySelectorAll("[data-back]").forEach((btn) => btn.addEventListener("click", goHome));
 }
 
 
-/* =============================================================================
-   5. 机器人验证总开关、星芒节时间覆盖（管理页在 admin.js，这里是访客端读取）
-   ============================================================================= */
+/* ==== 4. 站点开关与星芒节 ==== */
+/* 分享功能关闭时为纯静态展示：活动群、复制附言、场地登记、问卷、点赞不可用 */
+const STATIC_MODE_MSG = "功能暂未开放";
+let siteLockdown = false;
 
-/* 机器人验证总开关：captchaOn = false 时全站不弹人机验证，Worker 端也一律放行（压测用）。
-   存在 Worker 的 site_flags.captcha_off，没有这一行 = 开启 */
+async function isLockedDown() {
+  const data = await callWorker({ action: "get_lockdown" });
+  if (data) siteLockdown = !!data.value;
+  return siteLockdown;
+}
+
+/* 互动功能在静态模式下拦截，同时重新读取开关 */
+async function blockedByStaticMode() {
+  if (siteLockdown) isLockedDown();
+  else if (!(await isLockedDown())) return false;
+  showToast(STATIC_MODE_MSG);
+  return true;
+}
+
+/* 人机验证总开关（关闭时前后端均不验证） */
 let captchaOn = true;
 
 function applyCaptchaEnabled(on) {
   const changed = captchaOn !== !!on;
   captchaOn = !!on;
-  /* 购票表单里的验证组件在 ticket.js；只在开关真的变了时才动它，
-     否则每次读到「开启」都会把访客已经做完的验证重置掉 */
-  if (typeof syncTicketCaptcha === "function") syncTicketCaptcha(changed);
-  if (typeof syncVenueCaptcha === "function") syncVenueCaptcha(changed);   // 场地登记表单（venue.js）
-  if (window.HJ_SURVEY_READY && typeof syncSurveyCaptcha === "function") syncSurveyCaptcha(changed);   // 活动问卷（survey.js）
+  formGates.forEach((g) => g.sync(changed));
   if (!captchaOn && !$("captchaOverlay").hidden) closeCaptcha();
-  syncFeedbackGate();   // 网站说明弹窗里的反馈表单同样跟着总开关走
 }
 
+/* 星芒节期间游戏内强制下雪，管理员设置的时段内天气显示为小雪；本机缓存一份备用 */
+let hjStarlight = null;   // { start, end } 或 null
 
-/* 星芒节时间覆盖 --------------------------------------------------------------
-   游戏内星芒节期间全境强制下雪，天气算法无法得知；管理员在此设置时段后，
-   落在时段内的天气档一律显示「小雪」。
-   - 时间一律按国服时间（UTC+8）解释，与访客设备时区无关
-   - 全局设置存在 Worker（启动时随站点状态一起读取，管理页用 set_starlight 修改），本地另缓存一份，
-     Worker 暂时连不上时使用缓存 */
-let hjStarlight = null;   // { start, end }（epoch 毫秒）或 null
+const isValidRange = (v) => !!v && Number.isFinite(v.start) && Number.isFinite(v.end) && v.end > v.start;
+const hjStarlightActiveAt = (ms) => !!hjStarlight && ms >= hjStarlight.start && ms <= hjStarlight.end;
 
-const isValidRange = (v) =>
-  !!v && Number.isFinite(v.start) && Number.isFinite(v.end) && v.end > v.start;
-
-function hjStarlightActiveAt(epochMs) {
-  return !!hjStarlight && epochMs >= hjStarlight.start && epochMs <= hjStarlight.end;
-}
-
-function readStarlightLocal() {
-  try {
-    const v = JSON.parse(storage.get(STORE.starlight) || "null");
-    return isValidRange(v) ? { start: v.start, end: v.end } : null;
-  } catch (e) {
-    return null;
-  }
-}
-function writeStarlightLocal(value) {
-  if (value) storage.set(STORE.starlight, JSON.stringify(value));
-  else storage.remove(STORE.starlight);
-}
-
-/* 状态变化后统一刷新：本地缓存、管理面板、天气条 */
 function applyStarlight(value) {
   hjStarlight = isValidRange(value) ? { start: value.start, end: value.end } : null;
-  writeStarlightLocal(hjStarlight);
-  refreshStarlightStatus();
-  hjResetOmens();
-  hjWeatherLastKey = "";   // 天气条下次显示时一定重画
-  hjClockTick();
+  if (hjStarlight) storage.set(STORE.starlight, JSON.stringify(hjStarlight));
+  else storage.remove(STORE.starlight);
+  omenCache.clear();
+  weatherKey = "";
+  clockTick();
 }
 
 
-/* 管理页「星芒节」面板里的状态文字（面板由 admin.js 放进页面，没进过管理页时不存在） */
-function refreshStarlightStatus() {
-  const status = $("starlightStatus");
-  if (!status) return;
-  if (!hjStarlight) {
-    status.textContent = "当前状态：未设置（天气按算法正常显示）";
+/* ==== 5. 人机验证 ==== */
+/* 弹窗式通过后 5 分钟内免验证；表单式凭证随表单提交 */
+const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
+const CAPTCHA_NEEDED_MSG = "请完成人机验证";
+const CAPTCHA_FAILED_MSG = "人机验证未通过，请重新验证";
+
+const isCaptchaFresh = () => Date.now() - (Number(storage.get(STORE.captchaOkAt)) || 0) < CAPTCHA_GRACE_MS;
+
+let captchaGate = null;
+let captchaPending = null;      // 通过后要做的事
+let captchaFailStreak = 0;      // Turnstile 凭证连续校验失败次数
+let captchaSession = 0;         // 丢弃过期回调用
+
+function requestCaptcha(pending) {
+  if (isCaptchaFresh()) runCaptchaPending(pending);
+  else openCaptcha(pending);
+}
+
+function openCaptcha(pending) {
+  if (!captchaOn) { runCaptchaPending(pending); return; }
+  captchaPending = pending;
+  captchaFailStreak = 0;
+  captchaSession++;
+  setMsg($("captchaMsg"), "");
+  $("captchaOverlay").hidden = false;
+  playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
+  captchaGate.open();
+}
+
+function closeCaptcha() {
+  $("captchaOverlay").hidden = true;
+  captchaSession++;
+  captchaGate.hide();
+  captchaPending = null;
+}
+
+async function finishCaptcha(proof) {
+  const pending = captchaPending;
+  const session = captchaSession;
+  const msg = $("captchaMsg");
+  setMsg(msg, "验证中…");
+  /* 且听花间语：验证与打开记录一并提交 */
+  const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof });
+  if (session !== captchaSession) return;
+  if (data?.error === "closed") {
+    closeCaptcha();
+    applyHuayuMode({ mode: data.mode });
+    showToast(HUAYU_ERRORS.closed);
     return;
   }
-  const active = hjStarlightActiveAt(hjNow());
-  status.textContent = `当前时段：${formatCnLabel(hjStarlight.start)} — ${formatCnLabel(hjStarlight.end)}`
-    + (active ? "（进行中：所有天气显示为小雪）" : "（不在时段内：天气按算法正常显示）");
+  if (data && data.ok) {
+    closeCaptcha();
+    storage.set(STORE.captchaOkAt, Date.now());
+    runCaptchaPending(pending);
+    return;
+  }
+  if (proof.token) {
+    /* 连续两次校验失败则改用手动验证 */
+    if (++captchaFailStreak >= 2) {
+      captchaGate.useManual("已切换为手动验证");
+      return;
+    }
+    setMsg(msg, "请重新验证");
+    captchaGate.refresh();
+    return;
+  }
+  setMsg(msg, !data ? "网络连接失败"
+    : data.error === "rate_limited" ? "操作过于频繁，请稍后再试"
+    : "验证已过期，请重新验证");
+  captchaGate.refresh();
+}
+
+function runCaptchaPending(pending) {
+  if (pending === "group") openGroupModal();
+  else if (pending === "info") openInfoModal();
+  else if (pending === "huayu") {
+    huayuVisited = true;
+    openHuayuModal();
+  }
+  else if (pending === "copy") showToast("验证通过");
+  else if (pending === "internal") {
+    showToast("验证通过");
+    $("internalPassword").focus();
+  }
+}
+
+function initCaptcha() {
+  captchaGate = window.HJVerify.createGate($("captchaVerify"), {
+    post: callWorker,
+    turnstileSiteKey: TURNSTILE_SITE_KEY,
+    onPass: finishCaptcha,
+  });
+  $("captchaClose").addEventListener("click", closeCaptcha);
+  closeOnBackdrop($("captchaOverlay"), closeCaptcha);
+}
+
+/* 表单验证：Worker 已校验过的凭证作废并换题，未校验的保留 */
+const formGates = [];
+
+function createFormGate(host, { shouldOpen = () => true, onPass } = {}) {
+  let gate = null;
+  let opened = false;
+  const fg = {
+    get opened() { return opened; },
+    open(again = false) {
+      host.hidden = !captchaOn;
+      if (!captchaOn || (opened && !again) || !shouldOpen() || !window.HJVerify) return;
+      gate ??= HJVerify.createGate(host, { post: callWorker, turnstileSiteKey: TURNSTILE_SITE_KEY, onPass });
+      gate.open();
+      opened = true;
+    },
+    close() {
+      if (gate) gate.hide();
+      opened = false;
+    },
+    proof: () => (captchaOn && gate && opened ? gate.getProof() : null),
+    /* 缺少凭证时返回提示语 */
+    missing() {
+      if (!captchaOn || fg.proof()) return "";
+      fg.open();
+      return CAPTCHA_NEEDED_MSG;
+    },
+    afterSubmit(data) {
+      if (data && data.ok) fg.close();
+      else if ((!data || data.error === "captcha" || data.error === "server_error") && gate && opened) gate.refresh();
+    },
+    sync(changed) {
+      host.hidden = !captchaOn;
+      if (!changed) return;
+      fg.close();
+      fg.open();
+    },
+  };
+  formGates.push(fg);
+  return fg;
 }
 
 
-/* =============================================================================
-   6. 花街介绍 / 活动群弹窗
-   ============================================================================= */
-
-let firstBootInfoOpen = false;   // 首次进入时自动弹出的这次花街介绍：复制不附末尾那段话
+/* ==== 6. 花街介绍、活动群、网站说明 ==== */
+let firstBootInfoOpen = false;   // 进站时自动弹出的那次
 let infoGalleryRendered = false;
 
 function renderInfoGallery() {
@@ -1114,45 +1011,46 @@ function renderInfoGallery() {
       <img src="${escapeHtml(resizedSrc(src, 720))}" data-orig="${escapeHtml(src)}" alt="" loading="lazy" decoding="async"
         data-lightbox="gallery" data-lightbox-src="${escapeHtml(src)}">
       ${likeBtnHtml(likeKeyFromSrc("info", src))}
-    </div>
-  `).join("");
+    </div>`).join("");
   refreshLikes(grid);
 }
 
 function switchInfoTab(tab) {
-  document.querySelectorAll(".info-tabs .tab-btn").forEach((btn) => {
-    const active = btn.dataset.infoTab === tab;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  markTabs(document.querySelectorAll(".info-tabs .tab-btn"), (b) => b.dataset.infoTab === tab);
   $("infoPanelIntro").hidden = tab !== "intro";
   $("infoPanelGallery").hidden = tab !== "gallery";
   $("infoPanelRecord").hidden = tab !== "record";
   if (tab === "gallery") renderInfoGallery();
-  renderInfoRecord(tab === "record");
-}
-
-/* 「花舞之街记录」：每次切进来重画一次封面（详情页换活动时会清空视频登记表），切走就把播放器卸掉 */
-function renderInfoRecord(show) {
-  const panel = $("infoPanelRecord");
-  stopTabVideos(panel);
-  if (!show) return;
-  panel.innerHTML = renderTabVideo(INFO_RECORD_VIDEO) || EMPTY_NOTE;
-  applyBgs(panel);
+  const record = $("infoPanelRecord");
+  stopTabVideos(record);
+  if (tab === "record") {
+    record.innerHTML = INFO_RECORD_VIDEOS.map((v) =>
+      `<h3 class="tab-sec-title">${escapeHtml(v.heading)}</h3>${renderTabVideo(v) || EMPTY_NOTE}`).join("");
+    applyBgs(record);
+  }
 }
 
 function openInfoModal() {
   $("infoOverlay").hidden = false;
   switchInfoTab("intro");
   playFadeOnly($("infoBox"));
-  isLockedDown();   // 复制时要不要附末尾那段话看它
+  isLockedDown();
 }
 
 function closeInfoModal() {
   stopTabVideos($("infoBox"));
   $("infoOverlay").hidden = true;
   firstBootInfoOpen = false;
-  setTimeout(maybeShowSitePopup, 0);   // 新访客：花街介绍关掉以后再弹公告，不叠在一起
+  setTimeout(maybeShowSitePopup, 0);
+}
+
+/* 已验证时复制内容附上 INFO_COPY_TAIL；自动弹出与静态模式下不附 */
+function onInfoTextCopy(e) {
+  const selection = window.getSelection().toString();
+  if (!selection || siteLockdown || firstBootInfoOpen) return;
+  if (captchaOn && !isCaptchaFresh()) { openCaptcha("copy"); return; }
+  e.clipboardData.setData("text/plain", `${selection}\n\n${INFO_COPY_TAIL}`);
+  e.preventDefault();
 }
 
 function openGroupModal() {
@@ -1160,38 +1058,7 @@ function openGroupModal() {
   playEnterAnim(document.querySelector("#groupOverlay .group-box"));
 }
 
-function closeGroupModal() {
-  $("groupOverlay").hidden = true;
-}
-
-async function copyText(text, okMsg, fallbackMsg) {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(okMsg);
-  } catch (e) {
-    showToast(fallbackMsg);
-  }
-}
-
-/* 复制花街介绍文字：人机验证通过后 5 分钟内（或验证总开关关着时）附上 INFO_COPY_TAIL 那段话；
-   开屏自动弹出的那次、分享功能关闭时不附 */
-function onInfoTextCopy(e) {
-  const selection = window.getSelection().toString();
-  if (!selection || siteLockdown || firstBootInfoOpen) return;
-  if (!captchaOn || isCaptchaFresh()) {
-    e.clipboardData.setData("text/plain", `${selection}\n\n${INFO_COPY_TAIL}`);
-    e.preventDefault();
-  } else {
-    openCaptcha("copy_verify");
-  }
-}
-
-/* 点击遮罩空白处关闭弹窗（遮罩带 data-close-only-x 时不关：只能点 ×） */
-function closeOnBackdrop(overlay, close) {
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay && !overlay.dataset.closeOnlyX) close();
-  });
-}
+const closeGroupModal = () => { $("groupOverlay").hidden = true; };
 
 function initInfo() {
   $("infoClose").addEventListener("click", closeInfoModal);
@@ -1200,58 +1067,40 @@ function initInfo() {
     btn.addEventListener("click", () => switchInfoTab(btn.dataset.infoTab));
   });
   document.querySelector(".info-text").addEventListener("copy", onInfoTextCopy);
-
   $("groupClose").addEventListener("click", closeGroupModal);
   closeOnBackdrop($("groupOverlay"), closeGroupModal);
   $("copyGroupBtn").addEventListener("click", () => copyText(GROUP_QQ, "群号已复制", "群号：" + GROUP_QQ));
 }
 
-/* =============================================================================
-   7. 网站说明弹窗（首页底部小字点开）：关于网站 / 反馈与建议 / 分享网站
-   反馈走 Worker 的 submit_feedback，表单里嵌一个人机验证；管理员在「反馈建议箱」里处理
-   ============================================================================= */
-
-const FEEDBACK_CATEGORIES = {
-  bug: "bug反馈",
-  experience: "体验反馈",
-  feature: "功能建议",
-  join: "加入花街",
-  other: "其他",
-};
-/* 选了类别后，内容框上方的提示跟着换，帮访客知道写什么 */
+/* 网站说明：关于网站 / 反馈与建议 / 分享网站 --------------------------------------------- */
+const FEEDBACK_CATEGORIES = { bug: "bug反馈", experience: "体验反馈", feature: "功能建议", join: "加入花街", other: "其他" };
 const FEEDBACK_HINTS = {
-  "": "说说遇到的问题或想法吧",
-  bug: "在哪个页面、做了什么操作、看到了什么问题？用的是手机还是电脑、什么浏览器？",
-  experience: "哪里用着顺手、哪里别扭，都可以说说",
-  feature: "希望网站加上什么功能？",
-  join: "想以什么方式加入花街（店家 / 演出 / 工作人员 / 其他）？简单介绍一下自己吧，记得在下面留下联系方式",
-  other: "想说什么都可以",
+  "": "问题或想法",
+  bug: "页面、操作步骤、问题现象、设备与浏览器",
+  experience: "使用体验",
+  feature: "希望增加的功能",
+  join: "加入方式与自我介绍，并留下联系方式",
+  other: "其他内容",
 };
 const FEEDBACK_ERRORS = {
-  bad_category: "请先选择问卷类别",
-  bad_content: "内容太短了，多写几个字吧",
-  too_long: "内容太长了（最多 1000 字）",
-  bad_contact: "勾选了留下联系方式，就请填写一下联系方式",
-  captcha: "人机验证未通过，已换一题，请重新验证后提交",
-  rate_limited: "提交太频繁了，请过一会儿再试",
-  server_error: "提交失败，请稍后再试（一直这样的话请在活动群里告诉我们）",
+  bad_category: "请选择类别",
+  bad_content: "内容过短",
+  too_long: "最多 1000 字",
+  bad_contact: "请填写联系方式",
+  captcha: CAPTCHA_FAILED_MSG,
+  rate_limited: "操作过于频繁，请稍后再试",
 };
-
-const feedbackState = { proof: null, submitting: false };
-let feedbackGate = null;
 let aboutTab = "about";
+let feedbackSubmitting = false;
+let feedbackGate = null;
 
 function switchAboutTab(tab) {
   aboutTab = tab;
-  document.querySelectorAll("#siteAboutOverlay [data-about-tab]").forEach((btn) => {
-    const active = btn.dataset.aboutTab === tab;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  markTabs(document.querySelectorAll("#siteAboutOverlay [data-about-tab]"), (b) => b.dataset.aboutTab === tab);
   $("aboutPanelAbout").hidden = tab !== "about";
   $("aboutPanelFeedback").hidden = tab !== "feedback";
   $("aboutPanelShare").hidden = tab !== "share";
-  syncFeedbackGate();
+  feedbackGate.open();
 }
 
 function openSiteAbout(tab = "about") {
@@ -1260,41 +1109,7 @@ function openSiteAbout(tab = "about") {
   playEnterAnim($("siteAboutBox"));
 }
 
-function closeSiteAbout() {
-  $("siteAboutOverlay").hidden = true;
-}
-
-/* 反馈表单里的人机验证：第一次进入「反馈与建议」页时才出题（不点开就不打扰 Cloudflare / Worker）；
-   切到别的子页时不撤题，回来还能接着答。总开关关掉时整块隐藏 */
-let feedbackGateOpen = false;
-function syncFeedbackGate() {
-  const host = $("feedbackVerify");
-  if (!host) return;
-  if (!captchaOn) {
-    host.hidden = true;
-    feedbackState.proof = null;
-    if (feedbackGate && feedbackGateOpen) feedbackGate.hide();
-    feedbackGateOpen = false;
-    return;
-  }
-  host.hidden = false;
-  const visible = !$("siteAboutOverlay").hidden && aboutTab === "feedback" && !$("feedbackForm").hidden;
-  if (!visible || feedbackGateOpen) return;
-  if (!feedbackGate) {
-    if (!window.HJVerify) return;
-    feedbackGate = HJVerify.createGate(host, {
-      post: callWorker,
-      turnstileSiteKey: TURNSTILE_SITE_KEY,
-      onPass: (proof) => {
-        feedbackState.proof = proof;
-        setMsg($("feedbackMsg"), "");
-      },
-    });
-  }
-  feedbackState.proof = null;
-  feedbackGate.open();
-  feedbackGateOpen = true;
-}
+const closeSiteAbout = () => { $("siteAboutOverlay").hidden = true; };
 
 function syncFeedbackContactField() {
   const on = $("feedbackWantContact").checked;
@@ -1304,40 +1119,35 @@ function syncFeedbackContactField() {
 
 async function submitFeedback(e) {
   e.preventDefault();
-  if (feedbackState.submitting) return;
+  if (feedbackSubmitting) return;
   const msg = $("feedbackMsg");
   const category = $("feedbackCategory").value;
   const content = $("feedbackContent").value.trim();
   const wantContact = $("feedbackWantContact").checked;
   const contact = $("feedbackContact").value.trim();
-
-  if (!category) { setMsg(msg, FEEDBACK_ERRORS.bad_category); $("feedbackCategory").focus(); return; }
-  if (content.length < 2) { setMsg(msg, FEEDBACK_ERRORS.bad_content); $("feedbackContent").focus(); return; }
-  if (wantContact && !contact) { setMsg(msg, FEEDBACK_ERRORS.bad_contact); $("feedbackContact").focus(); return; }
-  const proof = feedbackState.proof;
-  if (captchaOn && !proof) {
-    setMsg(msg, feedbackGate
-      ? "请先完成下方的人机验证（自动验证，或点「自动验证不成功？点击手动验证」换手动验证）"
-      : "人机验证组件没加载出来，刷新页面再试一次");
+  const invalid = !category ? ["bad_category", "feedbackCategory"]
+    : content.length < 2 ? ["bad_content", "feedbackContent"]
+    : wantContact && !contact ? ["bad_contact", "feedbackContact"] : null;
+  if (invalid) {
+    setMsg(msg, FEEDBACK_ERRORS[invalid[0]]);
+    $(invalid[1]).focus();
     return;
   }
+  const missing = feedbackGate.missing();
+  if (missing) { setMsg(msg, missing); return; }
 
   setMsg(msg, "");
-  feedbackState.submitting = true;
+  feedbackSubmitting = true;
   const btn = $("feedbackSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_feedback", category, content, wantContact, contact, ...(proof || {}) });
-  feedbackState.submitting = false;
+  const data = await callWorker({ action: "submit_feedback", category, content, wantContact, contact, ...feedbackGate.proof() });
+  feedbackSubmitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
-  /* 凭证是一次性的：无论成败都作废，需要时重新出题 */
-  feedbackState.proof = null;
-
+  feedbackGate.afterSubmit(data);
   if (!data || !data.ok) {
-    if (captchaOn && feedbackGate) feedbackGate.refresh();
-    setMsg(msg, !data ? "连接失败，检查一下网络后再试（本次未提交成功）"
-      : FEEDBACK_ERRORS[data.error] || "提交失败，请稍后再试");
+    setMsg(msg, !data ? "网络连接失败" : FEEDBACK_ERRORS[data.error] || "提交失败，请稍后再试");
     return;
   }
   $("feedbackForm").reset();
@@ -1346,11 +1156,13 @@ async function submitFeedback(e) {
   syncFeedbackContactField();
   $("feedbackForm").hidden = true;
   $("feedbackDone").hidden = false;
-  if (feedbackGate) feedbackGate.hide();
-  feedbackGateOpen = false;
 }
 
 function initSiteAbout() {
+  feedbackGate = createFormGate($("feedbackVerify"), {
+    shouldOpen: () => !$("siteAboutOverlay").hidden && aboutTab === "feedback" && !$("feedbackForm").hidden,
+    onPass: () => setMsg($("feedbackMsg"), ""),
+  });
   $("aboutShareText").textContent = SHARE_TEXT;
   $("siteAboutLink").addEventListener("click", (e) => {
     e.preventDefault();
@@ -1358,57 +1170,91 @@ function initSiteAbout() {
   });
   $("siteAboutClose").addEventListener("click", closeSiteAbout);
   closeOnBackdrop($("siteAboutOverlay"), closeSiteAbout);
-  document.querySelectorAll("#siteAboutOverlay [data-about-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => switchAboutTab(btn.dataset.aboutTab));
-  });
   $("siteAboutOverlay").addEventListener("click", (e) => {
-    const go = e.target.closest("[data-about-goto]");
-    if (go) switchAboutTab(go.dataset.aboutGoto);
+    const btn = e.target.closest("[data-about-tab], [data-about-goto]");
+    if (btn) switchAboutTab(btn.dataset.aboutTab || btn.dataset.aboutGoto);
   });
-
   $("feedbackCategory").addEventListener("change", (e) => {
     $("feedbackContentHint").textContent = FEEDBACK_HINTS[e.target.value] || FEEDBACK_HINTS[""];
-    /* 选「加入花街」时顺手把联系方式勾上：不留联系方式就没法回复 */
     if (e.target.value === "join" && !$("feedbackWantContact").checked) {
       $("feedbackWantContact").checked = true;
       $("feedbackContact").hidden = false;
     }
   });
-  $("feedbackContent").addEventListener("input", (e) => {
-    $("feedbackCount").textContent = String(e.target.value.length);
-  });
+  $("feedbackContent").addEventListener("input", (e) => { $("feedbackCount").textContent = String(e.target.value.length); });
   $("feedbackWantContact").addEventListener("change", syncFeedbackContactField);
   $("feedbackForm").addEventListener("submit", submitFeedback);
   $("feedbackAgainBtn").addEventListener("click", () => {
     $("feedbackDone").hidden = true;
     $("feedbackForm").hidden = false;
     setMsg($("feedbackMsg"), "");
-    syncFeedbackGate();
+    feedbackGate.open();
   });
-
   $("shareSiteBtn").addEventListener("click", () => copyText(SHARE_TEXT, "分享内容已复制", SHARE_TEXT));
 }
 
 
-/* =============================================================================
-   8. 大图预览（Lightbox）
-   - 普通模式：单击 / 双击放大，右键缩小，拖动平移，双指缩放
-   - 相册模式（花街介绍相册）：不缩放，双击把图片设为网页背景
-   - 长图（高度超过宽度 LB_LONG_RATIO 倍的海报等）：自动按页面宽度显示、上下滚动看，不缩放
-   页面里带 data-lightbox 属性的元素点击即打开；data-lightbox="gallery" 为相册模式，
-   data-lightbox-src 可指定图片地址（默认取元素自身的 src）。
-   页面里显示的是缩小版时，先把已经下载好的缩小版放大显示，原图下载好了再无缝换上。
-   ============================================================================= */
+/* ==== 7. 弹窗公告 ==== */
+/* 仅首页且无其他弹窗时弹出，每次打开最多一次 */
+let sitePopup = null;
 
+const todayKey = () => ymdKey(new Date());
+
+function maybeShowSitePopup() {
+  const p = sitePopup;
+  if (!p || $("view-home").hidden || document.documentElement.classList.contains("boot-pending") || anyModalOpen()) return;
+  if (session.get(STORE.popupSeen) === String(p.rev) || storage.get(STORE.popupMute) === `${p.rev}|${todayKey()}`) return;
+  session.set(STORE.popupSeen, p.rev);
+  openSitePopup(p);
+}
+
+/* preview：管理页预览 */
+function openSitePopup(p, preview = false) {
+  const title = (p.title || "").trim();
+  $("sitePopupTitle").textContent = title || "公告";
+  const img = $("sitePopupImage");
+  img.hidden = !p.image_url;
+  if (p.image_url) img.src = workerImageUrl(p.image_url);
+  else img.removeAttribute("src");
+  const body = $("sitePopupBody");
+  body.innerHTML = linkify(escapeHtml(p.body || ""));
+  body.hidden = !(p.body || "").trim();
+  $("sitePopupMuteBtn").hidden = preview;
+  $("sitePopupOverlay").hidden = false;
+  $("sitePopupBox").scrollTop = 0;
+  playEnterAnim($("sitePopupBox"));
+}
+
+const closeSitePopup = () => { $("sitePopupOverlay").hidden = true; };
+
+function applySitePopup(p) {
+  sitePopup = p && p.enabled ? p : null;
+  maybeShowSitePopup();
+}
+
+function initSitePopup() {
+  $("sitePopupClose").addEventListener("click", closeSitePopup);
+  $("sitePopupOkBtn").addEventListener("click", closeSitePopup);
+  $("sitePopupMuteBtn").addEventListener("click", () => {
+    if (sitePopup) storage.set(STORE.popupMute, `${sitePopup.rev}|${todayKey()}`);
+    closeSitePopup();
+    showToast("今日不再显示");
+  });
+  closeOnBackdrop($("sitePopupOverlay"), closeSitePopup);
+}
+
+
+/* ==== 8. 大图预览 ==== */
+/* 单击放大、右键缩小、拖动、双指缩放；相册图双击设为背景；长图按宽度滚动 */
 const LB_ZOOM_STEP = 2.5;
 const LB_MAX_SCALE = 20;
-const DOUBLE_TAP_MS = 320;
 const LB_LONG_RATIO = 2.5;
+const DOUBLE_TAP_MS = 320;
 
 let lightboxMode = "normal";
-let lbLong = false;   // 当前是长图（滚动查看，不缩放）
+let lbLong = false;
 let lbState = null;
-let lbSeq = 0;        // 每次打开 / 关闭 +1，丢弃过期的原图加载
+let lbSeq = 0;
 
 function resetLightboxTransform() {
   lbState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0, moved: false };
@@ -1419,29 +1265,27 @@ function resetLightboxTransform() {
 function applyLightboxTransform() {
   const img = $("lightboxImg");
   img.style.transform = `translate(${lbState.tx}px, ${lbState.ty}px) scale(${lbState.scale})`;
-  if (!lbState.dragging) img.style.cursor = lbState.scale > 1 ? "zoom-out" : "zoom-in";
+  if (!lbState.dragging) img.style.cursor = lightboxMode === "gallery" || lbLong ? "default" : lbState.scale > 1 ? "zoom-out" : "zoom-in";
 }
 
 function setLightboxLong(long) {
   lbLong = long;
-  const overlay = $("lightboxOverlay");
-  overlay.classList.toggle("is-long", long);
-  if (long) {
-    overlay.scrollTop = 0;
-    $("lightboxImg").style.cursor = "default";
-  }
+  $("lightboxOverlay").classList.toggle("is-long", long);
+  if (long) $("lightboxOverlay").scrollTop = 0;
+  applyLightboxTransform();
 }
 
 function openLightbox(src, mode, preview) {
   lightboxMode = mode === "gallery" ? "gallery" : "normal";
   const img = $("lightboxImg");
   const seq = ++lbSeq;
+  resetLightboxTransform();
   setLightboxLong(false);
   img.onload = () => {
     if (!lbLong && lightboxMode !== "gallery" && img.naturalWidth && img.naturalHeight / img.naturalWidth > LB_LONG_RATIO) setLightboxLong(true);
   };
+  img.src = preview && preview !== src ? preview : src;
   if (preview && preview !== src) {
-    img.src = preview;
     const full = new Image();
     full.onload = () => {
       const swap = () => { if (seq === lbSeq) img.src = src; };
@@ -1449,13 +1293,9 @@ function openLightbox(src, mode, preview) {
       else swap();
     };
     full.src = src;
-  } else {
-    img.src = src;
   }
   $("lightboxOverlay").hidden = false;
-  resetLightboxTransform();
-  if (lightboxMode === "gallery") img.style.cursor = "default";
-  if (img.complete && img.naturalWidth) img.onload();   // 已缓存的图片
+  if (img.complete && img.naturalWidth) img.onload();
 }
 
 function closeLightbox() {
@@ -1464,11 +1304,11 @@ function closeLightbox() {
   $("lightboxImg").onload = null;
   $("lightboxImg").removeAttribute("src");
   lightboxMode = "normal";
-  setLightboxLong(false);
   resetLightboxTransform();
+  setLightboxLong(false);
 }
 
-/* 相册模式：把当前图片设为网页背景（切换昼夜时恢复默认天空） */
+/* 设为网页背景，切换昼夜时恢复 */
 function setSiteBackgroundFromLightbox() {
   const img = $("lightboxImg");
   if (!img.src) return;
@@ -1476,53 +1316,42 @@ function setSiteBackgroundFromLightbox() {
   $("skyBase").style.backgroundImage = uri;
   $("skyFade").style.backgroundImage = uri;
   $("skyFade").style.opacity = "0";
-  document.body.classList.add("custom-bg");   // CSS 据此给标题区加毛玻璃底板
+  document.body.classList.add("custom-bg");
   showToast("已设为网页背景");
   closeLightbox();
 }
 
-/* 以 (clientX, clientY) 为中心缩放 */
 function setTransformOriginAt(img, clientX, clientY) {
   const rect = img.getBoundingClientRect();
-  const px = ((clientX - rect.left) / rect.width) * 100;
-  const py = ((clientY - rect.top) / rect.height) * 100;
-  img.style.transformOrigin = `${px}% ${py}%`;
+  img.style.transformOrigin = `${((clientX - rect.left) / rect.width) * 100}% ${((clientY - rect.top) / rect.height) * 100}%`;
 }
 
 function zoomAt(clientX, clientY, factor) {
   setTransformOriginAt($("lightboxImg"), clientX, clientY);
   const next = lbState.scale * factor;
-  if (next <= 1.001) {
-    Object.assign(lbState, { scale: 1, tx: 0, ty: 0 });
-  } else if (next > LB_MAX_SCALE) {
-    lbState.scale = LB_MAX_SCALE;   // 已到上限：保留当前平移
-  } else {
-    Object.assign(lbState, { scale: next, tx: 0, ty: 0 });
-  }
+  if (next <= 1.001) Object.assign(lbState, { scale: 1, tx: 0, ty: 0 });
+  else if (next > LB_MAX_SCALE) lbState.scale = LB_MAX_SCALE;
+  else Object.assign(lbState, { scale: next, tx: 0, ty: 0 });
   applyLightboxTransform();
 }
 
 function lbPointerDown(x, y) {
   if (lbLong || lbState.scale <= 1) return;
   Object.assign(lbState, { dragging: true, moved: false, startX: x - lbState.tx, startY: y - lbState.ty });
-  const img = $("lightboxImg");
-  img.classList.add("is-dragging");
-  img.style.cursor = "grabbing";
+  $("lightboxImg").classList.add("is-dragging");
+  $("lightboxImg").style.cursor = "grabbing";
 }
 
 function lbPointerMove(x, y) {
   if (!lbState.dragging) return;
-  lbState.tx = x - lbState.startX;
-  lbState.ty = y - lbState.startY;
-  lbState.moved = true;
+  Object.assign(lbState, { tx: x - lbState.startX, ty: y - lbState.startY, moved: true });
   applyLightboxTransform();
 }
 
 function lbPointerUp() {
   lbState.dragging = false;
-  const img = $("lightboxImg");
-  img.classList.remove("is-dragging");
-  img.style.cursor = lbState.scale > 1 ? "zoom-out" : "zoom-in";
+  $("lightboxImg").classList.remove("is-dragging");
+  applyLightboxTransform();
 }
 
 function initLightbox() {
@@ -1530,7 +1359,6 @@ function initLightbox() {
   const img = $("lightboxImg");
   resetLightboxTransform();
 
-  // 统一的打开入口
   document.addEventListener("click", (e) => {
     const trigger = e.target.closest("[data-lightbox]");
     if (!trigger) return;
@@ -1538,11 +1366,9 @@ function initLightbox() {
     const preview = shown && shown.complete && shown.naturalWidth ? shown.currentSrc || shown.src : "";
     openLightbox(trigger.dataset.lightboxSrc || trigger.src, trigger.dataset.lightbox, preview);
   });
-
   $("lightboxClose").addEventListener("click", closeLightbox);
   closeOnBackdrop(overlay, closeLightbox);
 
-  /* 鼠标 */
   img.addEventListener("mousedown", (e) => {
     lbPointerDown(e.clientX, e.clientY);
     e.preventDefault();
@@ -1552,10 +1378,7 @@ function initLightbox() {
   img.addEventListener("click", (e) => {
     e.stopPropagation();
     if (lightboxMode === "gallery" || lbLong) return;
-    if (lbState.moved) {
-      lbState.moved = false;
-      return;
-    }
+    if (lbState.moved) { lbState.moved = false; return; }
     zoomAt(e.clientX, e.clientY, LB_ZOOM_STEP);
   });
   img.addEventListener("contextmenu", (e) => {
@@ -1567,72 +1390,51 @@ function initLightbox() {
     if (lightboxMode === "gallery") setSiteBackgroundFromLightbox();
   });
 
-  /* 触屏 */
+  /* 触屏：单击放大、双击复位、双指缩放；相册双击设为背景。点按在这里处理，阻止随后的 click */
   let lastTap = 0;
-  let pinching = false;
-  let pinchStartDist = 0;
-  let pinchStartScale = 1;
+  let pinch = null;   // { dist, scale }
   const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const zoomable = () => lightboxMode !== "gallery" && !lbLong;
 
   img.addEventListener("touchstart", (e) => {
-    if (lightboxMode === "gallery" || lbLong) return;
+    if (!zoomable()) return;
     if (e.touches.length === 2) {
-      pinching = true;
+      pinch = { dist: touchDist(e.touches), scale: lbState.scale };
       lbState.dragging = false;
-      pinchStartDist = touchDist(e.touches);
-      pinchStartScale = lbState.scale;
-      setTransformOriginAt(img,
-        (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        (e.touches[0].clientY + e.touches[1].clientY) / 2);
-    } else if (e.touches.length === 1 && !pinching) {
+      setTransformOriginAt(img, (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
+    } else if (e.touches.length === 1 && !pinch) {
       lbPointerDown(e.touches[0].clientX, e.touches[0].clientY);
     }
   });
-
   img.addEventListener("touchmove", (e) => {
-    if (lightboxMode === "gallery" || lbLong) return;
-    if (e.touches.length === 2) {
+    if (!zoomable()) return;
+    if (e.touches.length === 2 && pinch) {
       e.preventDefault();
-      const scale = clamp(pinchStartScale * (touchDist(e.touches) / pinchStartDist), 1, LB_MAX_SCALE);
-      lbState.scale = scale;
-      if (scale <= 1.001) Object.assign(lbState, { scale: 1, tx: 0, ty: 0 });
-      lbState.moved = true;
+      const scale = clamp(pinch.scale * (touchDist(e.touches) / pinch.dist), 1, LB_MAX_SCALE);
+      Object.assign(lbState, scale <= 1.001 ? { scale: 1, tx: 0, ty: 0 } : { scale }, { moved: true });
       applyLightboxTransform();
-    } else if (e.touches.length === 1 && !pinching && lbState.scale > 1) {
+    } else if (e.touches.length === 1 && !pinch && lbState.scale > 1) {
       lbPointerMove(e.touches[0].clientX, e.touches[0].clientY);
       e.preventDefault();
     }
   }, { passive: false });
-
   img.addEventListener("touchend", (e) => {
-    if (e.touches.length !== 0 || lbLong) return;
+    if (e.touches.length || lbLong) return;
     const now = Date.now();
-    const isDoubleTap = now - lastTap < DOUBLE_TAP_MS;
-
+    const doubleTap = now - lastTap < DOUBLE_TAP_MS;
     if (lightboxMode === "gallery") {
-      if (!e.changedTouches.length) return;
-      if (isDoubleTap) {
-        setSiteBackgroundFromLightbox();
-        lastTap = 0;
-      } else {
-        lastTap = now;
-      }
+      if (doubleTap) { setSiteBackgroundFromLightbox(); lastTap = 0; } else lastTap = now;
       return;
     }
-
-    if (pinching) {
-      pinching = false;
-      lbPointerUp();
-      return;
-    }
-    if (!lbState.moved) {
-      // 单击放大，双击复位
-      if (isDoubleTap) {
+    e.preventDefault();
+    if (pinch) {
+      pinch = null;
+    } else if (!lbState.moved) {
+      if (doubleTap) {
         resetLightboxTransform();
         lastTap = 0;
       } else {
-        const touch = e.changedTouches[0];
-        zoomAt(touch.clientX, touch.clientY, LB_ZOOM_STEP);
+        zoomAt(e.changedTouches[0].clientX, e.changedTouches[0].clientY, LB_ZOOM_STEP);
         lastTap = now;
       }
     }
@@ -1641,163 +1443,34 @@ function initLightbox() {
 }
 
 
-/* =============================================================================
-   9. 人机验证弹窗
-   -----------------------------------------------------------------------------
-   验证界面（Cloudflare 自动验证 + 狒科生 / 文科生 / 理科生三种手动验证）在 verify.js，这里只管衔接：
-   - 通过后把凭证交给 Worker 确认（verify_turnstile），再执行排队中的动作
-     （打开活动群 / 花街介绍、复制附言、密码连错后的再验证）
-   - 通过后 5 分钟内免验证（存本地，刷新仍有效）；密码连错触发的验证不享受这个窗口
-   - 表单里的验证（购票 / 场地登记 / 问卷 / 反馈）不走弹窗，凭证随表单一起交给 Worker
-   ============================================================================= */
-
-const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
-
-const isCaptchaFresh = () => Date.now() - (Number(storage.get(STORE.captchaOkAt)) || 0) < CAPTCHA_GRACE_MS;
-const markCaptchaOk = () => storage.set(STORE.captchaOkAt, Date.now());
-
-let captchaGate = null;         // 弹窗里的验证组件（verify.js）
-let turnstilePending = null;    // 验证通过后要执行的动作
-let turnstileFailStreak = 0;    // Turnstile 交给 Worker 校验时连续失败的次数
-let captchaSession = 0;         // 每次打开 / 关闭弹窗 +1，用来丢弃过期的异步回调
-
-/* 免验证窗口内直接执行，否则弹出验证 */
-function requestCaptcha(pending) {
-  if (isCaptchaFresh()) { runCaptchaPending(pending); return; }
-  openCaptcha(pending);
-}
-
-/* 弹出验证（不看免验证窗口）。总开关关着时直接执行；verify.js 没加载成功时给句提示 */
-function openCaptcha(pending) {
-  if (!captchaOn) { runCaptchaPending(pending); return; }
-  if (!captchaGate) { showToast("人机验证组件没加载出来，刷新页面再试一次"); return; }
-  turnstilePending = pending;
-  turnstileFailStreak = 0;
-  captchaSession++;
-  setMsg($("captchaMsg"), "");
-  $("captchaOverlay").hidden = false;
-  playEnterAnim(document.querySelector("#captchaOverlay .gate-card"));
-  captchaGate.open();
-}
-
-function closeCaptcha() {
-  $("captchaOverlay").hidden = true;
-  captchaSession++;
-  if (captchaGate) captchaGate.hide();
-  turnstilePending = null;
-}
-
-/* 把凭证交给 Worker 确认：Turnstile 走 siteverify，手动验证走一次性通行证 */
-async function finishCaptcha(proof) {
-  const pending = turnstilePending;
-  const msg = $("captchaMsg");
-  const session = captchaSession;
-
-  setMsg(msg, "验证中…");
-  const verify = await callWorker({ action: "verify_turnstile", ...proof });
-  if (session !== captchaSession) return;
-
-  if (!verify || !verify.ok) {
-    /* Turnstile 失败后无条件重建会陷入「自动通过 → Worker 校验失败 → 重建」的循环，
-       所以连续失败 2 次就改用手动验证 */
-    if (proof.token) {
-      turnstileFailStreak++;
-      if (turnstileFailStreak >= 2) {
-        captchaGate.useManual("验证服务暂时不可用，启用内置验证");
-        return;
-      }
-      setMsg(msg, "验证未通过，请重新完成一次");
-      captchaGate.refresh();
-      return;
-    }
-    setMsg(msg, !verify ? "连接失败，检查一下网络后再试"
-      : verify.error === "rate_limited" ? "尝试太频繁了，请稍等一会儿再试"
-      : "验证已过期，请重新完成一次");
-    captchaGate.clearProof();
-    return;
-  }
-
-  closeCaptcha();
-  markCaptchaOk();
-  runCaptchaPending(pending);
-}
-
-function runCaptchaPending(pending) {
-  switch (pending) {
-    case "group":
-      openGroupModal();
-      break;
-    case "info":
-      openInfoModal();
-      break;
-    case "copy_verify":
-      showToast("验证通过");
-      break;
-    case "internal":
-      showToast("验证通过");
-      $("internalPassword").focus();
-      break;
-  }
-}
-
-function initCaptcha() {
-  if (!window.HJVerify) { console.error("[验证] verify.js 没有加载成功，人机验证不可用"); return; }
-  captchaGate = HJVerify.createGate($("captchaVerify"), {
-    post: callWorker,
-    turnstileSiteKey: TURNSTILE_SITE_KEY,
-    onPass: finishCaptcha,
-  });
-  $("captchaClose").addEventListener("click", closeCaptcha);
-  closeOnBackdrop($("captchaOverlay"), closeCaptcha);
-}
-
-
-/* =============================================================================
-   10. 视觉特效：昼夜切换、飘落花叶 / 星星、点击爆花
-   ============================================================================= */
-
-/* 动画档位：full 完整（飘落、悬停设计图等全部特效）/ lite 轻量（只保留点击、翻页等一次性的短动画）/ off 关闭。
-   fxEnabled = 不是「关闭」，翻页、弹窗这类一次性动画看它 */
+/* ==== 9. 昼夜、动画与特效 ==== */
+/* 动画档位：full 全部特效 / lite 仅保留点击和翻页的短动画 / off 关闭 */
 const FX_LEVELS = ["full", "lite", "off"];
 const FX_LEVEL_NAMES = { full: "完整", lite: "轻量", off: "关闭" };
-const FX_LEVEL_TOASTS = {
-  full: "动画：完整",
-  lite: "动画：轻量（只保留点击和翻页时的短动画）",
-  off: "动画：关闭",
-};
+const DAYNIGHT_FADE_MS = 900;
 let fxLevel = "full";
 let fxEnabled = true;
-const DAYNIGHT_FADE_MS = 900;
 
-/* 昼夜底图（地址在 config.js 的 TILE_BG / SKY_IMAGES）------------------------ */
-function forEachTile(fn) {
-  TILE_IDS.forEach((id) => {
-    const el = $(id);
-    if (el) fn(el, id);
-  });
-}
-
-function setTileBg(el, uri) {
-  el.style.backgroundImage = uri ? `url('${uri}')` : "";
-}
+/* 天空与首页卡片底图（config.js 的 SKY_IMAGES / TILE_BG）------------------------------ */
+const TILE_IDS = Object.keys(TILE_BG.day);
+const tileBgs = (isDay) => TILE_BG[isDay ? "day" : "night"];
+const setTileBg = (el, uri) => { el.style.backgroundImage = uri ? `url('${uri}')` : ""; };
 
 function applyTileBackgrounds(isDay) {
-  const bg = TILE_BG[isDay ? "day" : "night"];
-  forEachTile((el, id) => setTileBg(el, bg[id]));
+  const bg = tileBgs(isDay);
+  TILE_IDS.forEach((id) => setTileBg($(id), bg[id]));
 }
 
-/* 竖屏（手机）的天空只看得到中间一窄条，用裁窄的版本；横竖屏切换时跟着换 */
-const skyPortraitMq = window.matchMedia ? window.matchMedia("(max-aspect-ratio: 4/5)") : null;
-let skyPortraitMissing = false;   // 裁窄的天空图读不到（还没生成 / 没上传）时退回原图
-function skyUrl(isDay) {
-  const portrait = skyPortraitMq && skyPortraitMq.matches && !skyPortraitMissing && typeof SKY_IMAGES_PORTRAIT !== "undefined";
-  return (portrait ? SKY_IMAGES_PORTRAIT : SKY_IMAGES)[isDay ? "day" : "night"];
-}
+/* 竖屏使用裁窄的天空图，不存在时退回原图 */
+const skyPortraitMq = matchMedia("(max-aspect-ratio: 4/5)");
+let skyPortraitMissing = false;
+const useSkyPortrait = () => skyPortraitMq.matches && !skyPortraitMissing;
+const skyUrl = (isDay) => (useSkyPortrait() ? SKY_IMAGES_PORTRAIT : SKY_IMAGES)[isDay ? "day" : "night"];
 
 function setSky(isDay) {
   const url = skyUrl(isDay);
   $("skyBase").style.backgroundImage = `url('${url}')`;
-  if (skyPortraitMissing || typeof SKY_IMAGES_PORTRAIT === "undefined" || !Object.values(SKY_IMAGES_PORTRAIT).includes(url)) return;
+  if (!useSkyPortrait()) return;
   const probe = new Image();
   probe.onerror = () => {
     skyPortraitMissing = true;
@@ -1806,71 +1479,24 @@ function setSky(isDay) {
   probe.src = url;
 }
 
-/* 某一套昼夜要用的图：天空 + 首页六张卡片 */
-const dayNightUrls = (isDay) => [skyUrl(isDay), ...Object.values(TILE_BG[isDay ? "day" : "night"])];
+const dayNightUrls = (isDay) => [skyUrl(isDay), ...Object.values(tileBgs(isDay))];
 
-/* 等一组图片下载并解码好（最多等 maxMs），用于切换昼夜前 */
-function whenImagesReady(urls, maxMs) {
-  const warm = window.HJ_BOOT && window.HJ_BOOT.warm;
-  const all = Promise.all(urls.map((u) => (warm ? warm(u) : Promise.resolve())));
-  return Promise.race([all, new Promise((r) => setTimeout(r, maxMs))]);
-}
+/* 等图片下载并解码，最多 maxMs */
+const whenImagesReady = (urls, maxMs) =>
+  Promise.race([Promise.all(urls.map((u) => HJ.boot.warm(u))), new Promise((r) => setTimeout(r, maxMs))]);
 
-/* 首页卡片底图都到齐的时刻（预取等它之后才开始，不和首页抢带宽） */
 let homeImagesReady = Promise.resolve();
 
-/* 慢网络 / 省流量模式 */
-function isSlowNetwork() {
+const isSlowNetwork = () => {
   const c = navigator.connection;
   return !!c && (c.saveData || /(^|-)2g$/.test(c.effectiveType || ""));
-}
+};
 
-/* 页面里卡片的底图模式 ----------------------------------------------------------
-   卡片不高于屏幕：底图整张铺满卡片（和弹窗一样）；高于屏幕：加 .is-tall，
-   底图改成跟随屏幕的水印（样式见 style.css「弹窗与表单卡片共用的底」）。
-   卡片高度会随内容变（购票开没开、查询结果、问卷展开），所以用 ResizeObserver 盯着，
-   页面里新插进来的卡片（活动问卷、只读的购票管理面板）由 MutationObserver 补登记。
-   切换留 48px 余量，手机地址栏伸缩导致屏幕高度微变时不会来回跳 */
-const CARD_TALL_MARGIN = 48;
-const cardSizeWatcher = window.ResizeObserver
-  ? new ResizeObserver((entries) => entries.forEach((e) => updateCardBackdrop(e.target))) : null;
-const watchedCards = new WeakSet();
-
-function updateCardBackdrop(card) {
-  const h = card.offsetHeight, vh = window.innerHeight;
-  const tall = card.classList.contains("is-tall");
-  if (!tall && h > vh + CARD_TALL_MARGIN) card.classList.add("is-tall");
-  else if (tall && h < vh - CARD_TALL_MARGIN) card.classList.remove("is-tall");
-}
-
-function refreshCardBackdrops() {
-  document.querySelectorAll(".view .gate-card").forEach((card) => {
-    if (cardSizeWatcher && !watchedCards.has(card)) {
-      watchedCards.add(card);
-      cardSizeWatcher.observe(card);
-    }
-    updateCardBackdrop(card);
-  });
-}
-
-function initCardBackdrops() {
-  let queued = false;
-  const queue = () => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => { queued = false; refreshCardBackdrops(); });
-  };
-  window.addEventListener("resize", queue);
-  new MutationObserver(queue).observe(document.querySelector("main") || document.body, { childList: true, subtree: true });
-  queue();   // 第一次量高度放到下一帧，不在启动时强制排版
-}
-
-/* 进站后、浏览器空闲时先把弹窗底图备好；电脑上顺便把另一套昼夜底图也下载好。
-   手机 / 慢网络不预先下载另一套（省流量，也不和正在看的内容抢带宽），点切换按钮时现取，取好再交叉淡入 */
+/* 空闲时预取弹窗底图；电脑上同时预取另一套昼夜底图 */
 function preloadDayNightImages(isDay) {
-  const eager = window.innerWidth > 760 && !(skyPortraitMq && skyPortraitMq.matches) && !isSlowNetwork();
+  const eager = window.innerWidth > 760 && !useSkyPortrait() && !isSlowNetwork();
   const urls = [INFO_BG_IMAGE, ...(eager ? dayNightUrls(!isDay) : [])];
-  window.HJ_LATE(() => urls.forEach((url) => { new Image().src = url; }));
+  HJ.late(() => urls.forEach((url) => { new Image().src = url; }));
 }
 
 function crossfadeSky(isDay, duration) {
@@ -1886,55 +1512,51 @@ function crossfadeSky(isDay, duration) {
 }
 
 function crossfadeTileBackgrounds(isDay, duration) {
-  const bg = TILE_BG[isDay ? "day" : "night"];
-  forEachTile((el, id) => {
-    const newUri = bg[id];
-    // 悬停中的卡片被设计图盖住，直接换图，避免新旧底图透过渐变区域叠加闪烁
-    if (el.matches(":hover")) {
-      setTileBg(el, newUri);
-      return;
-    }
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-      "position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;" +
-      `opacity:0;transition:opacity ${duration}ms ease;pointer-events:none;background-image:url('${newUri}');`;
-    el.appendChild(overlay);
-    requestAnimationFrame(() => { overlay.style.opacity = "1"; });
+  const bg = tileBgs(isDay);
+  TILE_IDS.forEach((id) => {
+    const el = $(id);
+    /* 悬停中的卡片被设计图覆盖，直接替换 */
+    if (el.matches(":hover")) { setTileBg(el, bg[id]); return; }
+    const layer = document.createElement("div");
+    layer.className = "tile-crossfade";
+    layer.style.cssText = `background-image:url('${bg[id]}');transition-duration:${duration}ms`;
+    el.appendChild(layer);
+    requestAnimationFrame(() => { layer.style.opacity = "1"; });
     setTimeout(() => {
-      setTileBg(el, newUri);
-      overlay.remove();
+      setTileBg(el, bg[id]);
+      layer.remove();
     }, duration + 60);
   });
 }
 
 function applyDayNight(willBeDay) {
   const body = document.body;
-  body.classList.remove("custom-bg");   // 回到默认天空，撤掉标题区毛玻璃
-
-  if (!fxEnabled) {
-    body.classList.remove("fx-crossfading");
-    body.classList.toggle("day-mode", willBeDay);
-    setSky(willBeDay);
-    $("skyFade").style.backgroundImage = "";
-    applyTileBackgrounds(willBeDay);
-  } else {
+  body.classList.remove("custom-bg");
+  body.classList.toggle("day-mode", willBeDay);
+  if (fxEnabled) {
     body.classList.add("fx-crossfading");
-    body.classList.toggle("day-mode", willBeDay);
     crossfadeSky(willBeDay, DAYNIGHT_FADE_MS);
     crossfadeTileBackgrounds(willBeDay, DAYNIGHT_FADE_MS);
     setTimeout(() => {
       body.classList.remove("fx-crossfading");
       $("skyFade").style.backgroundImage = "";
     }, DAYNIGHT_FADE_MS + 80);
+  } else {
+    body.classList.remove("fx-crossfading");
+    setSky(willBeDay);
+    $("skyFade").style.backgroundImage = "";
+    applyTileBackgrounds(willBeDay);
   }
   applyFx();
-  hjMusic.followDayNight();
+  bgm.followDayNight();
 }
 
-/* 切换昼夜：新一套图片先下载解码好（已缓存时几乎是立即）再切，最多等 2.5 秒；等待期间按钮呼吸闪烁 */
+/* 切换昼夜：新图就绪（最多 2.5 秒）后再切换 */
 let dayNightBusy = false;
+let dayNightLockedUntil = 0;
 function toggleDayNight() {
-  if (dayNightBusy) return;
+  if (dayNightBusy || (fxEnabled && Date.now() < dayNightLockedUntil)) return;
+  dayNightLockedUntil = Date.now() + 1000;
   const willBeDay = !isDayMode();
   const btn = $("dayNightToggle");
   dayNightBusy = true;
@@ -1948,81 +1570,94 @@ function toggleDayNight() {
 }
 
 function initDayNight() {
-  const isDay = window.HJ_START_DAY ?? (() => { const h = new Date().getHours(); return h >= 6 && h < 18; })();
+  const isDay = !!HJ.day;
   document.body.classList.toggle("day-mode", isDay);
   setSky(isDay);
-  /* 开屏期间：卡片底图排在天空、标题字体、弹窗底图之后再下载，下载完顺手解码好 */
-  window.HJ_BOOT.afterAssets(() => {
-    const urls = Object.values(TILE_BG[isDayMode() ? "day" : "night"]);
+  /* 卡片底图排在开屏所需资源之后 */
+  HJ.boot.afterAssets(() => {
     applyTileBackgrounds(isDayMode());
-    homeImagesReady = whenImagesReady(urls, 15000);
+    homeImagesReady = whenImagesReady(Object.values(tileBgs(isDayMode())), 15000);
   });
-  document.documentElement.style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);   // 弹窗 / 表单卡片共用的底图
+  document.documentElement.style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);
   preloadDayNightImages(isDay);
-
-  /* 横竖屏切换：天空换成对应的版本（换成相册里的自定义背景时不动） */
-  const onOrientation = () => { if (!document.body.classList.contains("custom-bg")) setSky(isDayMode()); };
-  if (skyPortraitMq) {
-    if (skyPortraitMq.addEventListener) skyPortraitMq.addEventListener("change", onOrientation);
-    else if (skyPortraitMq.addListener) skyPortraitMq.addListener(onOrientation);
-  }
-
-  // 动画进行中 1 秒内忽略重复点击
-  let locked = false;
-  $("dayNightToggle").addEventListener("click", () => {
-    if (fxEnabled) {
-      if (locked) return;
-      locked = true;
-      setTimeout(() => { locked = false; }, 1000);
-    }
-    toggleDayNight();
+  skyPortraitMq.addEventListener("change", () => {
+    if (!document.body.classList.contains("custom-bg")) setSky(isDayMode());
   });
+  $("dayNightToggle").addEventListener("click", toggleDayNight);
 }
 
-/* 飘落层 --------------------------------------------------------------------- */
+/* 卡片高于屏幕时加 .is-tall，底图改为固定的水印；留余量避免手机地址栏伸缩时来回切换 */
+const CARD_TALL_MARGIN = 48;
+const cardSizeWatcher = new ResizeObserver((entries) => entries.forEach((e) => updateCardBackdrop(e.target)));
+const watchedCards = new WeakSet();
 
-function clearFx() {
-  $("fxLayer").innerHTML = "";
+function updateCardBackdrop(card) {
+  const h = card.offsetHeight;
+  const vh = window.innerHeight;
+  if (h > vh + CARD_TALL_MARGIN) card.classList.add("is-tall");
+  else if (h < vh - CARD_TALL_MARGIN) card.classList.remove("is-tall");
 }
 
-/* 白天：花叶飘落。每片叶子由五层嵌套元素组成（结构与动画说明见 style.css），
-   各层周期、幅度、相位随机，避免整屏同步。 */
+function initCardBackdrops() {
+  let queued = false;
+  const refresh = () => {
+    queued = false;
+    document.querySelectorAll(".view .gate-card").forEach((card) => {
+      if (!watchedCards.has(card)) {
+        watchedCards.add(card);
+        cardSizeWatcher.observe(card);
+      }
+      updateCardBackdrop(card);
+    });
+  };
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(refresh);
+  };
+  window.addEventListener("resize", queue);
+  new MutationObserver(queue).observe(document.querySelector("main"), { childList: true, subtree: true });
+  queue();
+}
+
+/* 飘落层 ------------------------------------------------------------------------------- */
+const clearFx = () => { $("fxLayer").innerHTML = ""; };
+
+/* 白天花叶飘落：每片五层嵌套（下落 / 摆动 / Y 翻转 / X 翻转 / 贴图与明暗），各层周期与相位随机 */
 function renderDayFx() {
   clearFx();
-  if (!DAY_FX_LEAVES.length) return;
-
   const reduce = prefersReducedMotion();
   const count = window.innerWidth < 760 ? 11 : 17;
   const rand = (lo, hi) => lo + Math.random() * (hi - lo);
   const sign = () => (Math.random() > 0.5 ? 1 : -1);
   const sec = (v) => v.toFixed(2) + "s";
+  const span = (cls) => Object.assign(document.createElement("span"), { className: cls });
   const frag = document.createDocumentFragment();
 
   for (let i = 0; i < count; i++) {
     const sprite = randomItem(DAY_FX_LEAVES);
-    const w = rand(15, 31);             // 宽度 px
-    const fall = rand(9.5, 19);         // 下落一整程
-    const swayDur = rand(1.9, 5.6);     // 左右摆动周期
-    const flipDur = rand(2.1, 6.6);     // 绕 Y 轴翻转周期
-    const flipXDur = rand(1.6, 5.4);    // 绕 X 轴翻转周期（与 Y 轴错开）
-    const tumbleDur = rand(2.6, 7.4);   // 绕 Z 轴摆动周期
+    const w = rand(15, 31);
+    const fall = rand(9.5, 19);
+    const swayDur = rand(1.9, 5.6);
+    const flipDur = rand(2.1, 6.6);
+    const flipXDur = rand(1.6, 5.4);
+    const tumbleDur = rand(2.6, 7.4);
 
-    /* 第 1 层：下落 + 淡入淡出。两个动画共用同一个负 delay，
-       保证淡入淡出只发生在屏幕外的两端，不会在半空中突然消失 */
-    const el = document.createElement("span");
-    el.className = "fx-leaf";
-    el.style.left = rand(-3, 101).toFixed(2) + "vw";
-    el.style.width = w.toFixed(1) + "px";
-    el.style.height = (w / sprite.ar).toFixed(1) + "px";
+    /* 下落与淡入淡出共用 delay，淡入淡出发生在屏幕外 */
+    const el = span("fx-leaf");
     const fallDelay = sec(-Math.random() * fall);
-    el.style.animationDuration = `${sec(fall)}, ${sec(fall)}`;
-    el.style.animationDelay = `${fallDelay}, ${fallDelay}`;
+    Object.assign(el.style, {
+      left: rand(-3, 101).toFixed(2) + "vw",
+      width: w.toFixed(1) + "px",
+      height: (w / sprite.ar).toFixed(1) + "px",
+      animationDuration: `${sec(fall)}, ${sec(fall)}`,
+      animationDelay: `${fallDelay}, ${fallDelay}`,
+    });
     el.style.setProperty("--op", rand(0.5, 0.88).toFixed(2));
     el.style.setProperty("--sway", Math.round(rand(10, 54)) + "px");
     el.style.setProperty("--sway-skew", rand(0, 7).toFixed(1) + "deg");
     el.style.setProperty("--drift", Math.round(rand(-70, 150)) + "px");
-
-    /* "重量"：18% 沉叶不翻转，20% 轻叶翻 720°，其余翻 360°；X 轴翻转沿用同一重量 */
+    /* 18% 不翻转，20% 翻 720°，其余 360° */
     const r = Math.random();
     const turn = r < 0.18 ? 0 : r < 0.38 ? 720 : 360;
     el.style.setProperty("--flip-turn", turn * sign() + "deg");
@@ -2030,23 +1665,18 @@ function renderDayFx() {
     el.style.setProperty("--tilt-end", rand(-6, 34).toFixed(1) + "deg");
     if (reduce) el.style.setProperty("--static-top", Math.round(rand(2, 88)) + "vh");
 
-    /* 第 2 层：左右摆动 */
-    const sway = document.createElement("span");
-    sway.className = "fx-leaf-sway";
+    const sway = span("fx-leaf-sway");
     sway.style.animationDuration = sec(swayDur);
     sway.style.animationDelay = sec(-Math.random() * swayDur);
 
-    /* 第 3 层：绕 Y 轴翻转；delay 与第 5 层明暗动画共用，侧对镜头时最暗 */
+    /* Y 翻转与明暗共用 delay，侧面朝向时最暗 */
     const flipDelay = -Math.random() * flipDur;
-    const flip = document.createElement("span");
-    flip.className = "fx-leaf-flip";
+    const flip = span("fx-leaf-flip");
     flip.style.animationDuration = sec(flipDur);
     flip.style.animationDelay = sec(flipDelay);
 
-    /* 第 4 层：绕 X 轴翻转。轻叶 360° 连续翻；中等 180° 来回翻（alternate 避免循环跳变）；沉叶不翻 */
     const flipXTurn = turn === 0 ? 0 : turn === 720 ? 360 : 180;
-    const flipX = document.createElement("span");
-    flipX.className = "fx-leaf-flipx";
+    const flipX = span("fx-leaf-flipx");
     flipX.style.setProperty("--flipx-turn", flipXTurn * sign() + "deg");
     flipX.style.animationDuration = sec(flipXDur);
     flipX.style.animationDelay = sec(-Math.random() * flipXDur);
@@ -2055,15 +1685,12 @@ function renderDayFx() {
       flipX.style.animationTimingFunction = "ease-in-out";
     }
 
-    /* 第 5 层：贴图 + Z 轴摆动 + 明暗。
-       明暗周期 = 翻转周期 × 360 / 转数，使每次侧对镜头都恰好最暗；不翻转的叶子只缓慢呼吸 */
+    /* 明暗周期 = 翻转周期 × 360 / 转数 */
     const lightDur = turn === 0 ? flipDur * 2 : (flipDur * 360) / turn;
-    const face = document.createElement("span");
-    face.className = "fx-leaf-face";
+    const face = span("fx-leaf-face");
     face.style.backgroundImage = `url('${sprite.src}')`;
     face.style.animationDuration = `${sec(tumbleDur)}, ${sec(lightDur)}`;
-    face.style.animationDelay = `${sec(-Math.random() * tumbleDur)}, `
-      + sec(turn === 0 ? -Math.random() * lightDur : flipDelay);
+    face.style.animationDelay = `${sec(-Math.random() * tumbleDur)}, ${sec(turn === 0 ? -Math.random() * lightDur : flipDelay)}`;
 
     flipX.appendChild(face);
     flip.appendChild(flipX);
@@ -2074,101 +1701,78 @@ function renderDayFx() {
   $("fxLayer").appendChild(frag);
 }
 
-/* 夜晚：闪烁的星星 */
+/* 夜晚星光 */
 function renderNightFx() {
   clearFx();
   const frag = document.createDocumentFragment();
   for (let i = 0; i < 26; i++) {
     const el = document.createElement("span");
     el.className = "fx-star";
-    el.style.left = Math.random() * 100 + "vw";
-    el.style.top = Math.random() * 100 + "vh";
-    el.style.animationDuration = 2 + Math.random() * 3 + "s";
-    el.style.animationDelay = Math.random() * 4 + "s";
+    Object.assign(el.style, {
+      left: Math.random() * 100 + "vw",
+      top: Math.random() * 100 + "vh",
+      animationDuration: 2 + Math.random() * 3 + "s",
+      animationDelay: Math.random() * 4 + "s",
+    });
     frag.appendChild(el);
   }
   $("fxLayer").appendChild(frag);
 }
 
-/* 飘落花叶 / 星光只在「完整」档 */
 function applyFx() {
   if (fxLevel !== "full") clearFx();
   else if (isDayMode()) renderDayFx();
   else renderNightFx();
 }
 
-/* 动画档位 ------------------------------------------------------------------- */
-
-/* 默认档位由 index.html 开头的脚本算好（HJ_FX_LEVEL）：手动选过的为准；
-   否则开了系统"减弱动态效果"→ 关闭，电脑 → 完整，手机 → 轻量 */
-function getDefaultFxLevel() {
-  if (FX_LEVELS.includes(window.HJ_FX_LEVEL)) return window.HJ_FX_LEVEL;
-  if (prefersReducedMotion()) return "off";
-  return window.innerWidth > 760 ? "full" : "lite";
-}
-
-function clearAllFxEnterClasses() {
-  document.querySelectorAll(".fx-page-enter").forEach((el) => {
-    el.classList.remove("fx-page-enter");
-    el.style.animationDelay = "";
-  });
-  document.querySelectorAll(".fx-fade-only").forEach((el) => el.classList.remove("fx-fade-only"));
-}
-
 function syncFxToggle() {
   const btn = $("fxToggle");
-  const label = `动画：${FX_LEVEL_NAMES[fxLevel]}（点击切换）`;
+  const label = `动画：${FX_LEVEL_NAMES[fxLevel]}`;
   btn.classList.toggle("is-active", fxEnabled);
   btn.classList.toggle("is-lite", fxLevel === "lite");
   btn.setAttribute("aria-label", label);
   btn.title = label;
-  document.body.classList.toggle("fx-hover-enabled", fxLevel === "full");   // 悬停设计图只在完整档（也就不下载那几张图）
+  document.body.classList.toggle("fx-hover-enabled", fxLevel === "full");
   document.body.classList.toggle("fx-lite", fxLevel === "lite");
   applyFx();
-  if (!fxEnabled) clearAllFxEnterClasses();
+  if (fxEnabled) return;
+  document.querySelectorAll(".fx-page-enter, .fx-fade-only").forEach((el) => {
+    el.classList.remove("fx-page-enter", "fx-fade-only");
+    el.style.animationDelay = "";
+  });
 }
 
 function setFxLevel(level) {
   fxLevel = level;
   fxEnabled = level !== "off";
-  window.HJ_FX_LEVEL = level;
+  HJ.fx = level;
   storage.set(STORE.fxLevel, level);
-  storage.remove("hj_fx_enabled");
   syncFxToggle();
 }
 
 function initFxToggle() {
-  fxLevel = getDefaultFxLevel();
+  fxLevel = FX_LEVELS.includes(HJ.fx) ? HJ.fx : "lite";
   fxEnabled = fxLevel !== "off";
   syncFxToggle();
-  /* 开屏图还在时，各区块的入场动画留到进站那一刻再播（initApp 末尾） */
+  /* 开屏时入场动画留到进站 */
   if (!document.documentElement.classList.contains("boot-pending")) playPageEnterStagger();
-  /* 完整 → 轻量 → 关闭 → 完整 */
   $("fxToggle").addEventListener("click", () => {
     const next = FX_LEVELS[(FX_LEVELS.indexOf(fxLevel) + 1) % FX_LEVELS.length];
     setFxLevel(next);
-    showToast(FX_LEVEL_TOASTS[next]);
+    showToast(`动画：${FX_LEVEL_NAMES[next]}`);
   });
 }
 
-/* 点击爆花 ------------------------------------------------------------------- */
-
-const BURST_COUNT = 7;
-const BURST_COUNT_LITE = 4;
+/* 点击特效：白天花叶，夜晚星点 ------------------------------------------------------------- */
+const BURST_COUNT = { full: 7, lite: 4 };
 const BURST_THROTTLE_MS = 150;
-const BURST_FALLBACK_EMOJI = ["🌸", "🌼", "🌿", "🍃"];
-const FX_EXCLUDED_TARGETS =
-  "button, a, input, textarea, select, label, .tile, .tab-btn, .back-btn, " +
-  ".info-overlay, .lightbox-overlay, .review-photo, .album-card";
+const BURST_EXCLUDED = "button, a, input, textarea, select, label, .tile, .tab-btn, .back-btn, .info-overlay, .lightbox-overlay, .review-photo, .album-card";
 
-/* 白天用与飘落相同的花叶贴图，夜晚是星点 */
 function spawnClickBurst(x, y) {
   const layer = $("fxClickLayer");
   if (layer.children.length > 60) layer.innerHTML = "";
   const isDay = isDayMode();
-  const count = fxLevel === "full" ? BURST_COUNT : BURST_COUNT_LITE;
-
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < BURST_COUNT[fxLevel]; i++) {
     const el = document.createElement("span");
     const angle = Math.random() * Math.PI * 2;
     const dist = 26 + Math.random() * 46;
@@ -2176,380 +1780,263 @@ function spawnClickBurst(x, y) {
     el.style.top = y + "px";
     el.style.setProperty("--bx", Math.cos(angle) * dist + "px");
     el.style.setProperty("--by", Math.sin(angle) * dist + 16 + "px");
-
-    if (isDay && DAY_FX_LEAVES.length) {
+    if (isDay) {
       const sprite = randomItem(DAY_FX_LEAVES);
       const w = 11 + Math.random() * 12;
       el.className = "fx-burst-petal";
-      el.style.width = w.toFixed(1) + "px";
-      el.style.height = (w / sprite.ar).toFixed(1) + "px";
-      el.style.backgroundImage = `url('${sprite.src}')`;
+      Object.assign(el.style, {
+        width: w.toFixed(1) + "px",
+        height: (w / sprite.ar).toFixed(1) + "px",
+        backgroundImage: `url('${sprite.src}')`,
+        animationDuration: (0.85 + Math.random() * 0.5).toFixed(2) + "s",
+      });
       el.style.setProperty("--br", (Math.random() * 140 - 70).toFixed(1) + "deg");
-      el.style.animationDuration = (0.85 + Math.random() * 0.5).toFixed(2) + "s";
-    } else if (isDay) {
-      el.className = "fx-burst-petal";   // 没有贴图时退回表情符号
-      el.textContent = randomItem(BURST_FALLBACK_EMOJI);
-      el.style.fontSize = 12 + Math.random() * 8 + "px";
-      el.style.setProperty("--br", Math.random() * 180 - 90 + "deg");
     } else {
       el.className = "fx-burst-star";
     }
     layer.appendChild(el);
-    setTimeout(() => el.remove(), 1500);   // 动画最长约 1.35s
+    setTimeout(() => el.remove(), 1500);
   }
 }
 
 function initClickBurst() {
-  let lastBurstTime = 0;
+  let last = 0;
   document.addEventListener("click", (e) => {
-    if (!fxEnabled || e.target.closest(FX_EXCLUDED_TARGETS)) return;
+    if (!fxEnabled || e.target.closest(BURST_EXCLUDED)) return;
     const now = Date.now();
-    if (now - lastBurstTime < BURST_THROTTLE_MS) return;
-    lastBurstTime = now;
+    if (now - last < BURST_THROTTLE_MS) return;
+    last = now;
     spawnClickBurst(e.clientX, e.clientY);
   });
 }
 
+/* ==== 10. 头部工具：音量、更多、日历、时间条 ==== */
+const MUSIC_VOLUME = 0.55;
+const MUSIC_FADE_MS = 700;
 
-/* =============================================================================
-   11. 头部工具：背景音乐与音量、「更多」下拉、日历、时间条、天气
-   右上角按钮从右往左：更多 / 昼夜 / 特效 / 时钟 / 音量
-   ============================================================================= */
+/* 全站音量：<audio> / <video> 通过 attach 跟随；B 站外链播放器只能跟随静音 */
+const siteVolume = {
+  level: MUSIC_VOLUME,
+  media: new Set(),
+  get muted() { return this.level <= 0; },
+  attach(el) {
+    this.media.add(el);
+    try { el.volume = this.level; } catch (e) {}
+  },
+  detach(el) { this.media.delete(el); },
+  set(value) {
+    this.level = clamp(Number(value) || 0, 0, 1);
+    storage.set(STORE.volume, Math.round(this.level * 100));
+    this.media.forEach((el) => { try { el.volume = this.level; } catch (e) {} });
+    bgm.followVolume();
+    syncExternalVideoMute();
+    paintVolume();
+  },
+};
 
-/* 背景音乐播放器 ------------------------------------------------------------------
-   淡入淡出、循环、按昼夜选曲；歌单在 config.js 的 MUSIC_TRACKS，为空时所有操作均为空转。
-   音量按钮的亮 / 暗表示是否静音（音量 0 = 静音）。 */
-const hjMusic = {
+/* 背景音乐（config.js 的 MUSIC_TRACKS）：按昼夜选曲，首次交互后开始播放 */
+const bgm = {
+  tracks: MUSIC_TRACKS.filter((t) => t && t.src),
   audio: null,
-  tracks: MUSIC_TRACKS.slice(),
   index: 0,
-  loaded: "",          // 当前 audio 已载入的 src
+  loaded: "",
   playing: false,
-  wantPlay: false,
-  swapping: false,     // 昼夜换曲的淡出期间为 true，期间忽略 ended
+  swapping: false,   // 换曲淡出中
   fadeRaf: 0,
-  pauseTimer: 0,
-  vol: MUSIC_VOLUME,
+  stopTimer: 0,
 
-  btn() { return $("soundToggle"); },
-  hasTracks() { return this.tracks.length > 0; },
-  current() { return this.tracks[this.index] || null; },
-
-  /* 优先选与当前昼夜匹配的曲目 */
   pickIndex() {
-    const want = isDayMode() ? "day" : "night";
-    const i = this.tracks.findIndex((t) => t.mode === want);
-    return i >= 0 ? i : 0;
-  },
-
-  ensure() {
-    if (this.audio || !this.hasTracks()) return;
-    const a = new Audio();
-    a.preload = "none";
-    a.volume = 0;
-    a.loop = this.tracks.length <= 1;   // 单曲时原地循环
-    a.addEventListener("ended", () => this.next());
-    a.addEventListener("error", () => {
-      if (this.loaded) this.fail();
-    });
-    this.audio = a;
-  },
-
-  fail() {
-    this.playing = false;
-    this.wantPlay = false;
-    this.remember();
-    this.sync();
-    showToast("音源读不出来，检查一下 assets/audio/ 里的文件名");
+    const mode = isDayMode() ? "day" : "night";
+    return Math.max(0, this.tracks.findIndex((t) => t.mode === mode));
   },
 
   fade(to, done) {
     cancelAnimationFrame(this.fadeRaf);
-    if (!this.audio) {
-      if (done) done();
-      return;
-    }
-    const from = this.audio.volume;
+    const a = this.audio;
+    const from = a.volume;
     const t0 = performance.now();
     const step = () => {
       const k = Math.min(1, (performance.now() - t0) / MUSIC_FADE_MS);
-      this.audio.volume = clamp(from + (to - from) * k, 0, 1);
+      a.volume = clamp(from + (to - from) * k, 0, 1);
       if (k < 1) this.fadeRaf = requestAnimationFrame(step);
       else if (done) done();
     };
     this.fadeRaf = requestAnimationFrame(step);
   },
 
-  /* 换源并淡入到目标音量 */
-  startTrack(track) {
-    this.loaded = track.src;
-    this.audio.src = track.src;
-    this.audio.load();
-    const p = this.audio.play();
-    if (p && p.catch) p.catch(() => {});
-    this.fade(this.vol);
-    this.sync();
+  start(track) {
+    if (this.loaded !== track.src) {
+      this.loaded = track.src;
+      this.audio.src = track.src;
+      this.audio.load();
+    }
+    this.audio.play().catch((err) => {
+      this.playing = false;
+      if (err && err.name === "NotAllowedError") this.armAutoplay();
+      else showToast("背景音乐加载失败");
+    });
+    this.fade(siteVolume.level);
   },
 
   play() {
-    if (!this.hasTracks()) {
-      showToast("音源还没放进仓库，先给你留个位置~");
-      return;
+    if (!this.tracks.length) return;
+    if (!this.audio) {
+      const a = new Audio();
+      a.preload = "none";
+      a.volume = 0;
+      a.loop = this.tracks.length === 1;
+      a.addEventListener("ended", () => this.next());
+      this.audio = a;
     }
-    this.ensure();
-    this.index = this.pickIndex();
-    const t = this.current();
-    if (t && this.loaded !== t.src) {
-      this.loaded = t.src;
-      this.audio.src = t.src;
-      this.audio.load();
-    }
-    this.wantPlay = true;
-    const p = this.audio.play();
-    if (p && p.catch) {
-      p.catch((err) => {
-        if (err && err.name === "NotAllowedError") showToast("浏览器不让自动播放，再点一下按钮就好");
-        else this.fail();
-      });
-    }
+    clearTimeout(this.stopTimer);
     this.playing = true;
-    this.fade(this.vol);
-    this.sync();
-    this.remember();
+    this.index = this.pickIndex();
+    this.start(this.tracks[this.index]);
   },
 
   pause() {
     this.swapping = false;
-    this.wantPlay = false;
-    this.remember();
-    if (!this.audio || !this.playing) {
-      this.playing = false;
-      this.sync();
-      return;
-    }
+    if (!this.playing) return;
     this.playing = false;
     const stop = () => {
       cancelAnimationFrame(this.fadeRaf);
+      clearTimeout(this.stopTimer);
       this.audio.pause();
       this.audio.currentTime = 0;
       this.audio.volume = 0;
     };
     this.fade(0, stop);
-    // 部分浏览器会节流 requestAnimationFrame，用定时器兜底确保停止
-    clearTimeout(this.pauseTimer);
-    this.pauseTimer = setTimeout(stop, MUSIC_FADE_MS + 120);
-    this.sync();
-  },
-
-  toggle() {
-    if (this.playing) this.pause();
-    else this.play();
+    this.stopTimer = setTimeout(stop, MUSIC_FADE_MS + 120);   // 后台标签页中 rAF 会暂停
   },
 
   next() {
-    // 淡出暂停过程中也可能收到 ended，用 playing 拦住
-    if (!this.playing || this.swapping || !this.hasTracks()) return;
+    if (!this.playing || this.swapping) return;
     this.index = (this.index + 1) % this.tracks.length;
-    this.startTrack(this.current());
+    this.start(this.tracks[this.index]);
   },
 
-  /* 切换昼夜时换曲：淡出 → 换源 → 淡入（仅在播放中） */
   followDayNight() {
-    if (!this.playing || this.swapping || !this.hasTracks()) return;
+    if (!this.playing || this.swapping) return;
     const i = this.pickIndex();
-    const t = this.tracks[i];
-    if (!t || t.src === this.loaded) return;
+    if (this.tracks[i].src === this.loaded) return;
     this.index = i;
     this.swapping = true;
     this.fade(0, () => {
       this.swapping = false;
-      if (this.playing) this.startTrack(t);   // 淡出途中被暂停则不再继续
+      if (this.playing) this.start(this.tracks[i]);
     });
   },
 
-  setVolume(v) {
-    this.vol = clamp(Number(v) || 0, 0, 1);
-    if (this.audio && this.playing) this.audio.volume = this.vol;
-    storage.set(STORE.volume, Math.round(this.vol * 100));
-    this.sync();
-    hjSound.apply();   // 背景音乐以外的声音（外链视频等）也跟着这根音量条走
+  followVolume() {
+    if (!this.audio || !this.playing || this.swapping) return;
+    cancelAnimationFrame(this.fadeRaf);
+    this.audio.volume = siteVolume.level;
   },
 
-  remember() {
-    storage.set(STORE.soundOn, this.wantPlay ? "1" : "0");
-  },
-
-  /* 替换歌单（控制台调试用） */
-  load(list) {
-    this.tracks = (Array.isArray(list) ? list : []).filter((t) => t && t.src);
-    this.index = 0;
-    this.loaded = "";
-    if (this.audio) {
-      this.audio.pause();
-      this.audio = null;   // 重建，ensure() 会按新曲目数决定是否 loop
-    }
-    this.sync();
-    if (this.wantPlay && this.hasTracks()) this.play();
-  },
-
-  /* 同步按钮状态：音量 > 0 为亮色喇叭，0 为暗色静音图标（图标切换由 CSS 完成） */
-  sync() {
-    const btn = this.btn();
-    if (!btn) return;
-    const on = this.vol > 0;
-    const label = on ? "音量（未静音）" : "音量（静音）";
-    btn.classList.toggle("is-on", on);
-    btn.setAttribute("aria-label", label);
-    btn.title = label;
-  },
-};
-
-/* 控制台调试入口 */
-window.HJ_MUSIC = {
-  load: (list) => hjMusic.load(list),
-  play: () => hjMusic.play(),
-  pause: () => hjMusic.pause(),
-  toggle: () => hjMusic.toggle(),
-  setVolume: (v) => hjMusic.setVolume(v),
-  get tracks() { return hjMusic.tracks; },
-};
-
-function initSound() {
-  // 恢复上次音量；注意无记录时 getItem 返回 null，不能直接 Number()（会变成 0 = 静音）
-  const raw = storage.get(STORE.volume);
-  const saved = raw === null ? NaN : Number(raw);
-  hjMusic.setVolume(Number.isFinite(saved) ? saved / 100 : MUSIC_VOLUME);
-
-  $("soundToggle").addEventListener("click", toggleVolPanel);
-  initVolSlider();
-
-  // 浏览器禁止无交互自动播放：有音源且未静音时，在首次交互时开始播放
-  if (hjMusic.vol > 0 && hjMusic.hasTracks()) {
+  armAutoplay() {
+    if (!this.tracks.length || siteVolume.muted) return;
     const kick = () => {
-      document.removeEventListener("pointerdown", kick);
-      document.removeEventListener("keydown", kick);
-      hjMusic.play();
+      document.removeEventListener("pointerup", kick, true);
+      document.removeEventListener("keydown", kick, true);
+      if (!this.playing) this.play();
     };
-    document.addEventListener("pointerdown", kick);
-    document.addEventListener("keydown", kick);
-  }
-}
+    document.addEventListener("pointerup", kick, true);
+    document.addEventListener("keydown", kick, true);
+  },
+};
 
-/* 音量弹层 ---------------------------------------------------------------------
-   一根竖条：拖动 / 点击轨道 / 方向键调整；界面不显示数值，数值只通过 aria 提供给读屏。
-   这根竖条是全站唯一的音量入口，调整结果经 hjMusic.setVolume → hjSound.apply() 分发给所有声音。 */
-function openVolPanel(open) {
-  $("volPanel").hidden = !open;
-  $("soundToggle").setAttribute("aria-expanded", String(!!open));
-}
-
-function toggleVolPanel() {
-  openVolPanel($("volPanel").hidden);
-  openMorePanel(false);   // 与「更多」互斥
-}
-
-function paintVolSlider(p) {
+function paintVolume() {
+  const p = Math.round(siteVolume.level * 100);
+  const label = p ? "音量" : "音量：静音";
+  const btn = $("soundToggle");
+  btn.classList.toggle("is-on", p > 0);
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
   $("volFill").style.height = p + "%";
   $("volThumb").style.bottom = `calc(${p}% - 8px)`;
   const track = $("volTrack");
   track.setAttribute("aria-valuenow", String(p));
-  track.setAttribute("aria-valuetext", p === 0 ? "静音" : "音量 " + p);
+  track.setAttribute("aria-valuetext", p ? "音量 " + p : "静音");
 }
 
-const currentVolPercent = () => Math.round(hjMusic.vol * 100);
+function initVolume() {
+  const saved = Number(storage.get(STORE.volume) ?? NaN);
+  siteVolume.set(Number.isFinite(saved) ? saved / 100 : MUSIC_VOLUME);
+  bgm.armAutoplay();
 
-function setVolumePercent(p) {
-  hjMusic.setVolume(clamp(Math.round(p), 0, 100) / 100);
-  paintVolSlider(currentVolPercent());
-}
-
-function initVolSlider() {
   const track = $("volTrack");
-  paintVolSlider(currentVolPercent());
-
-  const valueFromPointer = (e) => {
-    const rect = track.getBoundingClientRect();
-    if (!rect.height) return currentVolPercent();
-    return (1 - (e.clientY - rect.top) / rect.height) * 100;
+  const setPercent = (p) => siteVolume.set(clamp(Math.round(p), 0, 100) / 100);
+  const fromPointer = (e) => {
+    const r = track.getBoundingClientRect();
+    return r.height ? (1 - (e.clientY - r.top) / r.height) * 100 : siteVolume.level * 100;
   };
-
   let dragging = false;
   track.addEventListener("pointerdown", (e) => {
     dragging = true;
     try { track.setPointerCapture(e.pointerId); } catch (err) {}
-    setVolumePercent(valueFromPointer(e));
+    setPercent(fromPointer(e));
     e.preventDefault();
   });
-  track.addEventListener("pointermove", (e) => {
-    if (dragging) setVolumePercent(valueFromPointer(e));
-  });
+  track.addEventListener("pointermove", (e) => { if (dragging) setPercent(fromPointer(e)); });
   track.addEventListener("pointerup", () => { dragging = false; });
   track.addEventListener("pointercancel", () => { dragging = false; });
-
-  // 键盘：方向键 ±5，Home 静音，End 最大
   const KEY_STEPS = { ArrowUp: 5, ArrowRight: 5, ArrowDown: -5, ArrowLeft: -5 };
   track.addEventListener("keydown", (e) => {
-    const cur = currentVolPercent();
-    let next = null;
-    if (e.key in KEY_STEPS) next = cur + KEY_STEPS[e.key];
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = 100;
+    const cur = Math.round(siteVolume.level * 100);
+    const next = e.key in KEY_STEPS ? cur + KEY_STEPS[e.key] : e.key === "Home" ? 0 : e.key === "End" ? 100 : null;
     if (next === null) return;
     e.preventDefault();
-    setVolumePercent(next);
+    setPercent(next);
   });
 }
 
-/* 「更多」下拉 -----------------------------------------------------------------
-   圆形图标按钮在「更多」下方竖排展开。新增功能：在 HJ_MORE_FEATURES 加一项，
-   并在 onMoreItemClick 里处理；dev 不为 false 的项视为开发中；shown() 返回假时不显示。
-   花语的图标是四瓣的月见草（和开屏图同一种花） */
+/* 「更多」菜单；花语图标为四瓣月见草 */
 const HUAYU_PETAL = "M12 11.2C8.9 9.6 7 5.9 8.9 3.9c1.1-1.1 2.5-.8 3.1.5.6-1.3 2-1.6 3.1-.5 1.9 2 0 5.7-3.1 7.3z";
-const HJ_MORE_FEATURES = [
-  { id: "alarm",    label: "闹铃",   dev: false, icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
-  { id: "calendar", label: "日历", dev: false, icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
-  { id: "huayu",    label: "听得花间语", dev: false, shown: () => huayuMode === "open" || huayuMode === "decrypt",
+const MORE_ITEMS = [
+  { id: "alarm", label: "闹铃", open: () => openAlarmModal(true),
+    icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
+  { id: "calendar", label: "日历", open: () => openCalWidget(true),
+    icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
+  { id: "huayu", label: "且听花间语", open: () => requestHuayu(), shown: () => huayuMode === "open" || huayuMode === "decrypt",
     icon: [0, 90, 180, 270].map((a) => `<path transform="rotate(${a} 12 12)" d="${HUAYU_PETAL}"/>`).join("") },
 ];
 
-function onMoreItemClick(id) {
-  if (id === "calendar") openCalWidget(true);
-  else if (id === "alarm") openAlarmModal(true);
-  else if (id === "huayu") openHuayuModal();
-  else showToast("功能正在开发中~");
-  openMorePanel(false);
-}
-
 function renderMorePanel() {
-  const panel = $("morePanel");
-  panel.innerHTML = HJ_MORE_FEATURES.filter((f) => !f.shown || f.shown()).map((f) => {
-    const title = f.label + (f.dev === false ? "" : "（开发中）");
-    return `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${title}">`
-      + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg></button>`;
-  }).join("");
-  panel.querySelectorAll(".more-item").forEach((btn) => {
-    btn.addEventListener("click", () => onMoreItemClick(btn.dataset.moreId));
-  });
+  $("morePanel").innerHTML = MORE_ITEMS.filter((f) => !f.shown || f.shown()).map((f) =>
+    `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${f.label}">`
+    + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg></button>`).join("");
 }
 
-/* 显隐用 is-open 类（配合 CSS visibility 过渡），不用 hidden，否则收起动画会被截断 */
+function openVolPanel(open) {
+  $("volPanel").hidden = !open;
+  $("soundToggle").setAttribute("aria-expanded", String(open));
+}
+
+/* 用 is-open 而非 hidden，保留收起动画 */
 function openMorePanel(open) {
-  $("morePanel").classList.toggle("is-open", !!open);
+  $("morePanel").classList.toggle("is-open", open);
   const btn = $("moreToggle");
-  btn.classList.toggle("is-active", !!open);
-  btn.setAttribute("aria-expanded", String(!!open));
+  btn.classList.toggle("is-active", open);
+  btn.setAttribute("aria-expanded", String(open));
 }
 
-function initMorePanel() {
+/* 音量与「更多」互斥，点空白处或 Esc 收起 */
+function initHeaderPanels() {
   renderMorePanel();
+  $("soundToggle").addEventListener("click", () => {
+    openVolPanel($("volPanel").hidden);
+    openMorePanel(false);
+  });
   $("moreToggle").addEventListener("click", () => {
     openMorePanel(!$("morePanel").classList.contains("is-open"));
-    openVolPanel(false);   // 与音量弹层互斥
+    openVolPanel(false);
   });
-}
-
-/* 点击空白处或按 Esc 收起音量弹层和「更多」下拉 */
-function initHeaderPanels() {
+  $("morePanel").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-more-id]");
+    if (!btn) return;
+    openMorePanel(false);
+    MORE_ITEMS.find((f) => f.id === btn.dataset.moreId).open();
+  });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#volPanel, #soundToggle")) openVolPanel(false);
     if (!e.target.closest("#morePanel, #moreToggle")) openMorePanel(false);
@@ -2561,1006 +2048,41 @@ function initHeaderPanels() {
   });
 }
 
-/* 日历小组件 -------------------------------------------------------------------
-   - 打开后常驻页面（点外面、按 Esc 不关闭），只能用 × 关闭
-   - 月份范围：2021-01 ~ 当前月 + 12
-   - 开合、缩放、拖动位置保存在本地；月份不保存，每次打开都回到今天所在的月份
-   - 活动标注写在 config.js 的 HJ_CAL_ITEMS；HJ_CAL_EVENTS 是按天展开后的索引（日格横条用它）
-   - 控制台调试：HJ_CAL.items.push({ date: "2026-09-26", label: "测试" }); HJ_CAL.refresh() */
-const HJ_CAL_MIN = { y: 2021, m: 1 };
-
-/* 按天展开：key = YYYY-MM-DD，值为当天的事件数组（含所属 item，便于取区间） */
-const HJ_CAL_EVENTS = {};
-
-function calItemStart(item) { return item.start || item.date; }
-function calItemEnd(item) { return item.end || item.date; }
-
-function calEachDay(item, fn) {
-  const [sy, sm, sd] = calItemStart(item).split("-").map(Number);
-  const [ey, em, ed] = calItemEnd(item).split("-").map(Number);
-  const end = new Date(ey, em - 1, ed);
-  for (const d = new Date(sy, sm - 1, sd); d <= end; d.setDate(d.getDate() + 1)) fn(calKey(d));
-}
-
-function buildCalEvents() {
-  Object.keys(HJ_CAL_EVENTS).forEach((k) => delete HJ_CAL_EVENTS[k]);
-  HJ_CAL_ITEMS.forEach((item) => {
-    calEachDay(item, (key) => {
-      (HJ_CAL_EVENTS[key] ||= []).push({ label: item.label, tone: item.tone, item });
-    });
-  });
-}
-const HJ_CAL_TONES = ["rose", "gold", "teal", "wisteria", "blue", "orange"];
-const HJ_CAL_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];
-const CAL_EDGE = 8;         // 拖动时距视口边缘的最小距离
-const CAL_KEEP_VISIBLE = 60; // 至少保留在视口内的宽 / 高
-const calState = { y: 0, m: 0, pick: "", zoom: 1 };
-
-/* 年月 ↔ 连续月序号 */
-const calIdx = (y, m) => y * 12 + (m - 1);
-const calFromIdx = (i) => ({ y: Math.floor(i / 12), m: (i % 12) + 1 });
-const calMinIdx = () => calIdx(HJ_CAL_MIN.y, HJ_CAL_MIN.m);
-function calMaxIdx() {
-  const d = new Date();
-  return calIdx(d.getFullYear(), d.getMonth() + 1) + 12;
-}
-const calClampIdx = (i) => clamp(i, calMinIdx(), calMaxIdx());
-const calKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const calTone = (ev) => (HJ_CAL_TONES.includes(ev.tone) ? ev.tone : "rose");
-
-function calGoTo(y, m) {
-  const c = calFromIdx(calClampIdx(calIdx(y, m)));
-  calState.y = c.y;
-  calState.m = c.m;
-}
-
-function renderCalGrid() {
-  const { y, m } = calState;
-  const firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7;   // 0 = 周一
-  const todayKey = calKey(new Date());
-  const cells = [];
-
-  // 固定 6 行 × 7 列，从本月第一周的周一开始
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(y, m - 1, 1 - firstWeekday + i);
-    const key = calKey(d);
-    const cls = ["cal-day"];
-    if (d.getMonth() !== m - 1) cls.push("is-out");
-    if (key === todayKey) cls.push("is-today");
-    if (key === calState.pick) cls.push("is-pick");
-    const bars = (HJ_CAL_EVENTS[key] || []).slice(0, 3)
-      .map((ev) => `<i class="cal-bar tone-${calTone(ev)}"></i>`).join("");
-    cells.push(`<button type="button" tabindex="-1" class="${cls.join(" ")}" data-date="${key}">`
-      + `<span class="cal-num">${d.getDate()}</span>`
-      + (bars ? `<span class="cal-bars">${bars}</span>` : "")
-      + `</button>`);
-  }
-
-  const grid = $("calGrid");
-  grid.innerHTML = cells.join("");
-  grid.querySelectorAll(".cal-day").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      calState.pick = btn.dataset.date;
-      renderCal();
-    });
-  });
-}
-
-/* 本月事件胶囊：与本月有交集的活动各出现一次，跨日的显示日期区间 */
-const calMd = (key) => {
-  const [, mm, dd] = key.split("-").map(Number);
-  return `${mm}/${dd}`;
-};
-
-function renderCalEvents() {
-  const { y, m } = calState;
-  const monthStart = `${y}-${pad2(m)}-01`;
-  const monthEnd = `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
-  const list = HJ_CAL_ITEMS
-    .filter((item) => calItemStart(item) <= monthEnd && calItemEnd(item) >= monthStart)
-    .sort((a, b) => calItemStart(a).localeCompare(calItemStart(b)));
-
-  const box = $("calEvents");
-  if (!list.length) {
-    box.innerHTML = '<p class="cal-empty">本月暂无活动标注</p>';
-    return;
-  }
-  box.innerHTML = list.map((item) => {
-    const start = calItemStart(item);
-    const end = calItemEnd(item);
-    const when = start === end ? calMd(start) : `${calMd(start)}–${calMd(end)}`;
-    // 跨月的活动点击后跳到它在本月的第一天，不会把日历翻走
-    const jump = start >= monthStart ? start : monthStart;
-    return `<button type="button" class="cal-chip tone-${calTone(item)}" data-date="${jump}">`
-      + `<span>${escapeHtml(item.label)}</span><span class="cal-chip-day">${when}</span></button>`;
-  }).join("");
-  box.querySelectorAll(".cal-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const [cy, cm] = chip.dataset.date.split("-").map(Number);
-      calState.y = cy;
-      calState.m = cm;
-      calState.pick = chip.dataset.date;
-      renderCal();
-    });
-  });
-}
-
-let calEventsBuilt = false;
-function renderCal() {
-  if (!calEventsBuilt) { buildCalEvents(); calEventsBuilt = true; }   // 先建事件索引，日格上才有活动横条
-  $("calTitle").textContent = `${calState.y}年${calState.m}月`;
-  renderCalGrid();
-  renderCalEvents();
-  const idx = calIdx(calState.y, calState.m);
-  $("calPrev").disabled = idx <= calMinIdx();
-  $("calNext").disabled = idx >= calMaxIdx();
-}
-
-function calShift(dir) {
-  calGoTo(calState.y, calState.m + dir);
-  renderCal();
-}
-
-function setCalZoom(z) {
-  calState.zoom = z;
-  $("calWidget").style.setProperty("--cal-zoom", String(z));
-  $("calZoomIn").disabled = z >= HJ_CAL_ZOOMS[HJ_CAL_ZOOMS.length - 1];
-  $("calZoomOut").disabled = z <= HJ_CAL_ZOOMS[0];
-  storage.set(STORE.calZoom, z);
-}
-
-function calZoomStep(dir) {
-  const i = HJ_CAL_ZOOMS.indexOf(calState.zoom);
-  return HJ_CAL_ZOOMS[clamp((i === -1 ? 2 : i) + dir, 0, HJ_CAL_ZOOMS.length - 1)];
-}
-
-/* 从关着到打开：不管之前翻到哪个月，都回到今天 */
-function calGoToday() {
-  const now = new Date();
-  calGoTo(now.getFullYear(), now.getMonth() + 1);
-  calState.pick = "";
-  renderCal();
-}
-
-function openCalWidget(open) {
-  if (open && $("calWidget").hidden) calGoToday();
-  $("calWidget").hidden = !open;
-  storage.set(STORE.calOpen, open ? "1" : "0");
-}
-
-/* 用 right / top 定位：与缩放锚点（右上角）一致 */
-function setCalPos(right, top) {
-  const w = $("calWidget");
-  w.style.right = right + "px";
-  w.style.top = top + "px";
-  storage.set(STORE.calXy, `${right},${top}`);
-}
+/* 小组件（日历、闹铃）：right / top 定位（与右上角缩放锚点一致），拖动标题栏移动，双击复位 */
+const WIDGET_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];
+const WIDGET_EDGE = 8;
+const WIDGET_KEEP_VISIBLE = 60;
 
 const viewportSize = () => ({
   vw: window.innerWidth || document.documentElement.clientWidth,
   vh: window.innerHeight || document.documentElement.clientHeight,
 });
 
-/* 标题栏拖动（鼠标 / 触屏通用），工具按钮区域除外；双击复位 */
-function initCalDrag() {
-  const w = $("calWidget");
-  const head = w.querySelector(".cal-head");
-  let drag = null;
-
-  head.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (e.target.closest(".cal-tool")) return;
-    const r = w.getBoundingClientRect();
-    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, ...viewportSize() };
-    try { head.setPointerCapture(e.pointerId); } catch (err) {}
-    w.classList.add("is-drag");
-    e.preventDefault();
-  });
-
-  head.addEventListener("pointermove", (e) => {
-    if (!drag) return;
-    const left = e.clientX - drag.ox;
-    let top = e.clientY - drag.oy;
-    let right = drag.vw - (left + drag.w);
-    if (drag.w) right = clamp(right, CAL_EDGE, drag.vw - CAL_KEEP_VISIBLE);
-    if (drag.h) top = clamp(top, CAL_EDGE, drag.vh - CAL_KEEP_VISIBLE);
-    setCalPos(Math.round(right), Math.round(top));
-  });
-
-  const end = () => {
-    drag = null;
-    w.classList.remove("is-drag");
-  };
-  head.addEventListener("pointerup", end);
-  head.addEventListener("pointercancel", end);
-
-  head.addEventListener("dblclick", (e) => {
-    if (e.target.closest(".cal-tool")) return;
-    w.style.right = "";
-    w.style.top = "";
-    storage.remove(STORE.calXy);
-  });
-}
-
-/* 从本地恢复：缩放、位置、开合（月份总是从今天开始） */
-function initCalWidget() {
-  const now = new Date();
-  calState.y = now.getFullYear();
-  calState.m = now.getMonth() + 1;
-  storage.remove(STORE.calYm);   // 以前版本存过的月份，清掉
-
-  const z = Number(storage.get(STORE.calZoom));
-  setCalZoom(HJ_CAL_ZOOMS.includes(z) ? z : 1);
-
-  $("calPrev").addEventListener("click", () => calShift(-1));
-  $("calNext").addEventListener("click", () => calShift(1));
-  $("calZoomIn").addEventListener("click", () => setCalZoom(calZoomStep(1)));
-  $("calZoomOut").addEventListener("click", () => setCalZoom(calZoomStep(-1)));
-  $("calClose").addEventListener("click", () => openCalWidget(false));
-
-  const xy = (storage.get(STORE.calXy) || "").split(",").map(Number);
-  if (xy.length === 2 && xy.every(Number.isFinite)) {
-    const { vw, vh } = viewportSize();
-    setCalPos(clamp(xy[0], CAL_EDGE, vw - CAL_KEEP_VISIBLE), clamp(xy[1], CAL_EDGE, vh - CAL_KEEP_VISIBLE));
-  }
-
-  initCalDrag();
-  /* 日格和事件索引等打开时再画（openCalWidget → calGoToday → renderCal） */
-  if (storage.get(STORE.calOpen) === "1") openCalWidget(true);
-}
-
-/* 控制台调试入口 */
-window.HJ_CAL = {
-  items: HJ_CAL_ITEMS,
-  events: HJ_CAL_EVENTS,
-  refresh: () => {
-    buildCalEvents();
-    renderCal();
-  },
-  open: () => openCalWidget(true),
-  close: () => openCalWidget(false),
-  go: (y, m) => {
-    calGoTo(y, m);
-    renderCal();
-  },
-};
-
-/* 时间条 -----------------------------------------------------------------------
-   国服时间：固定 UTC+8，不随访客时区变化。
-   艾欧泽亚时间（ET）：流速为现实的 144/7 倍，自 1970-01-01 00:00 UTC 起算
-   （1 ET 小时 = 175 秒，1 ET 分钟 ≈ 2.92 秒，1 ET 日 = 70 分钟）。
-   两个时间都用校准过的 hjNow()，和游戏内的时钟对得上。 */
-const EORZEA_RATE = 144 / 7;
-const ET_MINUTE_MS = 60000 / EORZEA_RATE;
-
-function hjReadClocks(now = hjNow()) {
-  const cn = new Date(now + CN_TZ_OFFSET_MS);
-  const etMinutes = Math.floor(now / ET_MINUTE_MS);   // 自 1970 年起的 ET 分钟数
-  const etHour = Math.floor(etMinutes / 60) % 24;
-  const etMin = etMinutes % 60;
-  return {
-    cn: `${pad2(cn.getUTCHours())}:${pad2(cn.getUTCMinutes())}:${pad2(cn.getUTCSeconds())}`,
-    et: `${pad2(etHour)}:${pad2(etMin)}`,
-    etNight: etHour >= 18 || etHour < 6,
-  };
-}
-
-const hjClockShown = () => !$("hjClock").classList.contains("is-hidden");
-
-function hjClockTick() {
-  if (!hjClockShown()) return;   // 时间条收着时不算天气和天象
-  const t = hjReadClocks();
-  $("hjTimeCN").textContent = t.cn;
-  $("hjTimeET").textContent = t.et;
-  $("hjEtGlyph").textContent = t.etNight ? "☾" : "☀";   // ☾ / ☀
-  $("hjClockEt").classList.toggle("is-night", t.etNight);
-  hjRenderWeather();
-  hjRenderOmens();
-}
-
-/* 刷新时机对准「下一个整秒」和「下一个 ET 整分」中较早的那个，ET 一跳分钟页面就跟着跳；
-   页面在后台时跳过 */
-let hjClockTimer = 0;
-function scheduleClockTick() {
-  clearTimeout(hjClockTimer);
-  const now = hjNow();
-  const toNextSecond = 1000 - (now % 1000);
-  const toNextEtMinute = ET_MINUTE_MS - (now % ET_MINUTE_MS);
-  hjClockTimer = setTimeout(() => {
-    if (!document.hidden) hjClockTick();
-    scheduleClockTick();
-  }, Math.min(toNextSecond, toNextEtMinute) + 8);
-}
-
-function initClock() {
-  hjClockTick();
-  scheduleClockTick();
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) hjClockTick();
-  });
-}
-
-/* 时钟按钮：切换时间条显隐（默认隐藏，不记忆） */
-function initClockToggle() {
-  const btn = $("clockToggle");
-  const clock = $("hjClock");
-  const sync = () => {
-    const hidden = clock.classList.contains("is-hidden");
-    btn.classList.toggle("is-active", !hidden);
-    btn.setAttribute("aria-pressed", String(!hidden));
-    btn.setAttribute("aria-label", hidden ? "显示时间条（国服时间与艾欧泽亚时间）" : "隐藏时间条");
-    btn.setAttribute("title", hidden ? "点击显示时间条" : "点击隐藏时间条");
-  };
-  btn.addEventListener("click", () => {
-    clock.classList.toggle("is-hidden");
-    sync();
-    if (!clock.classList.contains("is-hidden")) hjClockTick();
-  });
-  sync();
-}
-
-/* 高脚孤丘天气 -------------------------------------------------------------------
-   显示当前 + 未来 5 个时段。图标读取 weather/<天气名>.png。
-   算法与 asvel.github.io/ffxiv-weather、ffxiv.pf-n.co/skywatcher 一致：
-     每个 ET 日按 0/8/16 时分三段，seed = ET 天数 * 100 + 段标记，
-     step1 = (seed << 11) ^ seed，step2 = (step1 >>> 8) ^ step1，chance = step2 % 100。
-   概率分布（WeatherRate: The Goblet）：碧空 40 / 晴朗 20 / 阴云 25 / 薄雾 10 / 小雨 5。
-   星芒节覆盖时段内一律显示「小雪」（见第 6 节）。 */
-const HJ_WEATHER_ICON_DIR = "weather/";
-const HJ_WEATHER_SLOTS = 6;
-const ET_HOUR_SECONDS = 175;
-const HJ_GOBLET_WEATHERS = [   // limit 为累计概率上限，须升序
-  { limit: 40,  name: "碧空" },
-  { limit: 60,  name: "晴朗" },
-  { limit: 85,  name: "阴云" },
-  { limit: 95,  name: "薄雾" },
-  { limit: 100, name: "小雨" },
-];
-const HJ_STARLIGHT_WEATHER = { name: "小雪" };
-
-const hjWeatherIcon = (name) => HJ_WEATHER_ICON_DIR + encodeURIComponent(name) + ".png";
-
-function hjGobletWeatherAt(unixSec) {
-  const eHours = Math.floor(Math.floor(unixSec) / ET_HOUR_SECONDS);
-  const eDays = Math.floor(eHours / 24);
-  const chunk = ((eHours % 24) - (eHours % 8) + 8) % 24;   // ET 0/8/16 → 8/16/0
-  const seed = eDays * 100 + chunk;
-  /* 原算法是无符号 32 位运算；JS 的 ^ 结果是有符号的，用 >>> 0 转回无符号再取余 */
-  const s1 = ((seed << 11) ^ seed) >>> 0;
-  const s2 = ((s1 >>> 8) ^ s1) >>> 0;
-  const chance = s2 % 100;
-  const idx = HJ_GOBLET_WEATHERS.findIndex((w) => chance < w.limit);
-  const i = idx === -1 ? HJ_GOBLET_WEATHERS.length - 1 : idx;
-  return { chance, idx: i, ...HJ_GOBLET_WEATHERS[i] };
-}
-
-function hjGobletForecast(count) {
-  const now = hjNow() / 1000;
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const t = now + i * 8 * ET_HOUR_SECONDS;   // 每段 = 现实 23 分 20 秒
-    out.push(hjStarlightActiveAt(t * 1000) ? { ...HJ_STARLIGHT_WEATHER } : hjGobletWeatherAt(t));
-  }
-  return out;
-}
-
-/* 天气序列没变时不重绘；force = true 时强制重绘 */
-let hjWeatherLastKey = "";
-function hjRenderWeather(force) {
-  const seqEl = $("hjWeatherSeq");
-  const seq = hjGobletForecast(HJ_WEATHER_SLOTS);
-  const key = seq.map((s) => s.name).join("|");
-  if (!force && key === hjWeatherLastKey) return;
-  hjWeatherLastKey = key;
-
-  const arrow = '<span class="hj-weather-arrow" aria-hidden="true">→</span>';
-  seqEl.innerHTML = seq.map((w, i) => {
-    const current = i === 0;
-    return `<span class="hj-wx${current ? " is-current" : ""}" title="${w.name}">`
-      + (current ? '<span class="hj-wx-current-prefix">当前</span>' : "")
-      + `<img src="${hjWeatherIcon(w.name)}" alt="${w.name}" loading="lazy" decoding="async" width="18" height="18">`
-      + `<span class="hj-wx-name">${w.name}</span></span>`;
-  }).join(arrow);
-}
-
-/* 特殊天象与钓场之王（时间条第三行）------------------------------------------------
-   都由高脚孤丘的天气推算，只显示下一次还要等多久（现实时间）。
-   1 个天气时段 = 8 ET 小时 = 现实 1400 秒，时段从 ET 0 / 8 / 16 时开始。
-   - 彩虹（与灰机 wiki 天气预报一致）：只在每个 ET 月 27 日 12:00 ~ 次月 6 日 12:00 之间；
-     ET 16:00 换天气时，8–16 时是「小雨」、16 时起是碧空 / 晴朗 / 阴云；
-     ET 8:00 换天气时，前一天 16–24 时是「小雨」、8 时起是碧空 / 晴朗 / 阴云（中间 0–8 时不论）。
-     0:00 换天气在夜里，不出彩虹。ET x:10 出现，持续 30 ET 分钟（现实约 1 分 27 秒）。
-     ET 1 个月 = 32 天，日期由 ET 天数推出。
-   - 枪鼻头（高脚孤丘钓场的钓场之王）：ET 21:00–24:00，且 16–24 时这段天气为阴云或薄雾。
-   星芒节覆盖时段内天气当作小雪，两者都不会出现。 */
-const HJ_PERIOD_MS = 8 * ET_HOUR_SECONDS * 1000;
-const HJ_OMEN_SCAN_PERIODS = 3 * 24 * 30 * 3;       // 往后最多找约 30 天（现实）
-const HJ_RAINBOW_AFTER = ["碧空", "晴朗", "阴云"];
-const HJ_RAINBOW_OFFSET_MS = 10 * ET_MINUTE_MS;     // ET x:10 出现
-const HJ_RAINBOW_LEN_MS = 30 * ET_MINUTE_MS;
-const HJ_FISH_WEATHERS = ["阴云", "薄雾"];
-const HJ_FISH_OFFSET_MS = 5 * ET_HOUR_SECONDS * 1000;   // 16:00 起第 5 个 ET 小时 = 21:00
-
-const HJ_RAINBOW_SEASON = [26 * 24 + 12, 5 * 24 + 12];   // 月内第几个 ET 小时：27 日 12:00 起、6 日 12:00 止
-
-const hjPeriodWeatherName = (p) => hjGobletWeatherAt(p * HJ_PERIOD_MS / 1000).name;
-
-/* 第 p 个时段开始时是 ET 当月的第几个小时（1 日 0:00 = 0） */
-const hjPeriodMonthHour = (p) => (Math.floor(p / 3) % 32) * 24 + (p % 3) * 8;
-
-/* 第 p 个时段里的彩虹 / 枪鼻头窗口，没有就返回 null */
-function hjRainbowIn(p) {
-  const slot = p % 3;   // 0 / 1 / 2 = ET 0 / 8 / 16 时开始
-  if (slot === 0) return null;
-  const mh = hjPeriodMonthHour(p);
-  if (mh < HJ_RAINBOW_SEASON[0] && mh >= HJ_RAINBOW_SEASON[1]) return null;
-  const rainP = slot === 1 ? p - 2 : p - 1;
-  const start = p * HJ_PERIOD_MS + HJ_RAINBOW_OFFSET_MS;
-  if (hjStarlightActiveAt(rainP * HJ_PERIOD_MS) || hjStarlightActiveAt(start)) return null;
-  if (hjPeriodWeatherName(rainP) !== "小雨" || !HJ_RAINBOW_AFTER.includes(hjPeriodWeatherName(p))) return null;
-  return { start, end: start + HJ_RAINBOW_LEN_MS };
-}
-function hjSpearnoseIn(p) {
-  if (p % 3 !== 2) return null;
-  const start = p * HJ_PERIOD_MS + HJ_FISH_OFFSET_MS;
-  const end = (p + 1) * HJ_PERIOD_MS;
-  if (hjStarlightActiveAt(start) || hjStarlightActiveAt(end - 1)) return null;
-  return HJ_FISH_WEATHERS.includes(hjPeriodWeatherName(p)) ? { start, end } : null;
-}
-
-function hjNextWindow(find, now) {
-  const p0 = Math.floor(now / HJ_PERIOD_MS);
-  for (let p = p0; p < p0 + HJ_OMEN_SCAN_PERIODS; p++) {
-    const w = find(p);
-    if (w && w.end > now) return w;
-  }
-  return null;
-}
-
-/* 现实时长：1 小时内 mm:ss，超过显示 h:mm:ss，超过一天再加「x天」 */
-function hjFormatWait(ms) {
-  const total = Math.max(0, Math.ceil(ms / 1000));
-  const d = Math.floor(total / 86400);
-  const h = Math.floor(total / 3600) % 24;
-  const m = Math.floor(total / 60) % 60;
-  const s = total % 60;
-  const ms2 = `${pad2(m)}:${pad2(s)}`;
-  if (d) return `${d}天${pad2(h)}:${ms2}`;
-  return h ? `${h}:${ms2}` : ms2;
-}
-
-/* 窗口只在过期或星芒节设置变化时重新查找，每秒只刷新文字 */
-const hjOmenCache = {};   // key → { w: 窗口或 null, at: 查找时刻 }
-function hjResetOmens() { delete hjOmenCache.rainbow; delete hjOmenCache.fish; }
-
-function hjOmenWindow(key, find, now) {
-  const c = hjOmenCache[key];
-  const stale = !c || (c.w ? now >= c.w.end : now - c.at > 60000) || now < c.at;
-  if (stale) hjOmenCache[key] = { w: hjNextWindow(find, now), at: now };
-  return hjOmenCache[key].w;
-}
-
-function hjPaintOmen(itemId, w, now, liveText) {
-  const item = $(itemId);
-  if (!item) return;
-  const live = !!w && now >= w.start;
-  const text = !w ? "近期不会出现"
-    : live ? liveText(w)
-    : `将在 ${hjFormatWait(w.start - now)} 后出现`;
-  item.classList.toggle("is-live", live);
-  const state = item.querySelector(".hj-omen-state");
-  if (state.textContent !== text) state.textContent = text;
-}
-
-function hjRenderOmens() {
-  const now = hjNow();
-  hjPaintOmen("hjOmenRainbow", hjOmenWindow("rainbow", hjRainbowIn, now), now, () => "天象出现！");
-  hjPaintOmen("hjOmenFish", hjOmenWindow("fish", hjSpearnoseIn, now), now,
-    (w) => `现在会咬钩！持续 ${hjFormatWait(w.end - now)}`);
-}
-
-
-/* =============================================================================
-   12. 点赞（Worker：get_likes / add_like）
-   - 目标 key：活动详情 act:<id>，小型回顾 mini:<文件名>，花街相册 info:<文件名>
-   - 每人每日（UTC+8）最多 10 次，同一目标可重复点赞；上限由服务器强制，前端只做预检
-   - 接口不可用时按钮保持隐藏，不影响其它功能
-   ============================================================================= */
-
-const LIKE_DAILY_LIMIT = 10;
-const LIKE_LIMIT_MSG = `今天 ${LIKE_DAILY_LIMIT} 次点赞已用完，明天再来吧`;
-const LIKE_HEART_SVG = '<svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
-
-const hjLikeState = {
-  counts: {},                   // key → 总数
-  liked: new Set(),             // 本访客点过的 key
-  remaining: LIKE_DAILY_LIMIT,  // 今日剩余次数
-  available: false,             // 接口是否可用
-};
-
-function likeKeyFromSrc(prefix, src) {
-  const name = String(src).split("/").pop().split("?")[0];
-  return `${prefix}:${name}`;
-}
-
-/* 图片角标版点赞按钮（初始隐藏，接口可用后显示） */
-function likeBtnHtml(key) {
-  return `<button type="button" class="hj-like-btn hj-like-chip" data-like-key="${key}" aria-pressed="false" aria-label="点赞" title="点赞" hidden>`
-    + `${LIKE_HEART_SVG}<span class="hj-like-count">0</span></button>`;
-}
-
-/* root 内（含 root 自身）所有点赞按钮 */
-function likeButtonsIn(root) {
-  const list = [...root.querySelectorAll(".hj-like-btn[data-like-key]")];
-  if (root.matches && root.matches(".hj-like-btn[data-like-key]")) list.push(root);
-  return list;
-}
-
-function paintLikes() {
-  if (!hjLikeState.available) return;
-  likeButtonsIn(document).forEach((btn) => {
-    const key = btn.dataset.likeKey;
-    if (!key) return;
-    const liked = hjLikeState.liked.has(key);
-    btn.hidden = false;
-    btn.classList.toggle("is-liked", liked);
-    btn.setAttribute("aria-pressed", liked ? "true" : "false");
-    const count = btn.querySelector(".hj-like-count");
-    if (count) count.textContent = String(hjLikeState.counts[key] || 0);
-  });
-}
-
-async function refreshLikes(root) {
-  if (siteLockdown) return;   // 静态模式：点赞按钮保持隐藏
-  const keys = [...new Set(likeButtonsIn(root).map((b) => b.dataset.likeKey).filter(Boolean))];
-  if (!keys.length) return;
-  const data = await callWorker({ action: "get_likes", keys });
-  if (!data || !data.ok) return;
-  hjLikeState.available = true;
-  Object.assign(hjLikeState.counts, data.counts || {});
-  (data.liked || []).forEach((k) => hjLikeState.liked.add(k));
-  if (typeof data.remaining === "number") hjLikeState.remaining = data.remaining;
-  paintLikes();
-}
-
-/* 详情页横幅里的点赞按钮：切换活动时先清空旧状态 */
-function setupDetailLike(data) {
-  const btn = $("detailLikeBtn");
-  btn.dataset.likeKey = "act:" + (data.id || "latest");
-  btn.classList.remove("is-liked");
-  btn.querySelector(".hj-like-count").textContent = "0";
-  refreshLikes(btn);
-}
-
-async function onLikeBtnClick(btn) {
-  const key = btn.dataset.likeKey;
-  if (!key) return;
-  if (await blockedByStaticMode()) return;
-  if (hjLikeState.remaining <= 0) {
-    showToast(LIKE_LIMIT_MSG);
-    return;
-  }
-
-  btn.disabled = true;
-  const data = await callWorker({ action: "add_like", key });
-  btn.disabled = false;
-
-  if (data && data.ok) {
-    hjLikeState.liked.add(key);
-    hjLikeState.counts[key] = data.count;
-    if (typeof data.remaining === "number") hjLikeState.remaining = data.remaining;
-    paintLikes();
-    showToast(`点赞成功，今天还剩 ${hjLikeState.remaining} 次`);
-  } else if (data && data.error === "daily_limit") {
-    hjLikeState.remaining = 0;
-    showToast(LIKE_LIMIT_MSG);
-  } else {
-    showToast("点赞失败，请稍后再试");
-  }
-}
-
-/* 捕获阶段拦截：避免同时触发图片预览、点击爆花等 */
-function initLikes() {
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".hj-like-btn");
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    onLikeBtnClick(btn);
-  }, true);
-}
-
-
-/* =============================================================================
-   13. 闹铃与倒计时（纯本地，不经过 Worker）
-   - 入口：右上角「更多」→「闹铃」，弹窗内分两个子类型：闹铃 / 倒计时
-   - 闹铃：到指定时刻响铃。时间可按 国服时间（UTC+8）或 艾欧泽亚时间 设置；
-     国服时间可勾「每小时重复」（每小时的第 MM 分响，忽略小时），
-     艾欧泽亚时间可勾「每日重复」（1 艾欧泽亚日 ≈ 现实 70 分钟）
-   - 倒计时：倒数结束响铃。国服最短 30 秒；艾欧泽亚最短 15 分钟（游戏内时间）；
-     可勾「倒计时结束后自动循环」
-   - 铃声取自仓库 music/<名称>.ogg（名称见 ALARM_SOUNDS，与文件名一致），
-     播放时长 30 / 45 秒两档（默认 30 秒），结尾慢慢减弱（淡出）
-   - 同一时刻只播一个铃声：新的闹铃/倒计时到点时，先停掉正在响的铃声再播新的
-   - 国服时间的闹铃同一时刻（时:分）只允许设置一个，重复添加会被拦下并提示
-   - 添加后在页面上生成小组件：标题栏可拖动、双击回默认位置、± 缩放、× 收起
-   - 所有数据（含组件位置 / 缩放）保存在 localStorage（STORE.alarmItems）
-   - 控制台调试：HJ_ALARM.list() / HJ_ALARM.ringNow(id) / HJ_ALARM.open() / HJ_ALARM.clear()
-   ============================================================================= */
-
-/* 音源列表：与 music/ 目录里的文件名（不带扩展名）一致。
-   新增铃声：把 .ogg 放进 music/，再在这个数组里加上文件名即可。 */
-const ALARM_SOUNDS = ["基本闹铃", "闹铃1", "闹铃2", "闹铃3", "哄睡曲1", "哄睡曲2", "哄睡曲3"];
-const ALARM_SOUND_DIR = "music/";
-const ALARM_PLAY_DEFAULT = 30;                  // 默认播放时长（秒）
-const ALARM_PLAY_OPTIONS = [30, 45];            // 可选播放时长（秒）：30 / 45 两档，结尾都会渐弱
-const ALARM_FADE_SEC = 4;                       // 结尾渐弱（淡出）时长（秒）
-const ALARM_ZOOMS = [0.8, 0.9, 1, 1.1, 1.2];    // 小组件缩放档位（与日历一致）
-const ALARM_CN_MIN_SEC = 30;                    // 国服倒计时最短秒数
-const ALARM_ET_MIN_MIN = 15;                    // 艾欧泽亚倒计时最短分钟数（游戏内时间）
-
-const hjAlarms = {
-  items: [],           // 全部闹铃 / 倒计时（含运行时字段，保存时会一并写入本地）
-  ringing: new Map(),  // id → 播放会话 { stop }
-};
-const hjAlarmWidgets = new Map();   // id → { el, big, status, actions, sig }
-let hjAlarmPreview = null;          // 试听会话
-
-const alarmSoundSrc = (name) => ALARM_SOUND_DIR + encodeURIComponent(name) + ".ogg";
-const alarmById = (id) => hjAlarms.items.find((it) => it.id === id);
-const alarmZoneShort = (it) => (it.zone === "cn" ? "国服" : "艾欧泽亚");
-
-/* 剩余时长 → HH:MM:SS（不足 1 小时则 MM:SS） */
-function alarmFmtDur(ms) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return h > 0 ? `${pad2(h)}:${pad2(m)}:${pad2(sec)}` : `${pad2(m)}:${pad2(sec)}`;
-}
-
-/* 某时刻的国服钟面（UTC+8，无夏令时，可直接偏移计算） */
-function alarmCnClockAt(ms) {
-  const d = new Date(ms + CN_TZ_OFFSET_MS);
-  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
-}
-
-/* 时/分/秒 → 人话（0 的部分省略） */
-function alarmHumanDur(h, m, s) {
-  if (h > 0) return `${h}小时${m > 0 ? `${m}分` : ""}${s > 0 ? `${s}秒` : ""}`;
-  if (m > 0) return `${m}分${s > 0 ? `${s}秒` : ""}`;
-  return `${s}秒`;
-}
-
-/* 下一次响铃时刻（epoch 毫秒） -------------------------------------------------- */
-function alarmNextFire(it, now) {
-  if (it.zone === "cn") {
-    const d = new Date(now + CN_TZ_OFFSET_MS);
-    if (it.repeat) {                       // 每小时重复：只看「分」
-      d.setUTCMinutes(it.mm, 0, 0);
-      let t = d.getTime() - CN_TZ_OFFSET_MS;
-      if (t <= now) t += 3600 * 1000;
-      return t;
-    }
-    d.setUTCHours(it.hh, it.mm, 0, 0);     // 仅一次：下一个 HH:MM
-    let t = d.getTime() - CN_TZ_OFFSET_MS;
-    if (t <= now) t += 24 * 3600 * 1000;
-    return t;
-  }
-  // 艾欧泽亚：时间流速 144/7，ET 钟面每天（现实约 70 分钟）扫过全部 24 小时
-  const target = it.hh * 3600 + it.mm * 60;
-  const etSec = (now / 1000) * EORZEA_RATE;
-  const tod = ((etSec % 86400) + 86400) % 86400;
-  if (Math.floor(tod / 60) === Math.floor(target / 60)) return now;   // 正处在目标分钟内：立即响
-  const delta = (target - tod + 86400) % 86400;
-  return now + (delta / EORZEA_RATE) * 1000;
-}
-
-/* 铃声播放：从 0 快速渐入 → 平播 → 最后 ALARM_FADE_SEC 秒慢慢减弱到 0。
-   音量始终乘上全站音量条（hjMusic.vol），拖音量条即时生效。 */
-function alarmPlayCore(name, playSec, onEnd) {
-  const audio = new Audio(alarmSoundSrc(name));
-  audio.preload = "auto";
-  const totalMs = Math.max(1, Number(playSec) || ALARM_PLAY_DEFAULT) * 1000;
-  const fadeMs = Math.min(ALARM_FADE_SEC * 1000, totalMs * 0.6);
-  const t0 = performance.now();
-  let timer = 0;
-  let stopped = false;
-
-  const paint = () => {
-    const t = performance.now() - t0;
-    let f = 1;
-    if (t < 500) f = Math.max(0.02, t / 500);              // 开头小渐入，防爆音
-    const left = totalMs - t;
-    if (left <= fadeMs) f = Math.max(0, left / fadeMs);    // 结尾慢慢减弱
-    try { audio.volume = clamp(hjMusic.vol * f, 0, 1); } catch (e) {}
-  };
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    clearInterval(timer);
-    try { audio.pause(); } catch (e) {}
-    if (onEnd) onEnd();
-  };
-
-  audio.addEventListener("ended", stop);   // 音频文件本身比播放时长短
-  audio.addEventListener("error", () => {
-    showToast(`铃声加载失败：${ALARM_SOUND_DIR}${name}.ogg`);
-    stop();
-  });
-  paint();
-  const p = audio.play();
-  if (p && p.catch) p.catch((err) => {
-    if (err && err.name === "NotAllowedError") showToast("浏览器拦截了铃声，点击一下页面任意处即可出声");
-    stop();
-  });
-  // 用定时器同时负责音量包络和到点停止（后台标签页里 rAF 会停，定时器不会）
-  timer = setInterval(() => {
-    paint();
-    if (performance.now() - t0 >= totalMs) stop();
-  }, 100);
-  return { stop, audio };
-}
-
-function alarmRing(it) {
-  if (hjAlarms.ringing.has(it.id)) return;   // 同一个不在响铃中重复触发
-  // 同一时刻只播一个铃声：若还有别的闹铃/倒计时正在响，先停掉它再播新的
-  [...hjAlarms.ringing.keys()].forEach((id) => { if (id !== it.id) alarmStopRing(id); });
-  const sess = alarmPlayCore(it.sound, it.playSec, () => {
-    hjAlarms.ringing.delete(it.id);
-    alarmPaintWidget(it);
-    alarmRenderLists();
-  });
-  hjAlarms.ringing.set(it.id, sess);
-  alarmPaintWidget(it);
-  alarmRenderLists();
-}
-
-function alarmStopRing(id) {
-  const sess = hjAlarms.ringing.get(id);
-  if (sess) sess.stop();
-}
-
-/* 本地存取 -------------------------------------------------------------------- */
-function alarmSave() {
-  storage.set(STORE.alarmItems, JSON.stringify(hjAlarms.items));
-}
-
-/* 补齐默认值 + 清洗非法数据；返回 null 表示该条作废 */
-function alarmNormalize(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const kind = raw.kind === "countdown" ? "countdown" : "alarm";
-  const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-  const it = {
-    id: String(raw.id || `alm${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`),
-    kind,
-    zone: raw.zone === "et" ? "et" : "cn",
-    name: String(raw.name || "").slice(0, 12),
-    sound: ALARM_SOUNDS.includes(raw.sound) ? raw.sound : ALARM_SOUNDS[0],
-    playSec: ALARM_PLAY_OPTIONS.includes(Number(raw.playSec)) ? Number(raw.playSec) : ALARM_PLAY_DEFAULT,
-    enabled: raw.enabled !== false,
-    done: !!raw.done,          // 一次性闹铃已响过 / 不循环的倒计时已走完
-    hidden: !!raw.hidden,      // 小组件被 × 收起
-    zoom: ALARM_ZOOMS.includes(Number(raw.zoom)) ? Number(raw.zoom) : 1,
-    x: num(raw.x), y: num(raw.y),          // 组件位置（right / top 像素）
-    hh: clamp(Math.floor(Number(raw.hh) || 0), 0, 23),
-    mm: clamp(Math.floor(Number(raw.mm) || 0), 0, 59),
-    repeat: !!raw.repeat,      // 闹铃：cn = 每小时重复，et = 每日重复
-    durMs: Number(raw.durMs) > 0 ? Number(raw.durMs) : 0,   // 倒计时时长（现实毫秒）
-    durLabel: String(raw.durLabel || ""),
-    loop: !!raw.loop,
-    paused: !!raw.paused,
-    remainMs: Number(raw.remainMs) > 0 ? Number(raw.remainMs) : 0,
-    endAt: Number(raw.endAt) > 0 ? Number(raw.endAt) : 0,
-    nextFireAt: Number(raw.nextFireAt) > 0 ? Number(raw.nextFireAt) : 0,
-  };
-  if (it.kind === "countdown" && it.durMs < 1000) return null;
-  return it;
-}
-
-/* 刷新页面后恢复排程：离开期间错过的响铃不补响 */
-function alarmRevive(it) {
-  const now = hjNow();
-  if (it.kind === "alarm") {
-    if (!it.enabled || it.done) { it.nextFireAt = 0; return; }
-    if (!it.nextFireAt || it.nextFireAt <= now) {
-      if (it.repeat) it.nextFireAt = alarmNextFire(it, now);
-      else { it.done = true; it.nextFireAt = 0; }   // 一次性闹铃错过了 → 标记已完成
-    }
-    return;
-  }
-  if (!it.enabled || it.done) { it.endAt = 0; return; }
-  if (it.paused) return;                             // 暂停中：保留 remainMs
-  if (!it.endAt || it.endAt <= now) {
-    if (it.loop) {                                   // 循环倒计时：从现在起继续循环，不补响
-      let end = it.endAt || now;
-      let guard = 0;
-      while (end <= now && guard++ < 100000) end += it.durMs;
-      it.endAt = end;
-    } else { it.done = true; it.endAt = 0; it.remainMs = 0; }
-  }
-}
-
-/* 每秒心跳：判定响铃、推进状态、刷新组件与面板 -------------------------------- */
-function alarmTick() {
-  const now = hjNow();
-  let dirty = false;
-  hjAlarms.items.forEach((it) => {
-    if (!it.enabled || it.done) return;
-    if (it.kind === "alarm") {
-      if (it.nextFireAt && now >= it.nextFireAt) {
-        alarmRing(it);
-        if (it.repeat) it.nextFireAt = alarmNextFire(it, now + 500);
-        else { it.done = true; it.nextFireAt = 0; }
-        dirty = true;
-      }
-    } else if (!it.paused && it.endAt && now >= it.endAt) {
-      alarmRing(it);
-      if (it.loop) {
-        let end = it.endAt;
-        let guard = 0;
-        while (end <= now && guard++ < 10000) end += it.durMs;   // 后台节流错过多轮时只补一轮
-        it.endAt = end;
-      } else { it.done = true; it.endAt = 0; it.remainMs = 0; }
-      dirty = true;
-    }
-  });
-  if (dirty) alarmSave();
-  hjAlarms.items.forEach(alarmPaintWidget);
-  alarmPaintListLive();
-  alarmPaintNowHints();
-}
-
-/* 状态操作（停用 / 启用 / 暂停 / 重置 / 重新启用） ---------------------------- */
-function alarmSetEnabled(it, on) {
-  it.enabled = !!on;
-  const now = hjNow();
-  if (it.kind === "alarm") {
-    if (it.enabled) { it.done = false; it.nextFireAt = alarmNextFire(it, now); }
-    else { it.nextFireAt = 0; alarmStopRing(it.id); }
-  } else if (it.enabled) {
-    it.done = false;
-    it.paused = false;
-    it.endAt = now + (it.remainMs > 0 ? it.remainMs : it.durMs);
-    it.remainMs = 0;
-  } else {
-    if (!it.paused && it.endAt) it.remainMs = Math.max(1000, it.endAt - now);
-    it.paused = true;
-    it.endAt = 0;
-    alarmStopRing(it.id);
-  }
-  alarmSave();
-  alarmAfterChange();
-}
-
-function alarmTogglePause(it) {
-  if (it.done || !it.enabled) return;
-  const now = hjNow();
-  if (it.paused) {
-    it.paused = false;
-    it.endAt = now + (it.remainMs > 0 ? it.remainMs : it.durMs);
-    it.remainMs = 0;
-  } else {
-    it.remainMs = Math.max(1000, (it.endAt || now) - now);
-    it.paused = true;
-    it.endAt = 0;
-  }
-  alarmSave();
-  alarmAfterChange();
-}
-
-function alarmRestart(it) {   // 倒计时：从头开始
-  it.enabled = true;
-  it.done = false;
-  it.paused = false;
-  it.remainMs = 0;
-  it.endAt = hjNow() + it.durMs;
-  alarmSave();
-  alarmAfterChange();
-}
-
-function alarmRearm(it) {     // 一次性闹铃响过后重新启用
-  it.enabled = true;
-  it.done = false;
-  it.nextFireAt = alarmNextFire(it, hjNow());
-  alarmSave();
-  alarmAfterChange();
-}
-
-function alarmRemove(it) {
-  alarmStopRing(it.id);
-  hjAlarms.items = hjAlarms.items.filter((x) => x !== it);
-  alarmSave();
-  alarmAfterChange();
-  showToast(`已删除「${it.name}」`);
-}
-
-function alarmAfterChange() {
-  alarmRenderAllWidgets();
-  alarmRenderLists();
-}
-
-/* 小组件 ---------------------------------------------------------------------- */
-function alarmSubText(it) {
-  if (it.kind === "alarm") {
-    const rep = it.repeat ? (it.zone === "cn" ? "每小时重复" : "每日重复") : "仅一次";
-    return `${alarmZoneShort(it)}时间 · ${rep}`;
-  }
-  return `${alarmZoneShort(it)}倒计时 · ${it.durLabel}${it.loop ? " · 自动循环" : ""}`;
-}
-
-function alarmWidgetActionsHtml(it) {
-  const b = [];
-  if (hjAlarms.ringing.has(it.id)) b.push('<button type="button" class="alm-btn is-hot" data-w="stopring">停止响铃</button>');
-  if (it.kind === "alarm") {
-    if (it.done) b.push('<button type="button" class="alm-btn" data-w="rearm">重新启用</button>');
-    else b.push(`<button type="button" class="alm-btn" data-w="toggle">${it.enabled ? "停用" : "启用"}</button>`);
-  } else if (it.done) {
-    b.push('<button type="button" class="alm-btn" data-w="restart">重新开始</button>');
-  } else if (it.enabled) {
-    b.push(`<button type="button" class="alm-btn" data-w="pause">${it.paused ? "继续" : "暂停"}</button>`);
-    b.push('<button type="button" class="alm-btn" data-w="restart">重置</button>');
-  } else {
-    b.push('<button type="button" class="alm-btn" data-w="toggle">启用</button>');
-  }
-  return b.join("");
-}
-
-/* 新组件的默认落点：按可见顺序往右下阶梯排开，保证每个的标题栏和正文都露在外面 */
-function alarmInitPos(it) {
-  const visible = hjAlarms.items.filter((x) => !x.hidden);
-  const n = Math.max(0, visible.indexOf(it));
+function clampWidgetPos(right, top) {
   const { vw, vh } = viewportSize();
-  it.x = clamp(16 + (n % 4) * 30, CAL_EDGE, Math.max(CAL_EDGE, vw - CAL_KEEP_VISIBLE));
-  it.y = clamp(112 + (n % 6) * 92, CAL_EDGE, Math.max(CAL_EDGE, vh - CAL_KEEP_VISIBLE));
+  return [clamp(right, WIDGET_EDGE, Math.max(WIDGET_EDGE, vw - WIDGET_KEEP_VISIBLE)),
+    clamp(top, WIDGET_EDGE, Math.max(WIDGET_EDGE, vh - WIDGET_KEEP_VISIBLE))];
 }
 
-function alarmSetPos(it, el, right, top) {
-  it.x = right;
-  it.y = top;
+function placeWidget(el, right, top) {
   el.style.right = right + "px";
   el.style.top = top + "px";
-  alarmSave();
 }
 
-function alarmSyncZoomBtns(it, el) {
-  el.querySelector('[data-w="zoomin"]').disabled = it.zoom >= ALARM_ZOOMS[ALARM_ZOOMS.length - 1];
-  el.querySelector('[data-w="zoomout"]').disabled = it.zoom <= ALARM_ZOOMS[0];
+function zoomStep(zoom, dir) {
+  const i = WIDGET_ZOOMS.indexOf(zoom);
+  return WIDGET_ZOOMS[clamp((i === -1 ? 2 : i) + dir, 0, WIDGET_ZOOMS.length - 1)];
 }
 
-function alarmBuildWidget(it) {
-  const el = document.createElement("div");
-  el.className = "alm-widget";
-  el.dataset.id = it.id;
-  el.innerHTML = `
-    <div class="alm-head" title="拖动移动 · 双击回默认位置">
-      <span class="alm-name">${escapeHtml(it.name)}</span>
-      <span class="alm-tools">
-        <button type="button" class="alm-tool" data-w="zoomout" aria-label="缩小组件" title="缩小">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
-        </button>
-        <button type="button" class="alm-tool" data-w="zoomin" aria-label="放大组件" title="放大">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-        <button type="button" class="alm-tool" data-w="hide" aria-label="收起组件" title="收起（可在闹铃面板重新显示）">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
-      </span>
-    </div>
-    <div class="alm-big" data-r="big">--:--</div>
-    <div class="alm-sub" data-r="sub">${escapeHtml(alarmSubText(it))}</div>
-    <div class="alm-status" data-r="status"></div>
-    <div class="alm-actions" data-r="actions"></div>
-    <div class="alm-meta">♪ ${escapeHtml(it.sound)} · 播 ${it.playSec} 秒后渐弱</div>`;
-  el.style.setProperty("--alm-zoom", String(it.zoom));
-  if (it.x === null || it.y === null) alarmInitPos(it);
-  el.style.right = it.x + "px";
-  el.style.top = it.y + "px";
+function syncZoomButtons(zoomOut, zoomIn, zoom) {
+  zoomOut.disabled = zoom <= WIDGET_ZOOMS[0];
+  zoomIn.disabled = zoom >= WIDGET_ZOOMS[WIDGET_ZOOMS.length - 1];
+}
 
-  /* 标题栏拖动（鼠标 / 触屏通用），逻辑与日历小组件一致 */
-  const head = el.querySelector(".alm-head");
+function makeWidgetDraggable(el, head, { move, reset }) {
   let drag = null;
   head.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (e.target.closest(".alm-tool")) return;
+    if ((e.pointerType === "mouse" && e.button !== 0) || e.target.closest("button")) return;
     const r = el.getBoundingClientRect();
     drag = { ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, ...viewportSize() };
     try { head.setPointerCapture(e.pointerId); } catch (err) {}
@@ -3569,502 +2091,997 @@ function alarmBuildWidget(it) {
   });
   head.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    const left = e.clientX - drag.ox;
+    let right = drag.vw - (e.clientX - drag.ox + drag.w);
     let top = e.clientY - drag.oy;
-    let right = drag.vw - (left + drag.w);
-    if (drag.w) right = clamp(right, CAL_EDGE, drag.vw - CAL_KEEP_VISIBLE);
-    if (drag.h) top = clamp(top, CAL_EDGE, drag.vh - CAL_KEEP_VISIBLE);
-    alarmSetPos(it, el, Math.round(right), Math.round(top));
+    if (drag.w) right = clamp(right, WIDGET_EDGE, drag.vw - WIDGET_KEEP_VISIBLE);
+    if (drag.h) top = clamp(top, WIDGET_EDGE, drag.vh - WIDGET_KEEP_VISIBLE);
+    move(Math.round(right), Math.round(top));
   });
-  const endDrag = () => { drag = null; el.classList.remove("is-drag"); };
-  head.addEventListener("pointerup", endDrag);
-  head.addEventListener("pointercancel", endDrag);
-  head.addEventListener("dblclick", (e) => {
-    if (e.target.closest(".alm-tool")) return;
-    alarmInitPos(it);
-    el.style.right = it.x + "px";
-    el.style.top = it.y + "px";
-    alarmSave();
-  });
+  const end = () => {
+    drag = null;
+    el.classList.remove("is-drag");
+  };
+  head.addEventListener("pointerup", end);
+  head.addEventListener("pointercancel", end);
+  head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) reset(); });
+}
 
-  /* 工具按钮与操作按钮（事件委托） */
-  el.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-w]");
-    if (!btn || btn.disabled) return;
-    const act = btn.dataset.w;
-    if (act === "zoomin" || act === "zoomout") {
-      const i = ALARM_ZOOMS.indexOf(it.zoom);
-      const z = ALARM_ZOOMS[clamp((i === -1 ? 2 : i) + (act === "zoomin" ? 1 : -1), 0, ALARM_ZOOMS.length - 1)];
-      it.zoom = z;
-      el.style.setProperty("--alm-zoom", String(z));
-      alarmSyncZoomBtns(it, el);
+/* 日历：范围 2021-01 ~ 本月 + 12，打开时回到本月；活动标注在 config.js 的 HJ_CAL_ITEMS */
+const CAL_FIRST_MONTH = 2021 * 12;
+const CAL_TONES = ["rose", "gold", "teal", "wisteria", "blue", "orange"];
+const cal = { y: 0, m: 0, pick: "", zoom: 1, days: null };   // days：按日期索引的活动
+
+const monthIndex = (y, m) => y * 12 + m - 1;
+const calLastMonth = () => monthIndex(new Date().getFullYear(), new Date().getMonth() + 1) + 12;
+const calStart = (item) => item.start || item.date;
+const calEnd = (item) => item.end || item.date;
+const calTone = (item) => (CAL_TONES.includes(item.tone) ? item.tone : "rose");
+
+function calGoTo(y, m) {
+  const i = clamp(monthIndex(y, m), CAL_FIRST_MONTH, calLastMonth());
+  cal.y = Math.floor(i / 12);
+  cal.m = (i % 12) + 1;
+}
+
+function buildCalDays() {
+  const days = {};
+  HJ_CAL_ITEMS.forEach((item) => {
+    const [sy, sm, sd] = calStart(item).split("-").map(Number);
+    const [ey, em, ed] = calEnd(item).split("-").map(Number);
+    const end = new Date(ey, em - 1, ed);
+    for (const d = new Date(sy, sm - 1, sd); d <= end; d.setDate(d.getDate() + 1)) (days[ymdKey(d)] ||= []).push(item);
+  });
+  return days;
+}
+
+function renderCal() {
+  cal.days ??= buildCalDays();
+  const { y, m } = cal;
+  $("calTitle").textContent = `${y}年${m}月`;
+  $("calPrev").disabled = monthIndex(y, m) <= CAL_FIRST_MONTH;
+  $("calNext").disabled = monthIndex(y, m) >= calLastMonth();
+
+  /* 6 × 7 日格，周一起始 */
+  const firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+  const today = ymdKey(new Date());
+  let cells = "";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(y, m - 1, 1 - firstWeekday + i);
+    const key = ymdKey(d);
+    const cls = ["cal-day"];
+    if (d.getMonth() !== m - 1) cls.push("is-out");
+    if (key === today) cls.push("is-today");
+    if (key === cal.pick) cls.push("is-pick");
+    const bars = (cal.days[key] || []).slice(0, 3).map((it) => `<i class="cal-bar tone-${calTone(it)}"></i>`).join("");
+    cells += `<button type="button" tabindex="-1" class="${cls.join(" ")}" data-date="${key}">`
+      + `<span class="cal-num">${d.getDate()}</span>${bars ? `<span class="cal-bars">${bars}</span>` : ""}</button>`;
+  }
+  $("calGrid").innerHTML = cells;
+
+  /* 本月活动，点击跳到其在本月的第一天 */
+  const first = `${y}-${pad2(m)}-01`;
+  const last = `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+  const md = (key) => `${+key.slice(5, 7)}/${+key.slice(8, 10)}`;
+  const list = HJ_CAL_ITEMS.filter((it) => calStart(it) <= last && calEnd(it) >= first)
+    .sort((a, b) => calStart(a).localeCompare(calStart(b)));
+  $("calEvents").innerHTML = list.length ? list.map((it) => {
+    const s = calStart(it);
+    const e = calEnd(it);
+    return `<button type="button" class="cal-chip tone-${calTone(it)}" data-date="${s >= first ? s : first}">`
+      + `<span>${escapeHtml(it.label)}</span><span class="cal-chip-day">${s === e ? md(s) : `${md(s)}–${md(e)}`}</span></button>`;
+  }).join("") : '<p class="cal-empty">本月暂无活动标注</p>';
+}
+
+function setCalZoom(zoom) {
+  cal.zoom = zoom;
+  $("calWidget").style.setProperty("--cal-zoom", String(zoom));
+  syncZoomButtons($("calZoomOut"), $("calZoomIn"), zoom);
+  storage.set(STORE.calZoom, zoom);
+}
+
+function setCalPos(right, top) {
+  placeWidget($("calWidget"), right, top);
+  storage.set(STORE.calXy, `${right},${top}`);
+}
+
+function openCalWidget(open) {
+  const w = $("calWidget");
+  if (open && w.hidden) {
+    const now = new Date();
+    calGoTo(now.getFullYear(), now.getMonth() + 1);
+    cal.pick = "";
+    renderCal();
+  }
+  w.hidden = !open;
+  storage.set(STORE.calOpen, open ? "1" : "0");
+}
+
+function initCalWidget() {
+  const w = $("calWidget");
+  const zoom = Number(storage.get(STORE.calZoom));
+  setCalZoom(WIDGET_ZOOMS.includes(zoom) ? zoom : 1);
+  const xy = (storage.get(STORE.calXy) || "").split(",").map(Number);
+  if (xy.length === 2 && xy.every(Number.isFinite)) setCalPos(...clampWidgetPos(xy[0], xy[1]));
+
+  $("calPrev").addEventListener("click", () => { calGoTo(cal.y, cal.m - 1); renderCal(); });
+  $("calNext").addEventListener("click", () => { calGoTo(cal.y, cal.m + 1); renderCal(); });
+  $("calZoomIn").addEventListener("click", () => setCalZoom(zoomStep(cal.zoom, 1)));
+  $("calZoomOut").addEventListener("click", () => setCalZoom(zoomStep(cal.zoom, -1)));
+  $("calClose").addEventListener("click", () => openCalWidget(false));
+  w.addEventListener("click", (e) => {
+    const cell = e.target.closest("[data-date]");
+    if (!cell) return;
+    const date = cell.dataset.date;
+    if (cell.classList.contains("cal-chip")) calGoTo(+date.slice(0, 4), +date.slice(5, 7));
+    cal.pick = date;
+    renderCal();
+  });
+  makeWidgetDraggable(w, w.querySelector(".cal-head"), {
+    move: setCalPos,
+    reset: () => {
+      w.style.right = w.style.top = "";
+      storage.remove(STORE.calXy);
+    },
+  });
+  if (storage.get(STORE.calOpen) === "1") openCalWidget(true);
+}
+
+/* 时间条：艾欧泽亚时间（ET）流速为现实的 144/7 倍，1 ET 小时 = 175 秒 */
+const EORZEA_RATE = 144 / 7;
+const ET_HOUR_MS = 175000;
+const ET_MINUTE_MS = ET_HOUR_MS / 60;
+
+/* 艾欧泽亚历：星、灵交替共 12 个月，每月 32 天；每周 8 天，每月 1 日为冰属日；月相每 4 天一变 */
+const ET_WEEKDAYS = ["冰属日", "水属日", "风属日", "雷属日", "火属日", "土属日", "星极日", "灵极日"];
+const ET_MOONS = ["新月", "蛾眉月", "上弦月", "盈凸月", "满月", "亏凸月", "下弦月", "残月"];
+
+function etDateText(etDays) {
+  const day = etDays % 32;
+  const month = Math.floor(etDays / 32) % 12;
+  return `${month % 2 ? "灵" : "星"}${Math.floor(month / 2) + 1}月${day + 1}日 ${ET_WEEKDAYS[day % 8]} ${ET_MOONS[Math.floor(day / 4)]}`;
+}
+
+function readClocks(now = hjNow()) {
+  const etMinutes = Math.floor(now / ET_MINUTE_MS);
+  const etHour = Math.floor(etMinutes / 60) % 24;
+  return {
+    cn: formatCnClock(now),
+    et: `${pad2(etHour)}:${pad2(etMinutes % 60)}`,
+    etDate: etDateText(Math.floor(etMinutes / 1440)),
+    etNight: etHour >= 18 || etHour < 6,
+  };
+}
+
+const clockShown = () => !$("hjClock").classList.contains("is-hidden");
+
+function clockTick() {
+  if (!clockShown()) return;
+  const t = readClocks();
+  $("hjTimeCN").textContent = t.cn;
+  $("hjTimeET").textContent = t.et;
+  $("hjEtDate").textContent = t.etDate;
+  $("hjEtGlyph").textContent = t.etNight ? "☾" : "☀";
+  $("hjClockEt").classList.toggle("is-night", t.etNight);
+  renderWeather();
+  renderOmens();
+}
+
+/* 在下一个整秒或 ET 整分（取较早者）刷新 */
+function scheduleClockTick() {
+  const now = hjNow();
+  setTimeout(() => {
+    if (!document.hidden) clockTick();
+    scheduleClockTick();
+  }, Math.min(1000 - (now % 1000), ET_MINUTE_MS - (now % ET_MINUTE_MS)) + 8);
+}
+
+function initClock() {
+  const btn = $("clockToggle");
+  const sync = () => {
+    const shown = clockShown();
+    btn.classList.toggle("is-active", shown);
+    btn.setAttribute("aria-pressed", String(shown));
+    btn.setAttribute("aria-label", shown ? "隐藏时间条" : "显示时间条");
+    btn.title = btn.getAttribute("aria-label");
+  };
+  btn.addEventListener("click", () => {
+    $("hjClock").classList.toggle("is-hidden");
+    sync();
+    clockTick();
+  });
+  sync();
+  scheduleClockTick();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) clockTick(); });
+}
+
+/* 高脚孤丘天气，算法同 asvel.github.io/ffxiv-weather；ET 0 / 8 / 16 时换天气 */
+const WEATHER_SLOTS = 6;
+const WEATHER_PERIOD_MS = 8 * ET_HOUR_MS;
+const GOBLET_WEATHERS = [   // 累计概率
+  { limit: 40, name: "碧空" },
+  { limit: 60, name: "晴朗" },
+  { limit: 85, name: "阴云" },
+  { limit: 95, name: "薄雾" },
+  { limit: 100, name: "小雨" },
+];
+const STARLIGHT_WEATHER = "小雪";
+
+function gobletWeatherAt(ms) {
+  const eHours = Math.floor(ms / ET_HOUR_MS);
+  const chunk = ((eHours % 24) - (eHours % 8) + 8) % 24;   // ET 0 / 8 / 16 时 → 8 / 16 / 0
+  const seed = Math.floor(eHours / 24) * 100 + chunk;
+  const s1 = ((seed << 11) ^ seed) >>> 0;
+  const chance = (((s1 >>> 8) ^ s1) >>> 0) % 100;
+  return GOBLET_WEATHERS.find((w) => chance < w.limit).name;
+}
+
+let weatherKey = "";
+function renderWeather() {
+  const now = hjNow();
+  const seq = Array.from({ length: WEATHER_SLOTS }, (_, i) => {
+    const t = now + i * WEATHER_PERIOD_MS;
+    return hjStarlightActiveAt(t) ? STARLIGHT_WEATHER : gobletWeatherAt(t);
+  });
+  const key = seq.join("|");
+  if (key === weatherKey) return;
+  weatherKey = key;
+  $("hjWeatherSeq").innerHTML = seq.map((name, i) =>
+    `<span class="hj-wx${i ? "" : " is-current"}" title="${name}">${i ? "" : '<span class="hj-wx-current-prefix">当前</span>'}`
+    + `<img src="weather/${encodeURIComponent(name)}.png" alt="${name}" loading="lazy" decoding="async" width="18" height="18">`
+    + `<span class="hj-wx-name">${name}</span></span>`).join('<span class="hj-weather-arrow" aria-hidden="true">→</span>');
+}
+
+/* 彩虹：ET 27 日 12:00 至次月 6 日 12:00，雨后于 8:00 或 16:00 转碧空、晴朗、阴云时出现，持续 30 ET 分钟。
+   枪鼻头：ET 21–24 时阴云或薄雾。星芒节期间均不出现 */
+const OMEN_SCAN_PERIODS = 3 * 24 * 30 * 3;   // 约 30 天
+const RAINBOW_AFTER = ["碧空", "晴朗", "阴云"];
+const RAINBOW_SEASON = [26 * 24 + 12, 5 * 24 + 12];   // 月内 ET 小时
+const SPEARNOSE_WEATHERS = ["阴云", "薄雾"];
+
+const periodWeather = (p) => gobletWeatherAt(p * WEATHER_PERIOD_MS);
+const periodMonthHour = (p) => (Math.floor(p / 3) % 32) * 24 + (p % 3) * 8;
+
+function rainbowIn(p) {
+  const slot = p % 3;
+  if (slot === 0) return null;
+  const mh = periodMonthHour(p);
+  if (mh < RAINBOW_SEASON[0] && mh >= RAINBOW_SEASON[1]) return null;
+  const rainP = slot === 1 ? p - 2 : p - 1;
+  const start = p * WEATHER_PERIOD_MS + 10 * ET_MINUTE_MS;
+  if (hjStarlightActiveAt(rainP * WEATHER_PERIOD_MS) || hjStarlightActiveAt(start)) return null;
+  if (periodWeather(rainP) !== "小雨" || !RAINBOW_AFTER.includes(periodWeather(p))) return null;
+  return { start, end: start + 30 * ET_MINUTE_MS };
+}
+
+function spearnoseIn(p) {
+  if (p % 3 !== 2) return null;
+  const start = p * WEATHER_PERIOD_MS + 5 * ET_HOUR_MS;   // 21:00
+  const end = (p + 1) * WEATHER_PERIOD_MS;
+  if (hjStarlightActiveAt(start) || hjStarlightActiveAt(end - 1)) return null;
+  return SPEARNOSE_WEATHERS.includes(periodWeather(p)) ? { start, end } : null;
+}
+
+function nextWindow(find, now) {
+  const p0 = Math.floor(now / WEATHER_PERIOD_MS);
+  for (let p = p0; p < p0 + OMEN_SCAN_PERIODS; p++) {
+    const w = find(p);
+    if (w && w.end > now) return w;
+  }
+  return null;
+}
+
+/* 窗口过期后才重新查找 */
+const omenCache = new Map();
+function omenWindow(name, find, now) {
+  let c = omenCache.get(name);
+  if (!c || (c.w ? now >= c.w.end : now - c.at > 60000) || now < c.at) {
+    c = { w: nextWindow(find, now), at: now };
+    omenCache.set(name, c);
+  }
+  return c.w;
+}
+
+function paintOmen(id, w, now, liveText) {
+  const item = $(id);
+  const live = !!w && now >= w.start;
+  const text = !w ? "近期不会出现" : live ? liveText(w) : `将在 ${formatWait(w.start - now)} 后出现`;
+  item.classList.toggle("is-live", live);
+  const state = item.querySelector(".hj-omen-state");
+  if (state.textContent !== text) state.textContent = text;
+}
+
+function renderOmens() {
+  const now = hjNow();
+  paintOmen("hjOmenRainbow", omenWindow("rainbow", rainbowIn, now), now, () => "天象出现！");
+  paintOmen("hjOmenFish", omenWindow("fish", spearnoseIn, now), now,
+    (w) => `现在会咬钩！持续 ${formatWait(w.end - now)}`);
+}
+
+
+/* ==== 11. 点赞 ==== */
+/* 键：act:<活动 id> / mini:<文件名> / info:<文件名> */
+const LIKE_DAILY_LIMIT = 10;
+const LIKE_LIMIT_MSG = "今日点赞次数已用完";
+const LIKE_HEART_SVG = '<svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
+const likes = { counts: {}, liked: new Set(), remaining: LIKE_DAILY_LIMIT, available: false };
+
+const likeKeyFromSrc = (prefix, src) => `${prefix}:${String(src).split("/").pop().split("?")[0]}`;
+
+const likeBtnHtml = (key) =>
+  `<button type="button" class="hj-like-btn hj-like-chip" data-like-key="${key}" aria-pressed="false" aria-label="点赞" title="点赞" hidden>`
+  + `${LIKE_HEART_SVG}<span class="hj-like-count">0</span></button>`;
+
+function likeButtonsIn(root) {
+  const list = [...root.querySelectorAll(".hj-like-btn[data-like-key]")];
+  if (root.matches?.(".hj-like-btn[data-like-key]")) list.push(root);
+  return list.filter((btn) => btn.dataset.likeKey);
+}
+
+function paintLikes() {
+  if (!likes.available) return;
+  likeButtonsIn(document).forEach((btn) => {
+    const key = btn.dataset.likeKey;
+    const on = likes.liked.has(key);
+    btn.hidden = false;
+    btn.classList.toggle("is-liked", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.querySelector(".hj-like-count").textContent = String(likes.counts[key] || 0);
+  });
+}
+
+function syncLikes(data) {
+  if (typeof data.remaining === "number") likes.remaining = data.remaining;
+  paintLikes();
+}
+
+async function refreshLikes(root) {
+  paintLikes();
+  if (siteLockdown) return;
+  const keys = [...new Set(likeButtonsIn(root).map((b) => b.dataset.likeKey))];
+  if (!keys.length) return;
+  const data = await callWorker({ action: "get_likes", keys });
+  if (!data || !data.ok) return;
+  likes.available = true;
+  Object.assign(likes.counts, data.counts);
+  (data.liked || []).forEach((k) => likes.liked.add(k));
+  syncLikes(data);
+}
+
+/* 详情页横幅的点赞按钮 */
+function setupDetailLike(data) {
+  const btn = $("detailLikeBtn");
+  btn.dataset.likeKey = "act:" + (data.id || "latest");
+  btn.classList.remove("is-liked");
+  btn.querySelector(".hj-like-count").textContent = "0";
+  refreshLikes(btn);
+}
+
+async function onLikeClick(btn) {
+  const key = btn.dataset.likeKey;
+  if (!key || (await blockedByStaticMode())) return;
+  if (likes.remaining <= 0) { showToast(LIKE_LIMIT_MSG); return; }
+  btn.disabled = true;
+  const data = await callWorker({ action: "add_like", key });
+  btn.disabled = false;
+  if (data && data.ok) {
+    likes.liked.add(key);
+    likes.counts[key] = data.count;
+    syncLikes(data);
+    showToast(`已点赞，今日剩余 ${likes.remaining} 次`);
+  } else if (data && data.error === "daily_limit") {
+    likes.remaining = 0;
+    showToast(LIKE_LIMIT_MSG);
+  } else {
+    showToast("点赞失败，请稍后再试");
+  }
+}
+
+/* 捕获阶段处理，避免同时打开大图 */
+function initLikes() {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".hj-like-btn");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onLikeClick(btn);
+  }, true);
+}
+
+
+/* ==== 12. 闹铃与倒计时 ==== */
+/* 仅存本机；同一时刻只响一个，错过不补响 */
+const ALARM_SOUNDS = ["基本闹铃", "闹铃1", "闹铃2", "闹铃3", "哄睡曲1", "哄睡曲2", "哄睡曲3"];
+const ALARM_PLAY_OPTIONS = [30, 45];   // 秒，首项为默认
+const ALARM_FADE_SEC = 4;
+const ALARM_CN_MIN_SEC = 30;
+const ALARM_ET_MIN_MIN = 15;
+
+const alarms = {
+  items: [],
+  ringing: new Map(),
+  widgets: new Map(),
+  preview: null,
+};
+
+const alarmById = (id) => alarms.items.find((it) => it.id === id);
+const isRinging = (it) => alarms.ringing.has(it.id);
+const alarmZoneName = (it) => (it.zone === "cn" ? "国服" : "艾欧泽亚");
+
+function humanDuration(h, m, s) {
+  if (h > 0) return `${h}小时${m > 0 ? `${m}分` : ""}${s > 0 ? `${s}秒` : ""}`;
+  return m > 0 ? `${m}分${s > 0 ? `${s}秒` : ""}` : `${s}秒`;
+}
+
+function alarmNextFire(it, now) {
+  if (it.zone === "et") {
+    /* 正处于目标分钟内则立即响 */
+    const target = it.hh * 3600 + it.mm * 60;
+    const etSec = (now / 1000) * EORZEA_RATE;
+    const tod = ((etSec % 86400) + 86400) % 86400;
+    if (Math.floor(tod / 60) === Math.floor(target / 60)) return now;
+    return now + (((target - tod + 86400) % 86400) / EORZEA_RATE) * 1000;
+  }
+  const d = new Date(now + CN_TZ_OFFSET_MS);
+  if (it.repeat) d.setUTCMinutes(it.mm, 0, 0);
+  else d.setUTCHours(it.hh, it.mm, 0, 0);
+  const t = d.getTime() - CN_TZ_OFFSET_MS;
+  return t > now ? t : t + (it.repeat ? 3600000 : 86400000);
+}
+
+/* 循环倒计时：跳过已错过的轮次 */
+const nextLoopEnd = (end, now, dur) => end + (Math.floor((now - end) / dur) + 1) * dur;
+
+/* 开头 0.5 秒渐入，结尾渐弱；用定时器驱动（后台标签页中 rAF 会暂停） */
+function playAlarmSound(name, playSec, onEnd) {
+  const audio = new Audio(`music/${encodeURIComponent(name)}.ogg`);
+  const totalMs = playSec * 1000;
+  const fadeMs = Math.min(ALARM_FADE_SEC * 1000, totalMs * 0.6);
+  const t0 = performance.now();
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    audio.pause();
+    onEnd();
+  };
+  const paint = () => {
+    const t = performance.now() - t0;
+    const k = Math.min(1, Math.max(0.02, t / 500), Math.max(0, (totalMs - t) / fadeMs));
+    try { audio.volume = clamp(siteVolume.level * k, 0, 1); } catch (e) {}
+    if (t >= totalMs) stop();
+  };
+  const timer = setInterval(paint, 100);
+  paint();
+  audio.addEventListener("ended", stop);
+  audio.addEventListener("error", () => {
+    showToast(`铃声加载失败：${name}`);
+    stop();
+  });
+  audio.play().catch((err) => {
+    if (err && err.name === "NotAllowedError") showToast("铃声被浏览器拦截，点击页面后可播放");
+    stop();
+  });
+  return { stop };
+}
+
+function alarmRing(it) {
+  if (isRinging(it)) return;
+  alarms.ringing.forEach((s) => s.stop());   // 同一时刻只响一个
+  alarms.ringing.set(it.id, playAlarmSound(it.sound, it.playSec, () => {
+    alarms.ringing.delete(it.id);
+    alarmRefresh(it);
+  }));
+  alarmRefresh(it);
+}
+
+const alarmStopRing = (it) => alarms.ringing.get(it.id)?.stop();
+
+/* 本机存取 ------------------------------------------------------------------------------ */
+const alarmSave = () => storage.set(STORE.alarms, JSON.stringify(alarms.items));
+const positive = (v) => (Number(v) > 0 ? Number(v) : 0);
+const coord = (v) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/* 补齐默认值并校验，无效返回 null */
+function alarmNormalize(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const it = {
+    id: String(raw.id || `alm${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`),
+    kind: raw.kind === "countdown" ? "countdown" : "alarm",
+    zone: raw.zone === "et" ? "et" : "cn",
+    name: String(raw.name || "").slice(0, 12),
+    sound: ALARM_SOUNDS.includes(raw.sound) ? raw.sound : ALARM_SOUNDS[0],
+    playSec: ALARM_PLAY_OPTIONS.includes(Number(raw.playSec)) ? Number(raw.playSec) : ALARM_PLAY_OPTIONS[0],
+    enabled: raw.enabled !== false,
+    done: !!raw.done,
+    hidden: !!raw.hidden,        // 小组件已收起
+    zoom: WIDGET_ZOOMS.includes(Number(raw.zoom)) ? Number(raw.zoom) : 1,
+    x: coord(raw.x),             // right / top
+    y: coord(raw.y),
+    hh: clamp(Math.floor(Number(raw.hh) || 0), 0, 23),
+    mm: clamp(Math.floor(Number(raw.mm) || 0), 0, 59),
+    repeat: !!raw.repeat,        // 国服每小时 / 艾欧泽亚每日
+    durMs: positive(raw.durMs),
+    durLabel: String(raw.durLabel || ""),
+    loop: !!raw.loop,
+    paused: !!raw.paused,
+    remainMs: positive(raw.remainMs),
+    endAt: positive(raw.endAt),
+    nextFireAt: positive(raw.nextFireAt),
+  };
+  return it.kind === "countdown" && it.durMs < 1000 ? null : it;
+}
+
+function alarmFinish(it) {
+  it.done = true;
+  it.nextFireAt = it.endAt = it.remainMs = 0;
+}
+
+function alarmRevive(it, now) {
+  if (!it.enabled || it.done) {
+    it.nextFireAt = it.endAt = 0;
+  } else if (it.kind === "alarm") {
+    if (it.nextFireAt > now) return;
+    if (it.repeat) it.nextFireAt = alarmNextFire(it, now);
+    else alarmFinish(it);
+  } else if (!it.paused && it.endAt <= now) {
+    if (it.loop) it.endAt = nextLoopEnd(it.endAt || now, now, it.durMs);
+    else alarmFinish(it);
+  }
+}
+
+function alarmTick() {
+  const now = hjNow();
+  let dirty = false;
+  alarms.items.forEach((it) => {
+    if (!it.enabled || it.done) return;
+    const due = it.kind === "alarm" ? it.nextFireAt && now >= it.nextFireAt : !it.paused && it.endAt && now >= it.endAt;
+    if (!due) return;
+    alarmRing(it);
+    if (it.kind === "alarm" && it.repeat) it.nextFireAt = alarmNextFire(it, now + ET_MINUTE_MS);   // 跳过当前这一分钟
+    else if (it.kind === "countdown" && it.loop) it.endAt = nextLoopEnd(it.endAt, now, it.durMs);
+    else alarmFinish(it);
+    dirty = true;
+  });
+  if (dirty) alarmSave();
+  alarms.items.forEach(alarmPaintWidget);
+  alarmPaintListLive();
+  alarmPaintNowHints();
+}
+
+/* 操作 --------------------------------------------------------------------------------- */
+function alarmCommit() {
+  alarmSave();
+  alarmRenderWidgets();
+  alarmRenderLists();
+}
+
+function alarmSetEnabled(it, on) {
+  const now = hjNow();
+  it.enabled = on;
+  if (it.kind === "alarm") {
+    it.done = false;
+    it.nextFireAt = on ? alarmNextFire(it, now) : 0;
+  } else if (on) {
+    it.done = it.paused = false;
+    it.endAt = now + (it.remainMs || it.durMs);
+    it.remainMs = 0;
+  } else {
+    if (!it.paused && it.endAt) it.remainMs = Math.max(1000, it.endAt - now);
+    it.paused = true;
+    it.endAt = 0;
+  }
+  if (!on) alarmStopRing(it);
+  alarmCommit();
+}
+
+function alarmTogglePause(it) {
+  if (it.done || !it.enabled) return;
+  const now = hjNow();
+  if (it.paused) {
+    it.endAt = now + (it.remainMs || it.durMs);
+    it.remainMs = 0;
+  } else {
+    it.remainMs = Math.max(1000, (it.endAt || now) - now);
+    it.endAt = 0;
+  }
+  it.paused = !it.paused;
+  alarmCommit();
+}
+
+/* 倒计时重新开始；一次性闹铃重新启用 */
+function alarmRestart(it) {
+  it.enabled = true;
+  it.done = it.paused = false;
+  if (it.kind === "alarm") {
+    it.nextFireAt = alarmNextFire(it, hjNow());
+  } else {
+    it.remainMs = 0;
+    it.endAt = hjNow() + it.durMs;
+  }
+  alarmCommit();
+}
+
+function alarmRemove(it) {
+  alarmStopRing(it);
+  alarms.items = alarms.items.filter((x) => x !== it);
+  alarmCommit();
+  showToast(`已删除「${it.name}」`);
+}
+
+function alarmZoom(it, dir) {
+  it.zoom = zoomStep(it.zoom, dir);
+  const w = alarms.widgets.get(it.id);
+  w.el.style.setProperty("--alm-zoom", String(it.zoom));
+  syncZoomButtons(w.zoomOut, w.zoomIn, it.zoom);
+  alarmSave();
+}
+
+/* 小组件与列表共用的操作 */
+const ALARM_ACTIONS = {
+  toggle: (it) => alarmSetEnabled(it, !it.enabled),
+  pause: alarmTogglePause,
+  restart: alarmRestart,
+  stop: alarmStopRing,
+  del: alarmRemove,
+  zoomin: (it) => alarmZoom(it, 1),
+  zoomout: (it) => alarmZoom(it, -1),
+  widget: (it) => {
+    it.hidden = !it.hidden;
+    alarmCommit();
+  },
+  hide: (it) => {
+    it.hidden = true;
+    alarmCommit();
+    showToast("已收起，可在闹铃面板中显示");
+  },
+};
+
+function onAlarmAction(e, rowSelector) {
+  const btn = e.target.closest("button[data-act]");
+  const row = btn && !btn.disabled && btn.closest(rowSelector);
+  const it = row && alarmById(row.dataset.id);
+  if (it) ALARM_ACTIONS[btn.dataset.act](it);
+}
+
+function alarmButtons(it, inList) {
+  const b = [];
+  if (isRinging(it)) b.push(["stop", "停止响铃", "is-hot"]);
+  if (it.kind === "alarm") b.push(it.done ? ["restart", "重新启用"] : ["toggle", it.enabled ? "停用" : "启用"]);
+  else if (it.done) b.push(["restart", "重新开始"]);
+  else {
+    if (inList || !it.enabled) b.push(["toggle", it.enabled ? "停用" : "启用"]);
+    if (it.enabled) b.push(["pause", it.paused ? "继续" : "暂停"]);
+    if (inList || it.enabled) b.push(["restart", "重置"]);
+  }
+  if (inList) b.push(["widget", it.hidden ? "显示组件" : "隐藏组件"], ["del", "删除", "is-danger"]);
+  return b.map(([act, text, cls = ""]) => {
+    const c = [inList ? "" : "alm-btn", cls].filter(Boolean).join(" ");
+    return `<button type="button"${c ? ` class="${c}"` : ""} data-act="${act}">${text}</button>`;
+  }).join("");
+}
+
+function alarmSubText(it) {
+  if (it.kind === "alarm") {
+    return `${alarmZoneName(it)}时间 · ${it.repeat ? (it.zone === "cn" ? "每小时重复" : "每日重复") : "仅一次"}`;
+  }
+  return `${alarmZoneName(it)}倒计时 · ${it.durLabel}${it.loop ? " · 自动循环" : ""}`;
+}
+
+const alarmSoundText = (it, sep) => `♪${sep}${escapeHtml(it.sound)} · ${it.playSec} 秒`;
+
+/* 小组件 ------------------------------------------------------------------------------- */
+/* 默认位置：按顺序阶梯排开 */
+function alarmDefaultPos(it) {
+  const n = Math.max(0, alarms.items.filter((x) => !x.hidden).indexOf(it));
+  [it.x, it.y] = clampWidgetPos(16 + (n % 4) * 30, 112 + (n % 6) * 92);
+}
+
+const toolBtn = (act, label, title, path) =>
+  `<button type="button" class="alm-tool" data-act="${act}" aria-label="${label}" title="${title}">`
+  + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg></button>`;
+
+function alarmBuildWidget(it) {
+  const el = document.createElement("div");
+  el.className = "alm-widget";
+  el.dataset.id = it.id;
+  el.innerHTML = `
+    <div class="alm-head" title="拖动移动，双击复位">
+      <span class="alm-name">${escapeHtml(it.name)}</span>
+      <span class="alm-tools">${toolBtn("zoomout", "缩小组件", "缩小", "M5 12h14")}${toolBtn("zoomin", "放大组件", "放大", "M12 5v14M5 12h14")}${toolBtn("hide", "收起组件", "收起", "M6 6l12 12M18 6L6 18")}</span>
+    </div>
+    <div class="alm-big">--:--</div>
+    <div class="alm-sub">${escapeHtml(alarmSubText(it))}</div>
+    <div class="alm-status"></div>
+    <div class="alm-actions"></div>
+    <div class="alm-meta">${alarmSoundText(it, " ")}</div>`;
+  el.style.setProperty("--alm-zoom", String(it.zoom));
+  if (it.x === null || it.y === null) alarmDefaultPos(it);
+  placeWidget(el, it.x, it.y);
+  makeWidgetDraggable(el, el.querySelector(".alm-head"), {
+    move: (right, top) => {
+      [it.x, it.y] = [right, top];
+      placeWidget(el, right, top);
       alarmSave();
-    } else if (act === "hide") {
-      it.hidden = true;
+    },
+    reset: () => {
+      alarmDefaultPos(it);
+      placeWidget(el, it.x, it.y);
       alarmSave();
-      alarmAfterChange();
-      showToast("组件已收起，可在「闹铃」面板里重新显示");
-    } else if (act === "toggle") alarmSetEnabled(it, !it.enabled);
-    else if (act === "pause") alarmTogglePause(it);
-    else if (act === "restart") alarmRestart(it);
-    else if (act === "rearm") alarmRearm(it);
-    else if (act === "stopring") alarmStopRing(it.id);
+    },
   });
   return el;
 }
 
-function alarmRenderAllWidgets() {
+function alarmRenderWidgets() {
   const layer = $("alarmWidgetLayer");
   layer.innerHTML = "";
-  hjAlarmWidgets.clear();
-  hjAlarms.items.forEach((it) => {
-    if (it.hidden) return;
+  alarms.widgets.clear();
+  alarms.items.filter((it) => !it.hidden).forEach((it) => {
     const el = alarmBuildWidget(it);
     layer.appendChild(el);
-    hjAlarmWidgets.set(it.id, {
-      el,
-      big: el.querySelector('[data-r="big"]'),
-      status: el.querySelector('[data-r="status"]'),
-      actions: el.querySelector('[data-r="actions"]'),
-      sig: "",
+    const q = (sel) => el.querySelector(sel);
+    alarms.widgets.set(it.id, {
+      el, big: q(".alm-big"), status: q(".alm-status"), actions: q(".alm-actions"),
+      zoomIn: q('[data-act="zoomin"]'), zoomOut: q('[data-act="zoomout"]'), sig: "",
     });
-    alarmSyncZoomBtns(it, el);
+    syncZoomButtons(q('[data-act="zoomout"]'), q('[data-act="zoomin"]'), it.zoom);
     alarmPaintWidget(it);
   });
 }
 
 function alarmPaintWidget(it) {
-  const w = hjAlarmWidgets.get(it.id);
+  const w = alarms.widgets.get(it.id);
   if (!w) return;
   const now = hjNow();
-  const ringing = hjAlarms.ringing.has(it.id);
+  const ringing = isRinging(it);
+  const muted = siteVolume.muted ? " · 已静音" : "…";
   let big, status;
   if (it.kind === "alarm") {
     big = `${pad2(it.hh)}:${pad2(it.mm)}`;
-    status = ringing ? (hjMusic.vol <= 0 ? "响铃中（站内已静音）" : "响铃中…")
+    status = ringing ? `响铃中${muted}`
       : !it.enabled ? "已停用"
-      : it.done ? "已完成（一次性）"
-      : `距下次响铃 ${alarmFmtDur(it.nextFireAt - now)}`;
+      : it.done ? "已完成"
+      : `距下次响铃 ${formatDuration(it.nextFireAt - now)}`;
   } else {
     const remain = it.paused ? it.remainMs : Math.max(0, (it.endAt || now) - now);
-    big = it.done ? "00:00" : alarmFmtDur(remain);
-    status = ringing ? (hjMusic.vol <= 0 ? "时间到，响铃中（站内已静音）" : "时间到，响铃中…")
+    big = it.done ? "00:00" : formatDuration(remain);
+    status = ringing ? `时间到，响铃中${muted}`
       : !it.enabled ? "已停用"
-      : it.done ? "时间到！"
+      : it.done ? "时间到"
       : it.paused ? "已暂停"
       : it.zone === "et" ? `≈ 艾欧泽亚剩 ${Math.max(1, Math.ceil((remain / 1000) * EORZEA_RATE / 60))} 分钟`
-      : `至 国服 ${alarmCnClockAt(it.endAt)}`;
+      : `至 国服 ${formatCnClock(it.endAt)}`;
   }
   w.big.textContent = big;
   w.status.textContent = status;
   w.el.classList.toggle("is-ringing", ringing);
   w.el.classList.toggle("is-off", !it.enabled || it.done);
   const sig = [it.enabled, it.done, it.paused, ringing].join("|");
-  if (sig !== w.sig) {
-    w.sig = sig;
-    w.actions.innerHTML = alarmWidgetActionsHtml(it);
-  }
+  if (sig === w.sig) return;
+  w.sig = sig;
+  w.actions.innerHTML = alarmButtons(it, false);
 }
 
-/* 弹窗：表单 ------------------------------------------------------------------ */
-function alarmFillFormSelects() {
-  const snd = ALARM_SOUNDS.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
-  const dur = ALARM_PLAY_OPTIONS.map((s) => `<option value="${s}"${s === ALARM_PLAY_DEFAULT ? " selected" : ""}>${s} 秒</option>`).join("");
-  $("almSound").innerHTML = snd;
-  $("cdSound").innerHTML = snd;
-  $("almPlaySec").innerHTML = dur;
-  $("cdPlaySec").innerHTML = dur;
+function alarmRefresh(it) {
+  alarmPaintWidget(it);
+  alarmRenderLists();
 }
 
-const alarmFormZone = (group) => (document.querySelector(`input[name="${group}"]:checked`) || { value: "cn" }).value;
+/* 弹窗：表单 ------------------------------------------------------------------------------ */
+const alarmFormZone = (group) => document.querySelector(`input[name="${group}"]:checked`)?.value || "cn";
+const alarmMsg = (text) => setMsg($("alarmMsg"), text);
 
 function alarmNum(id) {
   const el = $(id);
   return clamp(Math.floor(Number(el.value) || 0), Number(el.min) || 0, Number(el.max) || 99);
 }
 
-function alarmSegSync(segId) {
-  $(segId).querySelectorAll("label").forEach((lb) => {
-    lb.classList.toggle("is-active", lb.querySelector("input").checked);
-  });
+const cnCountdownParts = () => [alarmNum("cdCnH"), alarmNum("cdCnM"), alarmNum("cdCnS")];
+const etCountdownParts = () => [alarmNum("cdEtH"), alarmNum("cdEtM")];
+
+function syncAlarmForm() {
+  const zone = alarmFormZone("almZone");
+  const rep = $("almRepeat").checked;
+  const tv = $("almTime").value || "--:--";
+  $("almRepeatText").textContent = zone === "cn" ? "每小时重复" : "每日重复";
+  $("almRepeatHint").textContent = zone === "cn"
+    ? (rep ? `每小时第 ${tv.slice(3)} 分响铃` : `下一个国服 ${tv} 响铃`)
+    : (rep ? `每个艾欧泽亚日 ${tv} 响铃` : `下一个艾欧泽亚 ${tv} 响铃`);
 }
 
-/* 表单联动提示：重复方式说明 / 倒计时换算 */
-function alarmSyncZoneUi(kind) {
-  if (kind === "alarm") {
-    const zone = alarmFormZone("almZone");
-    const rep = $("almRepeat").checked;
-    $("almRepeatText").textContent = zone === "cn" ? "每小时重复" : "每日重复";
-    const tv = $("almTime").value || "--:--";
-    const mm = tv.slice(3);
-    $("almRepeatHint").textContent = zone === "cn"
-      ? (rep ? `每小时的第 ${mm} 分都会响（忽略「时」）` : `到下一个国服 ${tv} 响一次`)
-      : (rep ? `每个艾欧泽亚日的 ${tv} 都响（1 艾欧泽亚日 ≈ 现实 70 分钟）` : `到下一个艾欧泽亚 ${tv} 响一次（最多等 ≈ 现实 70 分钟）`);
-  } else {
-    const zone = alarmFormZone("cdZone");
-    $("cdCnWrap").hidden = zone !== "cn";
-    $("cdEtWrap").hidden = zone !== "et";
-    const h = alarmNum("cdCnH"), m = alarmNum("cdCnM"), s = alarmNum("cdCnS");
-    const total = h * 3600 + m * 60 + s;
-    $("cdCnHint").textContent = total > 0 ? `共 ${alarmHumanDur(h, m, s)}${total < ALARM_CN_MIN_SEC ? `，最短 ${ALARM_CN_MIN_SEC} 秒` : ""}` : "";
-    const eh = alarmNum("cdEtH"), em = alarmNum("cdEtM");
-    const etTotal = eh * 60 + em;
-    const realSec = (etTotal * 60) / EORZEA_RATE;
-    $("cdEtHint").textContent = etTotal > 0
-      ? `≈ 现实 ${realSec >= 60 ? `${Math.floor(realSec / 60)} 分 ${Math.round(realSec % 60)} 秒` : `${Math.round(realSec)} 秒`}${etTotal < ALARM_ET_MIN_MIN ? `，最短 ${ALARM_ET_MIN_MIN} 分钟` : ""}`
-      : "";
-  }
+function syncCountdownForm() {
+  const zone = alarmFormZone("cdZone");
+  $("cdCnWrap").hidden = zone !== "cn";
+  $("cdEtWrap").hidden = zone !== "et";
+  const [h, m, s] = cnCountdownParts();
+  const total = h * 3600 + m * 60 + s;
+  $("cdCnHint").textContent = total > 0
+    ? `共 ${humanDuration(h, m, s)}${total < ALARM_CN_MIN_SEC ? `，最短 ${ALARM_CN_MIN_SEC} 秒` : ""}` : "";
+  const [eh, em] = etCountdownParts();
+  const etTotal = eh * 60 + em;
+  const realSec = (etTotal * 60) / EORZEA_RATE;
+  $("cdEtHint").textContent = etTotal > 0
+    ? `≈ 现实 ${realSec >= 60 ? `${Math.floor(realSec / 60)} 分 ${Math.round(realSec % 60)} 秒` : `${Math.round(realSec)} 秒`}`
+      + (etTotal < ALARM_ET_MIN_MIN ? `，最短 ${ALARM_ET_MIN_MIN} 分钟` : "")
+    : "";
+}
+
+function syncSegments(seg) {
+  seg.querySelectorAll("label").forEach((lb) => lb.classList.toggle("is-active", lb.querySelector("input").checked));
 }
 
 function alarmPaintNowHints() {
   if ($("alarmOverlay").hidden) return;
-  const t = hjReadClocks();
-  const text = `现在：国服 ${t.cn} · 艾欧泽亚 ${t.et} ${t.etNight ? "☾" : "☀"}`;
-  $("almNowHint").textContent = text;
-  $("cdNowHint").textContent = text;
+  const t = readClocks();
+  $("almNowHint").textContent = $("cdNowHint").textContent = `现在：国服 ${t.cn} · 艾欧泽亚 ${t.et} ${t.etNight ? "☾" : "☀"}`;
 }
 
-/* 试听：再点一次停止；两个页签共用一个试听会话 */
+/* 试听，再点一次停止 */
 function alarmPreview() {
-  const setLabel = (on) => { $("almPreview").textContent = on ? "停止试听" : "试听"; $("cdPreview").textContent = on ? "停止试听" : "试听"; };
-  if (hjAlarmPreview) {
-    hjAlarmPreview.stop();
-    hjAlarmPreview = null;
-    return;   // onEnd 会把按钮文字复原
-  }
+  if (alarms.preview) { alarms.preview.stop(); return; }
   const tab = $("alarmPanelCountdown").hidden ? "alm" : "cd";
-  const sound = $(`${tab}Sound`).value;
-  const sec = Number($(`${tab}PlaySec`).value) || ALARM_PLAY_DEFAULT;
-  setLabel(true);
-  hjAlarmPreview = alarmPlayCore(sound, sec, () => { hjAlarmPreview = null; setLabel(false); });
+  const label = (on) => { $("almPreview").textContent = $("cdPreview").textContent = on ? "停止试听" : "试听"; };
+  label(true);
+  alarms.preview = playAlarmSound($(`${tab}Sound`).value, Number($(`${tab}PlaySec`).value), () => {
+    alarms.preview = null;
+    label(false);
+  });
 }
 
-const alarmMsg = (text) => setMsg($("alarmMsg"), text);
+function addAlarmItem(raw, nameStem, toast) {
+  const it = alarmNormalize(raw);
+  it.name ||= `${nameStem}${alarms.items.filter((x) => x.kind === it.kind).length + 1}`;
+  alarms.items.push(it);
+  alarmCommit();
+  alarmMsg("");
+  showToast(toast(it.name));
+  return it;
+}
 
-function alarmSubmitAlarm() {
+function submitAlarm() {
   const zone = alarmFormZone("almZone");
-  const m = /^(\d{1,2}):(\d{2})$/.exec($("almTime").value || "");
-  if (!m) { alarmMsg("请先选择响铃时间"); return; }
-  const it = alarmNormalize({
-    kind: "alarm", zone,
-    hh: Number(m[1]), mm: Number(m[2]),
+  const m = /^(\d{1,2}):(\d{2})$/.exec($("almTime").value);
+  if (!m) { alarmMsg("请选择时间"); return; }
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  const dup = zone === "cn" && alarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === hh && x.mm === mm);
+  if (dup) { alarmMsg(`国服 ${pad2(hh)}:${pad2(mm)} 已有闹铃「${dup.name}」`); return; }
+  const raw = {
+    kind: "alarm", zone, hh, mm,
     repeat: $("almRepeat").checked,
     name: $("almName").value.trim(),
     sound: $("almSound").value,
-    playSec: Number($("almPlaySec").value) || ALARM_PLAY_DEFAULT,
-  });
-  if (!it.name) it.name = `闹铃${hjAlarms.items.filter((x) => x.kind === "alarm").length + 1}`;
-  // 国服时间的闹铃同一时刻只允许一个：已有同 时:分 的国服闹铃就拦下
-  if (zone === "cn") {
-    const dup = hjAlarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === it.hh && x.mm === it.mm);
-    if (dup) {
-      const t = `${String(it.hh).padStart(2, "0")}:${String(it.mm).padStart(2, "0")}`;
-      alarmMsg(`国服时间 ${t} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`);
-      return;
-    }
-  }
-  it.nextFireAt = alarmNextFire(it, hjNow());
-  hjAlarms.items.push(it);
-  alarmSave();
-  alarmAfterChange();
-  alarmMsg("");
+    playSec: $("almPlaySec").value,
+  };
+  raw.nextFireAt = alarmNextFire(raw, hjNow());
+  addAlarmItem(raw, "闹铃", (name) => `已添加闹铃「${name}」`);
   $("almName").value = "";
-  showToast(`闹铃「${it.name}」已添加，组件已放到页面上`);
 }
 
-function alarmSubmitCountdown() {
+function submitCountdown() {
   const zone = alarmFormZone("cdZone");
-  let durMs = 0;
-  let durLabel = "";
+  let durMs;
+  let durLabel;
   if (zone === "cn") {
-    const h = alarmNum("cdCnH"), m = alarmNum("cdCnM"), s = alarmNum("cdCnS");
+    const [h, m, s] = cnCountdownParts();
     const total = h * 3600 + m * 60 + s;
     if (total < ALARM_CN_MIN_SEC) { alarmMsg(`国服倒计时最短 ${ALARM_CN_MIN_SEC} 秒`); return; }
     durMs = total * 1000;
-    durLabel = alarmHumanDur(h, m, s);
+    durLabel = humanDuration(h, m, s);
   } else {
-    const h = alarmNum("cdEtH"), m = alarmNum("cdEtM");
+    const [h, m] = etCountdownParts();
     const total = h * 60 + m;
     if (total < ALARM_ET_MIN_MIN) { alarmMsg(`艾欧泽亚倒计时最短 ${ALARM_ET_MIN_MIN} 分钟`); return; }
-    durMs = (total * 60 / EORZEA_RATE) * 1000;
+    durMs = ((total * 60) / EORZEA_RATE) * 1000;
     durLabel = (h > 0 ? `${h}小时` : "") + `${m}分`;
   }
-  const it = alarmNormalize({
+  addAlarmItem({
     kind: "countdown", zone, durMs, durLabel,
+    endAt: hjNow() + durMs,
     loop: $("cdLoop").checked,
     name: $("cdName").value.trim(),
     sound: $("cdSound").value,
-    playSec: Number($("cdPlaySec").value) || ALARM_PLAY_DEFAULT,
-  });
-  if (!it.name) it.name = `倒计时${hjAlarms.items.filter((x) => x.kind === "countdown").length + 1}`;
-  it.endAt = hjNow() + durMs;
-  hjAlarms.items.push(it);
-  alarmSave();
-  alarmAfterChange();
-  alarmMsg("");
+    playSec: $("cdPlaySec").value,
+  }, "倒计时", (name) => `倒计时「${name}」已开始`);
   $("cdName").value = "";
-  showToast(`倒计时「${it.name}」已开始`);
 }
 
-/* 弹窗：已添加列表 ------------------------------------------------------------ */
-function alarmListLiveText(it) {
+/* 弹窗：列表 ---------------------------------------------------------------------------- */
+function alarmLiveText(it) {
   const now = hjNow();
-  if (hjAlarms.ringing.has(it.id)) return "响铃中…";
+  if (isRinging(it)) return "响铃中…";
   if (!it.enabled) return "已停用";
-  if (it.kind === "alarm") {
-    if (it.done) return "已完成（一次性）";
-    return `距响铃 ${alarmFmtDur(it.nextFireAt - now)}`;
-  }
+  if (it.kind === "alarm") return it.done ? "已完成" : `距响铃 ${formatDuration(it.nextFireAt - now)}`;
   if (it.done) return "已结束";
-  if (it.paused) return `已暂停（剩 ${alarmFmtDur(it.remainMs)}）`;
-  return `剩余 ${alarmFmtDur(it.endAt - now)}`;
-}
-
-function alarmListRowHtml(it) {
-  const ringing = hjAlarms.ringing.has(it.id);
-  const btns = [];
-  if (ringing) btns.push('<button type="button" data-act="stop">停止响铃</button>');
-  if (it.kind === "alarm") {
-    if (it.done) btns.push('<button type="button" data-act="rearm">重新启用</button>');
-    else btns.push(`<button type="button" data-act="toggle">${it.enabled ? "停用" : "启用"}</button>`);
-  } else if (it.done) {
-    btns.push('<button type="button" data-act="restart">重新开始</button>');
-  } else {
-    btns.push(`<button type="button" data-act="toggle">${it.enabled ? "停用" : "启用"}</button>`);
-    if (it.enabled) btns.push(`<button type="button" data-act="pause">${it.paused ? "继续" : "暂停"}</button>`);
-    btns.push('<button type="button" data-act="restart">重置</button>');
-  }
-  btns.push(`<button type="button" data-act="widget">${it.hidden ? "显示组件" : "隐藏组件"}</button>`);
-  btns.push('<button type="button" class="is-danger" data-act="del">删除</button>');
-  return `<div class="alarm-item" data-id="${it.id}">`
-    + `<div class="alarm-item-top"><span class="alarm-item-name">${escapeHtml(it.name)}</span>`
-    + `<span class="alarm-item-live" data-live="${it.id}"></span></div>`
-    + `<div class="alarm-item-sub">${escapeHtml(alarmSubText(it))} · ♪${escapeHtml(it.sound)} · 播 ${it.playSec} 秒后渐弱</div>`
-    + `<div class="alarm-item-btns">${btns.join("")}</div></div>`;
-}
-
-function alarmRenderList(box, kind) {
-  const list = hjAlarms.items.filter((it) => it.kind === kind);
-  box.innerHTML = list.length
-    ? list.map(alarmListRowHtml).join("")
-    : '<p class="alarm-empty">还没有添加，先在上方设置一个吧</p>';
+  return it.paused ? `已暂停 · 剩余 ${formatDuration(it.remainMs)}` : `剩余 ${formatDuration(it.endAt - now)}`;
 }
 
 function alarmRenderLists() {
   if ($("alarmOverlay").hidden) return;
-  alarmRenderList($("almListAlarm"), "alarm");
-  alarmRenderList($("almListCountdown"), "countdown");
+  [["almListAlarm", "alarm"], ["almListCountdown", "countdown"]].forEach(([id, kind]) => {
+    const list = alarms.items.filter((it) => it.kind === kind);
+    $(id).innerHTML = list.length ? list.map((it) => `
+      <div class="alarm-item" data-id="${escapeHtml(it.id)}">
+        <div class="alarm-item-top"><span class="alarm-item-name">${escapeHtml(it.name)}</span><span class="alarm-item-live"></span></div>
+        <div class="alarm-item-sub">${escapeHtml(alarmSubText(it))} · ${alarmSoundText(it, "")}</div>
+        <div class="alarm-item-btns">${alarmButtons(it, true)}</div>
+      </div>`).join("") : '<p class="alarm-empty">暂无</p>';
+  });
   alarmPaintListLive();
 }
 
 function alarmPaintListLive() {
   if ($("alarmOverlay").hidden) return;
-  document.querySelectorAll("#alarmOverlay .alarm-item-live").forEach((el) => {
-    const it = alarmById(el.dataset.live);
-    if (it) el.textContent = alarmListLiveText(it);
+  document.querySelectorAll("#alarmOverlay .alarm-item").forEach((row) => {
+    const it = alarmById(row.dataset.id);
+    if (it) row.querySelector(".alarm-item-live").textContent = alarmLiveText(it);
   });
 }
 
-function alarmListClick(e) {
-  const btn = e.target.closest("button[data-act]");
-  if (!btn) return;
-  const row = btn.closest(".alarm-item");
-  const it = row ? alarmById(row.dataset.id) : null;
-  if (!it) return;
-  const act = btn.dataset.act;
-  if (act === "toggle") alarmSetEnabled(it, !it.enabled);
-  else if (act === "pause") alarmTogglePause(it);
-  else if (act === "restart") alarmRestart(it);
-  else if (act === "rearm") alarmRearm(it);
-  else if (act === "stop") alarmStopRing(it.id);
-  else if (act === "widget") {
-    it.hidden = !it.hidden;
-    alarmSave();
-    alarmAfterChange();
-  } else if (act === "del") alarmRemove(it);
-  alarmRenderLists();
-}
-
-/* 弹窗：开合与页签 ------------------------------------------------------------ */
-function alarmSwitchTab(name) {
-  document.querySelectorAll("#alarmOverlay [data-alarm-tab]").forEach((b) => {
-    b.classList.toggle("is-active", b.dataset.alarmTab === name);
-  });
-  $("alarmPanelAlarm").hidden = name !== "alarm";
-  $("alarmPanelCountdown").hidden = name !== "countdown";
-}
-
+/* 弹窗：开合与页签 ------------------------------------------------------------------------ */
 function openAlarmModal(open) {
   $("alarmOverlay").hidden = !open;
   if (open) {
     alarmRenderLists();
     alarmPaintNowHints();
     playFadeOnly($("alarmOverlay").querySelector(".alarm-card"));
-  } else if (hjAlarmPreview) {
-    hjAlarmPreview.stop();   // 关窗即停试听（onEnd 会复原按钮文字）
-    hjAlarmPreview = null;
+  } else if (alarms.preview) {
+    alarms.preview.stop();
   }
 }
 
-function closeAlarmModal() {
-  openAlarmModal(false);
-}
+const closeAlarmModal = () => openAlarmModal(false);
 
-function initAlarmModal() {
-  alarmFillFormSelects();
+function initAlarm() {
+  const sounds = ALARM_SOUNDS.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  const secs = ALARM_PLAY_OPTIONS.map((s) => `<option value="${s}">${s} 秒</option>`).join("");
+  ["almSound", "cdSound"].forEach((id) => { $(id).innerHTML = sounds; });
+  ["almPlaySec", "cdPlaySec"].forEach((id) => { $(id).innerHTML = secs; });
+
   $("alarmClose").addEventListener("click", closeAlarmModal);
-  document.querySelectorAll("#alarmOverlay [data-alarm-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => alarmSwitchTab(btn.dataset.alarmTab));
-  });
-  $("almZoneSeg").addEventListener("change", () => { alarmSegSync("almZoneSeg"); alarmSyncZoneUi("alarm"); });
-  $("cdZoneSeg").addEventListener("change", () => { alarmSegSync("cdZoneSeg"); alarmSyncZoneUi("countdown"); });
-  $("almRepeat").addEventListener("change", () => alarmSyncZoneUi("alarm"));
-  $("almTime").addEventListener("input", () => alarmSyncZoneUi("alarm"));
-  ["cdCnH", "cdCnM", "cdCnS", "cdEtH", "cdEtM"].forEach((id) => {
-    $(id).addEventListener("input", () => alarmSyncZoneUi("countdown"));
-  });
+  const tabs = document.querySelectorAll("#alarmOverlay [data-alarm-tab]");
+  tabs.forEach((btn) => btn.addEventListener("click", () => {
+    const name = btn.dataset.alarmTab;
+    markTabs(tabs, (b) => b === btn);
+    $("alarmPanelAlarm").hidden = name !== "alarm";
+    $("alarmPanelCountdown").hidden = name !== "countdown";
+  }));
+  $("almZoneSeg").addEventListener("change", (e) => { syncSegments(e.currentTarget); syncAlarmForm(); });
+  $("cdZoneSeg").addEventListener("change", (e) => { syncSegments(e.currentTarget); syncCountdownForm(); });
+  $("almRepeat").addEventListener("change", syncAlarmForm);
+  $("almTime").addEventListener("input", syncAlarmForm);
+  ["cdCnH", "cdCnM", "cdCnS", "cdEtH", "cdEtM"].forEach((id) => $(id).addEventListener("input", syncCountdownForm));
   $("almPreview").addEventListener("click", alarmPreview);
   $("cdPreview").addEventListener("click", alarmPreview);
-  $("almAddAlarm").addEventListener("click", alarmSubmitAlarm);
-  $("cdAdd").addEventListener("click", alarmSubmitCountdown);
-  $("almListAlarm").addEventListener("click", alarmListClick);
-  $("almListCountdown").addEventListener("click", alarmListClick);
-  alarmSyncZoneUi("alarm");
-  alarmSyncZoneUi("countdown");
-}
+  $("almAddAlarm").addEventListener("click", submitAlarm);
+  $("cdAdd").addEventListener("click", submitCountdown);
+  ["almListAlarm", "almListCountdown"].forEach((id) => $(id).addEventListener("click", (e) => onAlarmAction(e, ".alarm-item")));
+  $("alarmWidgetLayer").addEventListener("click", (e) => onAlarmAction(e, ".alm-widget"));
+  syncAlarmForm();
+  syncCountdownForm();
 
-/* 启动：恢复本地数据 → 生成组件 → 每秒心跳 */
-function initAlarm() {
-  initAlarmModal();
-  try {
-    const arr = JSON.parse(storage.get(STORE.alarmItems) || "[]");
-    if (Array.isArray(arr)) hjAlarms.items = arr.map(alarmNormalize).filter(Boolean);
-  } catch (e) { hjAlarms.items = []; }
-  hjAlarms.items.forEach(alarmRevive);
+  const now = hjNow();
+  const saved = storage.json(STORE.alarms);
+  alarms.items = (Array.isArray(saved) ? saved : []).map(alarmNormalize).filter(Boolean);
+  alarms.items.forEach((it) => alarmRevive(it, now));
   alarmSave();
-  alarmRenderAllWidgets();
+  alarmRenderWidgets();
   alarmTick();
-  setInterval(() => alarmTick(), 1000);
+  setInterval(alarmTick, 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) alarmTick(); });
 }
 
-/* 控制台调试入口 */
-window.HJ_ALARM = {
-  list: () => hjAlarms.items,
-  open: () => openAlarmModal(true),
-  ringNow: (id) => { const it = alarmById(id); if (it) alarmRing(it); },
-  clear: () => {
-    [...hjAlarms.ringing.keys()].forEach(alarmStopRing);
-    hjAlarms.items = [];
-    alarmSave();
-    alarmAfterChange();
-  },
-};
 
-
-/* =============================================================================
-   14. 首页弹窗公告
-   内容由管理页「弹窗公告」设置（Worker：get_popup）。规则：
-   - 只在首页弹；开屏图、花街介绍、别的弹窗开着时先不弹，等它们关掉再弹；
-   - 每次打开网站最多弹一次（sessionStorage 记着，站内来回切页面不会反复弹）；
-   - 「今天不再显示」：本机当天不再弹；管理员改了内容（rev 变了）会重新弹。
-   ============================================================================= */
-const POPUP_SEEN_KEY = "hj_popup_seen";   // sessionStorage：本次打开网站已经弹过的 rev
-const POPUP_MUTE_KEY = "hj_popup_mute";   // localStorage：「rev|日期」当天不再显示
-let sitePopup = null;                     // Worker 返回的公告（开着才有内容）
-
-const localDateKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-};
-function sessionGet(key) { try { return sessionStorage.getItem(key); } catch (e) { return null; } }
-function sessionSet(key, v) { try { sessionStorage.setItem(key, String(v)); } catch (e) {} }
-
-/* 正文：先转义，再把 http(s) 网址变成链接；换行由 CSS 的 pre-wrap 保留 */
-function popupBodyHtml(text) {
-  return escapeHtml(text || "").replace(/https?:\/\/[^\s<>"']+/g, (url) => {
-    const trail = /[，。；、）)\].,;!！?？]+$/.exec(url);   // 句尾标点不算进网址
-    const clean = trail ? url.slice(0, -trail[0].length) : url;
-    return `<a href="${clean}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${clean}</a>${trail ? trail[0] : ""}`;
-  });
-}
-
-function fillSitePopup(p) {
-  const title = (p.title || "").trim();
-  $("sitePopupTitle").textContent = title || "公告";
-  const img = $("sitePopupImage");
-  img.hidden = !p.image_url;
-  if (p.image_url) img.src = workerImageUrl(p.image_url);
-  else img.removeAttribute("src");
-  const body = $("sitePopupBody");
-  body.innerHTML = popupBodyHtml(p.body);
-  body.hidden = !(p.body || "").trim();
-}
-
-function anyModalOpen() {
-  return A11Y_MODALS.some(({ overlay }) => { const el = $(overlay); return el && !el.hidden; });
-}
-
-function maybeShowSitePopup() {
-  const p = sitePopup;
-  if (!p || !p.enabled) return;
-  if ($("view-home").hidden) return;                                             // 只在首页弹
-  if (document.documentElement.classList.contains("boot-pending")) return;       // 开屏图还在
-  if (anyModalOpen()) return;                                                    // 别的弹窗开着
-  if (sessionGet(POPUP_SEEN_KEY) === String(p.rev)) return;                      // 这次打开网站已经弹过
-  if (storage.get(POPUP_MUTE_KEY) === `${p.rev}|${localDateKey()}`) return;       // 今天不再显示
-  sessionSet(POPUP_SEEN_KEY, p.rev);
-  openSitePopup(p);
-}
-
-/* preview = true：管理页「预览」，不显示「今天不再显示」 */
-function openSitePopup(p, preview = false) {
-  fillSitePopup(p);
-  $("sitePopupMuteBtn").hidden = preview;
-  $("sitePopupOverlay").hidden = false;
-  $("sitePopupBox").scrollTop = 0;
-  playEnterAnim($("sitePopupBox"));
-}
-
-function closeSitePopup() {
-  $("sitePopupOverlay").hidden = true;
-}
-
-function applySitePopup(p) {
-  sitePopup = p && p.enabled ? p : null;
-  maybeShowSitePopup();
-}
-
-function initSitePopup() {
-  $("sitePopupClose").addEventListener("click", closeSitePopup);
-  $("sitePopupOkBtn").addEventListener("click", closeSitePopup);
-  $("sitePopupMuteBtn").addEventListener("click", () => {
-    if (sitePopup) storage.set(POPUP_MUTE_KEY, `${sitePopup.rev}|${localDateKey()}`);
-    closeSitePopup();
-    showToast("今天不再显示这条公告");
-  });
-  closeOnBackdrop($("sitePopupOverlay"), closeSitePopup);
-}
-
-/* =============================================================================
-   15. 花语（「更多」里的「听得花间语」）
-   压缩、换字 / 组句在 huayu.js（第一次打开时加载，window.HJHuayu），加密在 Worker，密钥只在后端。
-   花语有两代：一代是「听花语：」+ 一串草木字（最短），二代是一段像散文的句子；
-   写的时候用管理页「花语加密」里选定的那一代（启动时随 get_site_state 读回 huayuAlgo），
-   听的时候自动认出是哪一代，两代都能解。
-   访客端开关也在那里（huayuMode）：open 完全开放（能写能听）/ decrypt 仅开放解密（只能听）/ off 彻底关闭（「更多」里不显示）。
-   管理员用自定义密钥写的花语，访客要自己填密钥才听得懂（寻宝、彩蛋用）。网站不保存输入的内容。
-   弹窗只能点右上角的 × 关（点遮罩、按 Esc 都不关），免得写了一半的话被误关掉。
-   ============================================================================= */
-const HUAYU_VISITOR_MAX = 5000;   // 访客一次最多写多少字
-const HUAYU_DETECT_NOW = 4000;    // 输入框超过这么长（多半是粘贴的长花语）就等停手再认是不是花语
-let huayuMode = null;             // null = 还不知道（Worker 没有花语功能时一直是 null，按钮不显示）
-let huayuAlgo = 2;                // 写花语用第几代（管理页选定）
+/* ==== 13. 花语 ==== */
+/* 访客开关：open 可写可读 / decrypt 仅解读 / off 隐藏 */
+const HUAYU_VISITOR_MAX = 5000;
+const HUAYU_DETECT_NOW = 4000;    // 超过此长度时延迟识别
+let huayuMode = null;
+let huayuAlgo = 2;
 let huayuBusy = false;
 let huayuResultCopy = "";
 let huayuDetectTimer = 0;
-
-const loadHuayuJs = () => loadLateScript("huayu.js", () => !!window.HJHuayu);
 
 const HUAYU_ERRORS = {
   empty: "先写点什么吧",
@@ -4082,13 +3099,10 @@ const HUAYU_ERRORS = {
   net: "连接失败，检查一下网络后再试",
   no_js: "花语字典没加载出来，检查一下网络后重新打开",
 };
+const loadHuayuJs = () => loadLateScript("huayu.js", () => !!window.HJHuayu);
+const huayuErrorText = (res) => HUAYU_ERRORS[res && res.error] || "出了点问题，稍后再试";
 
-const huayuErrorText = (res) => (res && res.error === "unknown action" ? HUAYU_ERRORS.closed
-  : HUAYU_ERRORS[res && res.error] || "出了点问题，稍后再试");
-
-/* 开关变了：更新「更多」里的按钮；弹窗开着时同步界面。state = { mode, algo }（只给 mode 字符串也行） */
-function applyHuayuMode(state) {
-  const { mode, algo } = typeof state === "object" && state ? state : { mode: state };
+function applyHuayuMode({ mode, algo } = {}) {
   if ([1, 2].includes(Number(algo))) huayuAlgo = Number(algo);
   const next = ["open", "decrypt", "off"].includes(mode) ? mode : null;
   if (next === huayuMode) return;
@@ -4097,18 +3111,12 @@ function applyHuayuMode(state) {
   if (!$("huayuOverlay").hidden) syncHuayuUi();
 }
 
-/* get_site_state 没带花语开关时（Worker 版本不一致）单独问一次 */
-async function refreshHuayuMode() {
-  const data = await callWorker({ action: "huayu_state" });
-  if (data && data.ok) applyHuayuMode(data);
-}
-
 function syncHuayuUi() {
   const canWrite = huayuMode === "open";
   const ready = !!window.HJHuayu;
   $("huayuHint").textContent = !ready ? "花语字典加载中…"
     : canWrite ? "写下想说的话化作花语，或把收到的花语贴进来听听"
-      : "把收到的花语贴进来，听听花在说什么";
+    : "把收到的花语贴进来，听听花在说什么";
   $("huayuInputLabel").textContent = canWrite ? "想说的话 / 花语" : "花语";
   $("huayuInput").placeholder = canWrite ? "写点什么，或者粘贴收到的花语" : "粘贴收到的花语";
   $("huayuSealBtn").hidden = !canWrite;
@@ -4116,15 +3124,14 @@ function syncHuayuUi() {
   syncHuayuInput();
 }
 
-/* 输入变化：字数；像是设了密钥的花语时提前露出密钥框；像花语时「听」排在前面。
-   很长的一段停手 0.3 秒再认，免得每改一个字都把整段读一遍 */
+/* 显示字数；识别为花语时调整按钮顺序，带密钥的显示密钥框 */
 function syncHuayuInput() {
   clearTimeout(huayuDetectTimer);
-  if ($("huayuInput").value.length > HUAYU_DETECT_NOW) huayuDetectTimer = setTimeout(syncHuayuInputNow, 300);
-  else syncHuayuInputNow();
+  if ($("huayuInput").value.length > HUAYU_DETECT_NOW) huayuDetectTimer = setTimeout(detectHuayuInput, 300);
+  else detectHuayuInput();
 }
 
-function syncHuayuInputNow() {
+function detectHuayuInput() {
   const text = $("huayuInput").value;
   const H = window.HJHuayu;
   const info = H && text ? H.detect(text) : null;
@@ -4138,13 +3145,14 @@ function syncHuayuInputNow() {
 
 function showHuayuResult(label, text, meta, copyLabel) {
   $("huayuResultLabel").textContent = label;
-  $("huayuResultMeta").textContent = meta || "";
+  $("huayuResultMeta").textContent = meta;
   $("huayuResultText").textContent = text;
   $("huayuCopyBtn").textContent = copyLabel;
   huayuResultCopy = text;
-  $("huayuResult").hidden = false;
-  playFadeOnly($("huayuResult"));
-  $("huayuResult").scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  const box = $("huayuResult");
+  box.hidden = false;
+  playFadeOnly(box);
+  box.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
 }
 
 async function withHuayuBusy(btn, fn) {
@@ -4153,58 +3161,58 @@ async function withHuayuBusy(btn, fn) {
   const label = btn.textContent;
   btn.textContent = "……";
   syncHuayuUi();
-  try { await fn(); } finally {
+  setMsg($("huayuMsg"), "");
+  try { await fn(window.HJHuayu, $("huayuInput").value); } finally {
     huayuBusy = false;
     btn.textContent = label;
     syncHuayuUi();
   }
 }
 
-async function huayuSeal() {
-  const H = window.HJHuayu;
-  const msg = $("huayuMsg");
-  const text = $("huayuInput").value;
-  setMsg(msg, "");
-  if (!text.trim()) { setMsg(msg, HUAYU_ERRORS.empty); return; }
-  const already = H.detect(text);   // 整段就是花语（二代句式对得上，或带着「听花语」）时提醒一下
-  if (already.ok && (already.algo === 2 || text.includes(H.MARK))) {
-    setMsg(msg, "这已经是花语啦，点「听花解语」听听它在说什么");
-    return;
-  }
-  if (H.countChars(text) > HUAYU_VISITOR_MAX) { setMsg(msg, HUAYU_ERRORS.too_long); return; }
+async function huayuSeal(H, text) {
+  const say = (t) => setMsg($("huayuMsg"), t);
+  if (!text.trim()) return say(HUAYU_ERRORS.empty);
+  const already = H.detect(text);
+  if (already.ok && (already.algo === 2 || text.includes(H.MARK))) return say("这已经是花语啦，点「听花解语」听听它在说什么");
+  if (H.countChars(text) > HUAYU_VISITOR_MAX) return say(HUAYU_ERRORS.too_long);
   let res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
-  if (!res.ok && res.error === "algo_changed" && res.algo) {   // 管理员刚换了算法：换成新的再写一次
+  if (!res.ok && res.error === "algo_changed" && res.algo) {
     huayuAlgo = res.algo;
     res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
   }
-  if (!res.ok) {
-    if (res.error === "closed") {
-      applyHuayuMode(res.mode);
-      setMsg(msg, res.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
-    } else setMsg(msg, huayuErrorText(res));
-    return;
-  }
-  showHuayuResult("花语", res.text, `原文 ${res.plainChars} 字 → 花语 ${res.cipherChars} 字`, "复制花语");
+  if (res.ok) return showHuayuResult("花语", res.text, `原文 ${res.plainChars} 字 → 花语 ${res.cipherChars} 字`, "复制花语");
+  if (res.error !== "closed") return say(huayuErrorText(res));
+  applyHuayuMode({ mode: res.mode });
+  say(res.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
 }
 
-async function huayuOpen() {
-  const H = window.HJHuayu;
-  const msg = $("huayuMsg");
-  setMsg(msg, "");
-  const input = $("huayuInput").value;
-  if (!input.trim()) { setMsg(msg, "先把花语粘贴进来吧"); return; }
-  const key = $("huayuKey").value.trim();
-  const res = await H.decrypt(input, { post: callWorker, key });
-  if (!res.ok) {
-    if (res.error === "need_key") {
-      $("huayuKeyRow").hidden = false;
-      $("huayuKey").focus();
-    }
-    if (res.error === "closed") applyHuayuMode(res.mode);
-    setMsg(msg, res.error === "bad_key" && res.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(res));
+async function huayuOpen(H, text) {
+  const say = (t) => setMsg($("huayuMsg"), t);
+  if (!text.trim()) return say("先把花语粘贴进来吧");
+  const res = await H.decrypt(text, { post: callWorker, key: $("huayuKey").value.trim() });
+  if (res.ok) return showHuayuResult("花在说", res.text, res.kind === 1 ? "密钥花语" : "", "复制原文");
+  if (res.error === "need_key") {
+    $("huayuKeyRow").hidden = false;
+    $("huayuKey").focus();
+  }
+  if (res.error === "closed") applyHuayuMode({ mode: res.mode });
+  say(res.error === "bad_key" && res.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(res));
+}
+
+/* 每次打开页面后首次打开前需人机验证，Worker 同时记录一次打开 */
+let huayuVisited = false;
+async function requestHuayu() {
+  if (huayuVisited) return openHuayuModal();
+  if (captchaOn) return openCaptcha("huayu");
+  const data = await callWorker({ action: "huayu_visit" });
+  if (data?.error === "captcha") return openCaptcha("huayu");
+  if (data?.error === "closed") {
+    applyHuayuMode({ mode: data.mode });
+    showToast(HUAYU_ERRORS.closed);
     return;
   }
-  showHuayuResult("花在说", res.text, res.kind === 1 ? "密钥花语" : "", "复制原文");
+  huayuVisited = !!data?.ok;
+  openHuayuModal();
 }
 
 function openHuayuModal() {
@@ -4212,42 +3220,28 @@ function openHuayuModal() {
   syncHuayuUi();
   playFadeOnly($("huayuCard"));
   if (window.HJHuayu) return;
-  loadHuayuJs().then(syncHuayuUi, (e) => {
-    console.error("[花语]", e);
+  loadHuayuJs().then(syncHuayuUi, () => {
     $("huayuHint").textContent = HUAYU_ERRORS.no_js;
   });
 }
 
-function closeHuayuModal() {
-  $("huayuOverlay").hidden = true;
-}
+const closeHuayuModal = () => { $("huayuOverlay").hidden = true; };
 
 function initHuayu() {
-  $("huayuClose").addEventListener("click", closeHuayuModal);   // 只有 × 能关（遮罩带 data-close-only-x）
+  $("huayuClose").addEventListener("click", closeHuayuModal);
   $("huayuInput").addEventListener("input", () => {
     syncHuayuInput();
     setMsg($("huayuMsg"), "");
   });
   $("huayuSealBtn").addEventListener("click", (e) => withHuayuBusy(e.currentTarget, huayuSeal));
   $("huayuOpenBtn").addEventListener("click", (e) => withHuayuBusy(e.currentTarget, huayuOpen));
-  $("huayuKey").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("huayuOpenBtn").click();
-  });
-  $("huayuCopyBtn").addEventListener("click", () => {
-    copyText(huayuResultCopy, "已复制", "复制失败，请长按文字手动复制");
-  });
+  $("huayuKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("huayuOpenBtn").click(); });
+  $("huayuCopyBtn").addEventListener("click", () => copyText(huayuResultCopy, "已复制", "复制失败，请长按文字手动复制"));
 }
 
-/* =============================================================================
-   16. 圆角下拉与日期选择
-   网页里所有的下拉框（<select>）和日期 / 日期时间 / 时间框，用鼠标点开时弹出和日历小组件同一风格的圆角弹层，
-   代替浏览器自带的方角列表和日期面板。控件本身不换：值、表单校验、input / change 事件都照旧，
-   后加进页面的控件（管理页、购票表单等）也自动生效（事件挂在 document 上）。
-   · 触屏上照旧用系统自带的选择器（手机上的滚轮 / 底部列表更顺手）；
-   · 日期类只在 Chromium 内核（Chrome、Edge 等）上替换，其它浏览器的日期面板拦不干净，保持原样；
-   · 日期框仍可以直接键盘输入；「今天」按国服日期算（全站的日期、时间都按国服时间理解）；
-   · 弹层开着时：Esc 只关弹层；点弹层外面只关弹层，这一下不会点到别处（和原生下拉一样）。
-   ============================================================================= */
+
+/* ==== 14. 下拉与日期选择 ==== */
+/* 鼠标操作时以站内弹层代替浏览器面板；触屏保留系统选择器，日期类仅在 Chromium 上替换 */
 const PICK_WEEK = ["一", "二", "三", "四", "五", "六", "日"];
 const PICK_DATE_TYPES = ["date", "datetime-local", "time"];
 const pick = { pop: null, anchor: null, kind: "", pointer: "mouse", start: "", items: [], active: -1, y: 0, m: 0, months: false };
@@ -4260,16 +3254,15 @@ const pickableDate = (el) => el instanceof HTMLInputElement && PICK_DATE_TYPES.i
 function pickPopEl() {
   if (pick.pop) return pick.pop;
   const pop = document.createElement("div");
-  pop.className = "hj-pop";
   pop.hidden = true;
-  pop.addEventListener("mousedown", (e) => e.preventDefault());   // 点弹层不抢走控件的焦点
+  pop.addEventListener("mousedown", (e) => e.preventDefault());   // 保持控件焦点
   pop.addEventListener("click", onPickClick);
   document.body.appendChild(pop);
   pick.pop = pop;
   return pop;
 }
 
-/* 贴着控件放：下面放得下放下面，否则放上面；左右不出屏幕 */
+/* 优先放在控件下方 */
 function placePick() {
   const { pop, anchor } = pick;
   if (!anchor) return;
@@ -4277,11 +3270,13 @@ function placePick() {
   const r = anchor.getBoundingClientRect();
   const { vw, vh } = viewportSize();
   if (r.bottom < 0 || r.top > vh) { closePick(); return; }
-  const below = vh - r.bottom - 14, above = r.top - 14;
+  const below = vh - r.bottom - 14;
+  const above = r.top - 14;
   const list = pop.querySelector(".hj-opt-list");
   if (list) list.style.maxHeight = `${clamp(Math.max(below, above), 120, 320)}px`;
   if (pick.kind === "select") pop.style.minWidth = `${Math.round(r.width)}px`;
-  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const w = pop.offsetWidth;
+  const h = pop.offsetHeight;
   const top = h <= below || below >= above ? r.bottom + 6 : r.top - 6 - h;
   pop.style.left = `${clamp(r.left, 8, Math.max(8, vw - w - 8))}px`;
   pop.style.top = `${Math.max(8, top)}px`;
@@ -4290,22 +3285,16 @@ function placePick() {
 function openPick(anchor, kind) {
   closePick();
   const pop = pickPopEl();
-  pick.anchor = anchor;
-  pick.kind = kind;
-  pick.start = anchor.value;
-  const cs = getComputedStyle(anchor);
-  pop.style.fontFamily = cs.fontFamily;
+  Object.assign(pick, { anchor, kind, start: anchor.value });
+  pop.style.fontFamily = getComputedStyle(anchor).fontFamily;
   pop.style.minWidth = "";
   pop.className = `hj-pop hj-pop-${kind === "select" ? "select" : "date"}`;
   if (kind === "select") renderSelectPick();
   else {
-    /* 没填过：从今天所在的月份开始；今天不在可选范围里时，从最近能选的那个月开始 */
     let d = pickParts().date || cnDate(0);
     if (pickMin() && d < pickMin()) d = pickMin();
     if (pickMax() && d > pickMax()) d = pickMax();
-    pick.y = +d.slice(0, 4);
-    pick.m = +d.slice(5, 7);
-    pick.months = false;
+    Object.assign(pick, { y: +d.slice(0, 4), m: +d.slice(5, 7), months: false });
     renderDatePick();
   }
   pop.hidden = false;
@@ -4322,10 +3311,16 @@ function closePick() {
   pop.hidden = true;
   pop.innerHTML = "";
   anchor.removeAttribute("aria-expanded");
-  /* 日期时间 / 时间：选的过程中只发 input，关上时值变了才发一次 change（免得改一次存一次） */
+  /* 日期时间 / 时间：选择过程只发 input，关闭时再发 change */
   if (pick.kind !== "select" && pick.kind !== "date" && anchor.value !== pick.start) {
     anchor.dispatchEvent(new Event("change", { bubbles: true }));
   }
+}
+
+function closePickToAnchor() {
+  const el = pick.anchor;
+  closePick();
+  el.focus();
 }
 
 function pickSetValue(v, change) {
@@ -4336,22 +3331,20 @@ function pickSetValue(v, change) {
   if (change) el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-/* ---- 下拉框 ---- */
+/* 下拉框 */
 function renderSelectPick() {
-  const sel = pick.anchor;
   const items = [];
   let html = "";
   const addOpt = (o, inGroup) => {
     if (o.hidden) return;
-    const off = o.disabled || (inGroup && o.parentElement.disabled);
     const cls = ["hj-opt"];
     if (inGroup) cls.push("in-group");
-    if (off) cls.push("is-disabled");
+    if (o.disabled || (inGroup && o.parentElement.disabled)) cls.push("is-disabled");
     if (o.selected) cls.push("is-selected", "is-active");
     html += `<div class="${cls.join(" ")}" role="option" aria-selected="${o.selected}" data-i="${items.length}">${escapeHtml(o.label)}</div>`;
     items.push(o);
   };
-  for (const node of sel.children) {
+  for (const node of pick.anchor.children) {
     if (node.tagName === "OPTGROUP") {
       html += `<div class="hj-opt-group">${escapeHtml(node.label)}</div>`;
       for (const o of node.children) addOpt(o, true);
@@ -4359,7 +3352,7 @@ function renderSelectPick() {
   }
   pick.items = items;
   pick.active = items.findIndex((o) => o.selected);
-  pick.pop.innerHTML = `<div class="hj-opt-list" role="listbox">${html || '<div class="hj-opt-group">（没有选项）</div>'}</div>`;
+  pick.pop.innerHTML = `<div class="hj-opt-list" role="listbox">${html || '<div class="hj-opt-group">无选项</div>'}</div>`;
 }
 
 function pickSelectChoose(i) {
@@ -4379,21 +3372,25 @@ function pickSelectMove(to) {
   const opts = [...pick.pop.querySelectorAll(".hj-opt")];
   const ok = (i) => opts[i] && !opts[i].classList.contains("is-disabled");
   let i = to;
-  if (!ok(i)) {
-    const dir = to > pick.active ? 1 : -1;
-    while (i >= 0 && i < opts.length && !ok(i)) i += dir;
-    if (!ok(i)) return;
-  }
+  const dir = to > pick.active ? 1 : -1;
+  while (i >= 0 && i < opts.length && !ok(i)) i += dir;
+  if (!ok(i)) return;
   opts.forEach((el, k) => el.classList.toggle("is-active", k === i));
   pick.active = i;
   opts[i].scrollIntoView({ block: "nearest" });
 }
 
-/* ---- 日期 / 日期时间 / 时间 ---- */
+/* 日期 / 日期时间 / 时间 */
 const pickHasDate = () => pick.kind !== "time";
 const pickHasTime = () => pick.kind !== "date";
+const pickMin = () => (pick.anchor.min || "").slice(0, 10);
+const pickMax = () => (pick.anchor.max || "").slice(0, 10);
+const pickDayOk = (key) => (!pickMin() || key >= pickMin()) && (!pickMax() || key <= pickMax());
+const pickRangeOk = (first, last) => (!pickMin() || last >= pickMin()) && (!pickMax() || first <= pickMax());
+const monthFirst = (y, m) => `${y}-${pad2(m)}-01`;
+const monthLast = (y, m) => `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
 
-/* 控件的值 → { date: "YYYY-MM-DD" | "", h, m }（时间没填时是 -1） */
+/* → { date, h, m }，未填的时间为 -1 */
 function pickParts() {
   const v = pick.anchor.value;
   const date = (/^\d{4}-\d{2}-\d{2}/.exec(v) || [""])[0];
@@ -4408,59 +3405,51 @@ function pickCompose({ date, h, m }) {
   return date ? `${date}T${hm}` : "";
 }
 
-const pickMin = () => (pick.anchor.min || "").slice(0, 10);
-const pickMax = () => (pick.anchor.max || "").slice(0, 10);
-const pickDayOk = (key) => (!pickMin() || key >= pickMin()) && (!pickMax() || key <= pickMax());
-
 function pickNavOk(dir) {
-  const y = pick.y, m = pick.m;
   if (pick.months) {
-    const edge = dir < 0 ? `${y - 1}-12-31` : `${y + 1}-01-01`;
-    return dir < 0 ? !pickMin() || edge >= pickMin() : !pickMax() || edge <= pickMax();
+    const y = pick.y + dir;
+    return pickRangeOk(monthFirst(y, 1), monthLast(y, 12));
   }
-  const d = new Date(y, m - 1 + dir, 1);
-  const first = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
-  const last = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())}`;
-  return (!pickMin() || last >= pickMin()) && (!pickMax() || first <= pickMax());
+  const d = new Date(pick.y, pick.m - 1 + dir, 1);
+  return pickRangeOk(monthFirst(d.getFullYear(), d.getMonth() + 1), monthLast(d.getFullYear(), d.getMonth() + 1));
 }
 
-const PICK_CHEVRON = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const chevron = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+const disabledIf = (off) => (off ? " disabled" : "");
 
 function renderDatePick() {
   const parts = pickParts();
+  const today = cnDate(0);
   let cal = "";
   if (pickHasDate()) {
-    const title = pick.months ? `${pick.y}年` : `${pick.y}年${pick.m}月`;
+    const { y, m, months } = pick;
     cal += `<div class="hj-date-head">
-      <button type="button" class="hj-date-title" data-act="mode" title="${pick.months ? "回到日期" : "选月份"}">${title}${PICK_CHEVRON(pick.months ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6")}</button>
+      <button type="button" class="hj-date-title" data-act="mode" title="${months ? "回到日期" : "选月份"}">${months ? `${y}年` : `${y}年${m}月`}${chevron(months ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6")}</button>
       <span class="hj-date-navs">
-        <button type="button" class="hj-date-nav" data-act="prev" aria-label="${pick.months ? "上一年" : "上个月"}"${pickNavOk(-1) ? "" : " disabled"}>${PICK_CHEVRON("M14.5 5l-7 7 7 7")}</button>
-        <button type="button" class="hj-date-nav" data-act="next" aria-label="${pick.months ? "下一年" : "下个月"}"${pickNavOk(1) ? "" : " disabled"}>${PICK_CHEVRON("M9.5 5l7 7-7 7")}</button>
+        <button type="button" class="hj-date-nav" data-act="prev" aria-label="${months ? "上一年" : "上个月"}"${disabledIf(!pickNavOk(-1))}>${chevron("M14.5 5l-7 7 7 7")}</button>
+        <button type="button" class="hj-date-nav" data-act="next" aria-label="${months ? "下一年" : "下个月"}"${disabledIf(!pickNavOk(1))}>${chevron("M9.5 5l7 7-7 7")}</button>
       </span>
     </div>`;
-    const today = cnDate(0);
-    if (pick.months) {
-      let cells = "";
-      for (let m = 1; m <= 12; m++) {
-        const first = `${pick.y}-${pad2(m)}-01`, last = `${pick.y}-${pad2(m)}-${pad2(new Date(pick.y, m, 0).getDate())}`;
-        const ok = (!pickMin() || last >= pickMin()) && (!pickMax() || first <= pickMax());
+    let cells = "";
+    if (months) {
+      for (let mm = 1; mm <= 12; mm++) {
+        const ym = monthFirst(y, mm).slice(0, 7);
         const cls = ["hj-month"];
-        if (today.slice(0, 7) === first.slice(0, 7)) cls.push("is-today");
-        if (parts.date.slice(0, 7) === first.slice(0, 7)) cls.push("is-pick");
-        cells += `<button type="button" class="${cls.join(" ")}" data-month="${m}"${ok ? "" : " disabled"}>${m}月</button>`;
+        if (today.startsWith(ym)) cls.push("is-today");
+        if (parts.date.startsWith(ym)) cls.push("is-pick");
+        cells += `<button type="button" class="${cls.join(" ")}" data-month="${mm}"${disabledIf(!pickRangeOk(monthFirst(y, mm), monthLast(y, mm)))}>${mm}月</button>`;
       }
       cal += `<div class="hj-month-grid">${cells}</div>`;
     } else {
-      const firstWeekday = (new Date(pick.y, pick.m - 1, 1).getDay() + 6) % 7;   // 周一起始，和日历小组件一样
-      let cells = "";
+      const firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7;   // 周一起始
       for (let i = 0; i < 42; i++) {
-        const d = new Date(pick.y, pick.m - 1, 1 - firstWeekday + i);
-        const key = calKey(d);
+        const d = new Date(y, m - 1, 1 - firstWeekday + i);
+        const key = ymdKey(d);
         const cls = ["hj-day"];
-        if (d.getMonth() !== pick.m - 1) cls.push("is-out");
+        if (d.getMonth() !== m - 1) cls.push("is-out");
         if (key === today) cls.push("is-today");
         if (key === parts.date) cls.push("is-pick");
-        cells += `<button type="button" class="${cls.join(" ")}" data-date="${key}"${pickDayOk(key) ? "" : " disabled"}>${d.getDate()}</button>`;
+        cells += `<button type="button" class="${cls.join(" ")}" data-date="${key}"${disabledIf(!pickDayOk(key))}>${d.getDate()}</button>`;
       }
       cal += `<div class="hj-date-week" aria-hidden="true">${PICK_WEEK.map((w) => `<span>${w}</span>`).join("")}</div>
         <div class="hj-date-grid">${cells}</div>`;
@@ -4481,12 +3470,11 @@ function renderDatePick() {
   }
   const foot = [];
   if (!pick.anchor.required) foot.push('<button type="button" class="hj-date-btn" data-act="clear">清除</button>');
-  if (pickHasDate()) foot.push(`<button type="button" class="hj-date-btn" data-act="today"${pickDayOk(cnDate(0)) ? "" : " disabled"}>今天</button>`);
+  if (pickHasDate()) foot.push(`<button type="button" class="hj-date-btn" data-act="today"${disabledIf(!pickDayOk(today))}>今天</button>`);
   if (pickHasTime()) foot.push('<button type="button" class="hj-date-btn is-main" data-act="done">完成</button>');
   pick.pop.innerHTML = `<div class="hj-date-main">${cal}${time}</div><div class="hj-date-foot">${foot.join("")}</div>`;
 }
 
-/* 翻月、切换月份视图后重画；时间列滚到选中的那一格 */
 function rerenderDatePick() {
   renderDatePick();
   pick.pop.querySelectorAll(".hj-time-col").forEach(centerPickedTime);
@@ -4498,10 +3486,9 @@ function centerPickedTime(col) {
   col.scrollTop = cell.offsetTop - col.offsetTop - (col.clientHeight - cell.offsetHeight) / 2;
 }
 
-function pickDateSet(parts, close) {
+/* 只更新高亮，保持时间列的滚动位置 */
+function pickDateSet(parts) {
   pickSetValue(pickCompose(parts), pick.kind === "date");
-  if (close) { const el = pick.anchor; closePick(); el.focus(); return; }
-  /* 不整个重画：时间列保持滚动位置 */
   const now = pickParts();
   pick.pop.querySelectorAll(".hj-day, .hj-month").forEach((b) => {
     b.classList.toggle("is-pick", b.dataset.date ? b.dataset.date === now.date
@@ -4509,6 +3496,22 @@ function pickDateSet(parts, close) {
   });
   pick.pop.querySelectorAll("[data-hour]").forEach((b) => b.classList.toggle("is-pick", +b.dataset.hour === now.h));
   pick.pop.querySelectorAll("[data-minute]").forEach((b) => b.classList.toggle("is-pick", +b.dataset.minute === now.m));
+}
+
+function pickDate(date) {
+  const parts = pickParts();
+  if (pick.kind === "date") {
+    pickSetValue(date, true);
+    closePickToAnchor();
+    return;
+  }
+  const y = +date.slice(0, 4);
+  const m = +date.slice(5, 7);
+  const flip = y !== pick.y || m !== pick.m || pick.months;
+  Object.assign(pick, { y, m, months: false });
+  if (!flip) { pickDateSet({ ...parts, date }); return; }
+  pickSetValue(pickCompose({ ...parts, date }));
+  rerenderDatePick();
 }
 
 function onPickClick(e) {
@@ -4520,8 +3523,7 @@ function onPickClick(e) {
   }
   const btn = e.target.closest("button");
   if (!btn || btn.disabled) return;
-  const parts = pickParts();
-  const { act } = btn.dataset;
+  const { act, month, date, hour, minute } = btn.dataset;
   if (act === "prev" || act === "next") {
     const dir = act === "prev" ? -1 : 1;
     if (pick.months) pick.y += dir;
@@ -4534,70 +3536,53 @@ function onPickClick(e) {
   } else if (act === "mode") {
     pick.months = !pick.months;
     rerenderDatePick();
-  } else if (btn.dataset.month) {
-    pick.m = +btn.dataset.month;
+  } else if (month) {
+    pick.m = +month;
     pick.months = false;
     rerenderDatePick();
-  } else if (btn.dataset.date) {
-    const { date } = btn.dataset;
-    if (pick.kind === "date") { pickDateSet({ ...parts, date }, true); return; }
-    const [y, m] = date.split("-").map(Number);
-    const flip = y !== pick.y || m !== pick.m;   // 点了露出来的上 / 下个月的日子：翻过去
-    pick.y = y;
-    pick.m = m;
-    if (!flip) { pickDateSet({ ...parts, date }, false); return; }
-    pickSetValue(pickCompose({ ...parts, date }));
-    rerenderDatePick();
-  } else if (btn.dataset.hour || btn.dataset.minute) {
-    const next = { ...parts, date: parts.date || cnDate(0) };
-    if (btn.dataset.hour) next.h = +btn.dataset.hour;
-    if (btn.dataset.minute) next.m = +btn.dataset.minute;
-    if (next.h < 0) next.h = 0;
-    if (next.m < 0) next.m = 0;
-    pickDateSet(next, false);
+  } else if (date) {
+    pickDate(date);
+  } else if (hour || minute) {
+    const parts = pickParts();
+    const next = { date: parts.date || cnDate(0), h: Math.max(parts.h, 0), m: Math.max(parts.m, 0) };
+    if (hour) next.h = +hour;
+    if (minute) next.m = +minute;
+    pickDateSet(next);
   } else if (act === "today") {
-    const today = cnDate(0);
-    pick.y = +today.slice(0, 4);
-    pick.m = +today.slice(5, 7);
-    pick.months = false;
-    if (pick.kind === "date") { pickDateSet({ ...parts, date: today }, true); return; }
-    pickSetValue(pickCompose({ ...parts, date: today }));
-    rerenderDatePick();
+    pickDate(cnDate(0));
   } else if (act === "clear") {
     pickSetValue("", pick.kind === "date");
-    const el = pick.anchor;
-    closePick();
-    el.focus();
+    closePickToAnchor();
   } else if (act === "done") {
-    const el = pick.anchor;
-    closePick();
-    el.focus();
+    closePickToAnchor();
   }
 }
 
-/* 弹层开着时的按键；返回 true 表示已处理（不再传给页面，免得 Esc 把外面的弹窗也关了） */
+/* 返回 true 表示已处理，不再向外传递 */
 function onPickKey(e) {
-  if (e.key === "Escape") { const el = pick.anchor; closePick(); el.focus(); return true; }
+  if (e.key === "Escape") { closePickToAnchor(); return true; }
   if (e.key === "Tab") { closePick(); return false; }
   if (pick.kind !== "select") {
-    if (e.key === "Enter" && pickHasTime()) { const el = pick.anchor; closePick(); el.focus(); return true; }
-    return false;   // 其余按键照常改日期框里的数字
+    if (e.key === "Enter" && pickHasTime()) { closePickToAnchor(); return true; }
+    return false;
   }
-  const n = pick.items.length;
-  if (e.key === "ArrowDown") pickSelectMove(Math.min(pick.active + 1, n - 1));
-  else if (e.key === "ArrowUp") pickSelectMove(Math.max(pick.active - 1, 0));
-  else if (e.key === "Home") pickSelectMove(0);
-  else if (e.key === "End") pickSelectMove(n - 1);
-  else if (e.key === "PageDown") pickSelectMove(Math.min(pick.active + 8, n - 1));
-  else if (e.key === "PageUp") pickSelectMove(Math.max(pick.active - 8, 0));
+  const last = pick.items.length - 1;
+  const moves = {
+    ArrowDown: pick.active + 1, ArrowUp: pick.active - 1, Home: 0, End: last,
+    PageDown: pick.active + 8, PageUp: pick.active - 8,
+  };
+  if (e.key in moves) pickSelectMove(clamp(moves[e.key], 0, last));
   else if (e.key === "Enter" || e.key === " ") pickSelectChoose(pick.active);
-  else return e.key.length === 1;   // 打字不改选中项，免得弹层和框里对不上
+  else return e.key.length === 1;
   return true;
 }
 
-/* 点弹层外面关掉后，吞掉随后这一下 click，别让它点到下面的按钮、遮罩 */
+/* 点外部关闭弹层时，吞掉随后的 click */
 function swallowNextClick() {
-  const eat = (e) => { e.preventDefault(); e.stopPropagation(); };
+  const eat = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
   document.addEventListener("click", eat, { capture: true, once: true });
   setTimeout(() => document.removeEventListener("click", eat, { capture: true }), 600);
 }
@@ -4614,7 +3599,7 @@ function initPickers() {
   document.addEventListener("mousedown", (e) => {
     const t = e.target;
     if (e.button !== 0 || pick.pointer === "touch" || !pickableSelect(t)) return;
-    e.preventDefault();   // 不弹浏览器自带的列表
+    e.preventDefault();
     t.focus();
     if (pick.anchor === t) closePick();
     else openPick(t, "select");
@@ -4623,13 +3608,16 @@ function initPickers() {
     const t = e.target;
     if (pick.pointer === "touch" || !pickableDate(t)) return;
     if (pick.anchor !== t) { openPick(t, t.type); return; }
-    /* 再点右端的日历图标：收起 */
+    /* 再点日历图标收起 */
     const r = t.getBoundingClientRect();
     if (e.clientX > r.right - parseFloat(getComputedStyle(t).paddingRight) - 28) closePick();
   }, true);
   document.addEventListener("keydown", (e) => {
     if (pick.anchor) {
-      if (onPickKey(e)) { e.preventDefault(); e.stopPropagation(); }
+      if (onPickKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       return;
     }
     const t = e.target;
@@ -4642,114 +3630,82 @@ function initPickers() {
       openPick(t, t.type);
     }
   }, true);
-  /* 在日期框里直接打字：弹层跟着改 */
   document.addEventListener("input", (e) => {
-    if (e.isTrusted && e.target === pick.anchor && pick.kind !== "select") {
-      const d = pickParts().date;
-      if (d) { pick.y = +d.slice(0, 4); pick.m = +d.slice(5, 7); pick.months = false; }
-      rerenderDatePick();
-    }
+    if (!e.isTrusted || e.target !== pick.anchor || pick.kind === "select") return;
+    const d = pickParts().date;
+    if (d) Object.assign(pick, { y: +d.slice(0, 4), m: +d.slice(5, 7), months: false });
+    rerenderDatePick();
   }, true);
   document.addEventListener("scroll", (e) => {
     if (pick.anchor && !pick.pop.contains(e.target)) placePick();
   }, true);
-  window.addEventListener("resize", () => closePick());
-  window.addEventListener("blur", () => closePick());
+  window.addEventListener("resize", closePick);
+  window.addEventListener("blur", closePick);
 }
 
-/* =============================================================================
-   17. 无障碍与启动
-   ============================================================================= */
 
-/* 启动时一次取齐：分享功能开关、机器人验证开关、星芒节、弹窗公告、花语开关、服务器时间。
-   读不到时各项维持默认（验证开着、分享功能开着、星芒节用本地缓存、不弹公告、不显示花语按钮） */
+/* ==== 15. 启动 ==== */
+/* 站点状态：分享功能、人机验证、星芒节、弹窗公告、花语开关、服务器时间 */
 async function loadSiteState() {
   const sentAt = Date.now();
   const data = await callWorker({ action: "get_site_state" });
-  const receivedAt = Date.now();
   if (!data || !data.ok) {
-    applyStarlight(readStarlightLocal());
+    applyStarlight(storage.json(STORE.starlight));
     return;
   }
-  syncServerClock(Number(data.now), sentAt, receivedAt);
+  syncServerClock(Number(data.now), sentAt, Date.now());
   siteLockdown = !!data.lockdown;
   applyCaptchaEnabled(data.captcha !== false);
   applyStarlight(data.starlight);
   applySitePopup(data.popup);
-  if (data.huayu === undefined) refreshHuayuMode();
-  else applyHuayuMode(data.huayu);
-  hjClockTick();
+  applyHuayuMode(data.huayu);
 }
 
-/* 首页卡片是 div：补上按钮语义和键盘操作 */
-function initA11yTiles() {
-  document.querySelectorAll("main .tile[id]").forEach((el) => {
-    el.setAttribute("role", "button");
-    el.setAttribute("tabindex", "0");
-    el.addEventListener("keydown", (e) => {
-      if (e.target !== el) return;   // 卡片内部的按钮自己处理键盘
-      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        el.click();
-      }
-    });
-  });
-}
-
-function initA11yTabs(container) {
-  container.querySelector(".tabs")?.setAttribute("role", "tablist");
-  container.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.setAttribute("role", "tab");
-    btn.setAttribute("aria-selected", btn.classList.contains("is-active") ? "true" : "false");
-  });
-}
-
-/* 弹窗：按 Esc 关闭最上层（按此顺序检查；遮罩带 data-close-only-x 的只能点 × 关），打开时焦点移到关闭按钮 */
-const CLOSE_PRESS_MS = 160;   // 点 × 后保持「按下」样子的时长，看清反馈再关窗
-const A11Y_MODALS = [
-  { overlay: "infoOverlay",     closeBtn: "infoClose",     close: closeInfoModal },
-  { overlay: "groupOverlay",    closeBtn: "groupClose",    close: closeGroupModal },
+/* 全站弹窗：Esc 关闭最上层，打开时聚焦关闭按钮 */
+const MODALS = [
+  { overlay: "infoOverlay", closeBtn: "infoClose", close: closeInfoModal },
+  { overlay: "groupOverlay", closeBtn: "groupClose", close: closeGroupModal },
   { overlay: "siteAboutOverlay", closeBtn: "siteAboutClose", close: closeSiteAbout },
-  { overlay: "ticketGuideOverlay", closeBtn: "ticketGuideClose", close: () => closeTicketGuide() },   // ticket.js
-  { overlay: "captchaOverlay",  closeBtn: "captchaClose",  close: closeCaptcha },
-  { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: () => closeTicketNotice() },   // ticket.js
-  { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: () => closeAdminPanel() },         // admin.js
-  { overlay: "alarmOverlay",    closeBtn: "alarmClose",    close: closeAlarmModal },
-  { overlay: "huayuOverlay",    closeBtn: "huayuClose",    close: closeHuayuModal },
-  { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: () => closeSitePopup() },
+  { overlay: "ticketGuideOverlay", closeBtn: "ticketGuideClose", close: () => closeTicketGuide() },
+  { overlay: "captchaOverlay", closeBtn: "captchaClose", close: closeCaptcha },
+  { overlay: "ticketNoticeOverlay", closeBtn: "ticketNoticeClose", close: () => closeTicketNotice() },
+  { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: () => closeAdminPanel() },
+  { overlay: "alarmOverlay", closeBtn: "alarmClose", close: closeAlarmModal },
+  { overlay: "huayuOverlay", closeBtn: "huayuClose", close: closeHuayuModal },
+  { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: closeSitePopup },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
+const CLOSE_PRESS_MS = 160;
 
-/* 切换页面（返回首页 / 换 hash / 浏览器前进后退）时把还开着的弹窗都关掉，免得下一个弹窗叠在上面 */
+const modalOpen = (m) => !$(m.overlay).hidden;
+const anyModalOpen = () => MODALS.some(modalOpen);
+
 function closeAllModals() {
-  A11Y_MODALS.forEach(({ overlay, close }) => {
-    const el = $(overlay);
-    if (el && !el.hidden) close();
-  });
+  MODALS.filter(modalOpen).forEach((m) => m.close());
 }
 
-function initA11yModals() {
+function initA11y() {
+  /* 首页卡片（role="button"）支持回车、空格 */
+  document.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("main .tile[role='button']")) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+
+  /* 大图、公告预览总在最上层 */
+  const byId = (id) => MODALS.find((m) => m.overlay === id);
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    /* 大图总叠在别的弹窗上面，先关它；其次是弹窗公告（管理页「预览」时叠在管理弹窗上面） */
-    const firstOpen = (id) => !$(id).hidden && A11Y_MODALS.find((m) => m.overlay === id);
-    const top = firstOpen("lightboxOverlay") || firstOpen("sitePopupOverlay")
-      || A11Y_MODALS.find((m) => !$(m.overlay).hidden);
-    if (top && !$(top.overlay).dataset.closeOnlyX) top.close();   // 只能点 × 的弹窗，Esc 也不关
+    const top = [byId("lightboxOverlay"), byId("sitePopupOverlay"), ...MODALS].find(modalOpen);
+    if (top && !$(top.overlay).dataset.closeOnlyX) top.close();
   });
 
-  A11Y_MODALS.forEach(({ overlay, closeBtn }) => {
+  MODALS.forEach(({ overlay, closeBtn, close }) => {
     const el = $(overlay);
-    new MutationObserver(() => {
-      if (!el.hidden) $(closeBtn).focus();
-    }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
-  });
-
-  /* 右上角的圆形 ×：和其他按钮一样按下时填成实心强调色；点完先保持这个样子一小会儿（style.css 的 .is-closing）再关窗，
-     不然窗口一下就没了、看不到反馈。Esc、点遮罩照旧立刻关。
-     在捕获阶段拦下这次点击，时间到了调用表里的 close（和按钮本身的点击处理一样） */
-  A11Y_MODALS.forEach(({ overlay, closeBtn, close }) => {
     const btn = $(closeBtn);
+    new MutationObserver(() => { if (!el.hidden) btn.focus(); }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
+    /* 圆形 × 保持按下态片刻再关闭 */
     if (!btn.matches(".info-close, .lightbox-close")) return;
     btn.addEventListener("click", (e) => {
       if (prefersReducedMotion()) return;
@@ -4757,31 +3713,27 @@ function initA11yModals() {
       if (btn.classList.contains("is-closing")) return;
       btn.classList.add("is-closing");
       setTimeout(() => {
-        if (!$(overlay).hidden) close();
+        if (!el.hidden) close();
         btn.classList.remove("is-closing");
       }, CLOSE_PRESS_MS);
     }, true);
   });
 }
 
-/* 离线缓存与预取（进站后、浏览器空闲时）----------------------------------------------
-   sw.js：打开过的页面、脚本、图片存进浏览器缓存，下次打开（尤其网络差时）直接从本机读取。
-   预取：把进站后最常点的内容先悄悄下载好——最新活动的横幅和海报（缩小版）、花街相册的前几张缩略图；
-   一张接一张地取，不和访客正在看的内容抢带宽；慢网络 / 省流量模式下不预取 */
+/* 离线缓存（sw.js）与常用图片预取，慢网络下不预取 */
 function initOfflineCache() {
   const sw = "serviceWorker" in navigator && window.isSecureContext ? navigator.serviceWorker : null;
   const controlled = !sw ? Promise.resolve()
-    : sw.register(`sw.js?v=${window.HJ_VERSION || ""}`)
+    : sw.register(`sw.js?v=${HJ.version}`)
       .then(() => (sw.controller ? null : new Promise((r) => {
         sw.addEventListener("controllerchange", r, { once: true });
         setTimeout(r, 4000);
       })))
       .catch(() => {});
   if (isSlowNetwork()) return;
-  const poster = (LATEST_EVENT.poster && LATEST_EVENT.poster.images) || [];
   const urls = [
     LATEST_EVENT.cover && resizedSrc(LATEST_EVENT.cover, 1280),
-    ...poster.map((src) => resizedSrc(src, 1280)),
+    ...(LATEST_EVENT.poster?.images || []).map((src) => resizedSrc(src, 1280)),
     ...INFO_GALLERY.slice(0, 6).map((src) => resizedSrc(src, 720)),
   ].filter(Boolean);
   Promise.all([controlled, homeImagesReady]).then(() => {
@@ -4797,62 +3749,27 @@ function initOfflineCache() {
   });
 }
 
-/* 启动 ------------------------------------------------------------------------- */
 function initApp() {
   const booting = document.documentElement.classList.contains("boot-pending");
-  initResizedFallback();
-  initDayNight();   // 最先设卡片底图和天空，其余初始化期间图片就开始下载了
-  initCardBackdrops();
-  renderHome();
-  initHomeVideo();
-  initTabs();
-  initTabVideos();
-  initA11yTabs($("view-detail"));
-  initA11yTabs($("infoBox"));
-  initA11yTabs($("siteAboutBox"));
-  initNav();
-  initLikes();
-  initFxToggle();
-  initInfo();
-  initSiteAbout();
-  initLightbox();
-  initCaptcha();
-  /* 购票（ticket.js）。管理页的初始化在 admin.js 末尾，进入 #internal 时才执行 */
-  if (typeof initTicket === "function") {
-    initTicket();
-    initTicketEntry();
-    refreshTicketEntry();   // 首页购票入口：购票开放且非测试时才出现
-  } else {
-    console.error("[购票] ticket.js 没有加载成功，购票入口与购票页不可用");
-  }
-  /* 场地使用登记（venue.js） */
-  if (typeof initVenue === "function") initVenue();
-  else console.error("[场地登记] venue.js 没有加载成功，场地使用登记不可用");
-  initClickBurst();
-  initA11yTiles();
-  initA11yModals();
-  initSound();
-  initMorePanel();
-  initHeaderPanels();
-  initCalWidget();
-  initAlarm();
-  initHuayu();
-  initPickers();
-  initClock();
-  initClockToggle();
-  initHashRoute();
-  initSitePopup();
-  loadSiteState();   // 异步：分享 / 验证 / 花语开关、星芒节、弹窗公告（开着就弹，等开屏图 / 花街介绍都关掉以后）
-  window.HJ_LATE(initOfflineCache);
+  /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
+  [
+    initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
+    initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
+    () => initTicket(), () => initVenue(),
+    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPickers,
+    initClock, initHashRoute, initSitePopup, loadSiteState,
+  ].forEach((init) => {
+    try { init(); } catch (e) { console.error(e); }
+  });
+  HJ.late(initOfflineCache);
 
-  /* 通知开屏脚本：主程序已就绪。新访客点击开屏图后，页面各区块依次入场并自动弹出花街介绍；
-     进站前等花街介绍的底图解码好（标题字体、天空由开屏脚本自己等） */
-  const boot = window.HJ_BOOT;
-  boot.appReady(() => {
+  /* 进站后弹出花街介绍（直接进入购票页时除外） */
+  HJ.boot.appReady(() => {
     playPageEnterStagger();
-    /* 拿着购票链接直接进来的访客：购票页自己会弹「购票须知」，这里就别再叠一层花街介绍 */
     if (!$("view-ticket").hidden) return;
     firstBootInfoOpen = true;
     openInfoModal();
-  }, booting ? [boot.warm(INFO_BG_IMAGE, true)] : []);
+  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true)] : []);
 }
+
+document.addEventListener("DOMContentLoaded", initApp);

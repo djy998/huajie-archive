@@ -1,37 +1,29 @@
-/* =============================================================================
-   花舞之街 · 薰风花语町 —— 样式表
-   -----------------------------------------------------------------------------
-   目录
-      1. 设计变量                     13. 页脚与响应式
-      2. 基础与背景                   14. 活动购票（访客表单 / 管理员面板）
-      3. 头部：标题与圆形按钮           15. 人机验证
-      4. 头部：时间条与天气             16. 管理功能：胶囊按钮与弹窗
-      5. 头部：音量、更多、日历          17. 闹铃与倒计时
-      6. 特效                         18. 按下反馈
-      7. 首页卡片                     19. 网站说明弹窗、反馈建议箱
-      8. 视图通用                     20. 购票入口与购票须知
-      9. 活动详情、往期相册、小型回顾    21. 场地使用登记
-     10. 内部入口与公告板              22. 活动问卷
-     11. 弹窗                         23. 活动回顾、首页弹窗公告
-     12. 点赞按钮                     24. 购票页开关、轮次、订单与售票统计
-                                     25. 花语（听得花间语 / 花语加密）
-                                     26. 圆角下拉与日期选择
-   约定：暗色（夜晚）为默认样式，白天样式统一写成 body.day-mode 前缀并紧跟在组件后面。
-   开屏图样式在 index.html 的 \3c style> 中（需要在本文件加载前生效）。
-   修改本文件后，记得把 index.html 里的版本号 HJ_VERSION 改成新的日期。
-   ============================================================================= */
+/* 花舞之街 · 样式表 */
 
-
-/* =============================================================================
-   1. 设计变量
-   ============================================================================= */
+/* ==== 1. 设计变量 ==== */
 @font-face {
   font-family: "HJ Brush";
   src: url("assets/site/brush.woff2") format("woff2");
   font-display: swap;
 }
+/* 艾欧泽亚文字，用到时才下载：Augmented Neo-Eorzean（MIT）、Eorzea、Hingashi Extended */
+@font-face {
+  font-family: "Augmented Neo-Eorzean";
+  src: url("assets/fonts/eorzean/AugmentedNeo-Eorzean-Regular.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Eorzea";
+  src: url("assets/fonts/eorzean/Eorzea.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Hingashi Extended";
+  src: url("assets/fonts/eorzean/HingashiExtended.woff2") format("woff2");
+  font-display: swap;
+}
 :root {
-  --cursor-img: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAFFklEQVR42nWU2W+UZRTGn/N+X2en0+l0ulBoaemULkAoBTQ2LDXBogYIxoKYAF4oGkJCiIkxETNt4oUXhsRwIZrGJegF1LiFRBYRmmDYalk70BahU+k2a6ezz/d97/ECETTx9wf8cp6Tcx4KLHo/aSkrNkMhoadzk9lA8Hym2LHT7/cb2/CtsQbs8C3Zu8dTUd6UU5XI9K3RO5+Nfdr7IzADgAAwnkA1l7nMJRuWp/PRhDV+ZfiEmArvbX7ToTf7O2lrby+6Nxw4uHrd+jdEoQ2Y60Q+k0PFUe8rFT/4th/mZIiJiJ6QqkJVhBZLq6GT/UcHbh7av5nD+cGtvWqoaVAesC1t8Xa07RRPeY3sVIzVeXYyWd1Gi7r52U33A/sOE70HZgGix0ItkUH8ytA3VTe7dgMAiAAgDwDdplVzTTqrRmhGIV0yx7KUDSfJ4nHIsqaFz2/KLvoQQPLsWp/a3tdtAGB19t7kllTk458/ca1va121ZrfLU1Kc1Y1MZiYRGbw5oE4d79etq6WieisJNh2kGQRoZLAs+mloyEZECQD6o20SAHze+Ormjh3bj82t95oQzQFWE6AAmUgM06cHWAxPk3vXWphqy8ACrGQkjR45lQhqsT5beWk45P/j8us3Dn0xBmSV/Xja2tG5qae+87lqLRrPGwJsWElKaUhhN5OruYZyI0FkA9OwNcwDaZKMyCw8y+rM85uX1JcvblhWXVX9YnPSZf96/OJJReBB6UstG/e4S90ubTgsMJlQOJ4VkCxYNwjMsCwohR6KQ7GYoAgFuT9DYJcNOqQ09Lxe4HGB4umqB9fPf6eOALNjA4OjXldlHdsLDDkWJ+GwEE8nQTYVPMcCUWiB85lGcDYPaAbMniIoBsFgg0iXhKkQGbEU7FDNaog5ddHT1uM8aVq5tGW5s8BqA0mGIAKlJbSZGHLJNKAKqBUuCDugRWehjUzDZrIQCVXlmTSGxoYuH0F4XAURT9S2njg1duHdUHDqrfk1NfWFhS6rwqrMazk42SSKPW5wuROczsOIZwCS8F+/pieyyQfu0lJjLDIxfubebx8xc5oAgMHU1brCOjU26y1K25ttXFC7qMS7cXHRgtbaujrFvGgupEkBJ7PQUxmYnXM4mcvIG7euTp77/devzqf7e15ob5/cd+JEjh5dOINJgeB3sLi2c0Pnl02umjZLlUdIhwkynQcIkNEkhFkFOy0okIJhm0OB2zdCPd8fXvtB8tptH1iIv30EBklwwZZdrx1cvmPraktHE3Trw6mIABIEYTdBqS4GEcGQOiGXNKrnV3tW1K7cDDC6Oo+RAAAffESC5B6U1Xsaalaj0SW12TSJjAYyKSBBIDC4yML6QhezprMwq4BFYeR1tlvszn9+GY8zw43KYj0QMcn7QUHJHJMqAAGwqgBpjRPXA0S3x+EocYIzOshqVcOBcfgf3B4BAPQOsgoAXejmbgLu8VQwMnA3uqCw3C5VYQiQEGYzKKEhNRoUJ6+evVgYNkoXNDRUOtxOhQxG//jg6f7o8C9EBOLuh0ICmJhwqW5itP3+YO+cWX67almTqpjNYEUgOh3EhcD1M33Rfp/daWPrnbuNVpO9RJdaMsKhs7XZ+ROMewDAhH8j9lYtra6MO18utxWvdDqc7lwur4WU1CV/cKR324ptd9b1dRlda9cp/lBINHk8sqvvnEF43If/FcIHn5hsPW5JBQLOfEKxwCYMxPToMQ6m6Iki/T/+AmqbaeBi8JeiAAAAAElFTkSuQmCC') 0 0;   /* 自定义指针，热点在左上角 */
+  --cursor-img: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAFFklEQVR42nWU2W+UZRTGn/N+X2en0+l0ulBoaemULkAoBTQ2LDXBogYIxoKYAF4oGkJCiIkxETNt4oUXhsRwIZrGJegF1LiFRBYRmmDYalk70BahU+k2a6ezz/d97/ECETTx9wf8cp6Tcx4KLHo/aSkrNkMhoadzk9lA8Hym2LHT7/cb2/CtsQbs8C3Zu8dTUd6UU5XI9K3RO5+Nfdr7IzADgAAwnkA1l7nMJRuWp/PRhDV+ZfiEmArvbX7ToTf7O2lrby+6Nxw4uHrd+jdEoQ2Y60Q+k0PFUe8rFT/4th/mZIiJiJ6QqkJVhBZLq6GT/UcHbh7av5nD+cGtvWqoaVAesC1t8Xa07RRPeY3sVIzVeXYyWd1Gi7r52U33A/sOE70HZgGix0ItkUH8ytA3VTe7dgMAiAAgDwDdplVzTTqrRmhGIV0yx7KUDSfJ4nHIsqaFz2/KLvoQQPLsWp/a3tdtAGB19t7kllTk458/ca1va121ZrfLU1Kc1Y1MZiYRGbw5oE4d79etq6WieisJNh2kGQRoZLAs+mloyEZECQD6o20SAHze+Ormjh3bj82t95oQzQFWE6AAmUgM06cHWAxPk3vXWphqy8ACrGQkjR45lQhqsT5beWk45P/j8us3Dn0xBmSV/Xja2tG5qae+87lqLRrPGwJsWElKaUhhN5OruYZyI0FkA9OwNcwDaZKMyCw8y+rM85uX1JcvblhWXVX9YnPSZf96/OJJReBB6UstG/e4S90ubTgsMJlQOJ4VkCxYNwjMsCwohR6KQ7GYoAgFuT9DYJcNOqQ09Lxe4HGB4umqB9fPf6eOALNjA4OjXldlHdsLDDkWJ+GwEE8nQTYVPMcCUWiB85lGcDYPaAbMniIoBsFgg0iXhKkQGbEU7FDNaog5ddHT1uM8aVq5tGW5s8BqA0mGIAKlJbSZGHLJNKAKqBUuCDugRWehjUzDZrIQCVXlmTSGxoYuH0F4XAURT9S2njg1duHdUHDqrfk1NfWFhS6rwqrMazk42SSKPW5wuROczsOIZwCS8F+/pieyyQfu0lJjLDIxfubebx8xc5oAgMHU1brCOjU26y1K25ttXFC7qMS7cXHRgtbaujrFvGgupEkBJ7PQUxmYnXM4mcvIG7euTp77/devzqf7e15ob5/cd+JEjh5dOINJgeB3sLi2c0Pnl02umjZLlUdIhwkynQcIkNEkhFkFOy0okIJhm0OB2zdCPd8fXvtB8tptH1iIv30EBklwwZZdrx1cvmPraktHE3Trw6mIABIEYTdBqS4GEcGQOiGXNKrnV3tW1K7cDDC6Oo+RAAAffESC5B6U1Xsaalaj0SW12TSJjAYyKSBBIDC4yML6QhezprMwq4BFYeR1tlvszn9+GY8zw43KYj0QMcn7QUHJHJMqAAGwqgBpjRPXA0S3x+EocYIzOshqVcOBcfgf3B4BAPQOsgoAXejmbgLu8VQwMnA3uqCw3C5VYQiQEGYzKKEhNRoUJ6+evVgYNkoXNDRUOtxOhQxG//jg6f7o8C9EBOLuh0ICmJhwqW5itP3+YO+cWX67almTqpjNYEUgOh3EhcD1M33Rfp/daWPrnbuNVpO9RJdaMsKhs7XZ+ROMewDAhH8j9lYtra6MO18utxWvdDqc7lwur4WU1CV/cKR324ptd9b1dRlda9cp/lBINHk8sqvvnEF43If/FcIHn5hsPW5JBQLOfEKxwCYMxPToMQ6m6Iki/T/+AmqbaeBi8JeiAAAAAElFTkSuQmCC') 0 0;
 
   --ink: #1c1830;
   --ink-2: #241d3c;
@@ -50,29 +42,22 @@
   --radius: 28px;
   --radius-sm: 18px;
   --serif: "Noto Serif SC", "Songti SC", serif;
-  --brush: "HJ Brush", "Ma Shan Zheng", cursive;   /* HJ Brush = 站内自带的马善政毛笔字（只含标题用字），缺的字再找 Google 字体 */
+  --brush: "HJ Brush", "Ma Shan Zheng", cursive;   /* 标题字为马善政子集，缺字回退完整字体 */
+  --eorzean: "Augmented Neo-Eorzean", var(--serif);
 
-  /* 主题强调色：夜晚紫藤，白天灯笼金 */
   --accent: var(--wisteria);
   --accent-soft: var(--wisteria-soft);
   --accent-ink: #241d3c;
 
-  /* 白天模式常用文字色（天空背景上的文字、按钮、小组件） */
   --day-title: #e4eb7b;
   --day-ink: #3a2508;
   --day-brown: #5b3610;
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
-  /* 白天金色窗口（弹窗、表单卡片、管理面板、公告）里的文字以夜间为准，夜间是哪种颜色，白天就用对应的那一档：
-       夜间奶油色（表单标签、输入的内容、正文里的重点字）→ --day-cream 墨绿近黑
-       夜间金色（标题、小标题、强调的数字）            → --day-gold  土黑
-       夜间浅紫 / 灰紫（正文、说明、选项、表头）        → --day-lilac 暖棕
-     输入框里的占位文字：夜间浅紫，白天灰色。
-     窗口里的玻璃胶囊按钮不按这张表走，和天空上的按钮一样用 --pill-ink；红、绿这类状态色各自单独配。 */
+  /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫 */
   --day-cream: #1e2810;
   --day-gold: #3d3934;
   --day-lilac: #5b3610;
-  /* 第一类玻璃胶囊：夜间奶油白文字；白天褐色文字 + 金黄色描边（--pill-edge，和右上角圆按钮悬停时的描边同色；悬停加深为 --pill-edge-hi） */
   --pill-ink: var(--cream);
 }
 body.day-mode {
@@ -84,10 +69,12 @@ body.day-mode {
   --accent-ink: #3a2508;
 }
 
+/* ==== 2. 基础与背景 ==== */
+[hidden] { display: none !important; }
+.eorzean { font-family: var(--eorzean); }
+.eorzean-classic { font-family: "Eorzea", var(--serif); }
+.hingashi { font-family: "Hingashi Extended", var(--serif); }
 
-/* =============================================================================
-   2. 基础与背景
-   ============================================================================= */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; cursor: var(--cursor-img), auto; }
 body {
@@ -117,7 +104,6 @@ button { font-family: inherit; cursor: var(--cursor-img), pointer; }
   border: 0;
 }
 
-/* 天空背景：skyBase 为当前图，skyFade 用于昼夜交叉淡入 */
 #skyBase, #skyFade {
   position: fixed; inset: 0; z-index: -2;
   background-size: cover;
@@ -125,7 +111,6 @@ button { font-family: inherit; cursor: var(--cursor-img), pointer; }
 }
 #skyFade { opacity: 0; transition: opacity .9s ease; }
 
-/* 天空上的暗色渐变遮罩 */
 body::after {
   content: "";
   position: fixed; inset: 0; z-index: -1;
@@ -136,10 +121,7 @@ body.day-mode::after {
   background: linear-gradient(180deg, rgba(40,30,20,.04), rgba(28,22,20,.2) 55%, var(--ink) 100%);
 }
 
-
-/* =============================================================================
-   3. 头部：标题与圆形按钮
-   ============================================================================= */
+/* ==== 3. 头部：标题与按钮 ==== */
 .site-header { position: relative; text-align: center; padding: 52px 24px 28px; }
 
 .site-header .brand {
@@ -158,7 +140,6 @@ body.day-mode::after {
   font-weight: 600;
   letter-spacing: .06em;
 }
-/* 标题：两个街名各自不换行；窄屏（放不下一行）时竖排三行，中间的点单独一行 */
 .site-header .brand .brand-name { white-space: nowrap; }
 @media (max-width: 520px) {
   .site-header .brand { line-height: 1.12; }
@@ -169,14 +150,12 @@ body.day-mode::after {
 body.day-mode .site-header .brand { color: var(--day-title); }
 body.day-mode .site-header .tagline { color: #5b4326; }
 .site-header .tagline .tl-line { display: block; }
-/* 手机：地址按段各占一行，全部居中 */
 @media (max-width: 640px) {
   .site-header .tagline { font-size: .95rem; letter-spacing: .03em; line-height: 1.6; }
   .site-header .tagline .tl-seg { display: block; }
   .site-header .tagline .tl-gap { display: none; }
 }
 
-/* 右上角圆形玻璃按钮（类名沿用 daynight-toggle，所有头部圆钮共用） */
 .daynight-toggle {
   position: absolute; top: 18px; right: 18px;
   width: 44px; height: 44px;
@@ -236,7 +215,6 @@ body.day-mode .daynight-toggle:active {
     inset 0 2px 6px rgba(120,80,20,.2);
 }
 
-/* 线性图标：24 网格、1.8 描边、圆角端点，颜色跟随 currentColor */
 .daynight-toggle .ico {
   width: 20px; height: 20px;
   display: block;
@@ -247,32 +225,27 @@ body.day-mode .daynight-toggle:active {
   stroke-linejoin: round;
 }
 
-/* 按钮位置：从右往左 1 更多 / 2 昼夜 / 3 特效 / 4 时钟 / 5 音量，间距 8px */
 .hb-slot-1 { right: 18px; }
 .hb-slot-2 { right: 70px; }
 .hb-slot-3 { right: 122px; }
 .hb-slot-4 { right: 174px; }
 .hb-slot-5 { right: 226px; }
 
-/* 各按钮状态：未激活时半透明，激活时图标染强调色 */
 #dayNightToggle .ico-sun { display: none; }
 body.day-mode #dayNightToggle .ico-moon { display: none; }
 body.day-mode #dayNightToggle .ico-sun { display: block; }
 
-/* 动画按钮：完整 = 两颗星亮；轻量 = 只剩大的那颗；关闭 = 整体变暗 */
 .fx-toggle { opacity: .4; }
 .fx-toggle.is-active { opacity: 1; color: var(--accent); }
 .fx-toggle .fx-ico-extra { transition: opacity .2s ease; }
 .fx-toggle.is-lite .fx-ico-extra { opacity: 0; }
 
-/* 昼夜：新一套图片还在下载时图标呼吸闪烁 */
 #dayNightToggle.is-busy .ico { animation: hjBusy 1s ease-in-out infinite; }
 @keyframes hjBusy { 50% { opacity: .35; } }
 
 .clock-toggle { opacity: .4; }
 .clock-toggle.is-active { opacity: 1; color: var(--accent); }
 
-/* 音量：暗 = 静音；.is-on（音量 > 0）时变亮并显示喇叭图标 */
 .sound-toggle { opacity: .55; }
 .sound-toggle.is-on { opacity: 1; border-color: var(--accent); color: var(--accent); }
 .hj-sound-icon {
@@ -286,10 +259,7 @@ body.day-mode #dayNightToggle .ico-sun { display: block; }
 
 .more-toggle.is-active { color: var(--accent); border-color: var(--accent); }
 
-
-/* =============================================================================
-   4. 头部：时间条与天气
-   ============================================================================= */
+/* ==== 4. 头部：时间条与天气 ==== */
 .hj-clock {
   display: flex; justify-content: center; align-items: baseline; flex-wrap: wrap;
   gap: 6px 12px;
@@ -309,13 +279,14 @@ body.day-mode #dayNightToggle .ico-sun { display: block; }
 }
 .hj-clock-sep { width: 1px; height: 11px; background: var(--line); align-self: center; }
 .hj-et-glyph { font-style: normal; margin-right: 4px; font-size: .78rem; opacity: .9; }
+.hj-et-date { color: var(--text-soft); letter-spacing: .06em; white-space: nowrap; }
+body.day-mode .hj-et-date { color: var(--day-text); }
 .hj-clock-cell.is-night .hj-clock-time { color: var(--wisteria-soft); }
 body.day-mode .hj-clock { color: var(--day-brown-soft); }
 body.day-mode .hj-clock-time { color: var(--day-text); }
 body.day-mode .hj-clock-sep { background: rgba(90,60,20,.28); }
 body.day-mode .hj-clock-cell.is-night .hj-clock-time { color: var(--day-brown); }
 
-/* 天气：时间条第二行 */
 .hj-weather {
   flex-basis: 100%;
   display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
@@ -325,7 +296,6 @@ body.day-mode .hj-clock-cell.is-night .hj-clock-time { color: var(--day-brown); 
   letter-spacing: .06em;
   color: var(--text-mute);
 }
-.hj-weather[hidden] { display: none !important; }
 .hj-weather-label { font-size: .7rem; opacity: .9; letter-spacing: .12em; white-space: nowrap; }
 .hj-weather-seq {
   display: inline-flex; align-items: center; flex-wrap: wrap;
@@ -357,7 +327,6 @@ body.day-mode .hj-weather { color: var(--day-brown-soft); }
 body.day-mode .hj-weather-seq { color: var(--day-text); }
 body.day-mode .hj-weather-arrow { opacity: .6; }
 
-/* 特殊天象与钓场之王：时间条第三行，放不下时两项各占一行 */
 .hj-omen {
   flex-basis: 100%;
   display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
@@ -384,12 +353,8 @@ body.day-mode .hj-omen { color: var(--day-brown-soft); }
 body.day-mode .hj-omen-state { color: var(--day-text); }
 body.day-mode .hj-omen-item.is-live .hj-omen-state { color: var(--day-brown); }
 
+/* ==== 5. 头部：音量、更多、日历 ==== */
 
-/* =============================================================================
-   5. 头部：音量弹层、「更多」下拉、日历小组件
-   ============================================================================= */
-
-/* 音量弹层（位于音量按钮正下方） */
 .vol-panel {
   position: absolute; top: 66px; right: 226px; z-index: 50;
   display: flex; justify-content: center;
@@ -403,8 +368,6 @@ body.day-mode .hj-omen-item.is-live .hj-omen-state { color: var(--day-brown); }
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   backdrop-filter: blur(10px) saturate(1.2);
 }
-.vol-panel[hidden] { display: none; }
-/* 竖条轨道；touch-action:none 保证手机上可拖动 */
 .vol-track {
   position: relative;
   width: 8px; height: 132px;
@@ -438,10 +401,8 @@ body.day-mode .vol-panel {
 }
 body.day-mode .vol-track { background: rgba(90,60,20,.18); }
 
-/* 「更多」下拉：无面板，圆钮在「更多」按钮正下方竖排（right 与 .hb-slot-1 相同）。
-   用 is-open + visibility 过渡控制显隐，关闭态不可点击、不可聚焦。 */
 .more-panel {
-  position: absolute; top: 70px; right: 18px; z-index: 50;   /* 70 = 按钮底边 62 + 间距 8 */
+  position: absolute; top: 70px; right: 18px; z-index: 50;   /* 按钮底边 62 + 间距 8 */
   display: flex; flex-direction: column; align-items: center;
   gap: 8px;
   opacity: 0;
@@ -527,7 +488,6 @@ body.day-mode .more-item:hover {
     inset 0 -4px 9px rgba(140,95,25,.09);
 }
 
-/* 日历小组件：毛玻璃月历，--cal-zoom 控制缩放（锚点右上角） */
 .cal-widget {
   --cal-zoom: 1;
   position: fixed; top: 112px; right: 16px; z-index: 70;
@@ -546,13 +506,11 @@ body.day-mode .more-item:hover {
   backdrop-filter: blur(14px) saturate(1.25);
   animation: calPop .28s cubic-bezier(.34,1.3,.64,1);
 }
-.cal-widget[hidden] { display: none; }
 @keyframes calPop {
   from { opacity: 0; transform: scale(calc(var(--cal-zoom) * .92)) translateY(-8px); }
   to   { opacity: 1; transform: scale(var(--cal-zoom)) translateY(0); }
 }
 
-/* 标题栏（拖动把手） */
 .cal-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px;
@@ -586,7 +544,6 @@ body.day-mode .more-item:hover {
 .cal-tool:disabled { opacity: .35; cursor: default; }
 .cal-tool .ico { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 
-/* 月份翻页 */
 .cal-body { position: relative; padding: 0 26px; }
 .cal-nav {
   position: absolute; top: 50%;
@@ -613,7 +570,6 @@ body.day-mode .more-item:hover {
   stroke-linejoin: round;
 }
 
-/* 星期行与日期格 */
 .cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .cal-week span {
   padding: 4px 0;
@@ -625,7 +581,7 @@ body.day-mode .more-item:hover {
   text-shadow: 0 1px 2px rgba(10,7,22,.45);
 }
 .cal-week span:nth-child(6),
-.cal-week span:last-child { color: #d98a94; }   /* 周末（周一起始，最后两列） */
+.cal-week span:last-child { color: #d98a94; }
 .cal-day {
   position: relative;
   padding: 4px 0 6px;
@@ -650,12 +606,11 @@ body.day-mode .more-item:hover {
   color: var(--cream);
   text-shadow: 0 1px 2px rgba(10,7,22,.5);
 }
-.cal-day.is-today .cal-num { background: #1f6b42; color: #fff; font-weight: 600; }   /* 今天：深绿圈 */
+.cal-day.is-today .cal-num { background: #1f6b42; color: #fff; font-weight: 600; }
 .cal-day.is-pick .cal-num { box-shadow: 0 0 0 2px var(--accent); }
 .cal-bars { display: flex; flex-direction: column; gap: 2px; width: 70%; }
 .cal-bar { display: block; height: 3px; border-radius: 2px; background: var(--tone, #c25b6e); }
 
-/* 事件色板：日期横条与事件胶囊共用 */
 .tone-rose     { --tone: #c25b6e; }
 .tone-gold     { --tone: #d9a94e; }
 .tone-teal     { --tone: #79b3a7; }
@@ -663,7 +618,6 @@ body.day-mode .more-item:hover {
 .tone-blue     { --tone: #7d9bc8; }
 .tone-orange   { --tone: #d78a4e; }
 
-/* 本月事件列表 */
 .cal-events { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,.18); }
 .cal-empty { font-size: .72rem; color: #b9b0d6; text-shadow: 0 1px 2px rgba(10,7,22,.45); }
 .cal-chip {
@@ -705,12 +659,8 @@ body.day-mode .cal-events { border-top-color: rgba(122,84,32,.22); }
 body.day-mode .cal-empty { color: #7a5a2e; }
 body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); }
 
+/* ==== 6. 特效 ==== */
 
-/* =============================================================================
-   6. 特效
-   ============================================================================= */
-
-/* 页面入场 / 淡入（由脚本添加类名触发） */
 @keyframes fxPageEnter {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -720,10 +670,8 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); }
 @keyframes fxFadeOnly { from { opacity: 0; } to { opacity: 1; } }
 .fx-fade-only { animation: fxFadeOnly .5s ease both; }
 
-/* 点击爆花 ------------------------------------------------------------------ */
 #fxClickLayer { position: fixed; inset: 0; z-index: 500; pointer-events: none; overflow: hidden; }
 
-/* 白天：花叶向外扩散（--bx / --by），随后轻微漂移、自转并淡出 */
 .fx-burst-petal {
   position: absolute;
   font-size: 16px;
@@ -744,7 +692,6 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); }
                     rotateZ(var(--br, 40deg)); opacity: 0; }
 }
 
-/* 夜晚：星点 */
 .fx-burst-star {
   position: absolute;
   width: 5px; height: 5px;
@@ -758,20 +705,12 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); }
   0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
   100% { transform: translate(calc(-50% + var(--bx)), calc(-50% + var(--by))) scale(.2); opacity: 0; }
 }
-/* 轻量档：粒子不加投影、不预先分图层 */
 body.fx-lite .fx-burst-petal { filter: none; will-change: auto; }
 body.fx-lite .fx-burst-star { will-change: auto; }
 
-/* 飘落层 -------------------------------------------------------------------- */
 #fxLayer { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 
-/* 白天花叶：一片叶子由五层嵌套元素组成，各层周期独立，轨迹不易看出循环
-     .fx-leaf        下落 + 风偏移 + 两端淡入淡出
-     .fx-leaf-sway   左右摆动（ease-in-out + alternate，近似正弦）
-     .fx-leaf-flip   绕 Y 轴 3D 翻转（父层 perspective 使侧面被压窄）
-     .fx-leaf-flipx  绕 X 轴 3D 翻转，与 Y 轴周期错开
-     .fx-leaf-face   贴图：绕 Z 轴来回摆动 + 随翻面变化的明暗
-   幅度、时长、相位由脚本 renderDayFx() 随机生成。 */
+/* 花叶五层嵌套：下落、摆动、Y 轴翻转、X 轴翻转、贴图摆动与明暗，周期各异 */
 .fx-leaf {
   position: absolute; top: var(--static-top, 0); left: 0;
   opacity: 0;
@@ -797,7 +736,6 @@ body.fx-lite .fx-burst-star { will-change: auto; }
   animation-timing-function: linear;
   animation-iteration-count: infinite;
 }
-/* 默认线性整转；180° 半翻的叶子由脚本改为 alternate + ease-in-out */
 .fx-leaf-flipx {
   transform-style: preserve-3d;
   animation-name: fxLeafFlipX;
@@ -809,9 +747,7 @@ body.fx-lite .fx-burst-star { will-change: auto; }
   background-repeat: no-repeat;
   background-position: center;
   filter: drop-shadow(0 1px 2px rgba(60,42,10,.3));
-  /* 两个动画与下面各属性按顺序一一对应：① fxLeafTumble ② fxLeafLight。
-     Z 轴摆动必须 alternate，否则周期末尾会从 tilt-end 跳回 tilt-start；
-     明暗动画首尾对称，保持 normal 即可。 */
+  /* Z 轴摆动须 alternate，否则周期末尾会跳变 */
   animation-name: fxLeafTumble, fxLeafLight;
   animation-timing-function: ease-in-out, ease-in-out;
   animation-iteration-count: infinite, infinite;
@@ -843,14 +779,12 @@ body.fx-lite .fx-burst-star { will-change: auto; }
   from { transform: rotateZ(var(--tilt-start, -16deg)) scale(1); }
   to   { transform: rotateZ(var(--tilt-end, 20deg)) scale(.94); }
 }
-/* 侧对镜头（25% / 75%，叶片最窄时）稍暗，正面最亮 */
 @keyframes fxLeafLight {
   0%, 100% { filter: brightness(1) saturate(1) drop-shadow(0 1px 2px rgba(60,42,10,.3)); }
   25%, 75% { filter: brightness(.8) saturate(.9) drop-shadow(0 1px 2px rgba(60,42,10,.38)); }
   50%      { filter: brightness(.93) saturate(.96) drop-shadow(0 1px 2px rgba(60,42,10,.32)); }
 }
 
-/* 夜晚星星 */
 .fx-star {
   position: absolute;
   width: 2px; height: 2px;
@@ -866,9 +800,6 @@ body.fx-lite .fx-burst-star { will-change: auto; }
   50%      { opacity: .85; }
 }
 
-/* 自定义背景 ------------------------------------------------------------------
-   在花街相册中双击图片设为网页背景后（body.custom-bg），
-   标题区加一块毛玻璃底板保证可读性；切回昼夜时由脚本移除。 */
 .site-header::before { content: none; }
 body.custom-bg .site-header::before {
   content: "";
@@ -897,7 +828,6 @@ body.custom-bg.day-mode .site-header::before {
   border-color: rgba(255,255,255,.62);
   box-shadow: 0 20px 56px rgba(96,64,16,.18), inset 0 1px 0 rgba(255,255,255,.78);
 }
-/* 白天保持原标题配色，只加阴影防止在浅色照片上发虚 */
 body.custom-bg.day-mode .site-header .brand {
   text-shadow: 0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34);
 }
@@ -906,14 +836,9 @@ body.custom-bg.day-mode .site-header .hj-clock {
   text-shadow: 0 1px 1px rgba(255,252,240,.7);
 }
 
-
-/* =============================================================================
-   7. 首页卡片
-   ============================================================================= */
+/* ==== 7. 首页卡片 ==== */
 main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
-.view[hidden] { display: none; }
 
-/* 卡片立体感只做在边缘：inset 内缘 + 顶部高光 + 双层投影（不用 border，避免圆角毛边） */
 .tile {
   position: relative;
   border-radius: var(--radius);
@@ -943,10 +868,7 @@ main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
 .tile:active { transform: translateY(-2px) scale(.994); }
 
 .tile-hero { aspect-ratio: 2926/1426; margin-bottom: 44px; }
-.tile[hidden] { display: none; }
 
-/* 最新活动卡片右下角的「播放视频」按钮：层级高于悬停设计图，悬停时仍可见；
-   左下角留给「查看详情」，有购票徽章时整体左移让出位置 */
 .hero-play {
   position: absolute; right: 30px; bottom: 30px; z-index: 3;
   display: inline-flex; align-items: center; gap: 10px;
@@ -968,7 +890,6 @@ main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
   backdrop-filter: blur(10px) saturate(1.2);
   transition: transform .2s, border-color .2s, box-shadow .25s, background .25s;
 }
-.hero-play[hidden] { display: none; }
 .hero-play svg { width: 22px; height: 22px; fill: currentColor; }
 .tile-hero.has-ticket .hero-play { right: 136px; }
 .hero-play:hover {
@@ -993,12 +914,6 @@ body.day-mode .hero-play {
 }
 body.day-mode .hero-play:hover { border-color: var(--pill-edge-hi); }
 
-/* 视频态：视频 + 下方按钮 整体与封面卡片同宽同高（比例与 .tile-hero 保持一致）。
-   .video-block 自己就是那块底层毛玻璃：位置、大小、圆角都跟收起时的封面卡片一模一样
-   （靠同样的 aspect-ratio + margin-bottom + var(--radius)，手机版比例换了也仍然对齐），
-   视频和下方两个按钮都压在它上面，四周留一圈窄边把玻璃露出来。
-   厚度按下方按钮的量级做：薄薄一层投影 + 顶部高光 + 底部内阴影，不用卡片那种重投影。
-   内缘描边用 inset 0 0 0 1px 而不是 border，盒子尺寸才不会比封面卡片大出 2px。 */
 .video-block {
   position: relative;
   display: flex; flex-direction: column;
@@ -1017,8 +932,6 @@ body.day-mode .hero-play:hover { border-color: var(--pill-edge-hi); }
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   backdrop-filter: blur(14px) saturate(1.2);
 }
-.video-block[hidden] { display: none; }
-/* 白天的天空很亮，用浅色打底等于隐形，所以跟下方两个按钮一样改用深棕透明底 + 白色高光 */
 body.day-mode .video-block {
   background:
     linear-gradient(165deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 52%, rgba(255,255,255,.14) 100%),
@@ -1029,7 +942,6 @@ body.day-mode .video-block {
     inset 0 1px 0 rgba(255,255,255,.34),
     inset 0 -5px 10px rgba(40,26,8,.18);
 }
-/* 视频压在玻璃上：圆角收小一档跟外框同心，投影也收薄，免得盖住那圈玻璃边 */
 .video-hero {
   position: relative;
   flex: 1 1 auto;
@@ -1045,11 +957,8 @@ body.day-mode .video-block {
     inset 0 1px 0 rgba(255,255,255,.18);
 }
 .video-hero iframe { display: block; width: 100%; height: 100%; border: 0; }
-/* 自托管视频：和 iframe 一样铺满，contain 保证竖版 / 非 16:9 的片子不被裁掉 */
 .video-hero video { display: block; width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
-.video-hero iframe[hidden], .video-hero video[hidden] { display: none; }
 
-/* 视频下方的操作按钮 */
 .video-actions {
   display: flex; justify-content: center; flex-wrap: wrap;
   gap: 12px;
@@ -1072,12 +981,9 @@ body.day-mode .video-block {
   backdrop-filter: blur(10px) saturate(1.2);
   transition: border-color .2s, color .2s, box-shadow .25s, transform .2s, filter .2s;
 }
-/* 「去 B 站看」是个 <a>，让它和旁边的按钮长得一样 */
 a.video-action { display: inline-flex; align-items: center; text-decoration: none; }
-a.video-action[hidden] { display: none; }
 .video-action:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--accent-soft); }
 .video-action:active { transform: translateY(.5px) scale(.985); }
-/* 主操作：同样是玻璃，靠强调色的描边和文字区分出主次 */
 .video-action-primary {
   font-weight: 600;
   color: var(--pill-ink);
@@ -1106,7 +1012,6 @@ body.day-mode .video-action:not(.video-action-primary) {
 .tile-grid.tile-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .tile-sm { aspect-ratio: 2.34; }
 
-/* 文字遮罩 */
 .tile-overlay {
   position: absolute; inset: 0; z-index: 1;
   display: flex; flex-direction: column; justify-content: flex-end;
@@ -1121,46 +1026,6 @@ body.day-mode .video-action:not(.video-action-primary) {
 .tile-sm h3 { font-family: var(--brush); font-size: 1.5rem; color: var(--cream); }
 .tile-sm .tile-hint { margin-top: 6px; font-size: .76rem; color: var(--text-mute); }
 
-/* 圆形购票徽章 */
-.ticket-badge {
-  position: absolute; z-index: 2; bottom: -20px; right: 30px;
-  width: 88px; height: 88px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--accent-soft);
-  text-decoration: none;
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.2) 0%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.11) 100%),
-    rgba(22,17,40,.44);
-  border: 1px solid var(--accent);
-  box-shadow:
-    0 0 0 3px rgba(20,16,36,.42),
-    0 8px 20px rgba(10,7,22,.4),
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -5px 10px rgba(10,8,22,.2);
-  -webkit-backdrop-filter: blur(9px) saturate(1.18);
-  backdrop-filter: blur(9px) saturate(1.18);
-  transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
-}
-body.day-mode .ticket-badge {
-  color: #fff6e0;
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.06) 50%, rgba(255,255,255,.12) 100%),
-    rgba(48,34,18,.46);
-  border-color: var(--accent-soft);
-  box-shadow:
-    0 0 0 3px rgba(60,40,14,.34),
-    0 8px 20px rgba(40,26,8,.32),
-    inset 0 1px 0 rgba(255,255,255,.34),
-    inset 0 -5px 10px rgba(40,26,8,.2);
-}
-.ticket-badge:hover { transform: scale(1.06); }
-.ticket-badge:active { transform: scale(.97); }
-.ticket-badge[hidden] { display: none; }
-
-/* 悬停时淡入完整设计图（仅在特效开启时） */
 .tile-hover-fx {
   position: absolute; inset: 0; z-index: 2;
   opacity: 0;
@@ -1170,9 +1035,8 @@ body.day-mode .ticket-badge {
   transition: opacity .5s ease;
 }
 body.fx-hover-enabled .tile:hover .tile-hover-fx { opacity: 1; }
-body.fx-hover-enabled .tile:hover .tile-overlay,
-body.fx-hover-enabled .tile:hover .ticket-badge { opacity: 0; pointer-events: none; }
-/* 设计图只在特效开启时才设置，特效关着（手机默认）就不下载 */
+body.fx-hover-enabled .tile:hover .tile-overlay { opacity: 0; pointer-events: none; }
+/* 悬停图仅在完整特效下加载 */
 body.fx-hover-enabled #latestTile .tile-hover-fx  { background-image: url('assets/site/tile-latest-hover.webp'); }
 body.fx-hover-enabled #archiveTile .tile-hover-fx { background-image: url('assets/site/tile-archive-hover.webp'); }
 body.fx-hover-enabled #miniTile .tile-hover-fx    { background-image: url('assets/site/tile-mini-hover.webp'); }
@@ -1183,10 +1047,17 @@ body.fx-hover-enabled #groupTile .tile-hover-fx   { background-image: url('asset
 body.day-mode .tile-hero p,
 body.day-mode .tile-hint { color: var(--day-title); }
 
+.tile-crossfade {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: center / cover no-repeat;
+  opacity: 0;
+  transition: opacity .6s ease;
+  pointer-events: none;
+}
 
-/* =============================================================================
-   8. 视图通用：返回按钮、区块标题、占位提示
-   ============================================================================= */
+/* ==== 8. 视图通用 ==== */
 .back-btn {
   margin: 28px 0 20px;
   padding: 8px 18px;
@@ -1218,7 +1089,6 @@ body.day-mode .tile-hint { color: var(--day-title); }
   transform: translateY(.5px) scale(.985);
   box-shadow: 0 2px 5px rgba(8,6,18,.24), inset 0 2px 6px rgba(8,6,18,.26);
 }
-/* 白天：直接压在天空上的胶囊（返回、标签、视频按钮）用黄绿色文字 + 淡烟熏玻璃底，保证在亮天空上看得清；描边和其他按钮一样是金黄色 */
 body.day-mode .back-btn {
   color: var(--day-title);
   background:
@@ -1242,7 +1112,7 @@ body.day-mode .back-btn:hover {
 }
 
 .section-title { font-family: var(--brush); font-size: 2rem; color: var(--lantern-soft); margin-bottom: 20px; }
-body.day-mode .section-title { color: var(--day-title); }   /* 和顶部「花舞之街 · 薰风花语町」同色 */
+body.day-mode .section-title { color: var(--day-title); }
 
 .empty-note {
   padding: 40px 20px;
@@ -1257,12 +1127,8 @@ body.day-mode .section-title { color: var(--day-title); }   /* 和顶部「花�
 body.day-mode .empty-note,
 body.day-mode .empty-note-left { color: var(--day-title); }
 
+/* ==== 9. 活动详情与相册 ==== */
 
-/* =============================================================================
-   9. 活动详情、往期相册、小型回顾
-   ============================================================================= */
-
-/* 详情页横幅 */
 .detail-hero {
   position: relative;
   min-height: 220px;
@@ -1284,55 +1150,6 @@ body.day-mode .empty-note-left { color: var(--day-title); }
 .detail-hero p { color: var(--text-soft); font-size: .88rem; }
 body.day-mode .detail-hero p { color: var(--day-title); }
 
-/* 行内购票 / 链接胶囊 */
-.ticket-badge-inline {
-  display: inline-block;
-  margin-top: 14px;
-  padding: 9px 22px;
-  border-radius: 999px;
-  font-size: .85rem;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--pill-ink);
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.09) 100%),
-    rgba(22,17,40,.38);
-  border: 1px solid var(--accent);
-  box-shadow:
-    0 3px 10px rgba(8,6,18,.24),
-    inset 0 1px 0 rgba(255,255,255,.22),
-    inset 0 -4px 8px rgba(10,8,22,.16);
-  -webkit-backdrop-filter: blur(9px) saturate(1.18);
-  backdrop-filter: blur(9px) saturate(1.18);
-  transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
-}
-.ticket-badge-inline:hover {
-  transform: translateY(-1px);
-  border-color: var(--accent-soft);
-  box-shadow:
-    0 5px 12px rgba(8,6,18,.28),
-    inset 0 1px 0 rgba(255,255,255,.28),
-    inset 0 -4px 8px rgba(10,8,22,.16);
-}
-.ticket-badge-inline:active {
-  transform: translateY(.5px) scale(.985);
-  box-shadow: 0 2px 6px rgba(8,6,18,.24), inset 0 2px 7px rgba(8,6,18,.26);
-}
-body.day-mode .ticket-badge-inline {
-  color: var(--pill-ink);
-  background:
-    linear-gradient(165deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.04) 50%, rgba(255,255,255,.08) 100%),
-    rgba(255,249,235,.33);
-  border-color: var(--pill-edge);
-  box-shadow:
-    0 3px 10px rgba(40,26,8,.26),
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -4px 8px rgba(40,26,8,.18);
-}
-body.day-mode .ticket-badge-inline:hover { color: var(--day-ink); border-color: var(--pill-edge-hi); }
-.ticket-badge-inline[hidden] { display: none; }
-
-/* 标签页按钮（详情页与花街介绍弹窗共用） */
 .tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
 .tab-btn {
   padding: 9px 20px;
@@ -1399,11 +1216,9 @@ body.day-mode .tab-btn.is-active {
     inset 0 -5px 10px rgba(140,90,15,.14);
 }
 
-.tab-panel[hidden] { display: none; }
 .tab-gallery { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
 .tab-gallery img { width: 100%; border-radius: var(--radius-sm); display: block; cursor: zoom-in; }
 
-/* 活动店家列表 */
 .area-block { margin-bottom: 26px; }
 .area-block h4 { font-size: .94rem; font-weight: 600; color: var(--wisteria-soft); margin-bottom: 12px; }
 .shop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -1415,15 +1230,13 @@ body.day-mode .tab-btn.is-active {
   font-size: .85rem;
   background: var(--panel);
 }
-.shop-item .num { color: var(--text-mute); font-size: .78rem; padding-top: 2px; overflow-wrap: anywhere; }   /* 房号格加宽；放不下时换行，不压到店名 */
+.shop-item .num { color: var(--text-mute); font-size: .78rem; padding-top: 2px; overflow-wrap: anywhere; }
 .shop-item .name { color: var(--cream); font-weight: 600; margin-bottom: 3px; }
 .shop-item .desc { color: var(--text-soft); font-size: .83rem; }
 .shop-item .price { color: var(--lantern-soft); font-size: .82rem; white-space: nowrap; text-align: right; }
 body.day-mode .shop-item .num,
 body.day-mode .shop-item .desc { color: var(--day-title); }
 
-/* 往期活动相册（瀑布流，分列和排序在 main.js 的 layoutAlbumGrid）：
-   卡片宽高比 = 封面图宽高比（行内 aspect-ratio），整张图铺满卡片、不裁不留边，标题叠在图片底部 */
 .album-grid { display: flex; gap: 20px; align-items: flex-start; }
 .album-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 .album-card {
@@ -1448,7 +1261,6 @@ body.day-mode .shop-item .desc { color: var(--day-title); }
 .album-card .year { font-size: .76rem; color: var(--wisteria-soft); }
 .album-card .title { font-family: var(--brush); font-size: 1.25rem; line-height: 1.3; color: var(--cream); }
 
-/* 小型活动回顾 */
 .review-item { position: relative; display: flex; flex-direction: column; }
 .review-photo {
   display: block;
@@ -1467,7 +1279,6 @@ body.day-mode .shop-item .desc { color: var(--day-title); }
 .review-caption { margin-top: 10px; font-size: .85rem; color: var(--text-soft); text-align: center; }
 body.day-mode .review-caption { color: var(--day-title); }
 
-/* 相册卡片边缘立体感 */
 .album-card,
 .review-photo {
   box-shadow:
@@ -1485,12 +1296,8 @@ body.day-mode .review-photo {
     inset 0 1px 0 rgba(255,255,255,.24);
 }
 
+/* ==== 10. 内部入口与公告板 ==== */
 
-/* =============================================================================
-   10. 内部入口与公告板
-   ============================================================================= */
-
-/* 卡片（内部入口、管理面板、验证弹窗共用） */
 .gate-card {
   max-width: 420px;
   margin: 20px auto;
@@ -1505,7 +1312,6 @@ body.day-mode .review-photo {
 body.day-mode .gate-card h2 { color: var(--day-gold); }
 body.day-mode .gate-card .hint { color: var(--day-lilac); }
 
-/* 文本输入（排除复选框，否则复选框会被撑满整行） */
 .gate-card input:not([type="checkbox"]) {
   width: 100%;
   margin-bottom: 14px;
@@ -1537,11 +1343,9 @@ body.day-mode .gate-card .hint { color: var(--day-lilac); }
 .gate-card textarea:focus { outline: none; border-color: var(--accent); }
 body.day-mode .gate-card input:not([type="checkbox"]) { background: #f6e3bb; color: var(--day-cream); border-color: #c98f3a; }
 body.day-mode .gate-card textarea { background: rgba(255,252,240,.55); color: var(--day-cream); border-color: #c98f3a; }
-/* 输入框里的占位文字（卡片表单和「网站说明」里的反馈表单共用）：夜间浅紫，白天灰色 */
 :is(.gate-card, .about-form) :is(input, textarea)::placeholder { color: var(--text-mute); }
 body.day-mode :is(.gate-card, .about-form) :is(input, textarea)::placeholder { color: #757575; }
 
-/* 自绘复选框，统一各浏览器尺寸 */
 .gate-card input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -1562,7 +1366,6 @@ body.day-mode .gate-card input[type="checkbox"] { background: #f6e3bb; border-co
 body.day-mode .gate-card input[type="checkbox"]:checked { background: #8a5a1c; border-color: #8a5a1c; }
 body.day-mode .gate-card input[type="checkbox"]:checked::after { color: #fff6e0; }
 
-/* 显示密码、公告可见对象等选项 */
 .password-field { position: relative; }
 .password-show-label {
   display: flex; justify-content: center; align-items: center;
@@ -1595,8 +1398,6 @@ body.day-mode .gate-card input[type="checkbox"]:checked::after { color: #fff6e0;
 body.day-mode .password-show-label,
 body.day-mode .audience-opt { color: var(--day-lilac); }
 
-/* 主按钮（进入 / 切换 / 发布 / 保存 / 配图）——全站统一的透明玻璃质感。
-   卡片里的按钮都以这条为底，只有语义色按钮（红色危险、开启态）自己覆盖回实心。 */
 .gate-card button {
   padding: 10px 30px;
   border-radius: 999px;
@@ -1630,8 +1431,6 @@ body.day-mode .audience-opt { color: var(--day-lilac); }
   filter: none;
   box-shadow: 0 2px 6px rgba(8,6,18,.24), inset 0 2px 7px rgba(8,6,18,.26);
 }
-/* 白天：金色卡片上用暖色玻璃（和验证面板、公告小按钮同一质感）。
-   两个描边胶囊按钮（取消编辑、清除覆盖）有自己的白天样式；选中的标签页和夜间一样保持实心强调色，都不套这一条。 */
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn, .tab-btn.is-active) {
   color: var(--pill-ink);
   background:
@@ -1655,7 +1454,6 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
   box-shadow: 0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
 }
 
-/* 描边胶囊按钮：取消编辑（轻玻璃） */
 #cancelEditAnnouncementBtn {
   margin-left: 12px;
   padding: 10px 22px;
@@ -1687,7 +1485,6 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
   transform: translateY(.5px) scale(.985);
   box-shadow: 0 2px 5px rgba(8,6,18,.22), inset 0 2px 6px rgba(8,6,18,.26);
 }
-#cancelEditAnnouncementBtn[hidden] { display: none; }
 body.day-mode #cancelEditAnnouncementBtn {
   color: var(--pill-ink);
   background:
@@ -1700,7 +1497,6 @@ body.day-mode #cancelEditAnnouncementBtn {
     inset 0 -4px 8px rgba(140,95,25,.08);
 }
 
-/* 玻璃胶囊按钮：清除星芒节覆盖（只调尺寸，材质继承 .gate-card button） */
 #starlightClearBtn {
   padding: 10px 22px;
   font-size: .88rem;
@@ -1719,12 +1515,9 @@ body.day-mode #starlightClearBtn {
 }
 body.day-mode #starlightClearBtn:hover { color: var(--day-ink); border-color: var(--pill-edge-hi); }
 
-/* 表单提示 */
 .form-msg { margin-top: 14px; font-size: .85rem; color: #e08e84; }
-.form-msg[hidden] { display: none; }
 body.day-mode .form-msg { color: var(--day-brown-soft); }
 
-/* 星芒节时间覆盖 */
 .starlight-fields {
   display: flex; justify-content: center; align-items: flex-end; flex-wrap: wrap;
   gap: 10px;
@@ -1732,17 +1525,15 @@ body.day-mode .form-msg { color: var(--day-brown-soft); }
 }
 .starlight-field { flex: 1 1 165px; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
 .starlight-field > span { font-size: .78rem; line-height: 1.4; text-align: center; color: var(--text-mute); }
-/* 与 .gate-card input:not([type=checkbox]) 特指度相同，靠书写顺序覆盖 */
+/* 特指度同 .gate-card input，依书写顺序覆盖 */
 .gate-card .starlight-field input { margin-bottom: 0; font-size: .85rem; padding: 10px 12px; }
 .starlight-sep { padding: 0 2px 12px; font-size: .85rem; color: var(--text-mute); }
 .starlight-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
-/* 让 datetime-local 的日历图标在暗色背景上可见 */
 #starlightPanel input[type="datetime-local"] { color-scheme: dark; }
 body.day-mode #starlightPanel input[type="datetime-local"] { color-scheme: light; }
 body.day-mode .starlight-field > span,
 body.day-mode .starlight-sep { color: var(--day-lilac); }
 
-/* 公告 */
 .announcement {
   margin-bottom: 14px;
   padding: 20px 22px;
@@ -1770,7 +1561,6 @@ body.day-mode .announcement .date,
 body.day-mode .announcement-audience { color: var(--day-lilac); }
 body.day-mode .announcement .body { color: var(--day-lilac); }
 
-/* 公告的编辑 / 删除小按钮 */
 .announcement-admin-btns { margin-top: 12px; display: flex; gap: 10px; }
 .announcement-edit-btn,
 .announcement-delete-btn {
@@ -1821,7 +1611,6 @@ body.day-mode .announcement-delete-btn {
 body.day-mode .announcement-delete-btn { color: #a33c2f; border-color: rgba(163,60,47,.5); }
 body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 
-/* 公告配图：选择按钮与预览 */
 .announcement-image-field { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .pill-btn-outline {
   padding: 8px 20px;
@@ -1829,7 +1618,6 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
   color: var(--pill-ink);
 }
 .announcement-image-preview { position: relative; display: inline-block; }
-.announcement-image-preview[hidden] { display: none; }
 .announcement-image-preview img {
   display: block;
   max-width: 140px;
@@ -1837,7 +1625,7 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
   border-radius: 10px;
   object-fit: cover;
 }
-/* 预览右上角的 × ：与 .gate-card button 特指度相同，必须写在其后 */
+/* 特指度同 .gate-card button，须写在其后 */
 .announcement-image-preview button {
   position: absolute; top: -8px; right: -8px;
   width: 22px; height: 22px;
@@ -1860,7 +1648,6 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 }
 .announcement-image-preview button:active { transform: scale(.92); }
 
-/* 卡片边缘立体感 */
 .detail-hero,
 .gate-card {
   box-shadow:
@@ -1870,22 +1657,17 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
     inset 0 1px 0 rgba(255,255,255,.16);
 }
 
+/* ==== 11. 弹窗 ==== */
 
-/* =============================================================================
-   11. 弹窗：花街介绍、活动群、人机验证、大图预览、提示条
-   ============================================================================= */
-
-/* 遮罩层（花街介绍 / 活动群 / 验证） */
 .info-overlay {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
   background: rgba(10,8,20,.78);
 }
-.info-overlay[hidden] { display: none; }
-#captchaOverlay { z-index: 250; }   /* 验证弹窗盖在其它弹窗之上 */
+#captchaOverlay { z-index: 250; }
 
-/* 弹窗与表单卡片共用的底：--info-photo 为底图（main.js 按 INFO_BG_IMAGE 设在根元素上），--info-tint 为其上的色层 */
+/* --info-photo 由 main.js 设置 */
 .info-box,
 .gate-card,
 .admin-modal {
@@ -1901,10 +1683,6 @@ body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { color: var(--day-cream); background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
 
-/* 白天：金色窗口（弹窗、表单卡片、管理面板）里的按钮和标签：金黄色描边 + 褐色文字。
-   窗口底色本身是金色，描边用深一档的金黄才看得出来。
-   描边颜色靠变量传下去，窗口里用 var(--pill-edge) 的按钮都会跟着变；
-   标签（.tab-btn）在天空上是黄绿色文字 + 烟熏玻璃，放进金色窗口时改回褐色文字 + 浅色玻璃 */
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {
   --pill-edge: #d18a2c;
   --pill-edge-hi: #a8661a;
@@ -1925,11 +1703,7 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
   border-color: var(--pill-edge-hi);
 }
 
-/* 页面里的卡片（购票、查询登记、场地使用登记、活动问卷、内部入口等）：
-   不高于屏幕时和弹窗一样整张铺满；高于屏幕时（main.js 的 updateCardBackdrop 加 .is-tall）
-   整张铺会被放得很大，所以卡片本身只留色层，底图做成一层屏幕高的水印，用 position: sticky 贴着屏幕跟随滚动，
-   滚到哪里都是完整的一张图、大小不变（sticky 在手机上也稳定，不用 background-attachment: fixed）。
-   水印的 opacity = 1 − 色层不透明度，和整张铺满时观感一致 */
+/* 高于屏幕的卡片（.is-tall）底图改为随滚动的粘性水印 */
 .view .gate-card {
   isolation: isolate;
   overflow: hidden;
@@ -1950,7 +1724,6 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
   pointer-events: none;
 }
 
-/* 弹窗面板 */
 .info-box {
   position: relative;
   width: 100%;
@@ -1976,7 +1749,6 @@ body.day-mode .info-date,
 body.day-mode .gallery-credit { color: var(--day-lilac); }
 body.day-mode .info-text p { color: var(--day-lilac); }
 
-/* 白天：卡片类表面的投影换暖棕色 */
 body.day-mode .detail-hero,
 body.day-mode .gate-card,
 body.day-mode .announcement,
@@ -1988,7 +1760,6 @@ body.day-mode .info-box {
     inset 0 1px 0 rgba(255,255,255,.28);
 }
 
-/* 花街相册 */
 .info-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2006,7 +1777,6 @@ body.day-mode .info-box {
 }
 .gallery-cell { position: relative; }
 
-/* 弹窗右上角的圆形关闭按钮 */
 .info-close {
   position: absolute; top: 16px; right: 18px;
   width: 36px; height: 36px;
@@ -2043,7 +1813,6 @@ body.day-mode .info-close {
 }
 body.day-mode .info-close:hover { color: var(--day-cream); }
 
-/* 活动群弹窗：「分享网站」「复制群号」并排放在二维码上方 */
 .group-box img { width: 100%; border-radius: var(--radius-sm); display: block; }
 .group-btn-row {
   display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
@@ -2108,9 +1877,8 @@ body.day-mode .share-site-btn:active {
   box-shadow: 0 2px 5px rgba(96,64,16,.18), inset 0 2px 6px rgba(120,80,20,.2);
 }
 
-/* 人机验证卡片（四种验证方式的界面由 verify.js 生成，样式见第 11 节末） */
-.captcha-card { position: relative; user-select: none; -webkit-user-select: none; }   /* 验证弹窗的文字一律不可选中 */
-/* 验证、闹铃、花语卡片都在 .gate-card 内，关闭按钮会被主按钮样式覆盖；用双 ID 提高特指度还原为圆形关闭按钮 */
+.captcha-card { position: relative; user-select: none; -webkit-user-select: none; }
+/* 双 ID 提高特指度，还原圆形关闭按钮 */
 #captchaOverlay #captchaClose,
 #alarmOverlay #alarmClose,
 #huayuOverlay #huayuClose {
@@ -2159,14 +1927,12 @@ body.day-mode #captchaOverlay #captchaClose:hover,
 body.day-mode #alarmOverlay #alarmClose:hover,
 body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-color: var(--accent); }
 
-/* 大图预览 */
 .lightbox-overlay {
   position: fixed; inset: 0; z-index: 300;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   background: rgba(6,5,12,.92);
 }
-.lightbox-overlay[hidden] { display: none; }
 .lightbox-overlay img {
   max-width: 95vw;
   max-height: 92vh;
@@ -2178,7 +1944,6 @@ body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-
   transition: transform .15s ease;
 }
 .lightbox-overlay img.is-dragging { cursor: grabbing; transition: none; }
-/* 长图：按页面宽度显示（最宽 760px），整个预览层上下滚动 */
 .lightbox-overlay.is-long {
   align-items: flex-start;
   overflow-y: auto;
@@ -2196,7 +1961,7 @@ body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-
   transition: none;
 }
 .lightbox-close {
-  position: fixed; top: 20px; right: 24px; z-index: 2;   /* 长图滚动时始终压在图片上面 */
+  position: fixed; top: 20px; right: 24px; z-index: 2;
   width: 44px; height: 44px;
   border-radius: 50%;
   font-size: 1.6rem;
@@ -2230,7 +1995,6 @@ body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-
   box-shadow: 0 2px 6px rgba(0,0,0,.35), inset 0 2px 7px rgba(0,0,0,.3);
 }
 
-/* 底部提示条 */
 .toast {
   position: fixed; left: 50%; bottom: 34px; z-index: 100;
   transform: translateX(-50%) translateY(20px);
@@ -2246,12 +2010,7 @@ body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-
-/* =============================================================================
-   12. 点赞按钮
-   .hj-like-detail：详情页横幅中的大号按钮
-   .hj-like-chip：浮在图片右上角的小号角标
-   ============================================================================= */
+/* ==== 12. 点赞 ==== */
 .hj-like-btn {
   display: inline-flex; align-items: center;
   gap: 7px;
@@ -2274,7 +2033,6 @@ body.day-mode #huayuOverlay #huayuClose:hover { color: var(--day-cream); border-
   cursor: pointer;
   transition: transform .2s, box-shadow .25s, border-color .2s, color .2s;
 }
-.hj-like-btn[hidden] { display: none; }
 .hj-like-btn:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
@@ -2340,10 +2098,7 @@ body.day-mode .hj-like-chip {
     rgba(255,249,235,.55);
 }
 
-
-/* =============================================================================
-   13. 页脚与响应式
-   ============================================================================= */
+/* ==== 13. 页脚与窄屏 ==== */
 footer { text-align: center; padding: 30px 24px 50px; color: var(--text-mute); font-size: .78rem; }
 body.day-mode footer { color: var(--day-title); }
 
@@ -2355,9 +2110,11 @@ body.day-mode footer { color: var(--day-title); }
   .hb-slot-4 { right: 150px; }
   .hb-slot-5 { right: 196px; }
   .vol-panel { right: 196px; top: 58px; }
-  .more-panel { right: 12px; top: 60px; gap: 6px; }   /* 60 = 按钮底边 54 + 间距 6 */
+  .more-panel { right: 12px; top: 60px; gap: 6px; }   /* 按钮底边 54 + 间距 6 */
 
   .hj-clock { margin-top: 14px; gap: 4px 9px; font-size: .74rem; padding: 0 4px; }
+  .hj-clock-sep { display: none; }
+  .hj-clock > .hj-clock-cell { flex-basis: 100%; justify-content: center; }
   .hj-weather { margin-top: 5px; gap: 3px 4px; font-size: .72rem; }
   .hj-wx img { width: 16px; height: 16px; }
   .hj-omen { gap: 2px 12px; font-size: .72rem; }
@@ -2371,16 +2128,12 @@ body.day-mode footer { color: var(--day-title); }
   .tile-grid.tile-grid-3 { grid-template-columns: 1fr; }
   .tile-hero { aspect-ratio: 1399/1374; }
   #archiveTile, #miniTile { aspect-ratio: 1404/792; }
-  /* 单列布局下卡片比例与桌面差异大，悬停设计图换成手机版 */
   body.fx-hover-enabled #latestTile .tile-hover-fx  { background-image: url('assets/site/tile-latest-hover-m.webp'); }
   body.fx-hover-enabled #archiveTile .tile-hover-fx { background-image: url('assets/site/tile-archive-hover-m.webp'); }
   body.fx-hover-enabled #miniTile .tile-hover-fx    { background-image: url('assets/site/tile-mini-hover-m.webp'); }
 
   .hero-play { right: 18px; bottom: 18px; padding: 10px 18px 10px 14px; font-size: .88rem; }
   .tile-hero.has-ticket .hero-play { right: 124px; }
-  /* 手机单列时封面接近正方形：视频区仍与封面等高（收起/展开时下方卡片不位移），
-     视频保持 16:9，多出的高度留给按钮区，按钮在剩余空间里垂直居中。
-     底层毛玻璃仍与封面卡片同位置同大小同形状，只是四周那圈边收窄一点 */
   .video-block { aspect-ratio: 1399/1374; padding: 10px; }
   .video-hero { flex: none; aspect-ratio: 16/9; margin-bottom: 0; }
   .video-actions { flex: 1 1 auto; align-items: center; align-content: center; min-height: 0; }
@@ -2391,7 +2144,6 @@ body.day-mode footer { color: var(--day-title); }
   .info-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 }
 
-/* 系统开启"减弱动态效果"时：关闭过渡、飘落和按钮位移，只保留静态样式 */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }
@@ -2407,9 +2159,6 @@ body.day-mode footer { color: var(--day-title); }
   .back-btn:active,
   .tab-btn:hover,
   .tab-btn:active,
-  .ticket-badge:active,
-  .ticket-badge-inline:hover,
-  .ticket-badge-inline:active,
   .gate-card button:hover,
   .gate-card button:active,
   #cancelEditAnnouncementBtn:hover,
@@ -2440,10 +2189,7 @@ body.day-mode footer { color: var(--day-title); }
   #huayuOverlay #huayuClose:active { transform: none; }
 }
 
-
-/* =============================================================================
-   14. 活动购票（访客表单 / 管理员面板）
-   ============================================================================= */
+/* ==== 14. 购票 ==== */
 .gate-card.ticket-card { max-width: 600px; text-align: left; }
 .ticket-card h2 { text-align: center; }
 .ticket-card > .hint { text-align: center; }
@@ -2462,16 +2208,14 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-stock b { margin: 0 3px; font-size: 1.15rem; color: var(--lantern-soft); }
 .ticket-stock.is-empty b { color: #e08e84; }
 .ticket-blocked { margin: 8px 0 4px; text-align: center; font-size: .95rem; color: var(--lantern-soft); }
-.ticket-blocked[hidden], #ticketForm[hidden], .ticket-result[hidden] { display: none; }
 
 .ticket-field { margin-bottom: 22px; }
 .ticket-label { display: block; font-size: .95rem; font-weight: 600; color: var(--cream); }
 .ticket-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
 .ticket-sub { margin: 3px 0 9px; font-size: .8rem; color: var(--text-mute); }
 .ticket-warn { margin-top: 8px; font-size: .8rem; color: var(--lantern-soft); }
-.ticket-warn[hidden] { display: none; }
 
-/* 与 .gate-card input 特指度相同，靠书写顺序覆盖：表单里输入框左对齐、不留下边距 */
+/* 特指度同 .gate-card input，依书写顺序覆盖 */
 .ticket-card input:not([type="checkbox"]) { text-align: left; }
 .ticket-card .ticket-field input:not([type="checkbox"]) { margin-bottom: 0; }
 .ticket-card textarea { min-height: 84px; margin-bottom: 10px; }
@@ -2480,7 +2224,6 @@ body.day-mode footer { color: var(--day-title); }
 
 .ticket-holder-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ticket-holder-row .th-name { flex: 1 1 180px; width: auto; }
-/* 第一位持票人没有说明文字了，给输入行补上和标题之间的间距；id 不合规时的实时提示 */
 .ticket-holder .ticket-label + .ticket-holder-row { margin-top: 9px; }
 .ticket-holder .th-warn { margin-top: 6px; color: #e08e84; }
 .ticket-card .ticket-holder-row .th-name.is-invalid { border-color: #e08e84; }
@@ -2506,9 +2249,7 @@ body.day-mode footer { color: var(--day-title); }
 .th-pending-opt { flex: none; }
 .ticket-anon { margin-left: 4px; }
 
-/* 数量步进器：整体做成一颗玻璃胶囊，− / + 只是胶囊里的两块可点区域。
-   注意白天模式的 .gate-card button:not(#id) 规则特指度到 (1,2,1)，会把 border: 0 也覆盖掉
-   （两个按钮因此各自长出一圈描边、被容器圆角切得很难看），所以这里同样用 :not(#_) 抬特指度。 */
+/* 白天按钮规则含 :not(#id)，此处同样用 :not(#_) 提高特指度 */
 .ticket-stepper {
   display: inline-flex; align-items: stretch;
   border: 1px solid rgba(233,224,255,.2);
@@ -2608,11 +2349,9 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-lookup-item.is-void .tli-body { text-decoration: line-through; }
 .tli-body { color: var(--text-soft); word-break: break-all; }
 
-/* 售罄 / 未开放提示弹窗 */
 .gate-card.ticket-notice { width: 100%; max-width: 380px; margin: 0; }
 .ticket-notice p { margin-bottom: 22px; font-size: 1.05rem; line-height: 1.7; color: var(--cream); }
 
-/* 管理员面板 */
 .gate-card.ticket-admin { max-width: 860px; }
 .ticket-admin .hint { margin-bottom: 12px; }
 .ticket-admin-stats {
@@ -2636,9 +2375,7 @@ body.day-mode footer { color: var(--day-title); }
   text-align: left;
 }
 .ticket-admin-key { font-size: .9rem; color: var(--text-soft); }
-/* 开关的关闭态和「刷新」只调尺寸/文字色，材质继承 .gate-card button 的玻璃 */
 .gate-card .ticket-switch { min-width: 190px; color: var(--text-soft); }
-/* 开启态保持实心强调色：这是状态标识，做成玻璃就看不出开没开 */
 .gate-card .ticket-switch.is-on {
   color: var(--accent-ink);
   background: var(--accent);
@@ -2648,7 +2385,6 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
 .gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
 
-/* 定时开关：两个时间框 + 保存/清除，窄屏时整体换行 */
 .ticket-sched-row { align-items: flex-start; }
 .ticket-sched-edit { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ticket-sched-edit label { font-size: .8rem; color: var(--text-mute); }
@@ -2663,7 +2399,6 @@ body.day-mode footer { color: var(--day-title); }
 }
 .ticket-admin-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 6px; }
 .gate-card .ticket-btn-ghost { color: var(--text-soft); }
-/* 红色危险按钮保持实心 */
 .gate-card .ticket-btn-danger { color: #fff; background: #b8473f; border-color: rgba(255,255,255,.2); }
 .gate-card .ticket-btn-danger:hover { color: #fff; border-color: rgba(255,255,255,.45); }
 
@@ -2695,7 +2430,6 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-table tr.is-over td { color: #ff7a6e; }
 .ticket-table .is-dup { color: #ffa257; font-weight: 600; }
 
-/* 已作废：整行划掉并压暗，一眼能和正常单区分开；操作列不划线，否则按钮不好认 */
 .ticket-table tr.is-void td { color: var(--text-mute); text-decoration: line-through; opacity: .72; }
 .ticket-table tr.is-void td.tt-actions { text-decoration: none; opacity: 1; }
 .ticket-table .tt-actions { white-space: nowrap; }
@@ -2715,7 +2449,6 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-table .tt-act.is-restore { color: #6fd08c; }
 .ticket-table .tt-act.is-restore:hover:not(:disabled) { background: rgba(111,208,140,.16); }
 
-/* 白天模式 */
 body.day-mode .ticket-label { color: var(--day-cream); }
 body.day-mode .ticket-sub,
 body.day-mode .ticket-legend,
@@ -2738,7 +2471,6 @@ body.day-mode .ticket-result h3,
 body.day-mode .tli-head,
 body.day-mode .ticket-warn { color: var(--day-gold); }
 body.day-mode .ticket-holder .th-warn { color: #c0392b; }
-/* 夜间标红的状态字（必填星号、售罄的余票数、超额的登记、提醒），白天换深一档的红，金底上才看得清 */
 body.day-mode .ticket-label.is-required::before,
 body.day-mode .ticket-stock.is-empty b,
 body.day-mode .ticket-lookup-item.is-over .tli-head,
@@ -2793,38 +2525,27 @@ body.day-mode .gate-card .ticket-btn-danger:hover { color: #fff; border-color: #
   .ticket-admin-row { justify-content: center; text-align: center; }
   .ticket-legend { margin-left: 0; }
 }
-/* 白天模式通用按钮规则带 :not(#id) 特指度较高，这里用同等特指度 + 书写顺序覆盖 */
+/* 与白天按钮规则同等特指度，依书写顺序覆盖 */
 body.day-mode .gate-card button#ticketClearBtn { color: #fff; background: #a83a2e; border-color: #7a2418; }
 body.day-mode .gate-card button#ticketClearBtn:hover { color: #fff; border-color: #5e1a10; }
 body.day-mode .gate-card button.ticket-switch.is-on:not(#_) { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
 body.day-mode .gate-card button.ticket-switch.is-on:not(#_):hover { color: #fff6e0; border-color: #6b4310; }
 
-/* =============================================================================
-   15. 人机验证：自动验证（Cloudflare Turnstile）+ 手动验证（狒科生 / 文科生 / 理科生）
-   结构与文案由 verify.js 生成；同一套样式在验证弹窗和购票表单里共用
-   -----------------------------------------------------------------------------
-   按钮一律走「透明玻璃」质感，和站内其他弹窗（标签页、返回、分享等）保持一致。
-   注意：白天模式的 .gate-card button 规则带 :not(#id)，特指度高到 (1,2,1)，
-   所以这里的按钮规则都加一个永不匹配的 :not(#_) 把特指度抬到同一量级再覆盖。
-   ============================================================================= */
+/* ==== 15. 人机验证 ==== */
 .verify-host {
   margin: 14px 0 4px;
-  /* 题面画在 canvas 上时取这个色（昼夜各一套，verify.js 直接读这个变量） */
+  /* verify.js 读取此变量绘制题面 */
   --verify-ink: var(--lantern-soft);
-  /* 验证界面里的文字一律不可选中：既防顺手复制题目，也少给脚本一条取文的路 */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 body.day-mode .verify-host { --verify-ink: var(--day-gold); }
-.verify-host[hidden] { display: none; }
 
-/* 题面的 canvas：算式和飞花令的令字都画成图，DOM 里不留文字 */
 .verify-canvas { display: inline-block; vertical-align: middle; }
 .verify-key-canvas { margin: 0 1px; vertical-align: middle; }
 .verify-expr-wrap { margin: 2px 0 12px; text-align: center; }
 
-/* --- 所有按钮共用的玻璃底 --- */
 .verify-host button.verify-tab:not(#_),
 .verify-host button.verify-opt:not(#_),
 .verify-host button.verify-ok:not(#_),
@@ -2873,13 +2594,11 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
   box-shadow: 0 2px 5px rgba(8,6,18,.22), inset 0 2px 6px rgba(8,6,18,.26);
 }
 
-/* --- 手动验证的三种方式（狒科生 / 文科生 / 理科生），归在「手动验证」下面 --- */
 .verify-tabs {
   display: flex; justify-content: center; align-items: center; flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
 }
-.verify-tabs[hidden] { display: none; }
 .verify-tabs-label {
   margin-right: 2px;
   font-size: .8rem;
@@ -2888,7 +2607,6 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
 }
 .verify-tabs-label::after { content: "："; }
 .verify-host button.verify-tab:not(#_) { padding: 7px 15px; font-size: .82rem; font-weight: 600; }
-/* 选中态保持实心：做成玻璃就分不出选的是哪一种 */
 .verify-host button.verify-tab.is-on:not(#_) {
   color: var(--accent-ink);
   background:
@@ -2902,23 +2620,17 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
 }
 .verify-host button.verify-tab.is-on:not(#_):hover { color: var(--accent-ink); border-color: rgba(255,255,255,.5); }
 
-/* 状态提示：出题中 / 答错 / 组件加载失败… */
 .verify-tip { margin: 0 0 12px; font-size: .85rem; line-height: 1.6; color: var(--text-mute); text-align: center; }
-.verify-tip[hidden] { display: none; }
 .verify-tip.is-error { color: #e08e84; }
 .verify-tip.is-note { color: var(--lantern-soft); }
 
 .verify-body { min-height: 72px; }
 .verify-cf { display: flex; align-items: center; justify-content: center; min-height: 65px; }
 .verify-q { margin-bottom: 12px; font-size: .95rem; line-height: 1.7; color: var(--text-soft); text-align: center; }
-.verify-sub { display: block; margin-top: 4px; font-size: .78rem; color: var(--text-mute); }
 
-/* --- 自动验证 ⇄ 手动验证的切换按钮（在验证区下方） --- */
 .verify-switch { margin-top: 14px; text-align: center; }
-.verify-switch[hidden] { display: none; }
 .verify-host button.verify-switch-btn:not(#_) { padding: 8px 20px; font-size: .82rem; font-weight: 600; }
 
-/* 狒科生：一个职业图标 + 三个职业名 */
 .verify-job { display: flex; justify-content: center; margin: 2px 0 12px; }
 .verify-job-icon {
   width: 72px; height: 72px;
@@ -2931,7 +2643,6 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
 .verify-options { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
 .verify-host button.verify-opt:not(#_) { min-width: 104px; padding: 9px 18px; font-size: .88rem; font-weight: 600; }
 
-/* 文科生 / 理科生：输入框 + 确认 */
 .verify-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; }
 .verify-host input.verify-input {
   flex: 1 1 180px;
@@ -2940,12 +2651,11 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
   margin: 0;
   font-size: .9rem;
   text-align: center;
-  user-select: text;          /* 输入框本身要能选中 / 编辑 */
+  user-select: text;
   -webkit-user-select: text;
 }
 .verify-host button.verify-ok:not(#_) { padding: 10px 20px; font-size: .9rem; font-weight: 600; }
 
-/* 文科生的提示：10 个字，点一下填进输入框 */
 .verify-hint-wrap { margin-top: 12px; text-align: center; }
 .verify-hint-note { margin: 10px 0 0; font-size: .78rem; color: var(--text-mute); }
 .verify-hint-chars { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -2958,7 +2668,6 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
   border-radius: 12px;
 }
 
-/* 通过之后题目撤掉，只留这一行 */
 .verify-done {
   display: flex; align-items: center; justify-content: center;
   gap: 9px;
@@ -2979,7 +2688,6 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
 }
 body.day-mode .verify-done { color: var(--day-lilac); }
 
-/* 小按钮：换一题 / 提示 / 返回自动验证 */
 .verify-actions { margin-top: 12px; text-align: center; }
 .verify-host button.verify-mini:not(#_) {
   padding: 5px 14px;
@@ -2988,12 +2696,10 @@ body.day-mode .verify-done { color: var(--day-lilac); }
   color: var(--pill-ink);
 }
 
-/* 白天模式：金色卡片上用暖色玻璃，和公告的编辑 / 删除小按钮同一质感 */
 body.day-mode .verify-tip { color: var(--day-lilac); }
 body.day-mode .verify-tip.is-error { color: #a83a2e; }
 body.day-mode .verify-tip.is-note { color: var(--day-gold); }
 body.day-mode .verify-q { color: var(--day-lilac); }
-body.day-mode .verify-sub,
 body.day-mode .verify-hint-note,
 body.day-mode .verify-tabs-label,
 body.day-mode .verify-job-fallback { color: var(--day-lilac); }
@@ -3042,7 +2748,6 @@ body.day-mode .verify-host button.verify-tab.is-on:not(#_):hover { color: var(--
 body.day-mode .verify-host input.verify-input { text-align: center; }
 body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color: #c98f3a; }
 
-/* 窄屏：按钮换行、输入框占满一行 */
 @media (max-width: 560px) {
   .verify-tabs { gap: 6px; }
   .verify-tabs-label { flex: 1 1 100%; text-align: center; margin-right: 0; }
@@ -3053,15 +2758,12 @@ body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color:
   .verify-host button.verify-switch-btn:not(#_) { padding: 8px 16px; font-size: .78rem; }
 }
 
-/* =============================================================================
-   16. 管理功能：上方胶囊按钮 + 弹窗
-   ============================================================================= */
+/* ==== 16. 管理弹窗 ==== */
 .admin-pills {
   display: flex; justify-content: center; flex-wrap: wrap;
   gap: 10px;
   margin: 4px auto 28px;
 }
-.admin-pills[hidden] { display: none; }
 #adminModalOverlay { z-index: 210; }
 .admin-modal {
   position: relative;
@@ -3072,14 +2774,12 @@ body.day-mode .verify-job-icon { background: rgba(255,251,238,.5); border-color:
   overscroll-behavior: contain;
   border-radius: var(--radius);
   padding: 0;
-  /* 玻璃边框画在弹窗本身上（和 .gate-card 同一套阴影），里面的面板不再另画边框，免得双重边框 */
   box-shadow:
     0 2px 8px rgba(8,6,18,.2),
     0 18px 40px rgba(0,0,0,.32),
     inset 0 0 0 1px rgba(255,255,255,.08),
     inset 0 1px 0 rgba(255,255,255,.16);
 }
-/* 弹窗里的面板去掉自身外边距和边框，宽度、边框都交给弹窗 */
 .admin-modal .gate-card {
   max-width: none;
   margin: 0;
@@ -3097,7 +2797,6 @@ body.day-mode .admin-modal {
 body.day-mode .admin-modal .gate-card { background: none; box-shadow: none; }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
-/* 区服下拉的大区分组 */
 .ticket-card select optgroup { font-style: normal; font-weight: 600; color: var(--text-mute); background: var(--ink-2); }
 .ticket-card select option { font-weight: 400; color: var(--cream); background: var(--ink-2); }
 body.day-mode .ticket-card select optgroup { color: var(--day-lilac); background: #f6e3bb; }
@@ -3109,13 +2808,8 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
   .admin-pills .tab-btn { padding: 8px 14px; font-size: .82rem; }
 }
 
-/* =============================================================================
-   17. 闹铃与倒计时
-   - 弹窗（.alarm-card 复用 .gate-card 的玻璃卡片与按钮底子）
-   - 页面小组件（.alm-widget，交互与日历小组件一致：拖动 / 双击复位 / ± 缩放 / × 收起）
-   ============================================================================= */
+/* ==== 17. 闹铃与倒计时 ==== */
 
-/* 弹窗卡片：内容较多时在卡片内部滚动（同 .admin-modal 的做法） */
 .alarm-card {
   position: relative;
   width: 100%;
@@ -3127,7 +2821,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 }
 .alarm-card h2, .alarm-card > .hint { text-align: center; }
 .alarm-tabs { justify-content: center; margin-bottom: 18px; }
-.alarm-panel[hidden] { display: none; }
 
 .alarm-field { margin-bottom: 15px; }
 .alarm-label {
@@ -3140,7 +2833,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 .alarm-card .alarm-field input:not([type="checkbox"]) { margin-bottom: 0; }
 .alarm-card input[type="time"] { color-scheme: dark; }
 
-/* 时间类型分段选择（国服 / 艾欧泽亚）：radio 藏起来，label 做成胶囊 */
 .alarm-seg { display: flex; gap: 10px; }
 .alarm-seg label {
   position: relative;
@@ -3166,7 +2858,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
   border-color: rgba(255,255,255,.36);
 }
 
-/* 复选行与说明文字 */
 .alarm-check {
   display: flex; align-items: center;
   gap: 8px;
@@ -3181,7 +2872,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 .alarm-hint { margin: 6px 0 0; font-size: .76rem; line-height: 1.6; color: var(--text-mute); }
 .alarm-hint:empty { display: none; }
 
-/* 铃声 / 播放时长 / 试听 一排 */
 .alarm-row2 { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .alarm-row2-gap { margin-top: 15px; }
 .alarm-row2 > div { flex: 1 1 130px; }
@@ -3204,7 +2894,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 .alarm-card select:focus { outline: none; border-color: var(--accent); }
 .alarm-row2 > button { flex: 0 0 auto; padding: 10px 20px; font-size: .88rem; }
 
-/* 倒计时时长：时 / 分 / 秒 数字输入 */
 .alarm-dur-row { display: flex; align-items: center; gap: 8px; }
 .alarm-dur-row input[type="number"] {
   width: 72px;
@@ -3223,7 +2912,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 
 .alarm-add { display: block; width: 100%; margin-top: 6px; }
 
-/* 已添加列表 */
 .alarm-list-head {
   margin-top: 20px;
   padding-top: 14px;
@@ -3249,7 +2937,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 .alarm-item-btns button.is-danger { color: #e8a49c; border-color: rgba(224,142,132,.45); }
 .alarm-item-btns button.is-danger:hover { color: #ffc9c0; border-color: #e08e84; }
 
-/* 白天模式（弹窗） */
 body.day-mode .alarm-label { color: var(--day-cream); }
 body.day-mode .alarm-card input[type="time"],
 body.day-mode .alarm-dur-row input[type="number"] { color-scheme: light; }
@@ -3281,7 +2968,6 @@ body.day-mode .alarm-item-sub { color: var(--day-lilac); }
 body.day-mode .alarm-item-live { color: var(--day-gold); }
 body.day-mode .alarm-item-btns button.is-danger:not(#_) { color: #a03a26; border-color: rgba(160,58,38,.45); }
 
-/* 页面小组件：毛玻璃小卡片，--alm-zoom 控制缩放（锚点右上角），交互同日历 */
 .alm-widget {
   --alm-zoom: 1;
   position: fixed; top: 112px; right: 16px; z-index: 68;
@@ -3396,13 +3082,11 @@ body.day-mode .alarm-item-btns button.is-danger:not(#_) { color: #a03a26; border
   white-space: nowrap;
 }
 
-/* 响铃中：边框呼吸发光 */
 .alm-widget.is-ringing { border-color: rgba(240,181,98,.75); animation: almRingGlow 1.1s ease-in-out infinite; }
 @keyframes almRingGlow {
   50% { box-shadow: 0 0 0 4px rgba(240,181,98,.22), 0 10px 26px rgba(10,7,22,.38), inset 0 1px 0 rgba(255,255,255,.22); }
 }
 
-/* 白天模式（小组件） */
 body.day-mode .alm-widget {
   color: #5b4326;
   background:
@@ -3421,28 +3105,17 @@ body.day-mode .alm-btn:hover { border-color: #8a5a1c; color: var(--day-ink); }
 body.day-mode .alm-btn.is-hot { color: #fff; background: #b3402a; border-color: #b3402a; }
 body.day-mode .alm-meta { border-top-color: rgba(122,84,32,.25); color: var(--day-brown-soft); }
 
-/* 手机：组件与弹窗收窄 */
 @media (max-width: 640px) {
   .alm-widget { top: 96px; right: 8px; width: min(224px, calc(100vw - 16px)); }
   .alarm-card { padding: 30px 18px; }
   .alarm-row2 > div { flex: 1 1 110px; }
 }
 
-/* 减弱动态效果：关掉呼吸与发光动画 */
 @media (prefers-reduced-motion: reduce) {
   .alm-widget, .alm-widget.is-ringing, .alm-btn.is-hot { animation: none; }
 }
 
-
-/* =============================================================================
-   18. 按下反馈：玻璃按钮在 :active 时填成实心强调色
-   -----------------------------------------------------------------------------
-   写在文件最末尾，靠书写顺序压过前面的白天模式规则（不少白天规则带 :not(#id)，
-   特指度很高，单靠类选择器盖不住）。这里只改颜色，位移仍由各自原有的 :active 负责，
-   以免破坏「减弱动态效果」里对 transform 的关闭。
-   红色危险按钮和开关的开启态本来就是实心，排除在外，避免按一下变成强调色。
-   窗口右上角的 × 同样填色；点完到关窗之间（main.js 加的 .is-closing）保持按下的样子。
-   ============================================================================= */
+/* ==== 18. 按下反馈 ==== */
 .gate-card button:not(.ticket-btn-danger, .ticket-switch.is-on):active,
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn, .ticket-btn-danger, .ticket-switch.is-on):active,
 .gate-card .ticket-stepper button:not(#_):active,
@@ -3465,8 +3138,6 @@ body.day-mode .tab-btn:active,
 body.day-mode .video-action:active,
 .back-btn:active,
 body.day-mode .back-btn:active,
-.ticket-badge-inline:active,
-body.day-mode .ticket-badge-inline:active,
 .info-close:active,
 .info-close.is-closing,
 body.day-mode .info-close:active,
@@ -3493,12 +3164,8 @@ body.day-mode #huayuOverlay #huayuClose.is-closing,
   box-shadow: inset 0 2px 7px rgba(58,34,6,.26);
 }
 
+/* ==== 19. 网站说明与反馈 ==== */
 
-/* =============================================================================
-   19. 网站说明弹窗（首页底部小字）+ 反馈建议箱 + 购票管理的部分设置项
-   ============================================================================= */
-
-/* 页脚：看起来就是普通文字，鼠标悬停才出现下划线 */
 footer .footer-link {
   color: inherit;
   text-decoration: none;
@@ -3508,23 +3175,18 @@ footer .footer-link {
 footer .footer-link:hover,
 footer .footer-link:focus-visible { text-decoration: underline; }
 footer .footer-link:focus-visible { outline: none; }
-/* 页脚三行居中，整块点开「网站说明」；后两行（版权）小一点、淡一点 */
 footer .footer-link { display: inline-block; max-width: 100%; }
 footer .footer-line { display: block; }
 footer .footer-copy { display: block; margin-top: 6px; font-size: .68rem; line-height: 1.6; opacity: .75; }
 footer .footer-copy + .footer-copy { margin-top: 2px; }
 
-/* 购票页：购票 / 查询登记 标签 */
 .ticket-tabs { justify-content: center; max-width: 600px; margin: 0 auto 4px; }
 .ticket-tabs .tab-btn { min-width: 104px; }
 
-/* 弹窗外壳沿用 .info-box（和花街介绍同一套底色），只把宽度收窄一些 */
 .about-box { max-width: 640px; padding: 42px 36px 36px; }
 .about-box .info-title { margin-bottom: 16px; }
 .about-tabs { margin-bottom: 22px; }
-.about-panel[hidden] { display: none; }
 
-/* 关于网站 */
 .about-text p { margin-bottom: 14px; font-size: .98rem; line-height: 1.95; color: var(--text-soft); }
 .about-text .about-sub {
   margin: 18px 0 8px;
@@ -3558,7 +3220,6 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 }
 .about-inline-link:hover { color: var(--cream); }
 
-/* 反馈与建议：问卷 */
 .about-field { margin-bottom: 18px; }
 .about-label { display: block; margin-bottom: 6px; font-size: .92rem; font-weight: 600; color: var(--cream); }
 .about-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
@@ -3596,11 +3257,9 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 }
 .about-form input:not([type="checkbox"]) { padding: 10px 16px; border-radius: 999px; }
 .about-form #feedbackContact { margin-top: 10px; }
-.about-form #feedbackContact[hidden] { display: none; }
 .about-form select:focus,
 .about-form textarea:focus,
 .about-form input:focus { outline: none; border-color: var(--accent); }
-/* 自绘复选框（.gate-card 那套只在卡片里生效，这里单独写一份） */
 .about-form input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -3618,18 +3277,15 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 .about-form input[type="checkbox"]:checked::after { content: "✓"; color: var(--accent-ink); font-size: 12px; font-weight: 700; }
 .about-check { white-space: normal; }
 .about-verify { margin: 6px 0 4px; }
-.about-verify[hidden] { display: none; }
 .about-verify input.verify-input { text-align: center; }
 .about-submit-row { display: flex; justify-content: center; margin-top: 16px; }
 .about-submit-row .share-site-btn { margin: 0; min-width: 140px; }
 .about-submit-row .share-site-btn:disabled { opacity: .6; cursor: default; transform: none; }
-#feedbackForm[hidden], .about-done[hidden] { display: none; }
 .about-form .form-msg { margin-top: 12px; text-align: center; }
 .about-done { padding: 26px 0 10px; text-align: center; }
 .about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--lantern-soft); }
 .about-done .share-site-btn { margin-top: 18px; }
 
-/* 分享网站 */
 .about-share-text {
   margin: 0 0 20px;
   padding: 14px 18px;
@@ -3645,7 +3301,6 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
   -webkit-user-select: all;
 }
 
-/* 白天模式 */
 body.day-mode .about-text p,
 body.day-mode .about-list dd,
 body.day-mode .about-share-text { color: var(--day-lilac); }
@@ -3676,30 +3331,21 @@ body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0
   .about-list dd:last-child { margin-bottom: 0; }
 }
 
-/* 购票页：余票后面的「每日 xx:xx 刷新」 */
 .ticket-reset-hint { display: block; margin-top: 1px; font-size: .72rem; line-height: 1.6; text-align: center; white-space: pre-line; color: var(--text-mute); }
-.ticket-reset-hint[hidden] { display: none; }
 body.day-mode .ticket-reset-hint { color: var(--day-lilac); }
 .ticket-stock:has(.ticket-reset-hint:not([hidden])) { border-radius: 18px; text-align: center; }
-/* 刷新时间和定时开关时间可能有两行；余票不显示时只剩小字那几行 */
-.ticket-stock[hidden], #ticketStockText[hidden] { display: none; }
 #ticketStockText[hidden] + .ticket-reset-hint { margin-top: 0; font-size: .78rem; }
 
-/* 购票管理：余票显示方式下拉框按文字宽度 */
 .ticket-admin #ticketRemainModeSelect { flex: 0 1 auto; }
 
-/* 查看购票情况（只读）：「购票管理」子标签整个不出现（admin.js 控制），订单表里没有操作列 */
 .ticket-admin.is-readonly [data-ta-pane="settings"],
 .ticket-admin.is-readonly .ticket-table th.tt-actions-th,
 .ticket-admin.is-readonly .ticket-table td.tt-actions { display: none !important; }
-#ticketViewBoard[hidden] { display: none; }
 
-/* 购票管理：标题输入框更宽 */
 .gate-card .ticket-title-edit input { width: 260px; max-width: 58vw; }
 .ticket-title-preview { color: var(--text-mute); }
 body.day-mode .ticket-title-preview { color: var(--day-lilac); }
 
-/* 反馈建议箱（管理员） */
 .admin-pills .fb-pill-badge {
   display: inline-block;
   min-width: 18px;
@@ -3713,7 +3359,6 @@ body.day-mode .ticket-title-preview { color: var(--day-lilac); }
   color: #fff;
   background: #c9463c;
 }
-.admin-pills .fb-pill-badge[hidden] { display: none; }
 .fb-admin-filters { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
 .fb-admin-filters select { flex: 0 1 auto; padding-top: 8px; padding-bottom: 8px; }
 .gate-card .fb-admin-filters button { padding: 8px 20px; font-size: .84rem; }
@@ -3761,12 +3406,8 @@ body.day-mode .about-form select {
   .gate-card .ticket-title-edit button { padding: 9px 16px; }
 }
 
+/* ==== 20. 购票入口与购票须知 ==== */
 
-/* =============================================================================
-   20. 购票入口（首页）+ 购票须知弹窗
-   ============================================================================= */
-
-/* 最新活动卡片上的圆形购票按钮：宽度用卡片宽度的百分比，任何屏宽下都跟卡片等比缩放 */
 .ticket-entry-btn {
   position: absolute; z-index: 5;
   right: 2.2%; bottom: 3%;
@@ -3781,7 +3422,6 @@ body.day-mode .about-form select {
   transition: transform .25s ease, filter .25s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.ticket-entry-btn[hidden] { display: none; }
 .ticket-entry-btn img {
   display: block;
   width: 100%; height: 100%;
@@ -3793,24 +3433,18 @@ body.day-mode .about-form select {
 .ticket-entry-btn:hover { transform: scale(1.07) rotate(-4deg); filter: drop-shadow(0 12px 24px rgba(8,6,18,.58)); }
 .ticket-entry-btn:active { transform: scale(.96); }
 .ticket-entry-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-/* 特效开着时轻轻上下浮动，吸引一下注意；悬停时停下来 */
 body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 3.2s ease-in-out infinite; }
 @keyframes ticketEntryBob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6%); }
 }
 
-/* 手机：卡片接近正方形，按钮按卡片宽度等比缩小，贴在右下角 */
 @media (max-width: 640px) {
   .ticket-entry-btn { width: 19%; right: 2.5%; bottom: 2%; }
 }
 
-/* 视频展开时：下方那行最右侧的「进入购票」。
-   左边放一个等宽的弹性空白（::before），中间那组按钮就仍然居中；
-   宽度不够时「进入购票」自动换到下一行，不会叠在别的按钮上 */
 .video-actions.has-ticket-entry::before { content: ""; flex: 1 1 0; }
 .video-ticket-slot { flex: 1 1 0; display: flex; justify-content: flex-end; min-width: max-content; }
-.video-ticket-slot[hidden] { display: none; }
 .video-action.video-action-ticket {
   font-weight: 700;
   letter-spacing: .06em;
@@ -3826,11 +3460,9 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 
   .video-ticket-slot { flex: 0 0 auto; }
 }
 
-/* 购票页：标题下方的「购票须知」 */
 .ticket-guide-row { display: flex; justify-content: center; margin: -10px 0 18px; }
 .gate-card button.ticket-guide-btn { padding: 6px 18px; font-size: .82rem; font-weight: 600; }
 
-/* 购票须知弹窗：内容区单独滚动，底部按钮常驻 */
 #ticketGuideOverlay { z-index: 230; }
 .info-box.guide-box {
   display: flex; flex-direction: column;
@@ -3942,7 +3574,6 @@ body.day-mode .guide-end { color: var(--day-lilac); }
 body.day-mode .guide-qa dd { border-color: rgba(138,90,28,.35); }
 body.day-mode .guide-steps li::marker { color: var(--day-gold); }
 body.day-mode .guide-actions { background: rgba(232,181,99,.92); border-color: rgba(138,90,28,.3); }
-/* 「我已阅读 / 知道了」：白天同样是实心强调色，和旁边的玻璃按钮分出主次 */
 body.day-mode .guide-actions .guide-ok-btn {
   color: var(--accent-ink);
   background:
@@ -3971,16 +3602,10 @@ body.day-mode .video-action.video-action-ticket {
 }
 body.day-mode .video-action.video-action-ticket:hover { color: var(--accent-ink); border-color: #fff; }
 
-/* =============================================================================
-   21. 场地使用登记（站内表单 #venue）+ 管理页「场地预约」
-   表单结构由 venue.js 生成；访客页和管理页的新增 / 修改表单共用这些样式
-   ============================================================================= */
+/* ==== 21. 场地使用登记 ==== */
 .venue-card .venue-intro { line-height: 1.8; text-align: left; }
-.venue-form .ticket-field[hidden],
-.venue-submit[hidden],
-.venue-other[hidden] { display: none; }
 
-/* 与 .gate-card input:not([type="checkbox"]) 特指度相同，靠书写顺序覆盖：单选框不能被撑成整行的输入框 */
+/* 特指度同 .gate-card input，依书写顺序覆盖 */
 .gate-card input[type="radio"] {
   appearance: none;
   -webkit-appearance: none;
@@ -4002,7 +3627,6 @@ body.day-mode .gate-card input[type="radio"] { background: #f6e3bb; border-color
 body.day-mode .gate-card input[type="radio"]:checked { border-color: #8a5a1c; }
 body.day-mode .gate-card input[type="radio"]:checked::after { background: #8a5a1c; }
 
-/* 选项：整块可点，选中后描边高亮 */
 .venue-choices { display: grid; gap: 8px; margin-top: 9px; }
 .venue-choice {
   display: flex; align-items: center; gap: 10px;
@@ -4025,7 +3649,6 @@ body.day-mode .gate-card input[type="radio"]:checked::after { background: #8a5a1
 .venue-form .ticket-field input:not([type="checkbox"]):not([type="radio"]) { margin-bottom: 0; text-align: left; }
 .venue-form textarea { min-height: 84px; margin-bottom: 0; }
 
-/* 场地：按 22 / 23 区分两组，每组自适应列数 */
 .venue-places { display: grid; gap: 14px; margin-top: 9px; }
 .venue-place-title { margin-bottom: 7px; font-size: .82rem; font-weight: 600; letter-spacing: .06em; color: var(--lantern-soft); }
 .venue-place-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
@@ -4040,7 +3663,6 @@ body.day-mode .venue-choice:hover { color: var(--day-cream); border-color: #8a5a
 body.day-mode .venue-choice:has(input:checked) { color: var(--day-cream); border-color: #8a5a1c; background: rgba(255,246,224,.85); }
 body.day-mode .venue-place-title { color: var(--day-gold); }
 
-/* ---- 管理页「场地预约」 ---- */
 .gate-card.venue-admin { text-align: center; }
 .venue-edit {
   margin: 0 0 18px;
@@ -4050,7 +3672,6 @@ body.day-mode .venue-place-title { color: var(--day-gold); }
   text-align: left;
   background: rgba(255,255,255,.03);
 }
-.venue-edit[hidden] { display: none; }
 .venue-edit-title { margin-bottom: 14px; font-size: 1.05rem; text-align: center; color: var(--lantern-soft); }
 .venue-edit-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 .venue-edit .form-msg { text-align: center; }
@@ -4093,20 +3714,15 @@ body.day-mode .feedback-admin .fb-actions button.is-restore:not(#_) { color: #2f
   .venue-kv { grid-template-columns: 1fr; gap: 0; }
   .venue-kv dd { margin-bottom: 6px; }
 }
-/* 日期 / 时间框：夜间用深色控件，日历图标才看得见；白天换回浅色 */
 .venue-form input[type="date"],
 .venue-form input[type="datetime-local"] { color-scheme: dark; }
 body.day-mode .venue-form input[type="date"],
 body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 
-/* =============================================================================
-   22. 活动问卷（最新活动详情页「反馈与建议」，表单由 survey.js 生成）+ 管理页「活动问卷」
-   选项格子沿用场地登记的 .venue-choice；表单外框沿用购票页的 .ticket-card / .ticket-field
-   ============================================================================= */
+/* ==== 22. 活动问卷 ==== */
 .gate-card.survey-card { max-width: none; margin: 0 0 20px; }
 .survey-card .survey-intro { margin-bottom: 6px; line-height: 1.8; text-align: left; }
 .survey-card .ticket-blocked { margin: 18px 0 6px; }
-#surveyForm[hidden], .survey-done[hidden] { display: none; }
 
 .survey-draft-note {
   margin: 14px 0 0;
@@ -4118,9 +3734,8 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
   background: rgba(185,164,224,.1);
   border: 1px dashed var(--line);
 }
-.survey-draft-note[hidden] { display: none; }
 
-/* 文字按钮（清空重填、跳到反馈与建议）：:not(#_) 压过 .gate-card button 的玻璃按钮样式 */
+/* :not(#_) 压过 .gate-card button */
 .survey-card button.survey-link:not(#_) {
   display: inline;
   margin: 0 2px;
@@ -4142,7 +3757,6 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-card button.survey-link:not(#_):hover { color: var(--cream); transform: none; box-shadow: none; }
 .survey-card button.survey-link:not(#_):active { transform: none; box-shadow: none; }
 
-/* 分节标题：一、活动宣传 …… 右边拖一条细线 */
 .survey-sec { margin-top: 30px; }
 .survey-sec-title {
   display: flex; align-items: center; gap: 10px;
@@ -4165,15 +3779,11 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
   background: var(--lantern-soft);
 }
 
-.survey-form .survey-q[hidden] { display: none; }
-/* 题号：字号、字重、颜色都跟着右边的题干走（白天 / 夜间一致） */
 .survey-no { font-size: inherit; font-weight: inherit; font-style: inherit; color: inherit; }
 .survey-q .ticket-sub:last-child { margin-bottom: 0; }
-/* 没有说明文字时，题目和输入框之间补一点间距 */
 .survey-q > .ticket-label + textarea,
 .survey-q > .ticket-label + input[type="text"] { margin-top: 9px; }
 
-/* 选项：默认自适应列数；是 / 否两列；项目格子宽一点 */
 .survey-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 9px; }
 .survey-options.is-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 360px; }
 .survey-options.is-wide,
@@ -4182,7 +3792,6 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-choice-text small { display: block; margin-top: 1px; font-size: .74rem; line-height: 1.45; color: var(--text-mute); }
 .gate-card .survey-other { margin-top: 8px; }
 
-/* 1～10 分：十个格子，整格可点；选中后填满强调色 */
 .survey-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .survey-scale-opt { position: relative; display: block; min-width: 0; cursor: pointer; }
 .gate-card .survey-scale-opt input[type="radio"] {
@@ -4210,7 +3819,6 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-scale-opt input:focus-visible + span { outline: 2px solid var(--accent-soft); outline-offset: 2px; }
 .survey-scale-ends { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: .74rem; color: var(--text-mute); }
 
-/* 游玩项目：每个选中的项目一张小卡片（打分 + 意见） */
 .survey-q.is-card {
   padding: 14px 16px 16px;
   border: 1px solid var(--line);
@@ -4225,9 +3833,7 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-card .survey-q textarea { min-height: 76px; margin-bottom: 0; }
 .survey-card .survey-q.is-card textarea { min-height: 62px; }
 
-/* 没答 / 答错：题目标红 + 一行提示 */
 .survey-err { margin-top: 7px; font-size: .8rem; color: #e08e84; }
-.survey-err[hidden] { display: none; }
 .survey-q.is-error .survey-scale-opt span,
 .survey-q.is-error .venue-choice { border-color: rgba(224,142,132,.7); }
 .survey-q.is-error.is-card { border-color: rgba(224,142,132,.7); }
@@ -4238,7 +3844,6 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-done { padding: 12px 0 4px; }
 .survey-done-more { font-size: .85rem; line-height: 1.8; color: var(--text-soft); }
 
-/* 白天 */
 body.day-mode .survey-draft-note { color: var(--day-lilac); background: rgba(255,252,240,.45); border-color: #c98f3a; }
 body.day-mode .survey-card button.survey-link:not(#_) { color: var(--day-brown); background: none; border: 0; box-shadow: none; }
 body.day-mode .survey-card button.survey-link:not(#_):hover { color: var(--day-cream); }
@@ -4273,16 +3878,11 @@ body.day-mode .survey-submit { border-top-color: rgba(138,90,28,.35); }
   .survey-options.is-long { grid-template-columns: 1fr; }
   .survey-q.is-card { padding: 12px 12px 14px; }
 }
-/* 手机竖屏：十个格子太挤，换成两排各五个 */
 @media (max-width: 480px) {
   .survey-scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .survey-scale-opt span { height: 40px; }
 }
 
-/* ---- 管理页「活动问卷」 ---- */
-.survey-admin select[hidden],
-.survey-admin .survey-stats[hidden],
-.survey-admin .fb-admin-list[hidden] { display: none; }
 .survey-stats { display: grid; gap: 12px; text-align: left; }
 .sv-stat-sec { margin: 10px 0 0; font-size: .95rem; font-weight: 700; color: var(--lantern-soft); }
 .sv-overview { padding: 14px 16px; border-radius: var(--radius-sm); background: rgba(240,181,98,.08); border: 1px solid rgba(240,181,98,.3); }
@@ -4351,11 +3951,8 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   .survey-item .venue-kv dt { max-width: none; }
 }
 
-/* =============================================================================
-   23. 活动回顾（外链视频、跳转按钮、剪影 / 直播回放 / 相册）· 首页弹窗公告 · 管理页「弹窗公告」
-   ============================================================================= */
+/* ==== 23. 活动回顾与弹窗公告 ==== */
 
-/* 活动回顾：B 站外链视频（先放封面，点了才加载播放器） */
 .tab-video { margin-bottom: 18px; }
 .tab-video-frame {
   position: relative;
@@ -4380,20 +3977,17 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   background-size: cover;
   background-position: center;
 }
-/* 封面上压一层淡淡的暗色，播放按钮看得清 */
 .tab-video-facade::before {
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(10,8,20,.05) 0%, rgba(10,8,20,.38) 100%);
   transition: background .25s;
 }
 .tab-video-facade:hover::before { background: linear-gradient(180deg, rgba(10,8,20,.12) 0%, rgba(10,8,20,.5) 100%); }
-/* 借用首页「播放视频」按钮的样式，只是改成居中、不再绝对定位到右下角 */
 .tab-video-facade .tab-video-play { position: relative; right: auto; bottom: auto; pointer-events: none; }
 .tab-video-facade:hover .tab-video-play { transform: scale(1.06); border-color: var(--accent); }
 .tab-video-actions { display: flex; justify-content: center; margin-top: 12px; }
 .tab-video-actions .video-action { font-size: .82rem; padding: 7px 18px; }
 
-/* 活动回顾：跳转按钮（标题很长，允许换行、居中，不撑出屏幕） */
 .tab-links {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   margin: 4px 0 22px;
@@ -4408,13 +4002,12 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   overflow-wrap: anywhere;
 }
 
-/* 首页弹窗公告 */
-#sitePopupOverlay { z-index: 210; }   /* 管理页「预览」时盖在管理弹窗上面；大图（300）仍在它上面 */
+#sitePopupOverlay { z-index: 210; }
 .site-popup-box { max-width: 560px; padding: 40px 34px 30px; }
 .site-popup-title {
   font-size: 1.9rem;
   line-height: 1.3;
-  margin: 0 36px 18px 0;   /* 右边给关闭按钮让位 */
+  margin: 0 36px 18px 0;
   overflow-wrap: anywhere;
 }
 .site-popup-image {
@@ -4427,7 +4020,6 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   background: rgba(0,0,0,.18);
   cursor: zoom-in;
 }
-.site-popup-image[hidden] { display: none; }
 .site-popup-body {
   margin-bottom: 22px;
   font-size: 1rem;
@@ -4436,14 +4028,12 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.site-popup-body[hidden] { display: none; }
 .site-popup-body a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 .site-popup-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
 body.day-mode .site-popup-body { color: var(--day-lilac); }
 body.day-mode .site-popup-body a { color: var(--day-lilac); }
 body.day-mode .site-popup-image { background: rgba(255,252,240,.35); }
 
-/* 管理页「弹窗公告」 */
 #popupAdminPanel { text-align: left; }
 #popupAdminPanel h2, #popupAdminPanel > .hint { text-align: center; }
 #popupToggleBtn { display: block; margin: -8px auto 22px; }
@@ -4466,13 +4056,10 @@ body.day-mode .popup-admin-count { color: var(--day-lilac); }
   .tab-links .tab-link-btn { padding: 10px 18px; font-size: .82rem; }
 }
 
-/* 配图缩略图右上角的 ×：.gate-card button 的左右内边距把它撑成了椭圆（「发布公告」和「弹窗公告」共用） */
 .gate-card .announcement-image-preview button { padding: 0; display: flex; align-items: center; justify-content: center; }
 
-/* 活动回顾分三块 —— 活动剪影（视频 + 毛玻璃底）/ 直播回放（磁贴）/ 活动相册
-   视频的毛玻璃底和下面的直播回放磁贴用同一个比例 --review-ratio，两块一样大 */
 .tab-panel { --review-ratio: 1.6; }
-.tab-sec-title {   /* 和顶部「花舞之街 · 薰风花语町」同款：毛笔字、加粗、同色 */
+.tab-sec-title {
   display: flex; align-items: center; gap: 12px;
   margin: 30px 0 14px;
   font-family: var(--brush);
@@ -4482,7 +4069,7 @@ body.day-mode .popup-admin-count { color: var(--day-lilac); }
   color: var(--lantern-soft);
 }
 .tab-sec-title:first-child { margin-top: 4px; }
-.tab-sec-title::after {   /* 标题右边一条淡淡的分隔线 */
+.tab-sec-title::after {
   content: ""; flex: 1; height: 1px;
   background: linear-gradient(90deg, rgba(255,214,153,.4), rgba(255,214,153,0));
 }
@@ -4490,8 +4077,8 @@ body.day-mode .tab-sec-title { color: var(--day-title); }
 body.custom-bg.day-mode .section-title,
 body.custom-bg.day-mode .tab-sec-title { text-shadow: 0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34); }
 body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91,54,16,.45), rgba(91,54,16,0)); }
+body.day-mode .info-box .tab-sec-title { color: var(--day-gold); text-shadow: none; }
 
-/* 活动剪影：借用首页 .video-block 的淡毛玻璃，视频和「去 B 站看」都压在玻璃上 */
 .tab-video.video-block {
   aspect-ratio: var(--review-ratio);
   margin-bottom: 0;
@@ -4503,9 +4090,8 @@ body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91
   aspect-ratio: auto;
   margin-bottom: 12px;
 }
-.tab-video.video-block .tab-video-actions { margin-top: 0; flex: 0 0 auto; }   /* 首页手机版会把按钮行拉伸占满，这里不要 */
+.tab-video.video-block .tab-video-actions { margin-top: 0; flex: 0 0 auto; }
 
-/* 直播回放：首页磁贴同款（背景图 + 底部渐变 + 毛笔字），整块可点，大小和上面的视频块一样 */
 .tab-links .tab-tile-link {
   display: block;
   align-self: stretch;
@@ -4524,7 +4110,6 @@ body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91
 }
 .tab-tile-link .tile-overlay {
   padding: 28px 30px;
-  /* 封面图底部自带 B 站的播放数 / 时长，渐变压深一点，文字更清楚 */
   background: linear-gradient(180deg, rgba(28,24,48,0) 30%, rgba(20,16,36,.62) 62%, rgba(20,16,36,.9) 100%);
 }
 .tab-tile-link h3 {
@@ -4548,7 +4133,6 @@ body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91
   .tab-tile-link .tile-hint { font-size: .74rem; }
 }
 
-/* 首页「最新活动」卡片：左下角显示活动名 + 日期 */
 #latestTile .tile-overlay h2 { text-shadow: 0 2px 10px rgba(0,0,0,.45); }
 #latestTile .tile-overlay p { margin-bottom: 0; font-size: 1rem; letter-spacing: .06em; color: var(--cream); opacity: .9; }
 @media (max-width: 640px) {
@@ -4557,13 +4141,9 @@ body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91
   #latestTile .tile-overlay p { font-size: .9rem; }
 }
 
+/* ==== 24. 购票页与购票管理 ==== */
 
-/* =============================================================================
-   24. 购票页显示开关、查询结果、购票管理（轮次 / 刷新点 / 须知）、详细订单、售票统计
-   ============================================================================= */
-
-/* ---- 购票页：不显示网站标题（管理页「显示网站标题」关掉时，ticket.js 给 <html> 加 hj-ticket-bare）
-   标题、地址、时间天气条都藏起来，右上角只留昼夜和特效两个按钮 ---- */
+/* hj-ticket-bare：购票页隐藏网站标题 */
 html.hj-ticket-bare .site-header .brand,
 html.hj-ticket-bare .site-header .tagline,
 html.hj-ticket-bare .site-header .hj-clock,
@@ -4583,13 +4163,9 @@ html.hj-ticket-bare #fxToggle { right: 70px; }
   html.hj-ticket-bare #fxToggle { right: 58px; }
 }
 
-/* ---- 购票页：与首页隔离时没有返回按钮；留言栏 / 须知按钮可以关掉 ---- */
 #view-ticket.is-isolated .back-btn { display: none !important; }
 #view-ticket.is-isolated > .ticket-card:first-of-type { margin-top: 28px; }
-#ticketMessageField[hidden],
-#ticketGuideRow[hidden] { display: none !important; }
 
-/* ---- 购票页：停留时间倒计时 ---- */
 .ticket-idle {
   margin: -6px 0 16px;
   font-size: .84rem;
@@ -4597,19 +4173,16 @@ html.hj-ticket-bare #fxToggle { right: 70px; }
   color: var(--lantern-soft);
   font-variant-numeric: tabular-nums;
 }
-.ticket-idle[hidden] { display: none; }
 .ticket-idle.is-urgent { color: #e08e84; font-weight: 600; }
 body.day-mode .ticket-idle { color: var(--day-gold); }
 body.day-mode .ticket-idle.is-urgent { color: #b0261b; }
 
-/* ---- 查询我的登记：部分作废的持票人、重复提示 ---- */
 .tli-void { color: var(--text-mute); }
 .tli-void s { text-decoration-thickness: 1px; }
 .tli-note { margin-top: 6px; font-size: .8rem; color: #ffa257; }
 body.day-mode .tli-void { color: var(--day-lilac); }
 body.day-mode .tli-note { color: #b85a00; }
 
-/* ---- 购票须知：可编辑正文的几种写法 ---- */
 .guide-p { margin: 0 0 8px; font-size: .9rem; line-height: 1.85; color: var(--text-soft); }
 .guide-bullets { list-style: disc; }
 .guide-hr { margin: 22px 0; border: 0; border-top: 1px solid var(--line); }
@@ -4622,9 +4195,7 @@ body.day-mode .guide-p { color: var(--day-lilac); }
 body.day-mode .guide-hr { border-color: rgba(138,90,28,.35); }
 body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a { color: var(--day-lilac); }
 
-/* ---- 购票管理：子标签、分组 ---- */
 .ticket-admin-tabs { justify-content: center; margin-bottom: 18px; }
-.ticket-admin-tabs[hidden], .ticket-admin-tabs .tab-btn[hidden], .ta-pane[hidden] { display: none; }
 .ta-topbar { margin: 0 0 14px; }
 .ta-group {
   margin: 0 0 18px;
@@ -4641,7 +4212,6 @@ body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a 
 .gate-card .ticket-limit-edit button { padding: 9px 18px; font-size: .86rem; white-space: nowrap; }
 .ta-inline-opt { font-size: .8rem; }
 .gate-card .ticket-limit-edit input[type="checkbox"] { width: 17px; padding: 0; }
-.ta-inline-opt[hidden] { display: none; }
 .ta-daily-only.is-off { opacity: .5; }
 .ta-idle-row.is-disabled { opacity: .45; }
 .ta-sub { max-width: 560px; margin: 6px auto 16px; text-align: left; }
@@ -4655,7 +4225,6 @@ body.day-mode .guide-way a, body.day-mode .guide-qa a, body.day-mode .guide-p a 
 body.day-mode .ticket-admin .tt-act.is-void:not(#_) { color: #b0261b; }
 body.day-mode .ticket-admin .tt-act.is-restore:not(#_) { color: #2f7d4a; }
 
-/* 当前这一轮 */
 .ta-round {
   max-width: 560px;
   margin: 0 auto 14px;
@@ -4674,7 +4243,6 @@ body.day-mode .tas-item b small { color: var(--day-lilac); }
 .ta-round b { color: var(--cream); }
 .ta-round small { margin-left: 8px; color: var(--text-mute); }
 
-/* 自定义刷新点 */
 .ta-points { display: grid; gap: 8px; }
 .ta-point { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .gate-card .ta-point input:not([type="checkbox"]) { width: auto; margin: 0; padding: 8px 12px; font-size: .88rem; }
@@ -4682,7 +4250,6 @@ body.day-mode .tas-item b small { color: var(--day-lilac); }
 .gate-card .ta-point .ta-point-qty { width: 96px; }
 .ta-point-unit { font-size: .82rem; color: var(--text-mute); }
 
-/* 购票须知编辑 */
 .ta-guide { max-width: 640px; margin: 4px auto 12px; text-align: left; }
 .ta-guide summary { cursor: pointer; font-size: .9rem; font-weight: 600; color: var(--accent-soft); text-align: center; padding: 6px 0; }
 .ta-guide summary span { font-weight: 400; color: var(--text-mute); }
@@ -4701,7 +4268,6 @@ body.day-mode .tas-item b small { color: var(--day-lilac); }
 }
 .ta-guide-preview .guide-title { margin-bottom: 14px; }
 
-/* ---- 详细订单 ---- */
 .gate-card .ticket-admin-list-head input.ta-search:not([type="checkbox"]) { flex: 1 1 180px; width: auto; max-width: 280px; margin: 0; padding: 8px 14px; font-size: .86rem; text-align: left; }
 .ticket-legend .lg-picked { margin-left: 8px; background: #6fd08c; }
 .ta-orders .tt-round { display: block; margin-top: 2px; font-size: .7rem; color: var(--text-mute); white-space: nowrap; }
@@ -4722,7 +4288,6 @@ body.day-mode .tt-unpicked { color: var(--day-lilac); }
 body.day-mode .tt-picked,
 body.day-mode .ta-orders tr.is-picked td.tt-pick-cell .tt-pick span { color: #2f7d4a; }
 
-/* 编辑订单 / 部分作废 */
 .ta-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px; }
 .ta-field { display: block; margin-bottom: 12px; }
 .ta-field > span { display: block; margin-bottom: 6px; font-size: .82rem; color: var(--text-mute); }
@@ -4743,7 +4308,6 @@ body.day-mode .te-holder.is-void,
 body.day-mode .ta-partial-row.is-void { color: var(--day-lilac); }
 body.day-mode .ta-partial-row { color: var(--day-lilac); }
 
-/* ---- 售票统计 ---- */
 .ta-stats { text-align: left; }
 .ta-stat-title { margin: 22px 0 10px; font-size: .95rem; color: var(--lantern-soft); }
 .ta-sellout tr.is-sel td { background: rgba(255,255,255,.05); }
@@ -4765,7 +4329,6 @@ body.day-mode .ta-partial-row { color: var(--day-lilac); }
 .ta-unpicked summary { margin: 0 0 8px; cursor: pointer; font-size: .84rem; color: var(--accent-soft); }
 body.day-mode .ta-unpicked summary { color: var(--day-lilac); }
 .gate-card .ta-copy-fallback { min-height: 160px; margin-top: 10px; font-size: .82rem; }
-.ta-copy-fallback[hidden] { display: none; }
 .ta-log { margin: 6px 0 12px; }
 .ta-log-ops { margin: 0; padding-left: 1.2em; font-size: .84rem; line-height: 1.8; color: var(--text-soft); }
 .ta-log-ops small { margin-left: 8px; color: var(--text-mute); }
@@ -4800,20 +4363,15 @@ body.day-mode .ta-chart .ta-bar-g:hover .ta-hit { fill: rgba(255,255,255,.25); }
 body.day-mode .ta-sellout tr.is-sel td { background: rgba(255,255,255,.3); }
 body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 
-/* ---- 只读端：活动问卷（只读）不显示开关 ---- */
 .survey-admin.is-readonly .ticket-admin-row,
 .survey-admin.is-readonly #surveyLockNote { display: none !important; }
-#viewerPills[hidden] { display: none; }
 
 @media (max-width: 640px) {
   .ta-group { padding: 16px 10px 6px; }
   .ta-orders .tt-acts { flex-direction: column; align-items: flex-start; }
 }
 
-
-/* =============================================================================
-   25. 花语：「听得花间语」弹窗（.huayu-card 复用 .gate-card 与闹铃卡片的表单样式）+ 管理页「花语加密」
-   ============================================================================= */
+/* ==== 25. 花语 ==== */
 .huayu-card {
   position: relative;
   width: 100%;
@@ -4828,14 +4386,11 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 .huayu-count { min-height: 1.3em; margin: 0 6px 10px; text-align: right; font-size: .76rem; color: var(--text-mute); }
 .huayu-count.is-over { color: #e08e84; }
 .huayu-key { margin-bottom: 16px; }
-.huayu-key[hidden] { display: none; }
 .huayu-card .huayu-key input:not([type="checkbox"]) { margin-bottom: 0; }
 .huayu-btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
-.huayu-btns button[hidden] { display: none; }
-.huayu-card.is-writing #huayuSealBtn { order: -1; }   /* 输入的不是花语时，「寄语花间」排在前面 */
+.huayu-card.is-writing #huayuSealBtn { order: -1; }
 .huayu-card .form-msg { text-align: center; }
 
-/* 结果：花字用衬线体、字距稍宽；原文照原样换行 */
 .huayu-result {
   margin-top: 18px;
   padding: 14px 16px 16px;
@@ -4843,7 +4398,6 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
   border-radius: var(--radius-sm);
   background: rgba(255,255,255,.04);
 }
-.huayu-result[hidden] { display: none; }
 .huayu-result-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .huayu-result-label { font-size: .9rem; font-weight: 700; letter-spacing: .12em; color: var(--lantern-soft); }
 .huayu-result-meta { font-size: .76rem; color: var(--text-mute); }
@@ -4872,7 +4426,6 @@ body.day-mode .huayu-result { background: rgba(255,252,240,.42); border-color: r
 body.day-mode .huayu-result-label { color: var(--day-gold); }
 body.day-mode .huayu-result-text { color: var(--day-cream); }
 
-/* ---- 管理页「花语加密」：分组框沿用购票管理的 .ta-group ---- */
 .huayu-admin .alarm-seg { margin-bottom: 12px; }
 .huayu-admin .ta-group-hint { margin: 0 auto 12px; text-align: center; }
 .hy-key-row { display: flex; align-items: center; gap: 10px; }
@@ -4880,9 +4433,7 @@ body.day-mode .huayu-result-text { color: var(--day-cream); }
 .gate-card .hy-key-row button { flex: none; padding: 10px 22px; }
 .hy-key-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 12px 4px 14px; }
 .hy-old-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin: -2px 0 12px; font-size: .8rem; color: var(--text-mute); }
-.hy-old-row button[hidden] { display: none; }
 .gate-card .hy-custom-key { margin: 0 0 14px; }
-.gate-card .hy-custom-key[hidden] { display: none; }
 .huayu-admin .ta-group textarea { min-height: 130px; margin-bottom: 4px; }
 .huayu-admin .huayu-result { text-align: left; }
 .huayu-admin .form-msg { text-align: center; }
@@ -4894,11 +4445,22 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
   .gate-card .hy-key-row button { flex: 1; }
 }
 
+.submit-meta { display: block; margin-top: 2px; font-size: .72rem; color: var(--text-mute); white-space: nowrap; }
+.fb-head .submit-meta,
+.fb-contact .submit-meta { display: inline; margin: 0 0 0 10px; }
+.hy-visits { list-style: none; max-height: 300px; margin: 8px 0 10px; padding: 0; overflow-y: auto; font-size: .8rem; }
+.hy-visits li { text-align: left; display: grid; grid-template-columns: 11.5em minmax(0, 1fr) 5.5em 4.5em; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--line); }
+.hy-visits li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hy-visit-id { font-family: ui-monospace, Consolas, monospace; color: var(--text-mute); }
+body.day-mode .submit-meta,
+body.day-mode .hy-visit-id { color: var(--day-lilac); }
+body.day-mode .hy-visits li { border-color: rgba(91, 54, 16, .18); }
+@media (max-width: 560px) {
+  .hy-visits li { grid-template-columns: minmax(0, 1fr) auto; }
+  .hy-visit-time { grid-column: 1 / -1; }
+}
 
-/* =============================================================================
-   26. 圆角下拉与日期选择（main.js 第 16 节）：代替浏览器自带的方角下拉列表和日期面板，
-   外观跟日历小组件一致（毛玻璃圆角卡片、周一起始的月历、今天绿圈）。弹层挂在 body 下，盖在所有弹窗上面
-   ============================================================================= */
+/* ==== 26. 下拉与日期选择 ==== */
 .hj-pop {
   position: fixed; left: 0; top: 0; z-index: 1000;
   max-width: calc(100vw - 16px);
@@ -4917,13 +4479,11 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
   user-select: none;
   -webkit-user-select: none;
 }
-.hj-pop[hidden] { display: none; }
 @keyframes hjPopIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .hj-pop { animation: none; } }
 .hj-pop button { font-family: inherit; }
 .hj-pop .ico { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* ---- 下拉列表 ---- */
 .hj-pop-select { min-width: 140px; max-width: min(420px, calc(100vw - 16px)); }
 .hj-opt-list {
   max-height: 320px;
@@ -4946,7 +4506,7 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
 .hj-opt:hover,
 .hj-opt.is-active { background: rgba(255,255,255,.1); }
 .hj-opt.is-selected { font-weight: 700; color: var(--accent-soft); }
-.hj-opt.is-selected::before {   /* 对勾 */
+.hj-opt.is-selected::before {
   content: "";
   position: absolute; left: 13px; top: 50%;
   width: 9px; height: 5px;
@@ -4965,7 +4525,6 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
   color: var(--text-mute);
 }
 
-/* ---- 日期 / 时间 ---- */
 .hj-pop-date { padding: 12px 12px 10px; }
 .hj-date-main { display: flex; gap: 12px; }
 .hj-date-cal { width: 252px; }
@@ -5025,7 +4584,7 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
 }
 .hj-day:hover, .hj-month:hover, .hj-time-cell:hover { background: rgba(255,255,255,.1); }
 .hj-day.is-out { opacity: .35; }
-.hj-day.is-today, .hj-month.is-today { box-shadow: inset 0 0 0 2px #2f8a57; }   /* 今天：绿圈（日历小组件里是实心绿） */
+.hj-day.is-today, .hj-month.is-today { box-shadow: inset 0 0 0 2px #2f8a57; }
 .hj-day.is-pick, .hj-month.is-pick, .hj-time-cell.is-pick {
   color: var(--accent-ink);
   background: var(--accent);
@@ -5080,7 +4639,6 @@ body.day-mode .hy-old-row { color: var(--day-lilac); }
   .hj-date-cal + .hj-time .hj-time-cols { height: 120px; }
 }
 
-/* 日期框右端仍显示浏览器的小图标，但点它（和点框里别处一样）弹的是上面这个面板 */
 html.hj-pick-date input[type="date"],
 html.hj-pick-date input[type="datetime-local"],
 html.hj-pick-date input[type="time"] { cursor: pointer; }

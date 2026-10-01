@@ -1,29 +1,15 @@
-/* =============================================================================
-   花舞之街 · 薰风花语町 —— 离线缓存 sw.js（Service Worker）
-   -----------------------------------------------------------------------------
-   访客第一次进站后由 main.js 的 initOfflineCache() 注册（sw.js?v=HJ_VERSION），之后：
-     · 页面（index.html）：先走网络；网络慢过 NAV_TIMEOUT 或连不上时，先用缓存里的上一份顶上，
-       网络那份到了存起来，下次打开就是新的
-     · 带 ?v= 的脚本和样式表：版本号变了就是新文件，缓存里有就直接用
-     · 图片、字体：缓存里有就直接用；距上次向服务器确认超过 RECHECK_MS 时，在后台确认一次有没有更新
-     · /api/、B 站 / 字体 / 验证码 / 统计等其它网站、音频视频的分段请求：不经过这里
-   发布新版本（改 HJ_VERSION）时注册地址跟着变，浏览器会重新安装，并清掉更早版本的脚本缓存。
-   万一需要停用：把本文件换成只有下面这几行的版本上传即可（访客下次打开时自动卸载）：
-     self.addEventListener("install", () => self.skipWaiting());
-     self.addEventListener("activate", (e) => e.waitUntil(caches.keys()
-       .then((ks) => Promise.all(ks.map((k) => caches.delete(k))))
-       .then(() => self.registration.unregister())));
-   ============================================================================= */
-
+/* 花舞之街 · 离线缓存
+   页面：网络优先，超时用缓存；带 ?v= 的脚本与样式：缓存优先；图片与字体：缓存优先，定期后台更新。
+   停用：换成只含 install 时 skipWaiting、activate 时清空缓存并 unregister 的版本 */
 const VERSION = new URL(self.location.href).searchParams.get("v") || "0";
-const SHELL_CACHE = "hj-shell-" + VERSION;   // 页面、脚本、样式表（按版本）
-const MEDIA_CACHE = "hj-media";              // 图片、字体（不分版本，按需更新）
-const MEDIA_MAX = 500;                       // 图片最多存这么多张，超过从最早的删起
+const SHELL_CACHE = "hj-shell-" + VERSION;
+const MEDIA_CACHE = "hj-media";
+const MEDIA_MAX = 500;
 const NAV_TIMEOUT = 3500;
 const RECHECK_MS = 6 * 3600 * 1000;
 
-const SHELL = ["./", `style.css?v=${VERSION}`,
-  ...["verify", "config", "main", "ticket", "venue", "survey"].map((n) => `${n}.js?v=${VERSION}`)];
+const SHELL = [new Request("./", { cache: "reload" }), `style.css?v=${VERSION}`,
+  ...["boot", "verify", "config", "main", "ticket", "venue", "survey"].map((n) => `${n}.js?v=${VERSION}`)];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
@@ -34,7 +20,7 @@ self.addEventListener("install", (e) => {
   );
 });
 
-/* 脚本缓存只留当前和上一个版本：网络慢时顶上的旧页面还能配上它那一版的脚本 */
+/* 保留上一版脚本，供超时时返回的旧页面使用 */
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
@@ -57,13 +43,11 @@ self.addEventListener("fetch", (e) => {
   else if (/\.(?:js|css)$/.test(url.pathname) && url.searchParams.has("v")) handler = shellFirst;
   else if (/\.(?:webp|jpe?g|png|gif|svg|ico|woff2?)$/i.test(url.pathname)) handler = mediaFirst;
   if (!handler) return;
-  /* 缓存出任何问题（隐私模式、空间不足…）都退回普通的网络请求，不让页面坏掉 */
   e.respondWith(handler(e, req, url).catch(() => fetch(req)));
 });
 
 const cacheable = (res) => res && res.ok && res.status === 200 && res.type === "basic";
 
-/* 让浏览器等后台的写缓存 / 更新做完；事件已经结束时直接跳过 */
 function keep(e, promise) {
   const p = promise.catch(() => {});
   try { e.waitUntil(p); } catch (err) {}

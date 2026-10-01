@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://cloudflareinsights.com; frame-src https://challenges.cloudflare.com https://player.bilibili.com https://www.bilibili.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>花舞之街 · 薰风花语町</title>
 <meta property="og:type" content="website">
 <meta property="og:title" content="花舞之街 · 薰风花语町">
@@ -16,40 +17,41 @@
 <meta name="twitter:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
 <link rel="icon" type="image/png" href="assets/site/favicon.png">
 <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
+<link rel="preload" as="script" href="boot.js?v=20261001a">
+<link rel="preload" as="style" href="style.css?v=20261001a">
 <style>body{margin:0;background:#1c1830}html.css-wait body{visibility:hidden}html.boot-pending,html.boot-pending body{overflow:hidden}html.boot-pending body>header,html.boot-pending body>main,html.boot-pending body>footer{visibility:hidden}#skyBase{transition:opacity .8s ease}html.boot-pending:not(.sky-ready) #skyBase{opacity:0}#bootOverlay{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:18px}html.boot-pending #bootOverlay{display:flex}html.boot-leaving #bootOverlay{display:flex;opacity:0;transition:opacity .45s ease;pointer-events:none}#bootImageBtn{position:relative;appearance:none;-webkit-appearance:none;border:none;background:none;padding:0;margin:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;transition:transform .2s ease}#bootImageBtn:hover{transform:scale(1.04)}#bootImageBtn:before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 8px 30px #00000059;pointer-events:none}#bootSpinner{position:relative;display:block;animation:bootIdle 36s linear infinite;pointer-events:none;will-change:transform}@keyframes bootIdle{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootImage{display:block;width:min(56vw,280px);height:auto;will-change:transform;-webkit-user-drag:none;user-select:none;pointer-events:none}#bootImage.is-spinning{animation:bootSpin 1s ease-in-out}@keyframes bootSpin{0%{transform:rotate(0)}to{transform:rotate(720deg)}}#bootImage.is-looping{animation:bootLoop .7s ease-in-out infinite}@keyframes bootLoop{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootFx{position:fixed;inset:0;z-index:650;pointer-events:none;overflow:hidden}.boot-petal,.boot-star,.boot-twinkle{position:absolute}#bootFx.is-full .boot-petal,#bootFx.is-full .boot-star,#bootFx.is-full .boot-twinkle{will-change:transform,opacity}.boot-petal{background:center / contain no-repeat;animation:bootPetal 1.3s cubic-bezier(.2,.7,.3,1) both}#bootFx.is-full .boot-petal{filter:drop-shadow(0 1px 2px rgba(60,42,10,.3))}@keyframes bootPetal{0%{transform:translate(-50%,-50%) scale(.4) rotate(0);opacity:0}10%{opacity:1}55%{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(1) rotate(calc(var(--br) * .6))}75%{opacity:.9}to{transform:translate(calc(-50% + var(--bx) * 1.12),calc(-50% + var(--by) * 1.12 + 46px)) scale(.75) rotate(var(--br));opacity:0}}.boot-star{border-radius:50%;background:#fff4d6;box-shadow:0 0 7px 2px #fff4d6cc;animation:bootStar .9s ease-out both}@keyframes bootStar{0%{transform:translate(-50%,-50%) scale(1.2);opacity:0}8%{opacity:1}to{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(.2);opacity:0}}.boot-twinkle{border-radius:50%;background:#fff4d6;box-shadow:0 0 5px 1px #fff4d6b3;animation:bootTwinkle .45s ease-in-out both}@keyframes bootTwinkle{0%,to{transform:translate(-50%,-50%) scale(.4);opacity:0}50%{transform:translate(-50%,-50%) scale(1.25);opacity:1}}#bootHint{min-height:1.5em;color:#c9bfe0;font:600 .9rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em;opacity:0;transition:opacity .3s ease}#bootOverlay.is-waiting #bootHint{opacity:1;animation:bootPulse 1.4s ease-in-out infinite}@keyframes bootPulse{50%{opacity:.45}}@media(prefers-reduced-motion:reduce){#bootSpinner,#bootImage.is-spinning,#bootImage.is-looping,#bootOverlay.is-waiting #bootHint{animation:none}#skyBase,html.boot-leaving #bootOverlay{transition:none}}</style>
-<script>window.HJ_VERSION="20260930i",(function(){var n=document.documentElement,a={get:function(e){try{return localStorage.getItem(e)}catch(i){return null}}},y=!a.get("hj_visited_2"),s=location.hash,l=s==="#ti"||s==="#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd"||s==="#survey",f=y&&!l;n.classList.add(f?"boot-pending":"css-wait"),s!=="#survey"&&l&&(a.get("hj_ticket_look")||"").charAt(0)==="1"&&n.classList.add("hj-ticket-bare");var t=a.get("hj_fx_level");if(!t){var u=a.get("hj_fx_enabled");u!==null&&(t=u==="1"?"full":"off")}if(t!=="full"&&t!=="lite"&&t!=="off"){var E=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;t=E?"off":window.innerWidth>760?"full":"lite"}window.HJ_FX_LEVEL=t;function c(e,i,g){var o=document.createElement("link");o.rel=e,o.href=i;for(var b in g)o[b]=g[b];return document.head.appendChild(o),o}function w(){n.classList.remove("css-wait"),n.classList.add("css-ready"),document.dispatchEvent(new Event("hj:cssready"))}var h=c("stylesheet","style.css?v="+window.HJ_VERSION);h.onload=h.onerror=w;var m=new Date().getHours();window.HJ_START_DAY=m>=6&&m<18,window.HJ_SKY_PORTRAIT=!!(window.matchMedia&&matchMedia("(max-aspect-ratio: 4/5)").matches);var v=window.HJ_START_DAY?"day":"night";window.HJ_SKY_FIRST="assets/site/sky-"+v+(window.HJ_SKY_PORTRAIT?"-p":"")+".webp",f||(c("preload",window.HJ_SKY_FIRST,{as:"image"}),c("preload","assets/site/tile-latest-"+v+".webp",{as:"image"}),c("preload","assets/site/brush.woff2",{as:"font",type:"font/woff2",crossOrigin:"anonymous"}));var d=[],r=!1,_=!1;function p(e){window.requestIdleCallback?requestIdleCallback(function(){e()},{timeout:3e3}):setTimeout(e,600)}window.HJ_LATE=function(e){r?p(e):d.push(e)},window.HJ_OPEN_LATE=function(){r||!_||n.classList.contains("boot-pending")||(r=!0,setTimeout(function(){d.forEach(p),d=[]},800))},window.addEventListener("load",function(){_=!0,window.HJ_OPEN_LATE()}),window.HJ_LATE(function(){window.fetch&&fetch("https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;600;700&display=swap").then(function(e){return e.ok?e.text():""}).then(function(e){if(e){var i=document.createElement("style");i.textContent=e,document.head.appendChild(i)}}).catch(function(){})}),window.HJ_LATE(function(){var e=document.createElement("script");e.type="module",e.src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495",e.integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==",e.crossOrigin="anonymous",e.setAttribute("data-cf-beacon",'{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}'),document.head.appendChild(e)}),setTimeout(function(){n.classList.contains("css-ready")||w()},8e3)})();</script>
 <noscript><link rel="stylesheet" href="style.css"></noscript>
 </head>
 <body>
 <div id="bootOverlay">
-<button type="button" id="bootImageBtn" aria-label="点击进入花街">
+<button type="button" id="bootImageBtn" aria-label="进入花街">
 <span id="bootSpinner"><img id="bootImage" src="boot-moguri-v2.webp" alt="" draggable="false" fetchpriority="high"></span>
 </button>
 <p id="bootHint" role="status" aria-live="polite">正在进入花街…</p>
 </div>
-<script>(function(){var c=document.documentElement,M=c.classList.contains("boot-pending"),v=window.HJ_FX_LEVEL||"off",g=!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches),P=1e3,B=700,Q=1800,U=700,b=!1,E=!1,w=!1,T=!1,O=!1,R=0,C=0,H=0,x=null,J=!1,y=[];function N(){if(y){var e=y;y=null,e.forEach(function(n){n()})}}var _=[[1.6,"01"],[1.1,"02"],[.807,"03"],[1.257,"04"],[1.086,"05"],[.949,"06"],[.864,"07"],[1.517,"08"],[.568,"09"]],Y=function(e){return"assets/site/leaf-"+e+".webp"},i=function(e,n){return e+Math.random()*(n-e)},A=[];function I(e,n){return new Promise(function(t){if(!e)return t();var o=new Image,s=function(){t(),setTimeout(function(){var m=A.indexOf(o);m>=0&&A.splice(m,1)},2e4)};A.push(o),o.decoding="async",n&&(o.fetchPriority="high"),o.onload=function(){o.decode?o.decode().then(s,s):s()},o.onerror=s,o.src=e})}function Z(e){return new Promise(function(n){var t=document.createElement("link");if(!(t.relList&&t.relList.supports&&t.relList.supports("preload")))return n();t.rel="preload",t.as="font",t.type="font/woff2",t.crossOrigin="anonymous",t.onload=t.onerror=function(){n()},t.href=e,document.head.appendChild(t)})}function $(e){var n=v==="full",t=e.getBoundingClientRect(),o=t.left+t.width/2,s=t.top+t.height/2,m=t.width*.42,h=document.createElement("div");h.id="bootFx",n&&(h.className="is-full"),h.setAttribute("aria-hidden","true");var S=function(ne,ie,oe,q,ae){var k=document.createElement("span");k.className=ne,k.style.cssText="left:"+ie.toFixed(1)+"px;top:"+oe.toFixed(1)+"px;width:"+q[0].toFixed(1)+"px;height:"+q[1].toFixed(1)+"px;"+ae,h.appendChild(k)},d,r,f,l,p;if(window.HJ_START_DAY)for(p=n?100:30,d=0;d<p;d++){var G=_[Math.floor(Math.random()*_.length)];r=Math.random()*Math.PI*2,f=i(90,330),l=i(15,31),S("boot-petal",o+Math.cos(r)*m*i(.5,1),s+Math.sin(r)*m*i(.5,1),[l,l/G[0]],"background-image:url('"+Y(G[1])+"');--bx:"+(Math.cos(r)*f).toFixed(1)+"px;--by:"+(Math.sin(r)*f).toFixed(1)+"px;--br:"+i(-200,200).toFixed(0)+"deg;animation-duration:"+i(1.05,1.6).toFixed(2)+"s;animation-delay:"+(d<p*.6?0:i(.12,.3)).toFixed(2)+"s")}else{for(p=n?60:22,d=0;d<p;d++)r=Math.random()*Math.PI*2,f=i(80,300),l=i(3,6.5),S("boot-star",o+Math.cos(r)*m*i(.6,1),s+Math.sin(r)*m*i(.6,1),[l,l],"--bx:"+(Math.cos(r)*f).toFixed(1)+"px;--by:"+(Math.sin(r)*f).toFixed(1)+"px;animation-duration:"+i(.7,1.15).toFixed(2)+"s;animation-delay:"+(d<p*.6?0:i(.1,.25)).toFixed(2)+"s");for(p=n?120:30,d=0;d<p;d++)r=Math.random()*Math.PI*2,f=m*i(.7,2.6),l=i(2,4.5),S("boot-twinkle",o+Math.cos(r)*f,s+Math.sin(r)*f,[l,l],"animation-duration:"+i(.3,.6).toFixed(2)+"s;animation-delay:"+i(0,.7).toFixed(2)+"s;animation-iteration-count:"+(1+Math.floor(Math.random()*3)))}document.body.appendChild(h),setTimeout(function(){h.parentNode&&h.parentNode.removeChild(h)},2400)}if(window.HJ_BOOT={warm:I,appReady:function(e,n){if(x=e,H=performance.now(),!!M){var t=(n||[]).concat([D,Z("assets/site/brush.woff2")]);Promise.all(t).then(function(){J=!0,N(),u()}),u()}},afterAssets:function(e){!M||!y?e():y.push(e)}},!M)return;var F=document.getElementById("bootOverlay"),L=document.getElementById("bootImageBtn"),a=document.getElementById("bootImage"),D=new Promise(function(e){function n(){I(window.HJ_SKY_FIRST,!0).then(function(){var t=document.getElementById("skyBase");t&&!t.style.backgroundImage&&(t.style.backgroundImage="url('"+window.HJ_SKY_FIRST+"')"),c.classList.add("sky-ready"),e()})}a.complete?n():(a.addEventListener("load",n),a.addEventListener("error",n))});window.HJ_START_DAY&&v!=="off"&&D.then(function(){_.forEach(function(e){I(Y(e[1]))})});function j(){return Math.max(C+Q,H+U)}function z(){return!x||!c.classList.contains("css-ready")?!1:J||performance.now()>=j()}function u(){if(!(w||!b||!E||O)){if(!z()){ee(),x&&c.classList.contains("css-ready")&&(clearTimeout(u.timer),u.timer=setTimeout(u,Math.max(50,j()-performance.now()+20)));return}T?te():setTimeout(W,Math.max(0,R+(v==="full"?1200:P)-performance.now()))}}var K=0,V=0;function ee(){V||(V=setTimeout(function(){w||F.classList.add("is-waiting")},g?0:1500)),!(T||g)&&(T=!0,a.classList.add("is-looping"),K=performance.now())}function te(){O=!0;var e=performance.now()-K,n=a.getAnimations?a.getAnimations()[0]:null;n&&typeof n.currentTime=="number"&&(e=n.currentTime);var t=e/B,o=Math.floor(t)+(t%1>.8?2:1);a.style.animationIterationCount=String(o);var s=function(){w||(a.classList.remove("is-looping"),a.style.animationIterationCount="",W())};a.addEventListener("animationend",s,{once:!0}),setTimeout(s,(o-t)*B+120)}function W(){if(!w){w=!0,clearTimeout(u.timer);var e=v!=="off"&&!g;window.pageYOffset&&(c.style.scrollBehavior="auto",window.scrollTo(0,0),c.style.scrollBehavior=""),c.classList.remove("boot-pending"),e?(c.classList.add("boot-leaving"),setTimeout(function(){c.classList.remove("boot-leaving"),F.style.display="none"},480)):F.style.display="none",N(),x(),window.HJ_OPEN_LATE&&window.HJ_OPEN_LATE()}}function X(){if(!b){b=!0,R=performance.now();try{localStorage.setItem("hj_visited_2","1"),localStorage.removeItem("hj_visited")}catch(n){}L.disabled=!0,a.classList.add("is-spinning"),v!=="off"&&!g&&$(L);var e=function(){E||(E=!0,C=performance.now(),a.classList.remove("is-spinning"),u())};a.addEventListener("animationend",function(n){n.animationName==="bootSpin"&&e()}),setTimeout(e,P+60)}}document.addEventListener("hj:cssready",u),L.addEventListener("click",X),L.addEventListener("touchend",function(e){e.preventDefault(),X()},{passive:!1})})();</script>
+<script src="boot.js?v=20261001a"></script>
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
 <div id="fxClickLayer" aria-hidden="true"></div>
 <header class="site-header">
 <button class="daynight-toggle more-toggle hb-slot-1" id="moreToggle" type="button"
-aria-haspopup="true" aria-expanded="false" aria-label="更多功能" title="更多功能">
+aria-haspopup="true" aria-expanded="false" aria-label="更多" title="更多">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
 </button>
-<button class="daynight-toggle hb-slot-2" id="dayNightToggle" aria-label="切换白天黑夜">
+<button class="daynight-toggle hb-slot-2" id="dayNightToggle" type="button" aria-label="昼夜切换" title="昼夜切换">
 <svg class="ico ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
 <svg class="ico ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
 </button>
-<button class="daynight-toggle fx-toggle hb-slot-3" id="fxToggle" type="button" aria-label="动画档位" title="动画档位">
+<button class="daynight-toggle fx-toggle hb-slot-3" id="fxToggle" type="button" aria-label="动画" title="动画">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path class="fx-ico-extra" d="M17.5 14l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
 </button>
 <button class="daynight-toggle clock-toggle hb-slot-4" id="clockToggle" type="button" aria-pressed="false"
-aria-label="显示时间条（国服时间与艾欧泽亚时间）" title="点击显示时间条">
+aria-label="显示时间条" title="显示时间条">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
 </button>
 <button class="daynight-toggle sound-toggle hb-slot-5" id="soundToggle" type="button"
-aria-haspopup="true" aria-expanded="false" aria-label="音量（未静音）" title="音量（未静音）">
+aria-haspopup="true" aria-expanded="false" aria-label="音量" title="音量">
 <span class="hj-sound-icon" aria-hidden="true">
 <svg class="ico ico-vol-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
 <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
@@ -62,9 +64,9 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 <div class="vol-thumb" id="volThumb"></div>
 </div>
 </div>
-<div class="more-panel" id="morePanel" aria-label="更多功能"></div>
+<div class="more-panel" id="morePanel" aria-label="更多"></div>
 <div class="cal-widget" id="calWidget" hidden>
-<div class="cal-head" title="拖动移动 · 双击回默认位置">
+<div class="cal-head" title="拖动移动，双击复位">
 <span class="cal-title" id="calTitle">----</span>
 <span class="cal-tools">
 <button class="cal-tool" id="calZoomOut" type="button" aria-label="缩小日历" title="缩小">
@@ -92,7 +94,7 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 </div>
 <div class="cal-events" id="calEvents"></div>
 </div>
-<div id="alarmWidgetLayer" aria-label="闹铃与倒计时小组件"></div>
+<div id="alarmWidgetLayer"></div>
 <h1 class="brand"><span class="brand-name">花舞之街</span><span class="brand-dot"> · </span><span class="brand-name">薰风花语町</span></h1>
 <p class="tagline">
 <span class="tl-line">莫古力区<span class="tl-gap"> </span>·<span class="tl-gap"> </span>梦羽宝境</span>
@@ -107,13 +109,14 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 <span class="hj-clock-sep" aria-hidden="true"></span>
 <span class="hj-clock-cell" id="hjClockEt">
 <span class="hj-clock-label">艾欧泽亚</span>
+<span class="hj-et-date" id="hjEtDate">--</span>
 <span class="hj-clock-time"><i class="hj-et-glyph" id="hjEtGlyph" aria-hidden="true">&#9728;</i><span id="hjTimeET">--:--</span></span>
 </span>
-<span class="hj-weather" id="hjWeather" aria-label="高脚孤丘天气">
+<span class="hj-weather" aria-label="高脚孤丘天气">
 <span class="hj-weather-label">高脚孤丘</span>
 <span class="hj-weather-seq" id="hjWeatherSeq">加载中…</span>
 </span>
-<span class="hj-omen" id="hjOmen">
+<span class="hj-omen">
 <span class="hj-omen-item" id="hjOmenRainbow" title="彩虹：每个 ET 月 27 日 12:00 至次月 6 日 12:00，ET 8:00 / 16:00 雨后转为碧空、晴朗或阴云时出现，持续约 1 分半（现实）">
 <span class="hj-omen-name">彩虹</span><span class="hj-omen-state">--:--</span>
 </span>
@@ -125,7 +128,7 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 </header>
 <main>
 <section id="view-home" class="view">
-<div class="tile tile-hero" id="latestTile">
+<div class="tile tile-hero" id="latestTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h2>2026莫古力中秋月轮祭</h2>
@@ -135,13 +138,12 @@ aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
 <span>播放视频</span>
 </button>
-<a class="ticket-badge" id="ticketBadge" href="#" target="_blank" rel="noopener" hidden>购票</a>
 <button type="button" class="ticket-entry-btn" id="tileTicketEntry" data-ticket-entry hidden aria-label="购票入口">
 <img src="ticket.webp" alt="" width="360" height="360" loading="lazy" decoding="async" draggable="false">
 </button>
 </div>
 <div class="video-block" id="latestVideoBlock" hidden>
-<div class="video-hero" id="latestVideo">
+<div class="video-hero">
 <iframe id="latestVideoFrame" title="花街活动视频"
 scrolling="no" frameborder="0" allowfullscreen
 referrerpolicy="strict-origin-when-cross-origin"
@@ -151,7 +153,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="video-actions" id="latestVideoActions">
 <button type="button" class="video-action video-action-primary" id="videoDetailBtn">查看活动详情</button>
-<a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>看不了？去 B 站看</a>
+<a class="video-action" id="videoFallbackLink" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>在 B 站观看</a>
 <button type="button" class="video-action" id="videoCloseBtn">收起视频</button>
 <span class="video-ticket-slot" data-ticket-entry hidden>
 <button type="button" class="video-action video-action-ticket" id="videoTicketEntry">进入购票</button>
@@ -159,13 +161,13 @@ controlslist="nodownload" hidden></video>
 </div>
 </div>
 <div class="tile-grid">
-<div class="tile tile-sm" id="archiveTile">
+<div class="tile tile-sm" id="archiveTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h3>往期街区活动</h3>
 </div>
 </div>
-<div class="tile tile-sm" id="miniTile">
+<div class="tile tile-sm" id="miniTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h3>小型活动回顾</h3>
@@ -173,19 +175,19 @@ controlslist="nodownload" hidden></video>
 </div>
 </div>
 <div class="tile-grid tile-grid-3">
-<div class="tile tile-sm" id="infoTile">
+<div class="tile tile-sm" id="infoTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h3>花街介绍</h3>
 </div>
 </div>
-<div class="tile tile-sm" id="bookingTile">
+<div class="tile tile-sm" id="bookingTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h3>场地<br>使用登记</h3>
 </div>
 </div>
-<div class="tile tile-sm" id="groupTile">
+<div class="tile tile-sm" id="groupTile" role="button" tabindex="0">
 <div class="tile-hover-fx"></div>
 <div class="tile-overlay">
 <h3>活动群</h3>
@@ -194,7 +196,7 @@ controlslist="nodownload" hidden></video>
 </div>
 </section>
 <section id="view-detail" class="view" hidden>
-<button class="back-btn" id="detailBackBtn" data-back>← 返回</button>
+<button type="button" class="back-btn" id="detailBackBtn" data-back>← 返回</button>
 <div class="detail-hero" id="detailHero">
 <h2 id="detailTitle"></h2>
 <p id="detailMeta"></p>
@@ -202,14 +204,13 @@ controlslist="nodownload" hidden></video>
 <svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
 <span>点赞</span><span class="hj-like-count">0</span>
 </button>
-<a class="ticket-badge-inline" id="detailTicket" href="#" target="_blank" rel="noopener" hidden>购票 / 报名</a>
 </div>
-<div class="tabs">
-<button class="tab-btn is-active" data-tab="poster">活动介绍</button>
-<button class="tab-btn" data-tab="manual">游玩手册</button>
-<button class="tab-btn" data-tab="shops">活动店家</button>
-<button class="tab-btn" id="reviewTabBtn" data-tab="review">活动回顾</button>
-<button class="tab-btn" id="feedbackTabBtn" data-tab="feedback" hidden>反馈与建议</button>
+<div class="tabs" role="tablist">
+<button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="poster">活动介绍</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="manual">游玩手册</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="shops">活动店家</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="review">活动回顾</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="feedback" hidden>反馈与建议</button>
 </div>
 <div class="tab-panel" id="panel-poster"></div>
 <div class="tab-panel" id="panel-manual" hidden></div>
@@ -218,29 +219,30 @@ controlslist="nodownload" hidden></video>
 <div class="tab-panel" id="panel-feedback" hidden></div>
 </section>
 <section id="view-mini-review" class="view" hidden>
-<button class="back-btn" data-back>← 返回</button>
+<button type="button" class="back-btn" data-back>← 返回</button>
 <h2 class="section-title">小型活动回顾</h2>
 <div class="album-grid" id="miniReviewGrid"></div>
 </section>
 <section id="view-archive-list" class="view" hidden>
-<button class="back-btn" id="archiveBackBtn" data-back>← 返回</button>
+<button type="button" class="back-btn" id="archiveBackBtn" data-back>← 返回</button>
 <h2 class="section-title">往期街区活动</h2>
 <div class="album-grid" id="albumGrid"></div>
 </section>
 <section id="view-ticket" class="view" hidden>
-<button class="back-btn" id="ticketBackBtn" data-back>← 返回</button>
-<div class="tabs ticket-tabs">
-<button type="button" class="tab-btn is-active" data-ticket-tab="buy">购票</button>
-<button type="button" class="tab-btn" data-ticket-tab="lookup">查询登记</button>
+<button type="button" class="back-btn" data-back>← 返回</button>
+<div class="tabs ticket-tabs" role="tablist">
+<button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-ticket-tab="buy">购票</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-ticket-tab="lookup">查询登记</button>
 </div>
 <div class="gate-card ticket-card" id="ticketBuyCard">
 <h2 id="ticketTitle">活动购票</h2>
-<p class="hint" id="ticketLimitHint">每名游客限购 5 张，需要批量购票的游客请联系活动群群主。</p>
+<p class="hint" id="ticketLimitHint">每人限购 5 张，批量购票请联系活动群群主</p>
 <div class="ticket-guide-row" id="ticketGuideRow">
 <button type="button" class="ticket-guide-btn" id="ticketGuideReopenBtn">购票须知</button>
 </div>
 <div class="ticket-stock" id="ticketStock"><span id="ticketStockText">今日余票 <b>--</b> 张</span><small class="ticket-reset-hint" id="ticketResetHint" hidden></small></div>
 <p class="ticket-idle" id="ticketIdle" role="timer" aria-live="off" hidden></p>
+<p class="ticket-blocked" id="ticketBlocked" hidden></p>
 <form id="ticketForm" novalidate autocomplete="off">
 <div class="ticket-field">
 <label class="ticket-label is-required" for="ticketContact">联系方式</label>
@@ -275,21 +277,20 @@ controlslist="nodownload" hidden></video>
 <p class="ticket-result-note" id="ticketResultNote"></p>
 <dl class="ticket-result-list" id="ticketResultList"></dl>
 <button type="button" id="ticketSaveImgBtn">截图保存</button>
-<button type="button" id="ticketAgainBtn" hidden>继续登记</button>
 </div>
 </div>
 <div class="gate-card ticket-card" id="ticketLookupCard" hidden>
 <h2 class="ticket-h-sm">查询我的登记</h2>
-<p class="hint">填写登记时的联系方式和第一位持票人 id（第一位为待定时填「待定」）</p>
+<p class="hint">填写登记时的联系方式和第一位持票人 id，待定则填「待定」</p>
 <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式">
-<input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id（不含区服）">
+<input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id">
 <div class="ticket-submit-row"><button type="button" id="ticketLookupBtn">查询</button></div>
 <p class="form-msg" id="ticketLookupMsg" hidden></p>
 <div id="ticketLookupList"></div>
 </div>
 </section>
 <section id="view-venue" class="view" hidden>
-<button class="back-btn" data-back>← 返回</button>
+<button type="button" class="back-btn" data-back>← 返回</button>
 <div class="gate-card ticket-card venue-card">
 <h2>场地使用登记</h2>
 <p class="hint venue-intro" id="venueIntro"></p>
@@ -315,21 +316,21 @@ controlslist="nodownload" hidden></video>
 <section id="view-internal" class="view" hidden>
 <div class="gate-card" id="internalGate">
 <h2>内部入口</h2>
-<p class="hint">部队 / 管理使用，需要密码</p>
+<p class="hint">仅限内部使用</p>
 <label for="internalPassword" class="visually-hidden">密码</label>
 <div class="password-field">
-<input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
+<input type="password" id="internalPassword" placeholder="密码" autocomplete="current-password" maxlength="64">
 </div>
 <label class="password-show-label">
 <input type="checkbox" id="internalPasswordShow"> 显示密码
 </label>
-<button id="internalSubmit">进入</button>
+<button type="button" id="internalSubmit">进入</button>
 <p class="form-msg" id="internalMsg" hidden></p>
 </div>
 <div id="internalBoard" hidden>
 <div class="admin-pills" id="adminPills" hidden>
 <button type="button" class="tab-btn" data-admin-panel="lockdownPanel">分享功能开关</button>
-<button type="button" class="tab-btn" data-admin-panel="captchaPanel">机器人验证</button>
+<button type="button" class="tab-btn" data-admin-panel="captchaPanel">人机验证</button>
 <button type="button" class="tab-btn" data-admin-panel="starlightPanel">星芒节</button>
 <button type="button" class="tab-btn" data-admin-panel="ticketAdminPanel">购票管理</button>
 <button type="button" class="tab-btn" data-admin-panel="venueAdminPanel">场地预约</button>
@@ -360,22 +361,21 @@ controlslist="nodownload" hidden></video>
 </a>
 </footer>
 <div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
-<button class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
+<button type="button" class="lightbox-close" id="lightboxClose" aria-label="关闭">×</button>
 <img id="lightboxImg" alt="">
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="info-overlay" id="captchaOverlay" role="dialog" aria-modal="true" aria-label="验证" hidden>
+<div class="info-overlay" id="captchaOverlay" role="dialog" aria-modal="true" aria-label="人机验证" hidden>
 <div class="gate-card captcha-card">
-<button class="info-close" id="captchaClose" aria-label="关闭">×</button>
-<h2>先验证一下</h2>
-<p class="hint">确认不是机器人</p>
+<button type="button" class="info-close" id="captchaClose" aria-label="关闭">×</button>
+<h2>人机验证</h2>
 <div class="verify-host" id="captchaVerify"></div>
 <p class="form-msg" id="captchaMsg" hidden></p>
 </div>
 </div>
 <div class="info-overlay" id="adminModalOverlay" role="dialog" aria-modal="true" aria-label="管理功能" hidden>
 <div class="admin-modal">
-<button class="info-close" id="adminModalClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="adminModalClose" aria-label="关闭">×</button>
 <div id="adminModalHost"></div>
 </div>
 </div>
@@ -387,7 +387,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="sitePopupOverlay" role="dialog" aria-modal="true" aria-labelledby="sitePopupTitle" hidden>
 <div class="info-box site-popup-box" id="sitePopupBox">
-<button class="info-close" id="sitePopupClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="sitePopupClose" aria-label="关闭">×</button>
 <h2 class="info-title site-popup-title" id="sitePopupTitle">公告</h2>
 <img class="site-popup-image" id="sitePopupImage" alt="" data-lightbox hidden>
 <div class="site-popup-body" id="sitePopupBody"></div>
@@ -399,12 +399,12 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="siteAboutOverlay" role="dialog" aria-modal="true" aria-label="网站说明" hidden>
 <div class="info-box about-box" id="siteAboutBox">
-<button class="info-close" id="siteAboutClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="siteAboutClose" aria-label="关闭">×</button>
 <h2 class="info-title">网站说明</h2>
-<div class="tabs about-tabs">
-<button class="tab-btn is-active" type="button" data-about-tab="about">关于网站</button>
-<button class="tab-btn" type="button" data-about-tab="feedback">反馈与建议</button>
-<button class="tab-btn" type="button" data-about-tab="share">分享网站</button>
+<div class="tabs about-tabs" role="tablist">
+<button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-about-tab="about">关于网站</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="feedback">反馈与建议</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="share">分享网站</button>
 </div>
 <div class="tab-panel about-panel" id="aboutPanelAbout">
 <div class="about-text">
@@ -413,31 +413,31 @@ controlslist="nodownload" hidden></video>
 <dt>点赞</dt>
 <dd>可以重复点赞，每日最多 10 次</dd>
 <dt>图片</dt>
-<dd>电脑端鼠标左键放大图片，鼠标右键缩小图片，长按拖拽图片。花街介绍中相册的图片打开即原图。</dd>
+<dd>电脑端左键放大、右键缩小、按住拖动；相册图片打开即为原图</dd>
 <dt>海报</dt>
-<dd>点击打开后直接滚动/上下滑动浏览</dd>
-<dt>验证功能</dt>
-<dd>国内玩家，网络连接不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
+<dd>打开后上下滑动浏览</dd>
+<dt>人机验证</dt>
+<dd>国内网络不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
 <dt>场地使用登记</dt>
-<dd>如果您需要使用花街场地进行活动，欢迎填写该问卷</dd>
+<dd>借用花街场地举办活动时填写</dd>
 </dl>
 <p class="about-sub">右上方</p>
 <dl class="about-list">
 <dt>音量按钮</dt>
-<dd>对于外链视频（b站视频）无法生效，仅在静音时对视频静音</dd>
+<dd>B 站视频仅跟随静音</dd>
 <dt>动画按钮</dt>
-<dd>点击在三档之间切换：完整（飘落花叶 / 星光、悬停图等全部特效）、轻量（只保留点击和翻页时的短动画）、关闭。电脑端默认完整，手机端默认轻量，请根据设备性能自行切换</dd>
+<dd>完整、轻量、关闭三档。完整含飘落花叶、星光与悬停图，轻量仅保留点击与翻页动画。电脑默认完整，手机默认轻量</dd>
 <dt>花语工具</dt>
 <dd>花街文化宣传和彩蛋工具，仅娱乐目的，禁止用于任何非法用途，网站不承担任何连带或赔偿责任，但保留依法向有关部门报告可疑行为的权利。</dd>
 </dl>
-<p>网站仍在试运行，有想法和建议欢迎点击旁边的<button type="button" class="about-inline-link" data-about-goto="feedback">“反馈与建议”</button>按钮。</p>
+<p>网站试运行中，意见与建议请提交至<button type="button" class="about-inline-link" data-about-goto="feedback">反馈与建议</button>。</p>
 <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
 </div>
 </div>
 <div class="tab-panel about-panel" id="aboutPanelFeedback" hidden>
 <form class="about-form" id="feedbackForm" novalidate autocomplete="off">
 <div class="about-field">
-<label class="about-label is-required" for="feedbackCategory">问卷类别</label>
+<label class="about-label is-required" for="feedbackCategory">类别</label>
 <select id="feedbackCategory">
 <option value="" disabled selected hidden>请选择</option>
 <option value="bug">bug反馈</option>
@@ -449,15 +449,15 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="about-field">
 <label class="about-label is-required" for="feedbackContent">内容</label>
-<p class="about-hint" id="feedbackContentHint">说说遇到的问题或想法吧</p>
+<p class="about-hint" id="feedbackContentHint">问题或想法</p>
 <textarea id="feedbackContent" maxlength="1000" placeholder="请填写"></textarea>
 <p class="about-count"><span id="feedbackCount">0</span> / 1000</p>
 </div>
 <div class="about-field">
 <label class="audience-opt about-check" for="feedbackWantContact">
-<input type="checkbox" id="feedbackWantContact"><span>留下联系方式（方便我们回复你）</span>
+<input type="checkbox" id="feedbackWantContact"><span>留下联系方式</span>
 </label>
-<input type="text" id="feedbackContact" maxlength="60" placeholder="QQ / 游戏 id@服务器 / 邮箱 均可" hidden>
+<input type="text" id="feedbackContact" maxlength="60" placeholder="QQ、游戏 id@服务器或邮箱" hidden>
 </div>
 <div class="verify-host about-verify" id="feedbackVerify"></div>
 <div class="about-submit-row">
@@ -467,7 +467,6 @@ controlslist="nodownload" hidden></video>
 </form>
 <div class="about-done" id="feedbackDone" hidden>
 <p class="about-done-title">收到啦，谢谢你的反馈！</p>
-<p class="about-hint">我们会认真看每一条留言。</p>
 <button type="button" class="share-site-btn" id="feedbackAgainBtn">再写一条</button>
 </div>
 </div>
@@ -482,7 +481,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="ticketGuideOverlay" role="dialog" aria-modal="true" aria-labelledby="ticketGuideTitle" hidden>
 <div class="info-box guide-box" id="ticketGuideBox">
-<button class="info-close" id="ticketGuideClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="ticketGuideClose" aria-label="关闭">×</button>
 <div class="guide-scroll" id="ticketGuideScroll" tabindex="-1">
 <div id="ticketGuideContent"></div>
 </div>
@@ -494,7 +493,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="groupOverlay" role="dialog" aria-modal="true" aria-label="加入活动群" hidden>
 <div class="info-box group-box">
-<button class="info-close" id="groupClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="groupClose" aria-label="关闭">×</button>
 <h2 class="info-title">加入活动群</h2>
 <div class="group-btn-row">
 <button type="button" class="share-site-btn" id="copyGroupBtn">复制群号</button>
@@ -504,17 +503,17 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="alarmOverlay" role="dialog" aria-modal="true" aria-label="闹铃与倒计时" hidden>
 <div class="gate-card alarm-card">
-<button class="info-close" id="alarmClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="alarmClose" aria-label="关闭">×</button>
 <h2>闹铃</h2>
-<p class="hint">闹铃与倒计时保存在本机浏览器里，页面开着才会响铃</p>
-<div class="tabs alarm-tabs">
-<button class="tab-btn is-active" type="button" data-alarm-tab="alarm">闹铃</button>
-<button class="tab-btn" type="button" data-alarm-tab="countdown">倒计时</button>
+<p class="hint">仅保存在本机，页面打开时才会响铃</p>
+<div class="tabs alarm-tabs" role="tablist">
+<button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-alarm-tab="alarm">闹铃</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-alarm-tab="countdown">倒计时</button>
 </div>
 <div class="tab-panel alarm-panel" id="alarmPanelAlarm">
 <div class="alarm-field">
-<label class="alarm-label" for="almName">名字（可不填）</label>
-<input id="almName" type="text" maxlength="12" placeholder="">
+<label class="alarm-label" for="almName">名称</label>
+<input id="almName" type="text" maxlength="12" placeholder="选填">
 </div>
 <div class="alarm-field">
 <span class="alarm-label">时间类型</span>
@@ -550,8 +549,8 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="tab-panel alarm-panel" id="alarmPanelCountdown" hidden>
 <div class="alarm-field">
-<label class="alarm-label" for="cdName">名字（可不填）</label>
-<input id="cdName" type="text" maxlength="12" placeholder="">
+<label class="alarm-label" for="cdName">名称</label>
+<input id="cdName" type="text" maxlength="12" placeholder="选填">
 </div>
 <div class="alarm-field">
 <span class="alarm-label">时间类型</span>
@@ -562,7 +561,7 @@ controlslist="nodownload" hidden></video>
 <p class="alarm-hint" id="cdNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
 </div>
 <div class="alarm-field" id="cdCnWrap">
-<span class="alarm-label">倒计时时长（国服时间，最短 30 秒）</span>
+<span class="alarm-label">时长</span>
 <div class="alarm-dur-row">
 <input type="number" id="cdCnH" min="0" max="99" step="1" value="0" aria-label="时"><span>时</span>
 <input type="number" id="cdCnM" min="0" max="59" step="1" value="5" aria-label="分"><span>分</span>
@@ -571,7 +570,7 @@ controlslist="nodownload" hidden></video>
 <p class="alarm-hint" id="cdCnHint"></p>
 </div>
 <div class="alarm-field" id="cdEtWrap" hidden>
-<span class="alarm-label">倒计时时长（艾欧泽亚时间，最短 15 分钟）</span>
+<span class="alarm-label">时长</span>
 <div class="alarm-dur-row">
 <input type="number" id="cdEtH" min="0" max="23" step="1" value="0" aria-label="艾欧泽亚时"><span>时</span>
 <input type="number" id="cdEtM" min="0" max="59" step="1" value="20" aria-label="艾欧泽亚分"><span>分</span>
@@ -580,7 +579,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <label class="alarm-check" for="cdLoop">
 <input type="checkbox" id="cdLoop">
-<span>倒计时结束后自动循环</span>
+<span>结束后自动循环</span>
 </label>
 <div class="alarm-field alarm-row2 alarm-row2-gap">
 <div>
@@ -602,8 +601,8 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="huayuOverlay" role="dialog" aria-modal="true" aria-labelledby="huayuTitle" data-close-only-x="1" hidden>
 <div class="gate-card huayu-card" id="huayuCard">
-<button class="info-close" id="huayuClose" aria-label="关闭">×</button>
-<h2 id="huayuTitle">听得花间语</h2>
+<button type="button" class="info-close" id="huayuClose" aria-label="关闭">×</button>
+<h2 id="huayuTitle">且听花间语</h2>
 <p class="hint" id="huayuHint"></p>
 <label class="alarm-label" for="huayuInput" id="huayuInputLabel">花语</label>
 <textarea id="huayuInput" maxlength="400000" spellcheck="false"></textarea>
@@ -632,12 +631,12 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="info-overlay" id="infoOverlay" role="dialog" aria-modal="true" aria-label="花街介绍" hidden>
 <div class="info-box" id="infoBox">
-<button class="info-close" id="infoClose" aria-label="关闭">×</button>
+<button type="button" class="info-close" id="infoClose" aria-label="关闭">×</button>
 <h2 class="info-title">花街</h2>
-<div class="tabs info-tabs">
-<button class="tab-btn is-active" data-info-tab="intro">介绍</button>
-<button class="tab-btn" data-info-tab="gallery">相册</button>
-<button class="tab-btn" data-info-tab="record">花舞之街记录</button>
+<div class="tabs info-tabs" role="tablist">
+<button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-info-tab="intro">介绍</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-info-tab="gallery">相册</button>
+<button type="button" class="tab-btn" role="tab" aria-selected="false" data-info-tab="record">建成记录视频</button>
 </div>
 <div class="tab-panel" id="infoPanelIntro">
 <div class="info-text">
@@ -654,12 +653,11 @@ controlslist="nodownload" hidden></video>
 <div class="tab-panel" id="infoPanelRecord" hidden></div>
 </div>
 </div>
-<script src="verify.js?v=20260930i"></script>
-<script src="config.js?v=20260930i"></script>
-<script src="main.js?v=20260930i"></script>
-<script src="ticket.js?v=20260930i"></script>
-<script src="venue.js?v=20260930i"></script>
-<script src="survey.js?v=20260930i"></script>
-<script>initApp();</script>
+<script src="verify.js?v=20261001a"></script>
+<script src="config.js?v=20261001a"></script>
+<script src="main.js?v=20261001a"></script>
+<script src="ticket.js?v=20261001a"></script>
+<script src="venue.js?v=20261001a"></script>
+<script src="survey.js?v=20261001a"></script>
 </body>
 </html>

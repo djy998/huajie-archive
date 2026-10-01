@@ -1,9 +1,5 @@
-"""重新生成标题用的毛笔字 assets/site/brush.woff2（马善政 Ma Shan Zheng，SIL OFL 1.1 授权，可自由使用和裁剪）。
-标题里出现了新字（例如新活动名）时跑一次；没跑的话新字会退回 Google 字体 / 系统字体，不影响使用。
-用法（在 _src 目录）：
-  pip install fonttools brotli
-  python tools/make-brush-font.py
-字体原件从 GitHub 下载：google/fonts 仓库 ofl/mashanzheng/MaShanZheng-Regular.ttf
+"""生成标题毛笔字子集 assets/site/brush.woff2（马善政 Ma Shan Zheng，SIL OFL 1.1）。标题出现新字时运行。
+用法（_src 目录）：pip install fonttools brotli && python tools/make-brush-font.py
 """
 import re
 import urllib.request
@@ -18,7 +14,6 @@ CACHE = SRC / "tools" / "MaShanZheng-Regular.ttf"
 
 
 def heading_chars():
-    """用毛笔字显示的文字：各级标题、活动名、几处落款"""
     html = (SRC / "index.html").read_text(encoding="utf-8")
     cfg = (SRC / "config.js").read_text(encoding="utf-8")
     js = "".join((SRC / f).read_text(encoding="utf-8")
@@ -29,12 +24,14 @@ def heading_chars():
     parts += re.findall(r'title:\s*"([^"]*)"', cfg)
     parts += re.findall(r"titles:\s*\{([^}]*)\}", cfg)
     parts += re.findall(r'TICKET_TITLE\s*=\s*"([^"]*)"', cfg)
+    survey = (SRC / "survey.js").read_text(encoding="utf-8")
+    parts += re.findall(r'^\s*title:\s*"([^"]*)"', survey, re.M)
+    parts += re.findall(r'SURVEY_SECTION_NO\s*=\s*(\[[^\]]*\])', survey)
     return sorted(set(ch for ch in "".join(parts) if ord(ch) > 0x2E7F))
 
 
 def main():
     if not CACHE.exists():
-        print("下载字体原件…")
         urllib.request.urlretrieve(FONT_URL, CACHE)
     chars = heading_chars()
     opts = subset.Options()

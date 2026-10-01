@@ -1,31 +1,19 @@
-/* =============================================================================
-   花舞之街 · 薰风花语町 —— 站点配置与内容 config.js
-   -----------------------------------------------------------------------------
-   平时改内容（换最新活动、加往期活动、加日历标注、换图片）只需要改这个文件。
-   逻辑在 main.js；本文件必须在 main.js 之前加载（index.html 底部已排好顺序）。
-   ============================================================================= */
+/* 花舞之街 · 站点配置与内容 */
 
-/* ---- 后端与站点常量 ------------------------------------------------------------
-   WORKER_URL：Worker 挂在本站域名的 /api/*（同源；*.workers.dev 在国内无法访问，不要用） */
+/* Worker 挂在本站 /api/*，须同源 */
 const WORKER_URL = "/api/";
 const TURNSTILE_SITE_KEY = "0x4AAAAAAExPobWO4wUg253f";
-
 const GROUP_QQ = "453278026";
-const INFO_COPY_TAIL = "若你懂麦穗，便懂希望；若你懂苍穹，便懂年华。有人说桂花树代表叹息，其实它只是在掌心酝酿清风。你我走过山间，芦苇呆呆飘荡，屋檐也勇敢了起来。有人说雏菊代表一生，其实它只是在巷口找寻清风。";   // 验证通过后复制花街介绍时附在末尾的一段话
+const INFO_COPY_TAIL = "若你懂麦穗，便懂希望；若你懂苍穹，便懂年华。有人说桂花树代表叹息，其实它只是在掌心酝酿清风。你我走过山间，芦苇呆呆飘荡，屋檐也勇敢了起来。有人说雏菊代表一生，其实它只是在巷口找寻清风。";   // 复制花街介绍时附在末尾
 const SHARE_TEXT = "ff14莫古力区梦羽花街网站试运行中！https://swayingsussurrusstreet.dpdns.org/";
 
-/* 直达链接（index.html 开头的脚本里也写了这几个 hash，改的话两边一起改）
-   TICKET_HASH：购票页；首页入口只在「购票已开放 + 没勾（测试）+ 不隔离」时出现，直接访问这个 hash 总能进
-   TICKET_HASH_LONG：购票页的长链接，和 #ti 等效，打开后自动换成短链接
-   SURVEY_HASH：最新活动详情页的「反馈与建议」（活动问卷） */
+/* 直达链接；#ti、#survey 同时写在 boot.js */
 const TICKET_HASH = "#ti";
-const TICKET_HASH_LONG = "#ticket-mq7Zr2Kx9vLp4sWb8TnY3cHd";
 const SURVEY_HASH = "#survey";
-/* 购票页标题在管理页「购票管理」里设置，这里只是状态读回来之前 / 读取失败时的兜底 */
+const VENUE_HASH = "#venue";
 const TICKET_TITLE = "莫古力中秋月轮祭 · 购票";
 
-/* ---- 站点图片 -------------------------------------------------------------------
-   首页卡片的白天 / 夜晚底图（悬停时的设计图在 style.css 的 .tile-hover-fx 规则里） */
+/* 首页卡片底图；悬停图在 style.css */
 const TILE_BG = {
   day: {
     latestTile:  "assets/site/tile-latest-day.webp",
@@ -45,101 +33,82 @@ const TILE_BG = {
   },
 };
 const SKY_IMAGES = { day: "assets/site/sky-day.webp", night: "assets/site/sky-night.webp" };
-/* 竖屏（手机）用的天空：从上面两张图中间裁出来的窄版，文件小一半多（tools/make-thumbs.py 生成）。
-   index.html 开头的脚本按「sky-昼夜-p.webp」的名字提前下载，改名的话两边一起改 */
+/* 竖屏用的窄版天空，文件名规则同时写在 boot.js */
 const SKY_IMAGES_PORTRAIT = { day: "assets/site/sky-day-p.webp", night: "assets/site/sky-night-p.webp" };
-/* 弹窗与表单卡片的底图（花街介绍、公告、验证、购票 / 问卷 / 场地登记、管理面板等共用）；
-   换了同名图片记得把 ?v= 数字 +1 */
+/* 弹窗与表单卡片底图；替换同名图片时 ?v= 加一 */
 const INFO_BG_IMAGE = "assets/site/info-bg.webp?v=2";
 
-/* 花街介绍 ·「花舞之街记录」页的 B 站外链视频（字段同 LATEST_EVENT.review.video；cover 是点击播放前的封面） */
-const INFO_RECORD_VIDEO = {
-  bvid: "BV1554y1h7By",
-  aid: 844834734,
-  cid: 315146059,
-  page: 1,
-  danmaku: false,
-  title: "花舞之街记录",
-  cover: "infogal/info-29.webp",
-};
+/* 花街介绍 · 建成记录视频：heading 为小标题，cover 为封面（可省略） */
+const INFO_RECORD_VIDEOS = [
+  {
+    heading: "花舞之街",
+    bvid: "BV1554y1h7By",
+    aid: 844834734,
+    cid: 315146059,
+    page: 1,
+    danmaku: false,
+    title: "花舞之街建成记录",
+    cover: "infogal/info-29.webp",
+  },
+  {
+    heading: "薰风花语町",
+    bvid: "BV1wbxHe9Ejz",
+    aid: 113205993014805,
+    cid: 32384222155,
+    page: 1,
+    danmaku: false,
+    title: "薰风花语町建成记录",
+  },
+];
 
-/* 花街介绍 · 相册：infogal/info-01.webp ~ info-39.webp（格子里显示 resized/720/ 下的缩略图，点开看原图） */
+/* 花街介绍 · 相册 */
 const INFO_GALLERY = Array.from({ length: 39 }, (_, i) =>
   `infogal/info-${String(i + 1).padStart(2, "0")}.webp`
 );
 
-/* 白天飘落的花叶贴图；ar = 宽 / 高（开屏图的爆花特效在 index.html 里另有一份同样的列表，增删时两边一起改） */
+/* 白天飘落的花叶，ar = 宽 / 高；boot.js 有同样的列表 */
 const DAY_FX_LEAVES = [
-  { ar: 1.6,   src: "assets/site/leaf-01.webp" },  // 红枫＋绿枫（一枝）
-  { ar: 1.1,   src: "assets/site/leaf-02.webp" },  // 白玉兰花瓣
-  { ar: 0.807, src: "assets/site/leaf-03.webp" },  // 大银杏叶
-  { ar: 1.257, src: "assets/site/leaf-04.webp" },  // 小银杏叶
-  { ar: 1.086, src: "assets/site/leaf-05.webp" },  // 樱花（淡）
-  { ar: 0.949, src: "assets/site/leaf-06.webp" },  // 樱花（艳）
-  { ar: 0.864, src: "assets/site/leaf-07.webp" },  // 竹叶三片
-  { ar: 1.517, src: "assets/site/leaf-08.webp" },  // 单片竹叶
-  { ar: 0.568, src: "assets/site/leaf-09.webp" },  // 尤加利枝
+  { ar: 1.6,   src: "assets/site/leaf-01.webp" },
+  { ar: 1.1,   src: "assets/site/leaf-02.webp" },
+  { ar: 0.807, src: "assets/site/leaf-03.webp" },
+  { ar: 1.257, src: "assets/site/leaf-04.webp" },
+  { ar: 1.086, src: "assets/site/leaf-05.webp" },
+  { ar: 0.949, src: "assets/site/leaf-06.webp" },
+  { ar: 0.864, src: "assets/site/leaf-07.webp" },
+  { ar: 1.517, src: "assets/site/leaf-08.webp" },
+  { ar: 0.568, src: "assets/site/leaf-09.webp" },
 ];
 
-/* 背景音乐：把音频放进 assets/audio/ 并在此登记 { src, title, mode? } 就会播放，留空 = 不放背景音乐；
-   mode 为 "day" / "night" 时，切换昼夜会自动换曲。
-   也可在控制台临时测试：HJ_MUSIC.load([{ src: "assets/audio/demo.mp3", title: "测试" }]) */
+/* 背景音乐 { src, title, mode? }，mode 为 day / night 时随昼夜换曲；留空不播放 */
 const MUSIC_TRACKS = [
   // { src: "assets/audio/huajie-day.mp3",   title: "花街·白昼",   mode: "day"   },
   // { src: "assets/audio/huajie-night.mp3", title: "花街·灯笼下", mode: "night" },
 ];
-
-
-/* =============================================================================
-   活动内容
-   ============================================================================= */
-
-/* 最新活动视频：src 或 bvid 非空时，「最新活动」卡片中间出现播放按钮，
-   点击后卡片原位换成视频；两个都留空则不显示播放按钮。
-
-   src —— 自托管视频（推荐）。填了就用站内的原生播放器播它，手机端电脑端都正常，
-          也不受 B 站对站外播放的限速。可以是 Worker + R2 的地址（如 "/api/video/moguri-2026.mp4"）
-          或任何能直链的 mp4。留空才回退到下面的 B 站外链播放器。
-
-   aid / cid —— 用 B 站外链播放器时强烈建议填上。只给 bvid 的话，播放器要先自己去查 cid，
-          这个查询带着本站域名做 referer，很容易被 B 站的站外风控挡掉，播放器就只好显示
-          「非常抱歉，本视频可能由于以下原因导致无法正常播放」。
-          取值：浏览器打开 https://api.bilibili.com/x/web-interface/view?bvid=BV15eeu66Eze
-          抄下 data.aid 和 data.cid（多 P 视频取 data.pages[第几P - 1].cid）。
-
-   page：分 P 序号；start：从第几秒开始；danmaku：是否显示弹幕 */
+/* 最新活动视频：src（本站视频地址，优先）或 bvid 非空时显示播放按钮。
+   B 站视频须填 aid / cid，取自 api.bilibili.com/x/web-interface/view?bvid=… 的 data.aid、data.cid */
 const LATEST_VIDEO = {
-  src: "",                          // 自托管视频地址，优先于 bvid
-  poster: "poster-moguri-2026.webp",// 自托管视频的封面图
+  src: "",
+  poster: "poster-moguri-2026.webp",
   bvid: "BV15eeu66Eze",
-  aid: 117285691852006,             // 已填（取自 B 站 view 接口）
+  aid: 117285691852006,
   cid: 41971092695,
   page: 1,
   start: 0,
   danmaku: false,
-  defaultOpen: false,               // 进首页时是否默认展开视频：false = 默认显示封面卡片（收起），点「播放视频」才展开
+  defaultOpen: false,
 };
 
-/* 最新活动（详情页内容）：title 为空时详情页标题显示「敬请期待」
-   字段格式同 ARCHIVE_EVENTS；poster / manual / review / feedback 可以是
-   字符串，或 { text, images: [...], link: { url, label } } 对象；
-   对象里还可以加：
-     video: { bvid, aid, cid, page, start, danmaku, title }  —— 页内的 B 站外链视频（手机 / 电脑自动换对应播放器，
-            aid / cid 的取法同上面的 LATEST_VIDEO；点封面才加载播放器，离开这一页自动停掉）
-     links: [{ url, label }, ...]  —— 多个跳转按钮（link 只能放一个）
-   页面上的顺序：视频 → 跳转按钮 → 图片 → 文字；
-   feedback（反馈与建议）只在最新活动中显示。
-   survey: true 时「反馈与建议」里显示站内活动问卷（题目在 survey.js），这时 feedback 字段不再使用；
-   改成 false 就恢复显示 feedback 的内容。 */
+/* 最新活动。poster / manual / review / feedback 为字符串或
+   { text, images, link: { url, label }, links: [{ url, label, image? }], video: { bvid, aid, cid, … }, titles, note }；
+   survey: true 时「反馈与建议」显示活动问卷 */
 const LATEST_EVENT = {
   title: "2026莫古力花舞之街月轮祭",
   dateLabel: "",
   location: "",
-  ticketUrl: "",   // 购票链接，留空则不显示购票按钮
-  cover: "poster-moguri-2026.webp",   // 详情页标题栏背景图（同「往期街区活动」的 cover 字段用法）
+  cover: "poster-moguri-2026.webp",
   areas: [
     {
-      name: "",   // 不分会场，标题留空
+      name: "",
       shops: [
         { num: "31·32·34·36", name: "真理馆", desc: "迷宫探索", price: "" },
         { num: "33·44", name: "Miumiucandy拉拉菲尔主题店", desc: "书信、故事续写·漂流瓶", price: "" },
@@ -155,12 +124,12 @@ const LATEST_EVENT = {
       ]
     }
   ],
-  manual: { images: ["assets/latest/latest-002.webp?v=2"] },   // 游玩手册（2026中秋月轮祭）
-  poster: { images: ["poster-moguri-2026.webp", "assets/latest/latest-001.webp?v=2"] },   // 活动海报 + 宣传图；换了同名图片记得把 ?v= 数字 +1，强制客人刷新缓存
-  review: {   // 活动回顾（2026中秋月轮祭）
+  manual: { images: ["assets/latest/latest-002.webp?v=2"] },
+  poster: { images: ["poster-moguri-2026.webp", "assets/latest/latest-001.webp?v=2"] },
+  review: {
     video: {
       bvid: "BV1shat6BETu",
-      aid: 117341459451164,   // 已填（取自 B 站 view 接口）
+      aid: 117341459451164,
       cid: 42240708501,
       page: 1,
       danmaku: false,
@@ -168,9 +137,9 @@ const LATEST_EVENT = {
     },
     links: [
       { url: "https://www.bilibili.com/video/BV1aZhd6fESZ/", label: "【直播回放】雪人小肥！猪区梦羽中秋花街！中秋快乐！ 2026年09月26日20点场",
-        image: "assets/latest/review-live-2.webp" },   // 有 image 就显示成磁贴（图 + 文字），没有就是普通胶囊按钮
+        image: "assets/latest/review-live-2.webp" },
     ],
-    titles: { video: "活动剪影", links: "直播回放", images: "活动相册" },   // 各块上方的小标题，不要哪个就删掉
+    titles: { video: "活动剪影", links: "直播回放", images: "活动相册" },
     images: [
       "assets/latest/review-001.webp",
       "assets/latest/review-002.webp",
@@ -178,12 +147,10 @@ const LATEST_EVENT = {
     ],
   },
   feedback: "",
-  survey: true,    // 「反馈与建议」= 站内活动问卷（survey.js）
+  survey: true,
 };
 
-/* 往期活动：按活动日期从新到老排（新的加在数组最前面）
-   id 用于分享链接（#event-<id>）和点赞；封面图什么比例都行（卡片自动按图片比例显示）；hideReview: 隐藏「活动回顾」页；
-   tabs: 只显示列出的标签页（poster 活动介绍 / manual 游玩手册 / shops 活动店家 / review 活动回顾），不写就全部显示 */
+/* 往期活动，新的在前。id 用于 #event-<id> 与点赞；tabs 限定显示的标签页；hideReview 隐藏活动回顾 */
 const ARCHIVE_EVENTS = [
   {
     id: "ny2026",
@@ -192,7 +159,6 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2026年1月1日–1月2日",
     location: "莫古力区 · 梦羽宝境 高脚孤丘 22/23扩建区",
     cover: "assets/gallery/gallery-001.jpg",
-    ticketUrl: "",
     manual: { images: ["assets/gallery/gallery-002.jpg","assets/gallery/gallery-003.jpg"] },
     poster: { images: ["assets/gallery/gallery-004.jpg"] },
     review: { link: { url: "https://www.bilibili.com/video/BV1VhivB1EC1/", label: "查看活动回顾视频" } },
@@ -238,7 +204,6 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2025年9月21日 20:30–0:00",
     location: "莫古力区 · 梦羽宝境 高脚孤丘22区（扩建西南区）",
     cover: "assets/gallery/gallery-005.jpg",
-    ticketUrl: "",
     manual: { images: ["assets/gallery/gallery-006.jpg"] },
     poster: { images: ["assets/gallery/gallery-007.jpg"] },
     review: {},
@@ -266,7 +231,6 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2024年12月31日–2025年1月1日",
     location: "莫古力区 · 梦羽宝境 高脚孤丘22/23区扩建区",
     cover: "assets/gallery/gallery-020.jpg",
-    ticketUrl: "",
     manual: { images: ["assets/gallery/gallery-021.jpg","assets/gallery/gallery-022.jpg","assets/gallery/gallery-023.jpg","assets/gallery/gallery-024.jpg"] },
     poster: { images: ["assets/gallery/gallery-025.jpg"] },
     review: {},
@@ -310,7 +274,6 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2024年夏",
     location: "莫古力区 · 梦羽宝境",
     cover: "assets/gallery/gallery-008.jpg",
-    ticketUrl: "",
     manual: { images: ["assets/gallery/gallery-009.jpg","assets/gallery/gallery-010.jpg","assets/gallery/gallery-011.jpg","assets/gallery/gallery-012.jpg","assets/gallery/gallery-013.jpg","assets/gallery/gallery-014.jpg","assets/gallery/gallery-015.jpg","assets/gallery/gallery-016.jpg","assets/gallery/gallery-017.jpg","assets/gallery/gallery-018.jpg"] },
     poster: { images: ["assets/gallery/gallery-019.jpg"] },
     review: {},
@@ -350,7 +313,6 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2023年8月20日 20:30-23:30",
     location: "莫古力区 · 梦羽宝境 沙都22区扩建西南",
     cover: "assets/gallery/gallery-026.jpg",
-    ticketUrl: "",
     manual: { images: ["assets/gallery/gallery-027.jpg","assets/gallery/gallery-028.jpg","assets/gallery/gallery-029.jpg","assets/gallery/gallery-030.jpg","assets/gallery/gallery-031.jpg"] },
     poster: { images: ["assets/gallery/gallery-032.jpg"] },
     review: {},
@@ -407,9 +369,7 @@ const ARCHIVE_EVENTS = [
   }
 ];
 
-/* 小型活动回顾：{ image, caption }，新的加在最前面；卡片按图片自己的比例整张显示
-   full（可选）：点开后看的图片（不写就看 image 那张），比如按钮用横幅、点开看长图海报
-   pinLast: true（可选）：固定排在最后，前面再加新的也不会变 */
+/* 小型活动回顾，新的在前。full：点开后显示的图片；pinLast：固定在最后 */
 const MINI_REVIEWS = [
   { image: "assets/gallery/gallery-033.jpg", caption: "女精群&兔娘群春游团建" },
   { image: "assets/gallery/gallery-034.jpg", caption: "2026年跨年举火把巡游-从格里达尼亚走到乌尔达哈" },
@@ -417,8 +377,7 @@ const MINI_REVIEWS = [
     caption: "“花舞之街-结缘之地”跨服婚礼包办（仅展示往期活动形式，详情请至活动群咨询）" }
 ];
 
-/* 日历小组件的活动标注：单日写 date，跨日写 start + end；
-   tone 可选 rose / gold / teal / wisteria / blue / orange */
+/* 日历标注：date 或 start + end；tone 为 rose / gold / teal / wisteria / blue / orange */
 const HJ_CAL_ITEMS = [
   { start: "2021-12-24", end: "2021-12-26", label: "2021 花舞之街星芒集市", tone: "rose" },
   { date: "2022-12-31", label: "2022 花舞之街新年集市", tone: "gold" },

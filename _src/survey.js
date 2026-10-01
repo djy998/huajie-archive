@@ -1,50 +1,25 @@
-/* =============================================================================
-   花舞之街 · 薰风花语町 —— 活动问卷 survey.js
-   -----------------------------------------------------------------------------
-   最新活动详情页「反馈与建议」标签页里的站内问卷（直达链接 #survey），数据进 Worker 的 survey_responses 表；
-   管理员在内部入口的「活动问卷」里看统计、逐份查看、作废 / 恢复、开放 / 关闭、导出 Excel（admin.js）。
-   依赖 main.js：$、callWorker、setMsg、showToast、escapeHtml、storage、captchaOn、siteLockdown、
-   STATIC_MODE_MSG、openSiteAbout；config.js：TURNSTILE_SITE_KEY。
-   admin.js 也用这里的题目定义和文字对照（SURVEY、SURVEY_FIELDS、surveyAnswerText…）。
-
-   题目规则（key、题型、选项 key、必答、显示条件、字数上限）要和 worker.js 的 SURVEYS 保持一致：
-     - 只改题目 / 选项的文字、说明：只改这里，不用动 Worker
-     - 增删题目或选项、改显示条件 / 必答 / 字数上限：这里和 worker.js 两边一起改
-   换一场活动做新问卷时：把 SURVEY.id 换成新的（例如 "newyear2027"），Worker 的 SURVEYS 里加同名的一份，
-   旧问卷的答卷按 id 分开存，互不影响。
-   ============================================================================= */
-
-/* 本次活动的游玩项目：按「活动店家」（LATEST_EVENT.areas）+ 摄影项目（游园手册 45 号房，自营） */
+/* 花舞之街 · 活动问卷。题目规则与 Worker 的 SURVEYS 一致，换活动时更换 SURVEY.id */
 const SURVEY_PROJECTS = [
-  { key: "zhenli",   name: "真理馆",                   desc: "迷宫探索",             num: "31·32·34·36" },
-  { key: "miumiu",   name: "Miumiucandy拉拉菲尔主题店", desc: "书信、故事续写·漂流瓶", num: "33·44" },
-  { key: "maitian",  name: "麦田舞团",                 desc: "舞蹈",                 num: "35" },
-  { key: "qingmu",   name: "青木原",                   desc: "情景游戏/抽奖",        num: "38" },
-  { key: "qihai",    name: "七海小镇",                 desc: "限时游戏（庭院）",     num: "39·40" },
-  { key: "lijiya",   name: "丽姬娅·群星",              desc: "占卜（自营）",         num: "41" },
-  { key: "paradise", name: "Paradise·乐园",            desc: "舞蹈",                 num: "42" },
-  { key: "matcha",   name: "抹茶Sweetheart",           desc: "小品",                 num: "43" },
-  { key: "photo",    name: "摄影项目",                 desc: "有偿摄影（自营）",     num: "45" },
-  { key: "longmen",  name: "†龙门†龙娘伊甸园",         desc: "指名",                 num: "49" },
-  { key: "xiangqin", name: "深夜相亲大会",             desc: "相亲交友活动",         num: "场外" },
-  { key: "band",     name: "老二次元音乐社",           desc: "乐队演奏",             num: "场外" },
+  { key: "zhenli", name: "真理馆", desc: "迷宫探索", num: "31·32·34·36" },
+  { key: "miumiu", name: "Miumiucandy拉拉菲尔主题店", desc: "书信、故事续写·漂流瓶", num: "33·44" },
+  { key: "maitian", name: "麦田舞团", desc: "舞蹈", num: "35" },
+  { key: "qingmu", name: "青木原", desc: "情景游戏/抽奖", num: "38" },
+  { key: "qihai", name: "七海小镇", desc: "限时游戏（庭院）", num: "39·40" },
+  { key: "lijiya", name: "丽姬娅·群星", desc: "占卜（自营）", num: "41" },
+  { key: "paradise", name: "Paradise·乐园", desc: "舞蹈", num: "42" },
+  { key: "matcha", name: "抹茶Sweetheart", desc: "小品", num: "43" },
+  { key: "photo", name: "摄影项目", desc: "有偿摄影（自营）", num: "45" },
+  { key: "longmen", name: "†龙门†龙娘伊甸园", desc: "指名", num: "49" },
+  { key: "xiangqin", name: "深夜相亲大会", desc: "相亲交友活动", num: "场外" },
+  { key: "band", name: "老二次元音乐社", desc: "乐队演奏", num: "场外" },
 ];
 
-/* 题目定义。题型：
-     choice —— 单选（multi 不写）/ 多选（multi: true）；选项带 exclusive 表示「选了它就不能选别的」，
-               带 other 表示「其他」，选中后出现补充说明框（other.key）；
-               pair / wide / long 只影响排版（两列 / 宽格子 / 手机上一行一个）
-     score  —— 1～10 分打分；card 表示用卡片样式（游玩项目）；
-               comment 表示卡片里附带的「意见或建议」框
-     text   —— 文字；multiline 为多行
-   short：题目的简称，只在管理页（评分一览、逐份查看）和导出的 Excel 表头里用
-   show：{ key, any: [...] } —— 只有前面那道题选了 any 里的任一项时才显示（被隐藏的题不提交） */
+/* 题型：choice（multi / exclusive / other）、score、card、text；show 为显示条件 */
 const SURVEY = {
   id: "moguri2026",
   title: "活动调查问卷",
-  intro: "感谢您参与「2026莫古力中秋月轮祭」！问卷大约需要 3～5 分钟，带 * 的为必答题。"
-    + "填到一半离开也没关系，已填的内容会暂存在这台设备的浏览器里。您的反馈会让我们未来的活动办得更好！",
-  closedText: "本次问卷已经结束收集啦，感谢您的关注和支持！",
+  intro: "感谢参与「2026莫古力中秋月轮祭」！问卷约需 3～5 分钟，* 为必答题，未提交的内容会自动暂存。",
+  closedText: "问卷已结束收集",
   sections: [
     {
       title: "活动宣传",
@@ -54,15 +29,15 @@ const SURVEY = {
           label: "您是从哪些渠道或平台了解到本次活动的？", desc: "可多选",
           options: [
             { key: "qq_group", label: "QQ群消息" },
-            { key: "qzone",    label: "QQ空间" },
-            { key: "nga",      label: "NGA" },
-            { key: "stone",    label: "石之家" },
+            { key: "qzone", label: "QQ空间" },
+            { key: "nga", label: "NGA" },
+            { key: "stone", label: "石之家" },
             { key: "bilibili", label: "B站 / 直播间" },
-            { key: "site",     label: "花街网站" },
-            { key: "recruit",  label: "游戏内招募板" },
-            { key: "shout",    label: "游戏内喊话" },
-            { key: "friend",   label: "亲友介绍" },
-            { key: "other",    label: "其他", other: true },
+            { key: "site", label: "花街网站" },
+            { key: "recruit", label: "游戏内招募板" },
+            { key: "shout", label: "游戏内喊话" },
+            { key: "friend", label: "亲友介绍" },
+            { key: "other", label: "其他", other: true },
           ],
           other: { key: "promo_channels_other", max: 40 },
         },
@@ -89,9 +64,9 @@ const SURVEY = {
           label: "您是通过什么方式获得活动票的？", desc: "可多选",
           options: [
             { key: "presale", label: "在花街网站购票系统预售登记" },
-            { key: "onsite",  label: "活动现场购买现场票" },
-            { key: "proxy",   label: "亲友代购 / 团体票等其他途径" },
-            { key: "none",    label: "没有购买活动票", exclusive: true },
+            { key: "onsite", label: "活动现场购买现场票" },
+            { key: "proxy", label: "亲友代购 / 团体票等其他途径" },
+            { key: "none", label: "没有购买活动票", exclusive: true },
           ],
         },
         {
@@ -106,7 +81,7 @@ const SURVEY = {
         {
           kind: "text", key: "ticket_note", short: "票务 / 购票系统的意见", multiline: true, max: 500,
           label: "您对本次活动的票务工作或购票系统是否有意见或建议？",
-          desc: "比如票价、限购、取票方式，或者购票页面哪里不好用",
+          desc: "如票价、限购、取票方式、购票页面的使用体验",
         },
       ],
     },
@@ -115,7 +90,7 @@ const SURVEY = {
       items: [
         {
           kind: "choice", key: "projects", short: "参与的项目", multi: true, required: true, wide: true,
-          label: "本次活动中，您参与了哪些游玩项目？", desc: "可多选，选中的项目会在下方出现对应的评分",
+          label: "本次活动中，您参与了哪些游玩项目？", desc: "可多选，选中的项目会在下方出现评分",
           options: [
             ...SURVEY_PROJECTS.map((p) => ({ key: p.key, label: p.name, sub: `${p.num} · ${p.desc}` })),
             { key: "none", label: "没有参与任何项目", exclusive: true },
@@ -146,11 +121,11 @@ const SURVEY = {
         },
         {
           kind: "score", key: "site_score", short: "网站满意度", required: true,
-          label: "您对花街网站的整体满意度", desc: "页面设计、功能、加载速度、手机上的使用体验等",
+          label: "您对花街网站的整体满意度", desc: "页面设计、功能、加载速度、手机端体验等",
         },
         {
           kind: "text", key: "site_note", short: "网站评价与建议", multiline: true, max: 500,
-          label: "您对花街网站有什么评价或建议？", desc: "想要的新功能、遇到的问题、用着不顺手的地方都可以说说",
+          label: "您对花街网站有什么评价或建议？", desc: "想要的新功能、遇到的问题等",
         },
       ],
     },
@@ -175,12 +150,12 @@ const SURVEY = {
         },
         {
           kind: "text", key: "other_note", short: "其他感想", multiline: true, max: 1000,
-          label: "对于本次中秋月轮祭活动，您还有哪些感想或建议？", desc: "比如想去的项目没能参加上等",
+          label: "对于本次中秋月轮祭活动，您还有哪些感想或建议？", desc: "如想去的项目没能参加上等",
         },
         {
           kind: "text", key: "contact", short: "联系方式", max: 60,
           label: "如果愿意让我们联系您，请留下游戏id或联系方式",
-          desc: "选填。仅工作人员可见，只用于和本问卷有关的联系", placeholder: "如：乔薇塔@梦羽宝境 / QQ号",
+          desc: "仅工作人员可见", placeholder: "如：乔薇塔@梦羽宝境 / QQ号",
         },
       ],
     },
@@ -190,14 +165,11 @@ const SURVEY = {
 const SURVEY_SCORE_LO = "非常不满意";
 const SURVEY_SCORE_HI = "非常满意";
 const SURVEY_SECTION_NO = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
-const SURVEY_DRAFT_KEY = `hj_survey_draft_${SURVEY.id}`;   // 没提交的草稿（本机）
-const SURVEY_DONE_KEY = `hj_survey_done_${SURVEY.id}`;     // 本机已经提交过（{ id, at }）
-const SURVEY_DRAFT_TTL = 30 * 86400000;                    // 草稿保留 30 天
+const SURVEY_DRAFT_KEY = STORE.surveyDraft + SURVEY.id;
+const SURVEY_DONE_KEY = STORE.surveyDone + SURVEY.id;
+const SURVEY_DRAFT_TTL = 30 * 86400000;
 
-/* ---- 题目展开 ----------------------------------------------------------------
-   SURVEY_ITEMS：页面上的一道道题（带所在分节）
-   SURVEY_FIELDS：真正提交的答案字段（「其他」补充、卡片里的意见框各算一个字段）。
-   校验规则只看 SURVEY_FIELDS，worker.js 的 SURVEYS 就是它去掉文字后的样子 */
+/* SURVEY_ITEMS 为页面题目，SURVEY_FIELDS 为提交字段 */
 const SURVEY_ITEMS = SURVEY.sections.flatMap((sec, si) => sec.items.map((it) => ({ ...it, section: si })));
 
 function surveyFlatten(items) {
@@ -206,14 +178,9 @@ function surveyFlatten(items) {
     const show = it.show ? { key: it.show.key, any: [...it.show.any] } : null;
     if (it.kind === "choice") {
       const ex = it.options.find((o) => o.exclusive);
-      fields.push({
-        key: it.key, type: it.multi ? "multi" : "single", options: it.options.map((o) => o.key),
-        exclusive: ex ? ex.key : "", required: !!it.required, show,
-      });
+      fields.push({ key: it.key, type: it.multi ? "multi" : "single", options: it.options.map((o) => o.key), exclusive: ex ? ex.key : "", required: !!it.required, show });
       const oth = it.options.find((o) => o.other);
-      if (oth && it.other) {
-        fields.push({ key: it.other.key, type: "text", max: it.other.max, required: false, show: { key: it.key, any: [oth.key] } });
-      }
+      if (oth && it.other) fields.push({ key: it.other.key, type: "text", max: it.other.max, required: false, show: { key: it.key, any: [oth.key] } });
     } else if (it.kind === "score") {
       fields.push({ key: it.key, type: "score", required: !!it.required, show });
       if (it.comment) fields.push({ key: it.comment.key, type: "text", max: it.comment.max, required: false, show });
@@ -224,20 +191,15 @@ function surveyFlatten(items) {
   return fields;
 }
 const SURVEY_FIELDS = surveyFlatten(SURVEY_ITEMS);
-/* 字段 → 所属的题 */
-const SURVEY_FIELD_ITEM = new Map();
+const SURVEY_FIELD_ITEM = new Map();   // 字段 → 所属的题
 SURVEY_ITEMS.forEach((it) => {
   SURVEY_FIELD_ITEM.set(it.key, it);
   if (it.other) SURVEY_FIELD_ITEM.set(it.other.key, it);
   if (it.comment) SURVEY_FIELD_ITEM.set(it.comment.key, it);
 });
 
-/* ---- 校验（和 worker.js 的 readSurveyAnswers 逻辑完全一致） --------------------
-   raw：{ 字段: 值 }。按顺序逐题判断：显示条件不满足的题直接丢掉；
-   成功返回 { answers }，失败返回 { field, reason }（reason：required / invalid / exclusive / too_long） */
-function surveyCleanText(v) {
-  return v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ").trim();
-}
+/* 校验规则与 Worker 一致：返回 { answers } 或 { field, reason } */
+const surveyCleanText = (v) => v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ").trim();
 
 function surveyNormalizeAnswers(fields, raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { field: "", reason: "invalid" };
@@ -248,8 +210,8 @@ function surveyNormalizeAnswers(fields, raw) {
       const vals = Array.isArray(dep) ? dep : dep === undefined ? [] : [dep];
       if (!f.show.any.some((v) => vals.includes(v))) continue;
     }
-    const v = Object.prototype.hasOwnProperty.call(raw, f.key) ? raw[f.key] : undefined;
-    if (v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0)) {
+    const v = raw[f.key];
+    if (v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length)) {
       if (f.required) return { field: f.key, reason: "required" };
       continue;
     }
@@ -257,12 +219,11 @@ function surveyNormalizeAnswers(fields, raw) {
       if (typeof v !== "string" || !f.options.includes(v)) return { field: f.key, reason: "invalid" };
       out[f.key] = v;
     } else if (f.type === "multi") {
-      if (!Array.isArray(v) || new Set(v).size !== v.length
-        || v.some((x) => typeof x !== "string" || !f.options.includes(x))) return { field: f.key, reason: "invalid" };
+      if (!Array.isArray(v) || new Set(v).size !== v.length || v.some((x) => typeof x !== "string" || !f.options.includes(x))) return { field: f.key, reason: "invalid" };
       if (f.exclusive && v.includes(f.exclusive) && v.length > 1) return { field: f.key, reason: "exclusive" };
       out[f.key] = f.options.filter((o) => v.includes(o));
     } else if (f.type === "score") {
-      if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 10) return { field: f.key, reason: "invalid" };
+      if (!Number.isInteger(v) || v < 1 || v > 10) return { field: f.key, reason: "invalid" };
       out[f.key] = v;
     } else {
       if (typeof v !== "string") return { field: f.key, reason: "invalid" };
@@ -278,7 +239,7 @@ function surveyNormalizeAnswers(fields, raw) {
   return { answers: out };
 }
 
-/* 按当前填写内容算出每个字段显示与否（和上面的丢题规则一致） */
+/* 按当前填写内容算出每个字段显示与否（与上面的丢题规则一致） */
 function surveyVisibility(raw) {
   const vis = {};
   for (const f of SURVEY_FIELDS) {
@@ -293,21 +254,21 @@ function surveyVisibility(raw) {
   return vis;
 }
 
-/* ---- 文字对照（管理页、导出共用） ------------------------------------------- */
+/* 文字对照（管理页、导出共用） */
 function surveyOptionLabel(it, key) {
-  const o = it.options && it.options.find((x) => x.key === key);
+  const o = it.options?.find((x) => x.key === key);
   return o ? o.label : key;
 }
-/* 一个字段的简短名字（管理页逐份查看、导出 Excel 的表头用） */
+
 function surveyFieldHeader(key) {
   const it = SURVEY_FIELD_ITEM.get(key);
   if (!it) return key;
   const name = it.card ? it.card.title : it.short || it.label;
-  if (it.other && key === it.other.key) return `${name}（其他·补充）`;
+  if (it.other && key === it.other.key) return `${name}·其他`;
   if (it.comment && key === it.comment.key) return `${name}·意见或建议`;
   return it.card ? `${name}·满意度` : name;
 }
-/* 一个字段的答案 → 文字（单选 / 多选换成选项文字，分数原样） */
+
 function surveyAnswerText(key, value) {
   if (value === undefined || value === null || value === "") return "";
   const it = SURVEY_FIELD_ITEM.get(key);
@@ -317,20 +278,14 @@ function surveyAnswerText(key, value) {
   return Array.isArray(value) ? value.join("、") : String(value);
 }
 
-
-/* =============================================================================
-   表单构建
-   控件都用 data-sv-* 标记（不靠 id 取值）：
-     data-sv-choice="字段"  单选 / 多选框     data-sv-score="字段"  打分
-     data-sv-text="字段"    文字框            data-sv-item="题 key" 每道题的外框
-   ============================================================================= */
+/* 表单：控件用 data-sv-choice / data-sv-score / data-sv-text="字段" 标记，每道题的外框是 data-sv-item */
 function surveyItemHtml(it) {
   const esc = escapeHtml;
   const id = (k) => `sv-${k}`;
   const sub = (text) => (text ? `<p class="ticket-sub">${esc(text)}</p>` : "");
   const req = it.required ? " is-required" : "";
-  const no = `<span class="survey-no" data-sv-no></span>`;
-  const err = `<p class="survey-err" data-sv-err role="alert" hidden></p>`;
+  const no = '<span class="survey-no" data-sv-no></span>';
+  const err = '<p class="survey-err" data-sv-err role="alert" hidden></p>';
 
   if (it.kind === "choice") {
     const type = it.multi ? "checkbox" : "radio";
@@ -340,14 +295,9 @@ function surveyItemHtml(it) {
         <span class="ticket-label${req}" id="${id(it.key)}-label">${no}${esc(it.label)}</span>
         ${sub(it.desc)}
         <div class="survey-options${cls}" role="${it.multi ? "group" : "radiogroup"}" aria-labelledby="${id(it.key)}-label">
-          ${it.options.map((o) => `
-            <label class="venue-choice survey-choice">
-              <input type="${type}" name="${id(it.key)}" value="${o.key}" data-sv-choice="${it.key}"${o.exclusive ? " data-sv-exclusive" : ""}>
-              <span class="survey-choice-text">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ""}</span>
-            </label>`).join("")}
+          ${it.options.map((o) => `<label class="venue-choice survey-choice"><input type="${type}" name="${id(it.key)}" value="${o.key}" data-sv-choice="${it.key}"${o.exclusive ? " data-sv-exclusive" : ""}><span class="survey-choice-text">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ""}</span></label>`).join("")}
         </div>
-        ${it.other ? `<input type="text" class="venue-other survey-other" data-sv-text="${it.other.key}" maxlength="${it.other.max}"
-               placeholder="请补充说明（选填）" aria-label="「其他」的补充说明" hidden>` : ""}
+        ${it.other ? `<input type="text" class="venue-other survey-other" data-sv-text="${it.other.key}" maxlength="${it.other.max}" placeholder="请补充说明" aria-label="补充说明" hidden>` : ""}
         ${err}
       </div>`;
   }
@@ -359,79 +309,64 @@ function surveyItemHtml(it) {
       ? `<p class="survey-card-title">${no}${esc(it.card.title)}</p><p class="survey-card-sub">${esc(it.card.sub)}</p>
          <span class="ticket-label survey-card-label${req}" id="${id(it.key)}-label">${esc(it.label)}</span>`
       : `<span class="ticket-label${req}" id="${id(it.key)}-label">${no}${esc(it.label)}</span>${sub(it.desc)}`;
+    const opts = Array.from({ length: 10 }, (_, i) => i + 1).map((n) =>
+      `<label class="survey-scale-opt"><input type="radio" name="${id(it.key)}" value="${n}" data-sv-score="${it.key}" aria-label="${n} 分${n === 1 ? ` ${esc(lo)}` : n === 10 ? ` ${esc(hi)}` : ""}"><span>${n}</span></label>`).join("");
     return `
       <div class="ticket-field survey-q${it.card ? " is-card" : ""}" data-sv-item="${it.key}">
         ${head}
-        <div class="survey-scale" role="radiogroup" aria-labelledby="${id(it.key)}-label">
-          ${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `
-            <label class="survey-scale-opt">
-              <input type="radio" name="${id(it.key)}" value="${n}" data-sv-score="${it.key}"
-                     aria-label="${n} 分${n === 1 ? `（${esc(lo)}）` : n === 10 ? `（${esc(hi)}）` : ""}">
-              <span>${n}</span>
-            </label>`).join("")}
-        </div>
+        <div class="survey-scale" role="radiogroup" aria-labelledby="${id(it.key)}-label">${opts}</div>
         <div class="survey-scale-ends" aria-hidden="true"><span>1 = ${esc(lo)}</span><span>10 = ${esc(hi)}</span></div>
         ${err}
         ${it.comment ? `
-          <label class="survey-sublabel" for="${id(it.comment.key)}">${esc(it.comment.label)}<em>（选填）</em></label>
+          <label class="survey-sublabel" for="${id(it.comment.key)}">${esc(it.comment.label)}</label>
           <textarea id="${id(it.comment.key)}" data-sv-text="${it.comment.key}" maxlength="${it.comment.max}" placeholder="选填" rows="2"></textarea>` : ""}
       </div>`;
   }
 
+  const placeholder = esc(it.placeholder || "选填");
   return `
     <div class="ticket-field survey-q" data-sv-item="${it.key}">
       <label class="ticket-label${req}" for="${id(it.key)}">${no}${esc(it.label)}</label>
       ${sub(it.desc)}
       ${it.multiline
-        ? `<textarea id="${id(it.key)}" data-sv-text="${it.key}" maxlength="${it.max}" placeholder="${esc(it.placeholder || "选填")}"></textarea>`
-        : `<input type="text" id="${id(it.key)}" data-sv-text="${it.key}" maxlength="${it.max}" placeholder="${esc(it.placeholder || "选填")}">`}
+        ? `<textarea id="${id(it.key)}" data-sv-text="${it.key}" maxlength="${it.max}" placeholder="${placeholder}"></textarea>`
+        : `<input type="text" id="${id(it.key)}" data-sv-text="${it.key}" maxlength="${it.max}" placeholder="${placeholder}">`}
       ${err}
     </div>`;
 }
 
-function surveyFormHtml() {
-  return SURVEY.sections.map((sec, si) => `
-    <section class="survey-sec" aria-label="${escapeHtml(sec.title)}">
-      <h3 class="survey-sec-title"><span class="survey-sec-no">${SURVEY_SECTION_NO[si] || si + 1}</span>${escapeHtml(sec.title)}</h3>
-      ${sec.items.map(surveyItemHtml).join("")}
-    </section>`).join("");
-}
+const surveyFormHtml = () => SURVEY.sections.map((sec, si) => `
+  <section class="survey-sec" aria-label="${escapeHtml(sec.title)}">
+    <h3 class="survey-sec-title"><span class="survey-sec-no">${SURVEY_SECTION_NO[si] || si + 1}</span>${escapeHtml(sec.title)}</h3>
+    ${sec.items.map(surveyItemHtml).join("")}
+  </section>`).join("");
 
-/* 读出表单里所有字段的原始值（包括被隐藏的题，草稿要用） */
+/* 所有字段的原始值（包括隐藏的题，草稿要用） */
 function surveyReadRaw(root) {
   const raw = {};
   for (const f of SURVEY_FIELDS) {
-    if (f.type === "single") {
-      raw[f.key] = root.querySelector(`input[data-sv-choice="${f.key}"]:checked`)?.value || "";
-    } else if (f.type === "multi") {
-      raw[f.key] = [...root.querySelectorAll(`input[data-sv-choice="${f.key}"]:checked`)].map((el) => el.value);
-    } else if (f.type === "score") {
+    if (f.type === "single") raw[f.key] = root.querySelector(`input[data-sv-choice="${f.key}"]:checked`)?.value || "";
+    else if (f.type === "multi") raw[f.key] = [...root.querySelectorAll(`input[data-sv-choice="${f.key}"]:checked`)].map((el) => el.value);
+    else if (f.type === "score") {
       const el = root.querySelector(`input[data-sv-score="${f.key}"]:checked`);
       raw[f.key] = el ? Number(el.value) : null;
-    } else {
-      raw[f.key] = root.querySelector(`[data-sv-text="${f.key}"]`)?.value || "";
-    }
+    } else raw[f.key] = root.querySelector(`[data-sv-text="${f.key}"]`)?.value || "";
   }
   return raw;
 }
 
-/* 把原始值填回表单（恢复草稿用）；不认识的值直接忽略 */
+/* 把原始值填回表单（恢复草稿），不认识的值忽略 */
 function surveyApplyRaw(root, raw) {
   for (const f of SURVEY_FIELDS) {
     const v = raw[f.key];
     if (f.type === "single" || f.type === "multi") {
       const want = new Set(Array.isArray(v) ? v : typeof v === "string" && v ? [v] : []);
+      if (f.exclusive && want.size > 1) want.delete(f.exclusive);
       root.querySelectorAll(`input[data-sv-choice="${f.key}"]`).forEach((el) => { el.checked = want.has(el.value); });
-      /* 草稿被改坏、「没有…」和别的选项同时勾着时，只留「没有…」以外的 */
-      if (f.exclusive && want.has(f.exclusive) && want.size > 1) {
-        const ex = root.querySelector(`input[data-sv-choice="${f.key}"][value="${f.exclusive}"]`);
-        if (ex) ex.checked = false;
-      }
     } else if (f.type === "score") {
       root.querySelectorAll(`input[data-sv-score="${f.key}"]`).forEach((el) => { el.checked = Number(el.value) === v; });
     } else {
-      const el = root.querySelector(`[data-sv-text="${f.key}"]`);
-      if (el) el.value = typeof v === "string" ? v.slice(0, f.max) : "";
+      root.querySelector(`[data-sv-text="${f.key}"]`).value = typeof v === "string" ? v.slice(0, f.max) : "";
     }
   }
 }
@@ -441,7 +376,7 @@ function surveyClearForm(root) {
     if (el.type === "radio" || el.type === "checkbox") el.checked = false;
     else el.value = "";
   });
-  surveyClearErrors(root);
+  root.querySelectorAll(".survey-q.is-error").forEach(clearSurveyError);
 }
 
 /* 按填写内容显示 / 隐藏题目，给看得见的题重新编号 */
@@ -450,84 +385,56 @@ function surveySync(root) {
   let n = 0;
   SURVEY_ITEMS.forEach((it) => {
     const box = root.querySelector(`[data-sv-item="${it.key}"]`);
-    if (!box) return;
     box.hidden = !vis[it.key];
     if (vis[it.key]) {
-      n++;
-      box.dataset.no = String(n);
+      box.dataset.no = String(++n);
       box.querySelector("[data-sv-no]").textContent = `${n}. `;
     }
-    if (it.other) {
-      const other = box.querySelector(`[data-sv-text="${it.other.key}"]`);
-      if (other) other.hidden = !vis[it.other.key];
-    }
+    if (it.other) box.querySelector(`[data-sv-text="${it.other.key}"]`).hidden = !vis[it.other.key];
   });
 }
 
-function surveyClearErrors(root) {
-  root.querySelectorAll(".survey-q.is-error").forEach((box) => {
-    box.classList.remove("is-error");
-    const e = box.querySelector("[data-sv-err]");
-    if (e) { e.hidden = true; e.textContent = ""; }
-  });
+function clearSurveyError(box) {
+  box.classList.remove("is-error");
+  setMsg(box.querySelector("[data-sv-err]"), "");
 }
 
 const SURVEY_REASON_TEXT = {
-  required: "这道题还没有回答",
-  invalid: "这道题的答案不对，请重新选一下",
-  exclusive: "「没有…」和其他选项不能同时选",
-  too_long: "写得太长了",
+  required: "未作答",
+  invalid: "请重新选择",
+  exclusive: "该选项不能与其他选项同时选择",
+  too_long: "超出字数上限",
 };
 
-/* 在题目上标红并滚过去；返回表单底部要显示的一句话 */
+/* 标红出错的题并滚过去，返回表单底部的提示 */
 function surveyShowFieldError(root, field, reason) {
   const it = SURVEY_FIELD_ITEM.get(field);
   const box = it && root.querySelector(`[data-sv-item="${it.key}"]`);
-  if (!box || box.hidden) return "提交的内容有问题，请检查一下再提交";
-  const f = SURVEY_FIELDS.find((x) => x.key === field);
-  let text = SURVEY_REASON_TEXT[reason] || SURVEY_REASON_TEXT.invalid;
-  if (reason === "too_long" && f && f.max) text = `写得太长了（最多 ${f.max} 字）`;
-  if (reason === "required" && it.card) text = "请给这个项目打个分";
+  if (!box || box.hidden) return "提交内容有误";
+  const max = SURVEY_FIELDS.find((x) => x.key === field)?.max;
+  const text = reason === "too_long" && max ? `最多 ${max} 字`
+    : reason === "required" && it.card ? "请评分"
+    : SURVEY_REASON_TEXT[reason] || SURVEY_REASON_TEXT.invalid;
   box.classList.add("is-error");
-  const e = box.querySelector("[data-sv-err]");
-  if (e) { e.textContent = text; e.hidden = false; }
+  setMsg(box.querySelector("[data-sv-err]"), text);
   box.scrollIntoView({ behavior: "smooth", block: "center" });
-  const focusEl = (it.other && field === it.other.key) || (it.comment && field === it.comment.key)
-    ? box.querySelector(`[data-sv-text="${field}"]`)
-    : box.querySelector("input, textarea");
-  focusEl?.focus({ preventScroll: true });
-  const where = it.card ? `第 ${box.dataset.no} 题（${it.card.title}）` : `第 ${box.dataset.no} 题`;
-  return reason === "required" ? `${where}还没有回答，已帮你定位到那里` : `${where}：${text}`;
+  const own = (it.other && field === it.other.key) || (it.comment && field === it.comment.key);
+  box.querySelector(own ? `[data-sv-text="${field}"]` : "input, textarea")?.focus({ preventScroll: true });
+  return `第 ${box.dataset.no} 题${it.card ? ` ${it.card.title}` : ""}：${text}`;
 }
 
-
-/* =============================================================================
-   页面：挂在最新活动详情页的「反馈与建议」里（main.js 的 openDetail 调用 mountSurvey）
-   ============================================================================= */
+/* 问卷卡片只创建一次，切换页面不丢失已填内容 */
 const surveyState = {
-  card: null,          // 整张问卷卡片（只建一次，切换页面不重建，填了一半的内容不会丢）
-  mode: "form",        // form / blocked / done
-  proof: null,         // 人机验证凭证（Turnstile 过期时以 gate.getProof() 为准）
-  gateOpened: false,
-  nearSubmit: false,   // 提交区已经进入（或接近）屏幕：这时才出验证题，免得填到一半题目过期
+  card: null,
+  mode: "form",       // form / blocked / done
+  nearSubmit: false,  // 提交区接近屏幕时才出验证题，免得填到一半题目过期
   submitting: false,
   draftTimer: 0,
-  verifyMissing: false,
 };
 let surveyGate = null;
 
 const surveyFieldsRoot = () => $("surveyFields");
 
-function surveyDone() {
-  try {
-    const v = JSON.parse(storage.get(SURVEY_DONE_KEY) || "null");
-    return v && typeof v === "object" ? v : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/* ---- 草稿 ---- */
 function surveySaveDraftNow() {
   clearTimeout(surveyState.draftTimer);
   surveyState.draftTimer = 0;
@@ -537,15 +444,15 @@ function surveySaveDraftNow() {
   if (empty) storage.remove(SURVEY_DRAFT_KEY);
   else storage.set(SURVEY_DRAFT_KEY, JSON.stringify({ at: Date.now(), raw }));
 }
+
 function surveySaveDraftSoon() {
   clearTimeout(surveyState.draftTimer);
   surveyState.draftTimer = setTimeout(surveySaveDraftNow, 500);
 }
+
 function surveyRestoreDraft() {
-  let d = null;
-  try { d = JSON.parse(storage.get(SURVEY_DRAFT_KEY) || "null"); } catch (e) { d = null; }
-  if (!d || typeof d !== "object" || !d.raw || typeof d.raw !== "object" || Array.isArray(d.raw)
-    || !(Date.now() - Number(d.at) < SURVEY_DRAFT_TTL)) {
+  const d = storage.json(SURVEY_DRAFT_KEY);
+  if (!d?.raw || typeof d.raw !== "object" || Array.isArray(d.raw) || !(Date.now() - Number(d.at) < SURVEY_DRAFT_TTL)) {
     storage.remove(SURVEY_DRAFT_KEY);
     return false;
   }
@@ -553,128 +460,58 @@ function surveyRestoreDraft() {
   return true;
 }
 
-/* ---- 显示状态 ---- */
-function setSurveyMode(mode, blockedText = "") {
+function setSurveyMode(mode, text = "") {
   surveyState.mode = mode;
-  $("surveyBlocked").hidden = mode !== "blocked";
-  $("surveyBlocked").textContent = mode === "blocked" ? blockedText : "";
+  setMsg($("surveyBlocked"), mode === "blocked" ? text : "");
   $("surveyForm").hidden = mode !== "form";
   $("surveyDoneBox").hidden = mode !== "done";
-  if (mode === "form") surveyMaybeOpenGate();
+  if (mode === "form") surveyGate.open();
 }
 
 function showSurveyDone(done) {
-  $("surveyDoneNote").textContent = done && done.id
-    ? `问卷编号 #${done.id}。每一份问卷我们都会认真阅读，感谢您抽出时间！`
-    : "每一份问卷我们都会认真阅读，感谢您抽出时间！";
+  $("surveyDoneNote").textContent = done.id ? `编号 #${done.id}，感谢您的反馈！` : "感谢您的反馈！";
   setSurveyMode("done");
 }
 
 /* 问卷所在的标签页现在看得见吗 */
 function surveyVisibleNow() {
   const card = surveyState.card;
-  return !!card && card.isConnected && !$("view-detail").hidden && !$("panel-feedback").hidden
-    && card.parentNode === $("panel-feedback");
+  return !!card && !$("view-detail").hidden && !$("panel-feedback").hidden && card.parentNode === $("panel-feedback");
 }
 
-/* ---- 人机验证：提交区快进入屏幕时才出题 ---- */
-function surveyMaybeOpenGate(force = false) {
-  const host = $("surveyVerify");
-  if (!host) return;
-  host.hidden = !captchaOn;
-  if (!captchaOn || surveyState.gateOpened || surveyState.mode !== "form") return;
-  if (!force && (!surveyState.nearSubmit || !surveyVisibleNow())) return;
-  if (!surveyGate) {
-    if (!window.HJVerify) {
-      if (!surveyState.verifyMissing) console.error("[验证] verify.js 没有加载成功，问卷的人机验证不可用");
-      surveyState.verifyMissing = true;
-      return;
-    }
-    surveyGate = HJVerify.createGate(host, {
-      post: callWorker,
-      turnstileSiteKey: TURNSTILE_SITE_KEY,
-      onPass: (proof) => {
-        surveyState.proof = proof;
-        setMsg($("surveyMsg"), "");
-      },
-    });
-  }
-  surveyState.proof = null;
-  surveyGate.open();
-  surveyState.gateOpened = true;
-}
-
-function surveyCurrentProof() {
-  if (surveyGate && typeof surveyGate.getProof === "function") return surveyGate.getProof();
-  return surveyState.proof;
-}
-
-/* 机器人验证总开关变了（主脚本 applyCaptchaEnabled 调用） */
-function syncSurveyCaptcha(changed) {
-  const host = $("surveyVerify");
-  if (!host) return;
-  host.hidden = !captchaOn;
-  if (!changed) return;
-  if (captchaOn) {
-    surveyState.gateOpened = false;
-    surveyMaybeOpenGate();
-  } else {
-    surveyState.proof = null;
-    if (surveyGate) surveyGate.hide();
-    surveyState.gateOpened = false;
-  }
-}
-
-function surveyResetCaptcha() {
-  surveyState.proof = null;
-  if (captchaOn && surveyGate && surveyState.gateOpened) surveyGate.refresh();
-}
-
-/* ---- 开放状态：每次打开「反馈与建议」都问一次 Worker ---- */
+/* 每次打开时查询开放状态；查询失败时照常填写，由 Worker 判断 */
 let surveyStatusSeq = 0;
 async function refreshSurveyStatus() {
   const seq = ++surveyStatusSeq;
   const data = await callWorker({ action: "get_survey_status", survey: SURVEY.id });
-  if (seq !== surveyStatusSeq || !surveyState.card) return;
-  /* 读不到：先让访客照常填，提交时由 Worker 说了算 */
-  if (!data || !data.ok) return;
-  siteLockdown = !!data.lockdown;   // 顺手同步「分享功能开关」（和 isLockedDown 读的是同一个开关）
+  if (seq !== surveyStatusSeq || !data?.ok) return;
+  siteLockdown = !!data.lockdown;
   if (surveyState.mode === "done" || surveyState.submitting) return;
-  if (data.lockdown) {
-    setSurveyMode("blocked", STATIC_MODE_MSG);
-  } else if (!data.open) {
-    setSurveyMode("blocked", SURVEY.closedText);
-  } else {
-    setSurveyMode("form");
-  }
+  if (data.lockdown) setSurveyMode("blocked", STATIC_MODE_MSG);
+  else if (!data.open) setSurveyMode("blocked", SURVEY.closedText);
+  else setSurveyMode("form");
 }
 
-/* main.js 的 selectDetailTab 切到「反馈与建议」时调用 */
+/* 详情页切到「反馈与建议」时调用 */
 function onSurveyTabShown() {
-  if (!surveyState.card || surveyState.card.parentNode !== $("panel-feedback")) return;
-  if (surveyState.mode === "done") return;
+  if (!surveyState.card || surveyState.card.parentNode !== $("panel-feedback") || surveyState.mode === "done") return;
   refreshSurveyStatus();
-  /* 标签页刚显示出来，等布局完成再看提交区在不在屏幕里（IntersectionObserver 会自己补报，这里是兜底） */
-  requestAnimationFrame(() => surveyMaybeOpenGate());
+  requestAnimationFrame(() => surveyGate.open());
 }
 
-/* ---- 提交 ---- */
 const SURVEY_ERRORS = {
-  rate_limited: "提交太频繁了，请过一会儿再试",
-  too_large: "填写的内容太多了，删减一些再提交",
-  bad_survey: "问卷不存在或已下线，刷新一下页面再试",
-  server_error: "问卷保存失败，请稍后再试（一直这样的话请联系管理员）",
-  "unknown action": "网站后台暂时无法接收问卷，请联系活动群群主",
+  rate_limited: "操作过于频繁，请稍后再试",
+  too_large: "内容过长",
+  bad_survey: "问卷不存在",
+  server_error: "保存失败，请稍后再试",
 };
-/* Worker 在这些情况下还没走到人机验证那一步，凭证没被用掉，不用重做验证 */
-const SURVEY_PRE_VERIFY = ["closed", "survey_closed", "bad_answer", "bad_survey", "too_large", "rate_limited", "unknown action"];
 
 async function submitSurvey(e) {
   e.preventDefault();
   if (surveyState.submitting) return;
   const root = surveyFieldsRoot();
   const msg = $("surveyMsg");
-  surveyClearErrors(root);
+  root.querySelectorAll(".survey-q.is-error").forEach(clearSurveyError);
   surveySync(root);
 
   const res = surveyNormalizeAnswers(SURVEY_FIELDS, surveyReadRaw(root));
@@ -682,12 +519,10 @@ async function submitSurvey(e) {
     setMsg(msg, surveyShowFieldError(root, res.field, res.reason));
     return;
   }
-  const proof = captchaOn ? surveyCurrentProof() : null;
-  if (captchaOn && !proof) {
-    surveyMaybeOpenGate(true);
-    setMsg(msg, surveyGate
-      ? "请先完成下方的人机验证（自动验证，或点「自动验证不成功？点击手动验证」换手动验证）"
-      : "人机验证组件没加载出来，刷新页面再试一次");
+  surveyState.nearSubmit = true;
+  const need = surveyGate.missing();
+  if (need) {
+    setMsg(msg, need);
     $("surveyVerify").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -697,57 +532,40 @@ async function submitSurvey(e) {
   const btn = $("surveySubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_survey", survey: SURVEY.id, answers: res.answers, ...(proof || {}) });
+  const data = await callWorker({ action: "submit_survey", survey: SURVEY.id, answers: res.answers, ...surveyGate.proof() });
   surveyState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交问卷";
-  const errKey = data && !data.ok ? data.error : "";
-  if (!(data && !data.ok && SURVEY_PRE_VERIFY.includes(errKey))) surveyResetCaptcha();
+  surveyGate.afterSubmit(data);
 
   if (!data) {
-    setMsg(msg, "网络连接失败，这次可能没有提交成功。检查一下网络后再点一次「提交问卷」（已填的内容不会丢）");
-    return;
+    setMsg(msg, "网络连接失败，请重试");
+  } else if (data.ok) {
+    const done = { id: Number(data.id) || 0, at: Date.now() };
+    storage.set(SURVEY_DONE_KEY, JSON.stringify(done));
+    clearTimeout(surveyState.draftTimer);
+    surveyState.draftTimer = 0;
+    storage.remove(SURVEY_DRAFT_KEY);
+    surveyClearForm(root);
+    surveySync(root);
+    $("surveyDraftNote").hidden = true;
+    showSurveyDone(done);
+    $("surveyDoneBox").scrollIntoView({ behavior: "smooth", block: "center" });
+  } else if (data.error === "closed") {
+    siteLockdown = true;
+    setSurveyMode("blocked", STATIC_MODE_MSG);
+  } else if (data.error === "survey_closed") {
+    setSurveyMode("blocked", SURVEY.closedText);
+  } else if (data.error === "captcha") {
+    setMsg(msg, CAPTCHA_FAILED_MSG);
+    $("surveyVerify").scrollIntoView({ behavior: "smooth", block: "center" });
+  } else if (data.error === "bad_answer") {
+    setMsg(msg, surveyShowFieldError(root, data.field, data.reason));
+  } else {
+    setMsg(msg, SURVEY_ERRORS[data.error] || "提交失败，请稍后再试");
   }
-  if (!data.ok) {
-    if (errKey === "closed") {
-      siteLockdown = true;
-      setSurveyMode("blocked", STATIC_MODE_MSG);
-      showToast(STATIC_MODE_MSG);
-      return;
-    }
-    if (errKey === "survey_closed") {
-      setSurveyMode("blocked", SURVEY.closedText);
-      return;
-    }
-    if (errKey === "captcha") {
-      setMsg(msg, "人机验证未通过或已过期，已换一题，请重新验证后提交");
-      $("surveyVerify").scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-    if (errKey === "bad_answer") {
-      setMsg(msg, surveyShowFieldError(root, data.field, data.reason));
-      return;
-    }
-    setMsg(msg, SURVEY_ERRORS[errKey] || "提交失败，请稍后再试");
-    return;
-  }
-
-  const done = { id: Number(data.id) || 0, at: Date.now() };
-  storage.set(SURVEY_DONE_KEY, JSON.stringify(done));
-  clearTimeout(surveyState.draftTimer);
-  surveyState.draftTimer = 0;
-  storage.remove(SURVEY_DRAFT_KEY);
-  surveyClearForm(root);
-  surveySync(root);
-  $("surveyDraftNote").hidden = true;
-  if (surveyGate) surveyGate.hide();
-  surveyState.gateOpened = false;
-  surveyState.proof = null;
-  showSurveyDone(done);
-  $("surveyDoneBox").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-/* ---- 构建整张卡片（只做一次） ---- */
 function buildSurveyCard() {
   const card = document.createElement("div");
   card.className = "gate-card ticket-card survey-card";
@@ -756,21 +574,18 @@ function buildSurveyCard() {
     <p class="hint survey-intro">${escapeHtml(SURVEY.intro)}</p>
     <p class="ticket-blocked" id="surveyBlocked" hidden></p>
     <form id="surveyForm" novalidate autocomplete="off">
-      <p class="survey-draft-note" id="surveyDraftNote" hidden>已为你恢复上次没提交的内容
-        <button type="button" class="survey-link" id="surveyDraftClear">清空重填</button></p>
+      <p class="survey-draft-note" id="surveyDraftNote" hidden>已恢复未提交的内容 <button type="button" class="survey-link" id="surveyDraftClear">清空</button></p>
       <div class="survey-form" id="surveyFields">${surveyFormHtml()}</div>
       <div class="survey-submit" id="surveySubmitArea">
         <div class="verify-host ticket-verify" id="surveyVerify"></div>
-        <div class="ticket-submit-row">
-          <button type="submit" id="surveySubmitBtn">提交问卷</button>
-        </div>
+        <div class="ticket-submit-row"><button type="submit" id="surveySubmitBtn">提交问卷</button></div>
         <p class="form-msg" id="surveyMsg" role="status" hidden></p>
       </div>
     </form>
     <div class="ticket-result survey-done" id="surveyDoneBox" hidden>
-      <h3>提交成功，谢谢您的反馈！</h3>
+      <h3>提交成功</h3>
       <p class="ticket-result-note" id="surveyDoneNote"></p>
-      <p class="survey-done-more">还有想说的，随时可以点首页最下面的小字，在<button type="button" class="survey-link" id="surveyAboutLink">「反馈与建议」</button>里告诉我们。</p>
+      <p class="survey-done-more">其他意见可通过<button type="button" class="survey-link" id="surveyAboutLink">反馈与建议</button>告诉我们。</p>
     </div>`;
   surveyState.card = card;
   return card;
@@ -780,51 +595,42 @@ function initSurveyCard() {
   const card = surveyState.card;
   const root = card.querySelector("#surveyFields");
   const form = card.querySelector("#surveyForm");
+  const edited = () => {
+    setMsg($("surveyMsg"), "");
+    surveySaveDraftSoon();
+  };
 
   form.addEventListener("change", (e) => {
     const t = e.target;
-    /* 「没有…」和其他选项互斥：勾了「没有…」就把别的取消，勾了别的就把「没有…」取消 */
-    if (t.matches && t.matches('input[type="checkbox"][data-sv-choice]') && t.checked) {
-      const group = root.querySelectorAll(`input[data-sv-choice="${t.dataset.svChoice}"]`);
+    /* 互斥：勾了「没有…」就取消其他，勾了其他就取消「没有…」 */
+    if (t.matches('input[type="checkbox"][data-sv-choice]') && t.checked) {
       const exclusive = t.hasAttribute("data-sv-exclusive");
-      group.forEach((el) => {
+      root.querySelectorAll(`input[data-sv-choice="${t.dataset.svChoice}"]`).forEach((el) => {
         if (el !== t && el.checked && (exclusive || el.hasAttribute("data-sv-exclusive"))) el.checked = false;
       });
     }
     surveySync(root);
-    const box = t.closest && t.closest(".survey-q");
-    if (box && box.classList.contains("is-error")) {
-      box.classList.remove("is-error");
-      const err = box.querySelector("[data-sv-err]");
-      if (err) err.hidden = true;
-    }
-    /* 刚选中「其他」：光标直接放进补充说明框 */
-    if (t.matches && t.matches("input[data-sv-choice]") && t.checked && t.value === "other") {
+    const box = t.closest(".survey-q.is-error");
+    if (box) clearSurveyError(box);
+    if (t.matches("input[data-sv-choice]") && t.checked && t.value === "other") {
       const it = SURVEY_FIELD_ITEM.get(t.dataset.svChoice);
-      if (it && it.other) root.querySelector(`[data-sv-text="${it.other.key}"]`)?.focus();
+      if (it?.other) root.querySelector(`[data-sv-text="${it.other.key}"]`).focus();
     }
-    setMsg($("surveyMsg"), "");
-    surveySaveDraftSoon();
+    edited();
   });
   form.addEventListener("input", (e) => {
-    const box = e.target.closest && e.target.closest(".survey-q.is-error");
-    if (box && e.target.matches("[data-sv-text]")) {
-      box.classList.remove("is-error");
-      const err = box.querySelector("[data-sv-err]");
-      if (err) err.hidden = true;
-    }
-    setMsg($("surveyMsg"), "");
-    surveySaveDraftSoon();
+    const box = e.target.closest(".survey-q.is-error");
+    if (box && e.target.matches("[data-sv-text]")) clearSurveyError(box);
+    edited();
   });
-  /* 在输入框 / 选项上按回车不提交整份问卷（只有点「提交问卷」才提交；输入法上屏时的回车不拦） */
+  /* 输入框里按回车不提交整份问卷（输入法上屏的回车不拦） */
   form.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
-    if (e.target && e.target.tagName === "INPUT") e.preventDefault();
+    if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && e.target.tagName === "INPUT") e.preventDefault();
   });
   form.addEventListener("submit", submitSurvey);
 
   card.querySelector("#surveyDraftClear").addEventListener("click", () => {
-    if (!confirm("确定清空已填写的内容、从头开始填吗？")) return;
+    if (!confirm("清空已填写的内容？")) return;
     surveyClearForm(root);
     surveySync(root);
     storage.remove(SURVEY_DRAFT_KEY);
@@ -832,51 +638,40 @@ function initSurveyCard() {
     setMsg($("surveyMsg"), "");
     card.scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  card.querySelector("#surveyAboutLink").addEventListener("click", () => {
-    if (typeof openSiteAbout === "function") openSiteAbout("feedback");
+  card.querySelector("#surveyAboutLink").addEventListener("click", () => openSiteAbout("feedback"));
+
+  /* 切到后台或离开页面前立刻存草稿（手机上切出去的页面常被回收） */
+  const flush = () => { if (surveyState.draftTimer) surveySaveDraftNow(); };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
+  window.addEventListener("pagehide", flush);
+
+  surveyGate = createFormGate($("surveyVerify"), {
+    shouldOpen: () => surveyState.mode === "form" && surveyState.nearSubmit && surveyVisibleNow(),
+    onPass: () => setMsg($("surveyMsg"), ""),
   });
-
-  /* 切到后台 / 关页面前把草稿立刻存一下（手机上 QQ / 微信内置浏览器切出去常会被回收） */
-  document.addEventListener("visibilitychange", () => { if (document.hidden && surveyState.draftTimer) surveySaveDraftNow(); });
-  window.addEventListener("pagehide", () => { if (surveyState.draftTimer) surveySaveDraftNow(); });
-
-  /* 提交区快进入屏幕时再出验证题 */
-  const area = card.querySelector("#surveySubmitArea");
-  if ("IntersectionObserver" in window) {
-    new IntersectionObserver((entries) => {
-      if (entries.some((en) => en.isIntersecting)) {
-        surveyState.nearSubmit = true;
-        surveyMaybeOpenGate();
-      }
-    }, { rootMargin: "0px 0px 240px 0px" }).observe(area);
-  } else {
+  /* 滚动到提交按钮附近才出题 */
+  if (!("IntersectionObserver" in window)) { surveyState.nearSubmit = true; return; }
+  new IntersectionObserver((entries) => {
+    if (!entries.some((en) => en.isIntersecting)) return;
     surveyState.nearSubmit = true;
-  }
+    surveyGate.open();
+  }, { rootMargin: "0px 0px 240px 0px" }).observe(card.querySelector("#surveySubmitArea"));
 }
 
-/* main.js 的 openDetail（最新活动）调用：把问卷放进「反馈与建议」标签页 */
+/* 打开最新活动详情时调用：把问卷放进「反馈与建议」 */
 function mountSurvey(panel) {
-  if (!panel) return;
-  if (!surveyState.card) {
-    buildSurveyCard();
-    panel.innerHTML = "";
-    panel.appendChild(surveyState.card);
-    initSurveyCard();
-    const root = surveyFieldsRoot();
-    const done = surveyDone();
-    if (done) {
-      showSurveyDone(done);
-    } else {
-      $("surveyDraftNote").hidden = !surveyRestoreDraft();
-      setSurveyMode(siteLockdown ? "blocked" : "form", siteLockdown ? STATIC_MODE_MSG : "");
-    }
-    surveySync(root);
+  if (surveyState.card) {
+    if (surveyState.card.parentNode !== panel) panel.replaceChildren(surveyState.card);
     return;
   }
-  if (surveyState.card.parentNode !== panel) {
-    panel.innerHTML = "";
-    panel.appendChild(surveyState.card);
+  panel.replaceChildren(buildSurveyCard());
+  initSurveyCard();
+  const done = storage.json(SURVEY_DONE_KEY);
+  if (done && typeof done === "object") {
+    showSurveyDone(done);
+  } else {
+    $("surveyDraftNote").hidden = !surveyRestoreDraft();
+    setSurveyMode(siteLockdown ? "blocked" : "form", STATIC_MODE_MSG);
   }
+  surveySync(surveyFieldsRoot());
 }
-
-window.HJ_SURVEY_READY = true;
