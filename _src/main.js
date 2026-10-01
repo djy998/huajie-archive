@@ -1225,6 +1225,8 @@ function maybeShowSitePopup() {
 }
 
 /* preview：管理页预览 */
+let sitePopupPreview = false;
+
 function openSitePopup(p, preview = false) {
   const title = (p.title || "").trim();
   $("sitePopupTitle").textContent = title || "公告";
@@ -1235,13 +1237,28 @@ function openSitePopup(p, preview = false) {
   const body = $("sitePopupBody");
   body.innerHTML = linkify(escapeHtml(p.body || ""));
   body.hidden = !(p.body || "").trim();
+  sitePopupPreview = preview;
   $("sitePopupMutes").hidden = preview;
+  $("sitePopupMuteCheck").checked = false;
+  $("sitePopupMuteMode").value = "today";
   $("sitePopupOverlay").hidden = false;
   $("sitePopupBox").scrollTop = 0;
   playEnterAnim($("sitePopupBox"));
 }
 
-const closeSitePopup = () => { $("sitePopupOverlay").hidden = true; };
+/* 关闭时按勾选项记录：今日不再显示，或本版公告不再弹出（直到管理页保存新内容或访客清除网站数据） */
+function closeSitePopup() {
+  if ($("sitePopupOverlay").hidden) return;
+  $("sitePopupOverlay").hidden = true;
+  if (sitePopupPreview || !sitePopup || !$("sitePopupMuteCheck").checked) return;
+  if ($("sitePopupMuteMode").value === "never") {
+    storage.set(STORE.popupNever, sitePopup.rev);
+    showToast("不再显示");
+  } else {
+    storage.set(STORE.popupMute, `${sitePopup.rev}|${todayKey()}`);
+    showToast("今日不再显示");
+  }
+}
 
 function applySitePopup(p) {
   sitePopup = p && p.enabled ? p : null;
@@ -1251,17 +1268,8 @@ function applySitePopup(p) {
 function initSitePopup() {
   $("sitePopupClose").addEventListener("click", closeSitePopup);
   $("sitePopupOkBtn").addEventListener("click", closeSitePopup);
-  $("sitePopupMuteBtn").addEventListener("click", () => {
-    if (sitePopup) storage.set(STORE.popupMute, `${sitePopup.rev}|${todayKey()}`);
-    closeSitePopup();
-    showToast("今日不再显示");
-  });
-  /* 本版公告不再弹出，直到管理页保存新内容或访客清除网站数据 */
-  $("sitePopupNeverBtn").addEventListener("click", () => {
-    if (sitePopup) storage.set(STORE.popupNever, sitePopup.rev);
-    closeSitePopup();
-    showToast("不再显示");
-  });
+  /* 选了范围就视为要勾选 */
+  $("sitePopupMuteMode").addEventListener("change", () => { $("sitePopupMuteCheck").checked = true; });
   closeOnBackdrop($("sitePopupOverlay"), closeSitePopup);
 }
 

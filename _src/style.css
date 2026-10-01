@@ -4030,11 +4030,55 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
 }
 .site-popup-body a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
 .site-popup-actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; }
-.site-popup-mutes { display: flex; flex-direction: column; gap: 8px; }
+.site-popup-mutes { display: flex; align-items: center; gap: 8px; }
 .site-popup-mutes[hidden] { display: none; }
+.site-popup-mutes input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 17px; height: 17px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  display: inline-grid; place-content: center;
+  line-height: 1;
+  background: var(--ink-2);
+  cursor: pointer;
+}
+.site-popup-mutes input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.site-popup-mutes input[type="checkbox"]:checked::after { content: "✓"; color: var(--accent-ink); font-size: 12px; font-weight: 700; }
+.site-popup-mutes select {
+  padding: 7px 30px 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--serif);
+  font-size: .84rem;
+  color: var(--text-soft);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center,
+    var(--ink-2);
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  cursor: pointer;
+}
+.site-popup-mutes select:focus { outline: none; border-color: var(--accent); }
+.site-popup-mutes select option { color: var(--cream); background: var(--ink-2); }
 body.day-mode .site-popup-body { color: var(--day-lilac); }
 body.day-mode .site-popup-body a { color: var(--day-lilac); }
 body.day-mode .site-popup-image { background: rgba(255,252,240,.35); }
+body.day-mode .site-popup-mutes input[type="checkbox"] { background: #f6e3bb; border-color: #c98f3a; }
+body.day-mode .site-popup-mutes input[type="checkbox"]:checked { background: #8a5a1c; border-color: #8a5a1c; }
+body.day-mode .site-popup-mutes input[type="checkbox"]:checked::after { color: #fff6e0; }
+body.day-mode .site-popup-mutes select {
+  color: var(--day-cream);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center,
+    #f6e3bb;
+  border-color: #c98f3a;
+  color-scheme: light;
+}
+body.day-mode .site-popup-mutes select option { color: var(--day-cream); background: #f6e3bb; }
 
 #popupAdminPanel { text-align: left; }
 #popupAdminPanel h2, #popupAdminPanel > .hint { text-align: center; }
