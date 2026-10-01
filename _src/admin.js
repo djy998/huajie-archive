@@ -380,7 +380,7 @@ function initViewerPills() {
 
 /* 管理弹窗：打开时把面板移入弹窗并刷新数据 */
 const ADMIN_PANEL_REFRESH = {
-  lockdownPanel: () => refreshLockdownStatus(),
+  lockdownPanel: () => { refreshLockdownStatus(); refreshMaintStatus(); },
   captchaPanel: () => refreshCaptchaSwitch(),
   starlightPanel: () => syncStarlightPanel(),
   ticketAdminPanel: () => refreshTicketAdmin(),
@@ -388,6 +388,7 @@ const ADMIN_PANEL_REFRESH = {
   venueAdminPanel: () => refreshVenueAdmin(),
   popupAdminPanel: () => refreshPopupAdmin(),
   huayuAdminPanel: () => refreshHuayuAdmin(),
+  puzzleAdminPanel: () => refreshPuzzleAdmin(),
   surveyAdminPanel: () => {
     if (typeof window.mountSurvey === "function") return refreshSurveyAdmin();
     $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
@@ -464,6 +465,59 @@ function initLockdownToggle() {
     siteLockdown = !!data.value;
     showToast(data.value ? "分享功能已关闭（纯静态展示）" : "分享功能已开启");
     refreshLockdownStatus();
+  });
+}
+
+/* 全站开关：库里存的是 maintenance（1 = 维护中，全站关闭） */
+const MAINT_ERRORS = {
+  unknown_action: "Worker 还没有更新，暂时用不了全站开关（见更新说明）",
+  bad_action: "Worker 还没有更新，暂时用不了全站开关（见更新说明）",
+};
+const MAINT_FALLBACK = "操作失败：Worker 可能还没更新（见更新说明），或登录已失效";
+
+async function refreshMaintStatus() {
+  const status = $("maintStatus");
+  const btn = $("maintToggleBtn");
+  status.textContent = "当前状态：加载中…";
+  btn.disabled = true;
+  const data = await callWorker({ action: "get_maintenance" });
+  if (!data || !data.ok) {
+    status.textContent = `当前状态：${adminErr(data, MAINT_FALLBACK, MAINT_ERRORS)}`;
+    return;
+  }
+  btn.disabled = false;
+  applyMaintenance(!!data.value);
+  status.textContent = data.value
+    ? "当前状态：已关闭（维护中，访客只能看到维护提示）"
+    : "当前状态：已开启（正常访问）";
+  btn.textContent = data.value ? "开启全站" : "关闭全站（进入维护）";
+  btn.dataset.current = data.value ? "1" : "0";
+  delete btn.dataset.armed;
+}
+
+function initMaintToggle() {
+  const btn = $("maintToggleBtn");
+  btn.addEventListener("click", async () => {
+    const msg = $("maintMsg");
+    setMsg(msg, "");
+    const closing = btn.dataset.current !== "1";
+    /* 关闭全站要点两次确认 */
+    if (closing && !(btn.dataset.armed && Date.now() - Number(btn.dataset.armed) < 4000)) {
+      btn.dataset.armed = String(Date.now());
+      setMsg(msg, "关闭后访客将无法浏览网站，4 秒内再点一次确认");
+      return;
+    }
+    delete btn.dataset.armed;
+    btn.disabled = true;
+    const data = await callWorker({ action: "set_maintenance", password: internalAdminPassword, value: closing });
+    btn.disabled = false;
+    if (!data || !data.ok) {
+      setMsg(msg, adminErr(data, MAINT_FALLBACK, MAINT_ERRORS));
+      return;
+    }
+    applyMaintenance(!!data.value);
+    showToast(data.value ? "全站已关闭，访客只能看到维护提示" : "全站已开启");
+    refreshMaintStatus();
   });
 }
 
@@ -2887,6 +2941,358 @@ function initHuayuAdmin() {
   $("huayuVisitRefreshBtn").addEventListener("click", refreshHuayuVisits);
 }
 
+/* ==== 花街拼图 ==== */
+/* 中断继续开关；大赛的时段、难度、图片（裁剪后走公告配图上传）；参赛记录 */
+const PZ_ADMIN_DIFFS = { easy: "鱼信 · 36块", normal: "鱼丽 · 60块", hard: "光风院霁月 · 128块" };
+const PZ_ADMIN_ERRORS = {
+  no_image: "请先上传并裁剪大赛图片",
+  bad_range: "开启大赛需要填写开始和结束时间，结束要晚于开始",
+  bad_time: "时间无效",
+  bad_title: "大赛名称最多 30 字",
+  bad_diff: "难度无效，请刷新页面",
+  bad_image: "图片无效，请重新上传",
+  unknown_action: "Worker 还没有更新，暂时用不了（见更新说明）",
+};
+const PZ_CROP_RATIOS = { "16:9": 16 / 9, "4:3": 4 / 3, "3:2": 3 / 2, "1:1": 1, "3:4": 3 / 4 };
+const PZ_CROP_MAX = 1600;   // 裁剪输出的长边
+const puzzleAdmin = { s: null, image: "", records: [], crop: null };
+
+const pzImageUrl = (key) => (key ? new URL(`image/${key}`, workerBase()).href : "");
+
+function pzFmtMs(ms) {
+  const t = Math.max(0, Math.round(ms));
+  const total = Math.floor(t / 1000);
+  const h = Math.floor(total / 3600);
+  const mmss = `${pad2(Math.floor(total / 60) % 60)}:${pad2(total % 60)}.${Math.floor(t / 100) % 10}`;
+  return h ? `${h}:${mmss}` : mmss;
+}
+
+function pzContestStatusText(c, now) {
+  if (!c.enabled) return "大赛未开启";
+  if (!c.image) return "大赛已开启，但还没有图片";
+  if (now < c.start) return `大赛已开启 · 未开始（${formatCnTime(c.start)} 开始）`;
+  if (now <= c.end) return `大赛进行中（${formatCnTime(c.end)} 结束）`;
+  return `大赛已结束（${formatCnTime(c.end)}）`;
+}
+
+function renderPuzzleAdmin(d) {
+  puzzleAdmin.s = d;
+  const c = d.contest;
+  const now = hjNow();
+  puzzleAdmin.image = c.image;
+  $("pzAdminStatus").textContent = `中断继续${d.resume ? "已开启" : "已关闭"} · ${pzContestStatusText(c, now)} · 当前第 ${c.rev} 届`;
+  $("pzAdminResumeStatus").textContent = d.resume ? "当前：已开启" : "当前：已关闭（默认）";
+  $("pzAdminResumeBtn").textContent = d.resume ? "关闭中断继续" : "开启中断继续";
+  $("pzAdminTitle").value = c.title;
+  $("pzAdminStart").value = c.start ? epochToCnLocal(c.start) : "";
+  $("pzAdminEnd").value = c.end ? epochToCnLocal(c.end) : "";
+  setHuayuSeg("pzAdminDiffSeg", c.diff);
+  $("pzAdminContestStatus").textContent = `当前：${pzContestStatusText(c, now)}`;
+  $("pzAdminToggleBtn").textContent = c.enabled ? "关闭大赛" : "开启大赛";
+  showPzAdminImage();
+}
+
+function showPzAdminImage() {
+  const url = pzImageUrl(puzzleAdmin.image);
+  const img = $("pzAdminImagePreview");
+  img.hidden = !url;
+  if (url && img.src !== url) img.src = url;
+  $("pzAdminImageNone").hidden = !!url;
+  const changed = !!puzzleAdmin.s && puzzleAdmin.image !== puzzleAdmin.s.contest.image;
+  $("pzAdminImageNote").textContent = changed ? "新图片已上传，点「保存设置」后生效（更换图片算新一届）" : "";
+}
+
+async function refreshPuzzleAdmin() {
+  $("pzAdminStatus").textContent = "加载中…";
+  setMsg($("pzAdminMsg"), "");
+  const data = await callWorker({ action: "puzzle_admin_get", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    $("pzAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试", PZ_ADMIN_ERRORS);
+    return;
+  }
+  renderPuzzleAdmin(data);
+  refreshPuzzleRecords();
+}
+
+function pzContestForm() {
+  return {
+    title: $("pzAdminTitle").value.trim(),
+    start: cnLocalToEpoch($("pzAdminStart").value),
+    end: cnLocalToEpoch($("pzAdminEnd").value),
+    diff: huayuSegValue("pzAdminDiffSeg") || "easy",
+    image: puzzleAdmin.image || "",
+  };
+}
+
+async function savePuzzleAdmin(patch, okMsg, btn) {
+  const msg = $("pzAdminMsg");
+  setMsg(msg, "");
+  const c = patch.contest;
+  if (c) {
+    if (c.title.length > 30) return setMsg(msg, PZ_ADMIN_ERRORS.bad_title);
+    if (c.start && c.end && c.end <= c.start) return setMsg(msg, "结束时间要晚于开始时间");
+    if (c.enabled && !c.image) return setMsg(msg, PZ_ADMIN_ERRORS.no_image);
+    if (c.enabled && (!c.start || !c.end)) return setMsg(msg, PZ_ADMIN_ERRORS.bad_range);
+  }
+  if (btn) btn.disabled = true;
+  const before = puzzleAdmin.s?.contest.rev;
+  const data = await callWorker({ action: "puzzle_admin_set", password: internalAdminPassword, ...patch });
+  if (btn) btn.disabled = false;
+  if (!data || !data.ok) {
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", PZ_ADMIN_ERRORS));
+    return;
+  }
+  renderPuzzleAdmin(data);
+  if (typeof puzzleSiteState !== "undefined") puzzleSiteState = null;   // 下次打开拼图时重新读取
+  showToast(before !== undefined && data.contest.rev !== before ? `${okMsg}，已开始第 ${data.contest.rev} 届` : okMsg);
+  renderPuzzleRecords();
+}
+
+/* ---- 裁剪：选框比例固定，拖动移动，拖四角缩放 ---- */
+function openPzCrop(file) {
+  const msg = $("pzAdminImageMsg");
+  setMsg(msg, "");
+  if (!file.type.startsWith("image/")) return setMsg(msg, "请选择图片");
+  if (file.size > IMAGE_MAX_BYTES) return setMsg(msg, "图片不能超过 50MB");
+  closePzCrop();
+  const url = URL.createObjectURL(file);
+  const img = $("pzCropImg");
+  img.onload = () => {
+    puzzleAdmin.crop = { url, nw: img.naturalWidth, nh: img.naturalHeight, ratio: PZ_CROP_RATIOS[huayuSegValue("pzCropRatioSeg")] || 16 / 9 };
+    resetPzCrop();
+    $("pzCropBox").hidden = false;
+    layoutPzCrop();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    setMsg(msg, "无法读取该图片");
+  };
+  img.src = url;
+}
+
+function closePzCrop() {
+  const c = puzzleAdmin.crop;
+  if (c) URL.revokeObjectURL(c.url);
+  puzzleAdmin.crop = null;
+  $("pzCropBox").hidden = true;
+  $("pzCropImg").removeAttribute("src");
+}
+
+function resetPzCrop() {
+  const c = puzzleAdmin.crop;
+  let w = c.nw;
+  let h = w / c.ratio;
+  if (h > c.nh) { h = c.nh; w = h * c.ratio; }
+  Object.assign(c, { w, h, x: (c.nw - w) / 2, y: (c.nh - h) / 2 });
+}
+
+function layoutPzCrop() {
+  const c = puzzleAdmin.crop;
+  if (!c || $("pzCropBox").hidden) return;
+  const k = $("pzCropImg").clientWidth / c.nw;
+  Object.assign($("pzCropRect").style, { left: c.x * k + "px", top: c.y * k + "px", width: c.w * k + "px", height: c.h * k + "px" });
+  const out = Math.min(1, PZ_CROP_MAX / Math.max(c.w, c.h));
+  $("pzCropInfo").textContent = `选中 ${Math.round(c.w)}×${Math.round(c.h)}，输出 ${Math.round(c.w * out)}×${Math.round(c.h * out)}`
+    + (Math.max(c.w, c.h) < 900 ? " · 图片偏小，拼块可能模糊" : "");
+}
+
+function initPzCrop() {
+  const rect = $("pzCropRect");
+  let drag = null;
+  rect.addEventListener("pointerdown", (e) => {
+    const c = puzzleAdmin.crop;
+    if (!c || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    const h = e.target.dataset.h || "";
+    drag = { id: e.pointerId, k: $("pzCropImg").clientWidth / c.nw, sx: e.clientX, sy: e.clientY, x: c.x, y: c.y, w: c.w, h: c.h, handle: h };
+    if (h) {
+      drag.dx = h.includes("w") ? -1 : 1;
+      drag.dy = h.includes("n") ? -1 : 1;
+      drag.ax = drag.dx < 0 ? c.x + c.w : c.x;   // 对角固定不动
+      drag.ay = drag.dy < 0 ? c.y + c.h : c.y;
+    }
+    try { rect.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  rect.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const c = puzzleAdmin.crop;
+    const mx = (e.clientX - drag.sx) / drag.k;
+    const my = (e.clientY - drag.sy) / drag.k;
+    if (!drag.handle) {
+      c.x = clamp(drag.x + mx, 0, c.nw - c.w);
+      c.y = clamp(drag.y + my, 0, c.nh - c.h);
+    } else {
+      const px = (drag.dx > 0 ? drag.x + drag.w : drag.x) + mx;
+      const py = (drag.dy > 0 ? drag.y + drag.h : drag.y) + my;
+      const maxW = Math.min(drag.dx > 0 ? c.nw - drag.ax : drag.ax, (drag.dy > 0 ? c.nh - drag.ay : drag.ay) * c.ratio);
+      const w = clamp(Math.max(Math.abs(px - drag.ax), Math.abs(py - drag.ay) * c.ratio), Math.min(60, maxW), maxW);
+      c.w = w;
+      c.h = w / c.ratio;
+      c.x = drag.dx > 0 ? drag.ax : drag.ax - w;
+      c.y = drag.dy > 0 ? drag.ay : drag.ay - c.h;
+    }
+    layoutPzCrop();
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+  rect.addEventListener("pointerup", end);
+  rect.addEventListener("pointercancel", end);
+  window.addEventListener("resize", layoutPzCrop);
+  $("pzCropRatioSeg").addEventListener("change", () => {
+    syncSegments($("pzCropRatioSeg"));
+    const c = puzzleAdmin.crop;
+    if (!c) return;
+    c.ratio = PZ_CROP_RATIOS[huayuSegValue("pzCropRatioSeg")] || 16 / 9;
+    resetPzCrop();
+    layoutPzCrop();
+  });
+  $("pzCropCancelBtn").addEventListener("click", closePzCrop);
+  $("pzCropOkBtn").addEventListener("click", uploadPzCrop);
+}
+
+async function uploadPzCrop() {
+  const c = puzzleAdmin.crop;
+  if (!c) return;
+  const btn = $("pzCropOkBtn");
+  const msg = $("pzAdminImageMsg");
+  btn.disabled = true;
+  setMsg(msg, "处理中…");
+  try {
+    const k = Math.min(1, PZ_CROP_MAX / Math.max(c.w, c.h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(c.w * k));
+    canvas.height = Math.max(1, Math.round(c.h * k));
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage($("pzCropImg"), c.x, c.y, c.w, c.h, 0, 0, canvas.width, canvas.height);
+    let blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+    if (!blob || blob.type !== "image/webp") blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) throw new Error("encode fail");
+    const base64 = (await readAsDataURL(blob)).split(",")[1];
+    setMsg(msg, "上传中…");
+    const data = await callWorker({ action: "upload_announcement_image", password: internalAdminPassword, image: base64, content_type: blob.type });
+    if (!data?.ok) throw new Error(data?.error || "upload failed");
+    puzzleAdmin.image = data.key;
+    closePzCrop();
+    setMsg(msg, "");
+    showPzAdminImage();
+    showToast("图片已上传，记得点「保存设置」");
+  } catch (e) {
+    setMsg(msg, e.message === "rate_limited" ? "上传过于频繁，请稍后再试" : "上传失败，请重试");
+  }
+  btn.disabled = false;
+}
+
+/* ---- 参赛记录 ---- */
+async function refreshPuzzleRecords() {
+  $("pzRecSummary").textContent = "加载中…";
+  const data = await callWorker({ action: "puzzle_admin_records", password: internalAdminPassword });
+  if (!data || !data.ok) {
+    $("pzRecSummary").textContent = adminErr(data, "读取失败", PZ_ADMIN_ERRORS);
+    return;
+  }
+  puzzleAdmin.records = data.items || [];
+  renderPuzzleRecords();
+}
+
+/* 按届筛选；按耗时排序时有名次，「每人最好成绩」只留每位玩家最快的有效记录 */
+function pzRecordsShown() {
+  const round = $("pzRecRound").value || "cur";
+  const rev = puzzleAdmin.s?.contest.rev ?? 0;
+  const byTime = $("pzRecSort").value !== "at";
+  let list = puzzleAdmin.records.filter((r) => round === "all" || r.rev === (round === "cur" ? rev : Number(round)));
+  list = list.slice().sort((a, b) => (byTime ? a.voided - b.voided || a.elapsed - b.elapsed || a.at - b.at : b.at - a.at));
+  if ($("pzRecBest").checked) {
+    const seen = new Set();
+    list = list.filter((r) => {
+      if (r.voided) return false;
+      const key = `${r.rev}|${r.player}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  let rank = 0;
+  return list.map((r) => ({ ...r, rank: byTime && !r.voided ? ++rank : 0 }));
+}
+
+function renderPuzzleRecords() {
+  const sel = $("pzRecRound");
+  const keep = sel.value || "cur";
+  const rev = puzzleAdmin.s?.contest.rev ?? 0;
+  const revs = [...new Set(puzzleAdmin.records.map((r) => r.rev))].filter((r) => r !== rev).sort((a, b) => b - a);
+  sel.innerHTML = `<option value="cur">本届（第 ${rev} 届）</option><option value="all">全部</option>`
+    + revs.map((r) => `<option value="${r}">第 ${r} 届</option>`).join("");
+  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "cur";
+  const list = pzRecordsShown();
+  const valid = list.filter((r) => !r.voided);
+  $("pzRecSummary").textContent = list.length
+    ? `共 ${list.length} 条（有效 ${valid.length} 条，${new Set(valid.map((r) => r.player)).size} 位玩家）`
+    : "暂无记录";
+  $("pzRecBody").innerHTML = list.map((r) => `<tr class="${r.voided ? "is-voided" : ""}">
+    <td>${r.rank || ""}</td>
+    <td>No.${r.id}</td>
+    <td class="pz-rec-player">${escapeHtml(r.player)}</td>
+    <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
+    <td title="开局到登记 ${escapeHtml(pzFmtMs(r.serverMs))}">${escapeHtml(pzFmtMs(r.elapsed))}</td>
+    <td>${escapeHtml(formatCnSeconds(r.at))}</td>
+    <td title="${escapeHtml(geoTitle(r.geo))}">${escapeHtml(geoText(r.geo) || "—")}</td>
+    <td class="hy-visit-id">${escapeHtml(r.visitor)}</td>
+    <td><button type="button" class="pz-rec-void" data-id="${r.id}" data-voided="${r.voided ? 1 : 0}">${r.voided ? "恢复" : "作废"}</button></td>
+  </tr>`).join("") || `<tr><td colspan="9" class="pz-rec-empty">暂无记录</td></tr>`;
+}
+
+function exportPuzzleRecords() {
+  const list = pzRecordsShown();
+  if (!list.length) return showToast("没有可导出的记录");
+  const safe = (v) => (/^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v));   // 防止表格软件把 ID 当公式
+  const head = ["名次", "登记号", "届", "玩家ID", "难度", "块数", "耗时(秒)", "耗时", "开局到登记(秒)", "登记时间", "IP属地", "访客标识", "状态"];
+  const rows = list.map((r) => [r.rank || "", r.id, r.rev, safe(r.player), PZ_ADMIN_DIFFS[r.diff] || r.diff, r.pieces,
+    (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed), (r.serverMs / 1000).toFixed(1), formatCnSeconds(r.at),
+    geoText(r.geo), r.visitor, r.voided ? "已作废" : "有效"]);
+  const csv = [head, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const stamp = epochToCnLocal(Date.now()).replace(/[-:]/g, "").replace("T", "-");
+  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `拼图大赛记录_${stamp}.csv`);
+}
+
+function initPuzzleAdmin() {
+  $("pzAdminResumeBtn").addEventListener("click", (e) => {
+    const on = !puzzleAdmin.s?.resume;
+    savePuzzleAdmin({ resume: on }, on ? "中断继续已开启" : "中断继续已关闭", e.currentTarget);
+  });
+  $("pzAdminDiffSeg").addEventListener("change", () => syncSegments($("pzAdminDiffSeg")));
+  $("pzAdminSaveBtn").addEventListener("click", (e) => savePuzzleAdmin({ contest: pzContestForm() }, "大赛设置已保存", e.currentTarget));
+  $("pzAdminToggleBtn").addEventListener("click", (e) => {
+    const on = !puzzleAdmin.s?.contest.enabled;
+    savePuzzleAdmin({ contest: { ...pzContestForm(), enabled: on } }, on ? "大赛已开启" : "大赛已关闭", e.currentTarget);
+  });
+  $("pzAdminPickBtn").addEventListener("click", () => $("pzAdminFile").click());
+  $("pzAdminFile").addEventListener("change", () => {
+    const file = $("pzAdminFile").files[0];
+    $("pzAdminFile").value = "";
+    if (file) openPzCrop(file);
+  });
+  initPzCrop();
+  ["pzRecRound", "pzRecSort", "pzRecBest"].forEach((id) => $(id).addEventListener("change", renderPuzzleRecords));
+  $("pzRecRefreshBtn").addEventListener("click", refreshPuzzleRecords);
+  $("pzRecExportBtn").addEventListener("click", exportPuzzleRecords);
+  $("pzRecBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".pz-rec-void");
+    if (!btn) return;
+    btn.disabled = true;
+    const data = await callWorker({
+      action: "puzzle_admin_void", password: internalAdminPassword, id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
+    });
+    if (!data || !data.ok) {
+      btn.disabled = false;
+      showToast(adminErr(data, "操作失败，刷新后再试"));
+      return;
+    }
+    const i = puzzleAdmin.records.findIndex((r) => r.id === data.item.id);
+    if (i >= 0) puzzleAdmin.records[i] = data.item;
+    renderPuzzleRecords();
+  });
+}
+
 /* ==== 10. 管理面板 ==== */
 const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card" id="lockdownPanel" hidden>
@@ -2895,6 +3301,13 @@ const ADMIN_PANELS_HTML = `
   <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
   <button id="lockdownToggleBtn">切换</button>
   <p class="form-msg" id="lockdownMsg" hidden></p>
+  <div class="maint-box">
+    <h3 class="maint-title">全站开关</h3>
+    <p class="hint">关闭后全站进入维护状态：除内部入口（#internal）外，首页及其他页面都只显示背景和「网站正在维护中……」。</p>
+    <p class="hint" id="maintStatus">当前状态：加载中…</p>
+    <button id="maintToggleBtn">切换</button>
+    <p class="form-msg" id="maintMsg" hidden></p>
+  </div>
 </div>
 <div class="gate-card admin-card" id="captchaPanel" hidden>
   <h2>人机验证开关</h2>
@@ -3383,6 +3796,95 @@ const ADMIN_PANELS_HTML = `
     <div class="popup-admin-btns"><button type="button" id="huayuVisitRefreshBtn">刷新</button></div>
   </section>
 </div>
+<div class="gate-card admin-card pz-admin" id="puzzleAdminPanel" data-close-only-x="1" hidden>
+  <h2>花街拼图</h2>
+  <p class="hint" id="pzAdminStatus">加载中…</p>
+  <section class="ta-group">
+    <h3 class="ta-group-title">中断继续</h3>
+    <p class="ta-group-hint">开启后，访客关掉拼图、刷新或切走页面，再打开时可以从中断处继续（进度存在访客自己的浏览器里）。关闭时关掉拼图即放弃本局。</p>
+    <p class="ta-group-hint" id="pzAdminResumeStatus"></p>
+    <div class="popup-admin-btns"><button type="button" id="pzAdminResumeBtn">切换</button></div>
+  </section>
+  <section class="ta-group">
+    <h3 class="ta-group-title">大赛拼图</h3>
+    <p class="ta-group-hint">开启后在设定时段内，拼图首页出现大赛入口。大赛用下面的图片和难度、正计时；通关后访客填写游戏 ID 登记成绩，并自动生成一代通关码。更换图片或难度算新一届，记录分开显示。</p>
+    <p class="ta-group-hint" id="pzAdminContestStatus"></p>
+    <label class="pz-admin-field"><span>大赛名称</span><input type="text" id="pzAdminTitle" maxlength="30" placeholder="如：中秋花街拼图大赛"></label>
+    <div class="starlight-fields">
+      <label class="starlight-field">
+        <span>开始（国服时间）</span>
+        <input type="datetime-local" id="pzAdminStart">
+      </label>
+      <span class="starlight-sep" aria-hidden="true">—</span>
+      <label class="starlight-field">
+        <span>结束（国服时间）</span>
+        <input type="datetime-local" id="pzAdminEnd">
+      </label>
+    </div>
+    <span class="pz-admin-label">难度</span>
+    <div class="alarm-seg pz-admin-seg" id="pzAdminDiffSeg">
+      <label class="is-active"><input type="radio" name="pzAdminDiff" value="easy" checked><span>鱼信 36块</span></label>
+      <label><input type="radio" name="pzAdminDiff" value="normal"><span>鱼丽 60块</span></label>
+      <label><input type="radio" name="pzAdminDiff" value="hard"><span>光风院霁月 128块</span></label>
+    </div>
+    <span class="pz-admin-label">图片</span>
+    <div class="pz-admin-image">
+      <img id="pzAdminImagePreview" alt="大赛图片" hidden>
+      <p class="ta-group-hint" id="pzAdminImageNone">还没有上传图片</p>
+      <p class="ta-group-hint pz-admin-note" id="pzAdminImageNote"></p>
+    </div>
+    <div class="popup-admin-btns">
+      <input type="file" id="pzAdminFile" accept="image/*" hidden>
+      <button type="button" id="pzAdminPickBtn">选择图片并裁剪</button>
+    </div>
+    <div class="pz-crop-box" id="pzCropBox" hidden>
+      <div class="alarm-seg pz-admin-seg" id="pzCropRatioSeg">
+        <label class="is-active"><input type="radio" name="pzCropRatio" value="16:9" checked><span>16:9</span></label>
+        <label><input type="radio" name="pzCropRatio" value="4:3"><span>4:3</span></label>
+        <label><input type="radio" name="pzCropRatio" value="3:2"><span>3:2</span></label>
+        <label><input type="radio" name="pzCropRatio" value="1:1"><span>1:1</span></label>
+        <label><input type="radio" name="pzCropRatio" value="3:4"><span>3:4</span></label>
+      </div>
+      <div class="pz-crop-stage">
+        <img id="pzCropImg" alt="" draggable="false">
+        <div class="pz-crop-rect" id="pzCropRect">
+          <span class="pz-crop-handle" data-h="nw"></span><span class="pz-crop-handle" data-h="ne"></span>
+          <span class="pz-crop-handle" data-h="sw"></span><span class="pz-crop-handle" data-h="se"></span>
+        </div>
+      </div>
+      <p class="ta-group-hint pz-crop-info" id="pzCropInfo"></p>
+      <p class="ta-group-hint">拖动选框移动位置，拖四角调整大小；推荐 16:9，和相册图片一致</p>
+      <div class="popup-admin-btns">
+        <button type="button" id="pzCropOkBtn">裁剪并上传</button>
+        <button type="button" id="pzCropCancelBtn">取消</button>
+      </div>
+    </div>
+    <p class="form-msg" id="pzAdminImageMsg" hidden></p>
+    <div class="popup-admin-btns">
+      <button type="button" id="pzAdminSaveBtn">保存设置</button>
+      <button type="button" id="pzAdminToggleBtn">开启大赛</button>
+    </div>
+    <p class="form-msg" id="pzAdminMsg" hidden></p>
+  </section>
+  <section class="ta-group">
+    <h3 class="ta-group-title">参赛记录</h3>
+    <p class="ta-group-hint">耗时为拼图计时（暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。IP 属地与访客标识不含 IP 本身。</p>
+    <div class="pz-rec-tools">
+      <select id="pzRecRound" aria-label="届"><option value="cur">本届</option></select>
+      <select id="pzRecSort" aria-label="排序"><option value="time">按耗时</option><option value="at">按登记时间</option></select>
+      <label class="audience-opt"><input type="checkbox" id="pzRecBest"><span>每人最好成绩</span></label>
+      <button type="button" id="pzRecRefreshBtn">刷新</button>
+      <button type="button" id="pzRecExportBtn">导出 CSV</button>
+    </div>
+    <p class="ta-group-hint" id="pzRecSummary"></p>
+    <div class="ticket-table-wrap">
+      <table class="ticket-table pz-rec-table">
+        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+        <tbody id="pzRecBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
   <h2>发布公告</h2>
   <textarea id="announcementText" placeholder="公告内容"></textarea>
@@ -3416,13 +3918,13 @@ function mountAdminPanels() {
 
 mountAdminPanels();
 [
-  initInternal, initAdminPanels, initLockdownToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
+  initInternal, initAdminPanels, initLockdownToggle, initMaintToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
   initViewerPills, initFeedbackAdmin,
   typeof window.buildVenueForm === "function" ? initVenueAdmin
     : () => console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用"),
   typeof window.mountSurvey === "function" ? initSurveyAdmin
     : () => console.error("[活动问卷] survey.js 没有加载成功，管理页的「活动问卷」不可用"),
-  initPostAnnouncement, initPopupAdmin, initHuayuAdmin,
+  initPostAnnouncement, initPopupAdmin, initHuayuAdmin, initPuzzleAdmin,
 ].forEach((init) => {
   try { init(); } catch (e) { console.error(e); }
 });

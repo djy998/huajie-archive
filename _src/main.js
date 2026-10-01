@@ -18,6 +18,7 @@ const STORE = {
   ticketGuideAck: "hj_ticket_guide_ack",
   surveyDraft: "hj_survey_draft_",
   surveyDone: "hj_survey_done_",
+  maint: "hj_maint",   // 名字同时写在 boot.js
 };
 
 const $ = (id) => document.getElementById(id);
@@ -336,6 +337,7 @@ function openFeature(name, missingMsg) {
 
 let routedPath = null;
 function routeFromHash() {
+  applyMaintenance();
   closeAllModals();
   let hash = location.hash;
   if (onStandalonePage() && hash && hash !== "#") {
@@ -844,6 +846,27 @@ async function blockedByStaticMode() {
   return true;
 }
 
+/* 全站开关：维护中时除 #internal 外只显示背景与维护提示。本机记一份，下次进站由 boot.js 立即套用 */
+let siteMaintenance = storage.get(STORE.maint) === "1";
+const maintenanceActive = () => document.documentElement.classList.contains("hj-maint");
+
+function applyMaintenance(on) {
+  if (on !== undefined) {
+    siteMaintenance = !!on;
+    if (siteMaintenance) storage.set(STORE.maint, "1");
+    else storage.remove(STORE.maint);
+  }
+  const active = siteMaintenance && location.hash !== "#internal";
+  const was = maintenanceActive();
+  document.documentElement.classList.toggle("hj-maint", active);
+  if (active && !was) {
+    closeAllModals();
+    openMorePanel(false);
+    openVolPanel(false);
+  }
+  return active;
+}
+
 /* 人机验证总开关（关闭时前后端均不验证） */
 let captchaOn = true;
 
@@ -1216,7 +1239,7 @@ const todayKey = () => ymdKey(new Date());
 
 function maybeShowSitePopup() {
   const p = sitePopup;
-  if (!p || $("view-home").hidden || document.documentElement.classList.contains("boot-pending") || anyModalOpen()) return;
+  if (!p || maintenanceActive() || $("view-home").hidden || document.documentElement.classList.contains("boot-pending") || anyModalOpen()) return;
   const rev = String(p.rev);
   if (session.get(STORE.popupSeen) === rev || storage.get(STORE.popupNever) === rev
     || storage.get(STORE.popupMute) === `${rev}|${todayKey()}`) return;
@@ -2029,6 +2052,9 @@ const MORE_ITEMS = [
     icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
   { id: "huayu", label: "听得花间语", open: () => requestHuayu(), shown: () => huayuMode === "open" || huayuMode === "decrypt",
     icon: [0, 90, 180, 270].map((a) => `<path transform="rotate(${a} 12 12)" d="${HUAYU_PETAL}"/>`).join("") },
+  { id: "puzzle", label: "花街拼图", open: () => openPuzzle(),
+    icon: '<path d="M4.5 12.5v-1.8A2.7 2.7 0 0 1 7.2 8h9.6a2.7 2.7 0 0 1 2.7 2.7v1.8"/><rect x="3.5" y="12.5" width="17" height="8" rx="1.6"/>'
+      + '<path d="M10.6 12.5v2.7h2.8v-2.7"/><path d="M12 2.6l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/><path d="M6.6 4.2v1.8M5.7 5.1h1.8M17.6 3.8v1.8M16.7 4.7h1.8"/>' },
 ];
 
 function renderMorePanel() {
@@ -3271,6 +3297,29 @@ function initHuayu() {
   $("huayuCopyBtn").addEventListener("click", () => copyText(huayuResultCopy, "已复制", "复制失败，请长按文字手动复制"));
 }
 
+/* ==== 花街拼图（puzzle.js 按需加载） ==== */
+let puzzleSiteState = null;   // 站点状态里的拼图设置：中断继续开关与大赛，puzzle.js 打开时会再取一次
+
+function openPuzzle() {
+  closeAllModals();
+  loadLateScript("puzzle.js", () => !!window.HJPuzzle).then(
+    () => window.HJPuzzle.open(),
+    () => showToast("拼图没加载出来，检查一下网络再试"),
+  );
+}
+
+function closePuzzle() {
+  if (window.HJPuzzle) window.HJPuzzle.close();
+  else $("puzzleOverlay").hidden = true;
+}
+
+function initPuzzle() {
+  $("puzzleClose").addEventListener("click", () => {
+    if (window.HJPuzzle?.requestClose) window.HJPuzzle.requestClose();
+    else closePuzzle();
+  });
+}
+
 
 /* ==== 14. 下拉与日期选择 ==== */
 /* 鼠标操作时以站内弹层代替浏览器面板；触屏保留系统选择器，日期类仅在 Chromium 上替换 */
@@ -3687,10 +3736,14 @@ async function loadSiteState() {
   }
   syncServerClock(Number(data.now), sentAt, Date.now());
   siteLockdown = !!data.lockdown;
+  /* 旧版 Worker 的站点状态里没有 maintenance 时单独查询 */
+  if ("maintenance" in data) applyMaintenance(!!data.maintenance);
+  else callWorker({ action: "get_maintenance" }).then((d) => { if (d && d.ok) applyMaintenance(!!d.value); });
   applyCaptchaEnabled(data.captcha !== false);
   applyStarlight(data.starlight);
   applySitePopup(data.popup);
   applyHuayuMode(data.huayu);
+  puzzleSiteState = data.puzzle || null;
 }
 
 /* 全站弹窗：Esc 关闭最上层，打开时聚焦关闭按钮 */
@@ -3704,6 +3757,7 @@ const MODALS = [
   { overlay: "adminModalOverlay", closeBtn: "adminModalClose", close: () => closeAdminPanel() },
   { overlay: "alarmOverlay", closeBtn: "alarmClose", close: closeAlarmModal },
   { overlay: "huayuOverlay", closeBtn: "huayuClose", close: closeHuayuModal },
+  { overlay: "puzzleOverlay", closeBtn: "puzzleClose", close: closePuzzle },
   { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: closeSitePopup },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
@@ -3788,7 +3842,7 @@ function initApp() {
     initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
-    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPickers,
+    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initPickers,
     initClock, initHashRoute, initSitePopup, loadSiteState,
   ].forEach((init) => {
     try { init(); } catch (e) { console.error(e); }
@@ -3798,7 +3852,7 @@ function initApp() {
   /* 进站后弹出花街介绍（直接进入购票页时除外） */
   HJ.boot.appReady(() => {
     playPageEnterStagger();
-    if (!$("view-ticket").hidden) return;
+    if (!$("view-ticket").hidden || maintenanceActive()) return;
     firstBootInfoOpen = true;
     openInfoModal();
   }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true)] : []);

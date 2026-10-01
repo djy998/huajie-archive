@@ -10,6 +10,8 @@
   const hash = location.hash;
   const fresh = !get(VISITED_KEY) && hash !== "#ti" && hash !== "#survey";
   root.classList.add(fresh ? "boot-pending" : "css-wait");
+  /* 全站维护中（main.js 记在本机）：除内部入口外只显示背景与维护提示 */
+  if (get("hj_maint") === "1" && hash !== "#internal") root.classList.add("hj-maint");
   if (hash === "#ti" && (get("hj_ticket_look") || "")[0] === "1") root.classList.add("hj-ticket-bare");
 
   let fx = get("hj_fx_level");

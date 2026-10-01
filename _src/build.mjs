@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(process.argv[2] || here);
 const OUT = resolve(process.argv[3] || join(here, ".."));
 
-const SCRIPTS = ["boot.js", "verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "huayu.js", "sw.js"];
+const SCRIPTS = ["boot.js", "verify.js", "config.js", "main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "huayu.js", "puzzle.js", "sw.js"];
 const LEGACY_TARGET = { "boot.js": "es2015" };
 const HUAYU_PARTS = ["util.js", "zi.js", "v1.js", "v2-lexicon.js", "v2-compress.js", "v2-sentence.js", "v2.js"];
 const SITE_TITLE = "花舞之街 · 薰风花语町";

@@ -17,11 +17,12 @@
 | `verify.js` | 人机验证：Turnstile 与三种手动验证 |
 | `admin.js` | 内部入口与管理页，进入 `#internal` 时加载 |
 | `huayu.js`、`huayu/` | 花语，打开时加载 |
+| `puzzle.js` | 花街拼图（「更多」里的百宝箱），打开时加载 |
 | `sw.js` | 离线缓存 |
 | `build.mjs` | 生成发布版 |
 | `tools/` | 缩略图、标题字体子集 |
 
-脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、`assets/lib/exceljs.min.js` 按需加载。
+脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
@@ -32,6 +33,20 @@
 - 加解密在 Worker，密钥只存在 D1，网站不保存明文与花语。
 - `zi.js`、`zi-data.json`、`v1.js`、`v2-*.js` 决定花语格式，改动会导致旧花语无法解读。需要新格式时新增一代并在 `huayu.js` 的 `ALGOS` 登记。
 - 自测：`node huayu/selftest.mjs`
+
+## 花街拼图
+
+- 原图取 `config.js` 的 `INFO_GALLERY`；难度与限时在 `puzzle.js` 开头的 `DIFFS`：鱼信 36 块 / 鱼丽 60 块 / 光风院霁月 128 块（块数固定，按图片宽高比挑行列），限时 7 / 15 / 35 分钟。改块数要同时改 Worker 的 `PUZZLE_PIECES`。
+- 中断继续：管理页「花街拼图」开关，默认关闭。开启时进度存在访客本机 `hj_puzzle_save`；关闭时关掉拼图即放弃本局（× 要点两次）。
+- 限时模式鱼丽及以上通关时，调用 `huayu_seal`（`v: 1, purpose: "puzzle"`）用一代花语生成通关码，去掉「听花语：」前缀。管理页「花语加密」或访客花语工具粘贴通关码即可解读。
+- 大赛拼图：管理页设置名称、时段、难度、图片（裁剪后走公告配图上传，存 R2）。时段内拼图首页出现入口，正计时；开局时 Worker 发开局凭证，通关后访客填写游戏 ID，`puzzle_contest_submit` 按服务器时间核对耗时并记入 `puzzle_records`，再生成一代通关码。更换图片或难度算新一届（`contest_rev`）。
+- Worker 接口：`puzzle_state`、`puzzle_contest_start`、`puzzle_contest_submit`、`puzzle_admin_get` / `_set` / `_records` / `_void`；`get_site_state` 带 `puzzle`。
+
+## 全站开关
+
+- 管理页「分享功能开关」里的「全站开关」。关闭后除 `#internal` 外只显示背景与「网站正在维护中……」。
+- Worker 接口：`get_maintenance`、`set_maintenance`，`get_site_state` 带 `maintenance`。前端在本机记一份（`hj_maint`），下次进站由 `boot.js` 立即套用。
+- 只是前端遮挡，接口本身不受影响。
 
 ## 发布
 
