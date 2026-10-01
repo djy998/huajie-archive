@@ -318,13 +318,20 @@ function goHome() {
 
 const ROUTES = {
   "#internal": () => openInternalView(),
-  [TICKET_HASH]: () => window.openTicketView?.(),
-  [VENUE_HASH]: () => window.openVenueView?.(),
+  [TICKET_HASH]: () => openFeature("openTicketView", "购票页面没加载出来，刷新一下页面再试"),
+  [VENUE_HASH]: () => openFeature("openVenueView", "登记页没加载出来，刷新一下页面再试"),
   "#latest": () => openLatestEvent(),
   [SURVEY_HASH]: () => openLatestSurvey(),
   "#previous": () => openArchiveList(),
   "#mini-review": () => openMiniReview(),
 };
+
+/* 功能脚本没加载成功时回到首页并提示 */
+function openFeature(name, missingMsg) {
+  if (typeof window[name] === "function") return window[name]();
+  showView("view-home");
+  showToast(missingMsg);
+}
 
 let routedPath = null;
 function routeFromHash() {
@@ -381,7 +388,7 @@ function openInternalView() {
 
 
 /* ==== 3. 首页与活动详情 ==== */
-const EMPTY_NOTE = `<div class="empty-note">内容整理中</div>`;
+const EMPTY_NOTE = `<div class="empty-note">内容整理中，稍后会补充~</div>`;
 const BV_PATTERN = /^BV[0-9A-Za-z]{10}$/;
 const VIDEO_MUTED_TOAST = "站内已静音";
 
@@ -660,7 +667,8 @@ function openDetail(data) {
   $("panel-review").innerHTML = renderTabContent(data.review);
   applyBgs($("view-detail"));
   if (data.isLatest) {
-    if (data.survey) window.mountSurvey?.($("panel-feedback"));
+    if (data.survey && typeof window.mountSurvey === "function") window.mountSurvey($("panel-feedback"));
+    else if (data.survey) $("panel-feedback").innerHTML = `<div class="empty-note">问卷没加载出来，刷新一下页面再试</div>`;
     else $("panel-feedback").innerHTML = renderTabContent(data.feedback);
   }
   /* tabs 限定显示的标签页；hideReview 隐藏「活动回顾」；「反馈与建议」仅最新活动 */
@@ -773,7 +781,7 @@ function renderMiniReviews() {
   const grid = $("miniReviewGrid");
   grid.replaceChildren();
   if (!MINI_REVIEWS.length) {
-    grid.innerHTML = `<div class="empty-note">暂无内容</div>`;
+    grid.innerHTML = `<div class="empty-note">还没有内容，敬请期待</div>`;
     return Promise.resolve();
   }
   const list = [...MINI_REVIEWS.filter((it) => !it.pinLast), ...MINI_REVIEWS.filter((it) => it.pinLast)];
@@ -805,7 +813,8 @@ function initNav() {
   $("infoTile").addEventListener("click", () => requestCaptcha("info"));
   $("bookingTile").addEventListener("click", async () => {
     if (await blockedByStaticMode()) return;
-    if (location.hash === VENUE_HASH) window.openVenueView?.();
+    if (typeof window.openVenueView !== "function") return showToast("登记页没加载出来，刷新一下页面再试");
+    if (location.hash === VENUE_HASH) window.openVenueView();
     else setRoute(VENUE_HASH);
   });
   $("groupTile").addEventListener("click", async () => {
@@ -817,7 +826,7 @@ function initNav() {
 
 /* ==== 4. 站点开关与星芒节 ==== */
 /* 分享功能关闭时为纯静态展示：活动群、复制附言、场地登记、问卷、点赞不可用 */
-const STATIC_MODE_MSG = "功能暂未开放";
+const STATIC_MODE_MSG = "功能未开放，敬请谅解~";
 let siteLockdown = false;
 
 async function isLockedDown() {
@@ -864,7 +873,8 @@ function applyStarlight(value) {
 /* 弹窗式通过后 5 分钟内免验证；表单式凭证随表单提交 */
 const CAPTCHA_GRACE_MS = 5 * 60 * 1000;
 const CAPTCHA_NEEDED_MSG = "请完成人机验证";
-const CAPTCHA_FAILED_MSG = "人机验证未通过，请重新验证";
+const CAPTCHA_FAILED_MSG = "请重新验证";
+const CAPTCHA_LOAD_FAILED_MSG = "加载失败，请刷新页面再试一次";
 
 const isCaptchaFresh = () => Date.now() - (Number(storage.get(STORE.captchaOkAt)) || 0) < CAPTCHA_GRACE_MS;
 
@@ -880,6 +890,7 @@ function requestCaptcha(pending) {
 
 function openCaptcha(pending) {
   if (!captchaOn) { runCaptchaPending(pending); return; }
+  if (!captchaGate) { showToast(CAPTCHA_LOAD_FAILED_MSG); return; }
   captchaPending = pending;
   captchaFailStreak = 0;
   captchaSession++;
@@ -892,7 +903,7 @@ function openCaptcha(pending) {
 function closeCaptcha() {
   $("captchaOverlay").hidden = true;
   captchaSession++;
-  captchaGate.hide();
+  captchaGate?.hide();
   captchaPending = null;
 }
 
@@ -901,7 +912,7 @@ async function finishCaptcha(proof) {
   const session = captchaSession;
   const msg = $("captchaMsg");
   setMsg(msg, "验证中…");
-  /* 且听花间语：验证与打开记录一并提交 */
+  /* 听得花间语：验证与打开记录一并提交 */
   const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof });
   if (session !== captchaSession) return;
   if (data?.error === "closed") {
@@ -926,7 +937,7 @@ async function finishCaptcha(proof) {
     captchaGate.refresh();
     return;
   }
-  setMsg(msg, !data ? "网络连接失败"
+  setMsg(msg, !data ? "连接失败，检查一下网络后再试"
     : data.error === "rate_limited" ? "操作过于频繁，请稍后再试"
     : "验证已过期，请重新验证");
   captchaGate.refresh();
@@ -979,6 +990,7 @@ function createFormGate(host, { shouldOpen = () => true, onPass } = {}) {
     /* 缺少凭证时返回提示语 */
     missing() {
       if (!captchaOn || fg.proof()) return "";
+      if (!window.HJVerify) return CAPTCHA_LOAD_FAILED_MSG;
       fg.open();
       return CAPTCHA_NEEDED_MSG;
     },
@@ -1075,20 +1087,21 @@ function initInfo() {
 /* 网站说明：关于网站 / 反馈与建议 / 分享网站 --------------------------------------------- */
 const FEEDBACK_CATEGORIES = { bug: "bug反馈", experience: "体验反馈", feature: "功能建议", join: "加入花街", other: "其他" };
 const FEEDBACK_HINTS = {
-  "": "问题或想法",
-  bug: "页面、操作步骤、问题现象、设备与浏览器",
-  experience: "使用体验",
-  feature: "希望增加的功能",
-  join: "加入方式与自我介绍，并留下联系方式",
-  other: "其他内容",
+  "": "说说遇到的问题或想法吧",
+  bug: "在哪个页面、做了什么操作、看到了什么问题？用的是手机还是电脑、什么浏览器？",
+  experience: "哪里用着顺手、哪里别扭，都可以说说",
+  feature: "希望网站加上什么功能？",
+  join: "想以什么方式加入花街（店家 / 演出 / 工作人员 / 其他）？简单介绍一下自己吧，记得在下面留下联系方式",
+  other: "想说什么都可以",
 };
 const FEEDBACK_ERRORS = {
-  bad_category: "请选择类别",
+  bad_category: "请先选择问卷类别",
   bad_content: "内容过短",
   too_long: "最多 1000 字",
   bad_contact: "请填写联系方式",
   captcha: CAPTCHA_FAILED_MSG,
   rate_limited: "操作过于频繁，请稍后再试",
+  server_error: "提交失败，请稍后再试（一直这样的话请在活动群里告诉我们）",
 };
 let aboutTab = "about";
 let feedbackSubmitting = false;
@@ -1990,20 +2003,20 @@ function initVolume() {
   });
 }
 
-/* 「更多」菜单；花语图标为四瓣月见草 */
+/* 「更多」菜单；dev: true 的项显示为开发中；花语图标为四瓣月见草 */
 const HUAYU_PETAL = "M12 11.2C8.9 9.6 7 5.9 8.9 3.9c1.1-1.1 2.5-.8 3.1.5.6-1.3 2-1.6 3.1-.5 1.9 2 0 5.7-3.1 7.3z";
 const MORE_ITEMS = [
   { id: "alarm", label: "闹铃", open: () => openAlarmModal(true),
     icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
   { id: "calendar", label: "日历", open: () => openCalWidget(true),
     icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
-  { id: "huayu", label: "且听花间语", open: () => requestHuayu(), shown: () => huayuMode === "open" || huayuMode === "decrypt",
+  { id: "huayu", label: "听得花间语", open: () => requestHuayu(), shown: () => huayuMode === "open" || huayuMode === "decrypt",
     icon: [0, 90, 180, 270].map((a) => `<path transform="rotate(${a} 12 12)" d="${HUAYU_PETAL}"/>`).join("") },
 ];
 
 function renderMorePanel() {
   $("morePanel").innerHTML = MORE_ITEMS.filter((f) => !f.shown || f.shown()).map((f) =>
-    `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${f.label}">`
+    `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${f.label}${f.dev ? "（开发中）" : ""}">`
     + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg></button>`).join("");
 }
 
@@ -2035,7 +2048,9 @@ function initHeaderPanels() {
     const btn = e.target.closest("[data-more-id]");
     if (!btn) return;
     openMorePanel(false);
-    MORE_ITEMS.find((f) => f.id === btn.dataset.moreId).open();
+    const item = MORE_ITEMS.find((f) => f.id === btn.dataset.moreId);
+    if (item.dev) showToast("功能正在开发中~");
+    else item.open();
   });
   document.addEventListener("click", (e) => {
     if (!e.target.closest("#volPanel, #soundToggle")) openVolPanel(false);
@@ -2401,7 +2416,7 @@ function renderOmens() {
 /* ==== 11. 点赞 ==== */
 /* 键：act:<活动 id> / mini:<文件名> / info:<文件名> */
 const LIKE_DAILY_LIMIT = 10;
-const LIKE_LIMIT_MSG = "今日点赞次数已用完";
+const LIKE_LIMIT_MSG = `今天 ${LIKE_DAILY_LIMIT} 次点赞已用完，明天再来吧`;
 const LIKE_HEART_SVG = '<svg class="ico-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
 const likes = { counts: {}, liked: new Set(), remaining: LIKE_DAILY_LIMIT, available: false };
 
@@ -2467,7 +2482,7 @@ async function onLikeClick(btn) {
     likes.liked.add(key);
     likes.counts[key] = data.count;
     syncLikes(data);
-    showToast(`已点赞，今日剩余 ${likes.remaining} 次`);
+    showToast(`点赞成功，今天还剩 ${likes.remaining} 次`);
   } else if (data && data.error === "daily_limit") {
     likes.remaining = 0;
     showToast(LIKE_LIMIT_MSG);
@@ -2835,7 +2850,7 @@ function alarmPaintWidget(it) {
   if (!w) return;
   const now = hjNow();
   const ringing = isRinging(it);
-  const muted = siteVolume.muted ? " · 已静音" : "…";
+  const muted = siteVolume.muted ? "（站内已静音）" : "…";
   let big, status;
   if (it.kind === "alarm") {
     big = `${pad2(it.hh)}:${pad2(it.mm)}`;
@@ -2942,11 +2957,11 @@ function addAlarmItem(raw, nameStem, toast) {
 function submitAlarm() {
   const zone = alarmFormZone("almZone");
   const m = /^(\d{1,2}):(\d{2})$/.exec($("almTime").value);
-  if (!m) { alarmMsg("请选择时间"); return; }
+  if (!m) { alarmMsg("请先选择响铃时间"); return; }
   const hh = Number(m[1]);
   const mm = Number(m[2]);
   const dup = zone === "cn" && alarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === hh && x.mm === mm);
-  if (dup) { alarmMsg(`国服 ${pad2(hh)}:${pad2(mm)} 已有闹铃「${dup.name}」`); return; }
+  if (dup) { alarmMsg(`国服时间 ${pad2(hh)}:${pad2(mm)} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`); return; }
   const raw = {
     kind: "alarm", zone, hh, mm,
     repeat: $("almRepeat").checked,
@@ -2955,7 +2970,7 @@ function submitAlarm() {
     playSec: $("almPlaySec").value,
   };
   raw.nextFireAt = alarmNextFire(raw, hjNow());
-  addAlarmItem(raw, "闹铃", (name) => `已添加闹铃「${name}」`);
+  addAlarmItem(raw, "闹铃", (name) => `闹铃「${name}」已添加，组件已放到页面上`);
   $("almName").value = "";
 }
 

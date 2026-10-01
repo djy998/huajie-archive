@@ -19,7 +19,7 @@ const SURVEY = {
   id: "moguri2026",
   title: "活动调查问卷",
   intro: "感谢参与「2026莫古力中秋月轮祭」！问卷约需 3～5 分钟，* 为必答题，未提交的内容会自动暂存。",
-  closedText: "问卷已结束收集",
+  closedText: "本次问卷已经结束收集啦，感谢您的关注和支持！",
   sections: [
     {
       title: "活动宣传",
@@ -90,7 +90,7 @@ const SURVEY = {
       items: [
         {
           kind: "choice", key: "projects", short: "参与的项目", multi: true, required: true, wide: true,
-          label: "本次活动中，您参与了哪些游玩项目？", desc: "可多选，选中的项目会在下方出现评分",
+          label: "本次活动中，您参与了哪些游玩项目？", desc: "可多选",
           options: [
             ...SURVEY_PROJECTS.map((p) => ({ key: p.key, label: p.name, sub: `${p.num} · ${p.desc}` })),
             { key: "none", label: "没有参与任何项目", exclusive: true },
@@ -125,7 +125,7 @@ const SURVEY = {
         },
         {
           kind: "text", key: "site_note", short: "网站评价与建议", multiline: true, max: 500,
-          label: "您对花街网站有什么评价或建议？", desc: "想要的新功能、遇到的问题等",
+          label: "您对花街网站有什么评价或建议？", desc: "想要的新功能、遇到的问题、用着不顺手的地方都可以说说",
         },
       ],
     },
@@ -155,7 +155,7 @@ const SURVEY = {
         {
           kind: "text", key: "contact", short: "联系方式", max: 60,
           label: "如果愿意让我们联系您，请留下游戏id或联系方式",
-          desc: "仅工作人员可见", placeholder: "如：乔薇塔@梦羽宝境 / QQ号",
+          desc: "选填。仅工作人员可见，只用于和本问卷有关的联系", placeholder: "如：乔薇塔@梦羽宝境 / QQ号",
         },
       ],
     },
@@ -297,7 +297,7 @@ function surveyItemHtml(it) {
         <div class="survey-options${cls}" role="${it.multi ? "group" : "radiogroup"}" aria-labelledby="${id(it.key)}-label">
           ${it.options.map((o) => `<label class="venue-choice survey-choice"><input type="${type}" name="${id(it.key)}" value="${o.key}" data-sv-choice="${it.key}"${o.exclusive ? " data-sv-exclusive" : ""}><span class="survey-choice-text">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ""}</span></label>`).join("")}
         </div>
-        ${it.other ? `<input type="text" class="venue-other survey-other" data-sv-text="${it.other.key}" maxlength="${it.other.max}" placeholder="请补充说明" aria-label="补充说明" hidden>` : ""}
+        ${it.other ? `<input type="text" class="venue-other survey-other" data-sv-text="${it.other.key}" maxlength="${it.other.max}" placeholder="请补充说明（选填）" aria-label="补充说明" hidden>` : ""}
         ${err}
       </div>`;
   }
@@ -400,8 +400,8 @@ function clearSurveyError(box) {
 }
 
 const SURVEY_REASON_TEXT = {
-  required: "未作答",
-  invalid: "请重新选择",
+  required: "这道题还没有回答",
+  invalid: "这道题的答案不对，请重新选一下",
   exclusive: "该选项不能与其他选项同时选择",
   too_long: "超出字数上限",
 };
@@ -410,17 +410,18 @@ const SURVEY_REASON_TEXT = {
 function surveyShowFieldError(root, field, reason) {
   const it = SURVEY_FIELD_ITEM.get(field);
   const box = it && root.querySelector(`[data-sv-item="${it.key}"]`);
-  if (!box || box.hidden) return "提交内容有误";
+  if (!box || box.hidden) return "提交的内容有问题，请检查一下再提交";
   const max = SURVEY_FIELDS.find((x) => x.key === field)?.max;
   const text = reason === "too_long" && max ? `最多 ${max} 字`
-    : reason === "required" && it.card ? "请评分"
+    : reason === "required" && it.card ? "请给这个项目打个分"
     : SURVEY_REASON_TEXT[reason] || SURVEY_REASON_TEXT.invalid;
   box.classList.add("is-error");
   setMsg(box.querySelector("[data-sv-err]"), text);
   box.scrollIntoView({ behavior: "smooth", block: "center" });
   const own = (it.other && field === it.other.key) || (it.comment && field === it.comment.key);
   box.querySelector(own ? `[data-sv-text="${field}"]` : "input, textarea")?.focus({ preventScroll: true });
-  return `第 ${box.dataset.no} 题${it.card ? ` ${it.card.title}` : ""}：${text}`;
+  const where = it.card ? `第 ${box.dataset.no} 题（${it.card.title}）` : `第 ${box.dataset.no} 题`;
+  return reason === "required" ? `${where}还没有回答，已帮你定位到那里` : `${where}：${text}`;
 }
 
 /* 问卷卡片只创建一次，切换页面不丢失已填内容 */
@@ -469,7 +470,9 @@ function setSurveyMode(mode, text = "") {
 }
 
 function showSurveyDone(done) {
-  $("surveyDoneNote").textContent = done.id ? `编号 #${done.id}，感谢您的反馈！` : "感谢您的反馈！";
+  $("surveyDoneNote").textContent = done.id
+    ? `问卷编号 #${done.id}。每一份问卷我们都会认真阅读，感谢您抽出时间！`
+    : "每一份问卷我们都会认真阅读，感谢您抽出时间！";
   setSurveyMode("done");
 }
 
@@ -502,8 +505,9 @@ function onSurveyTabShown() {
 const SURVEY_ERRORS = {
   rate_limited: "操作过于频繁，请稍后再试",
   too_large: "内容过长",
-  bad_survey: "问卷不存在",
-  server_error: "保存失败，请稍后再试",
+  bad_survey: "问卷不存在或已下线，刷新一下页面再试",
+  server_error: "问卷保存失败，请稍后再试，一直这样的话请联系管理员",
+  unknown_action: "网站后台暂时无法接收问卷，请联系活动群群主",
 };
 
 async function submitSurvey(e) {
@@ -539,7 +543,7 @@ async function submitSurvey(e) {
   surveyGate.afterSubmit(data);
 
   if (!data) {
-    setMsg(msg, "网络连接失败，请重试");
+    setMsg(msg, "网络连接失败，这次可能没有提交成功。检查一下网络后再点一次「提交问卷」（已填的内容不会丢）");
   } else if (data.ok) {
     const done = { id: Number(data.id) || 0, at: Date.now() };
     storage.set(SURVEY_DONE_KEY, JSON.stringify(done));
@@ -583,9 +587,9 @@ function buildSurveyCard() {
       </div>
     </form>
     <div class="ticket-result survey-done" id="surveyDoneBox" hidden>
-      <h3>提交成功</h3>
+      <h3>提交成功，谢谢您的反馈！</h3>
       <p class="ticket-result-note" id="surveyDoneNote"></p>
-      <p class="survey-done-more">其他意见可通过<button type="button" class="survey-link" id="surveyAboutLink">反馈与建议</button>告诉我们。</p>
+      <p class="survey-done-more">还有想说的，随时可以点首页最下面的小字，在<button type="button" class="survey-link" id="surveyAboutLink">「反馈与建议」</button>里告诉我们。</p>
     </div>`;
   surveyState.card = card;
   return card;

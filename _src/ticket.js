@@ -8,17 +8,19 @@ const TICKET_SERVER_GROUPS = [
   { dc: "豆豆柴", servers: ["水晶塔", "银泪湖", "太阳海岸", "伊修加德", "红茶川"] },
 ];
 const TICKET_SERVERS = TICKET_SERVER_GROUPS.flatMap((g) => g.servers);
-const TICKET_MSG_CLOSED = "购票暂未开放";
+const TICKET_MSG_CLOSED = "购票暂未开放，请留意活动群通知";
 const TICKET_ERRORS = {
   closed: TICKET_MSG_CLOSED,
   bad_contact: "请填写联系方式",
-  bad_qty: "超出单人限购数量",
-  bad_holders: "持票人信息不完整",
+  bad_qty: "购票数量超出单人限额，请调整后再试",
+  bad_holders: "持票人信息不完整，请检查",
   bad_holder_name: "请填写每位持票人的 id",
   bad_holder_server: "请为每位持票人选择区服",
   bad_holder_name_format: "持票人 id 仅限汉字、英文字母和「·」，最多 6 个字",
-  pending_not_allowed: "暂不支持 id 待定",
+  pending_not_allowed: "当前不支持 id 待定，请填写完整的持票人信息",
   first_holder_required: "第一位持票人不能待定",
+  captcha: "人机验证未通过，请重新验证后再提交",
+  cooldown: "刚刚已经成功登记过了，请稍后再提交",
   rate_limited: "提交过于频繁，请稍后再试",
   server_error: "服务器错误，请先在「查询登记」确认是否已登记",
 };
@@ -60,7 +62,7 @@ const TICKET_META_INTS = ["cooldownMin", "resetMin", "idleMin"];
 
 const roundWord = () => ticketState.roundWord || "今日";
 const ticketFullTitle = () => (ticketState.title || TICKET_TITLE) + (ticketState.testMode ? "（测试）" : "");
-const ticketSoldOutText = () => `${roundWord()}活动票已售罄`;
+const ticketSoldOutText = () => `${roundWord()}活动票已售罄，可留意后续放票！`;
 
 /* 分钟数 ↔ "HH:MM" */
 const minutesToHHMM = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
@@ -71,7 +73,7 @@ function hhmmToMinutes(v) {
 
 const waitText = (sec) => (sec >= 60 ? `约 ${Math.ceil(sec / 60)} 分钟` : `${Math.max(1, Math.ceil(sec))} 秒`);
 function ticketCooldownText(sec) {
-  const gap = ticketState.cooldownMin ? `两次登记需间隔 ${ticketState.cooldownMin} 分钟，` : "";
+  const gap = ticketState.cooldownMin ? `每次成功登记后需间隔 ${ticketState.cooldownMin} 分钟才能再次提交，` : "";
   return `${gap}请${waitText(sec)}后再试`;
 }
 
@@ -117,7 +119,7 @@ function normalizeTicketName(raw) {
 function ticketNameError(name) {
   const chars = Array.from(name);
   if (!chars.length) return "请填写持票人 id";
-  if (/[@＠]/.test(name)) return "id 无需包含 @服务器";
+  if (/[@＠]/.test(name)) return "id 里不用写 @ 和服务器，服务器在右边选择";
   if (/[0-9]/.test(name)) return "id 不能包含数字";
   if (chars.some((ch) => ch !== "·" && !/[A-Za-z]/.test(ch) && !isHanCodePoint(ch.codePointAt(0)))) return "id 只能用汉字、英文字母和「·」";
   if (chars.every((ch) => ch === "·")) return "id 不能只有「·」";
@@ -188,11 +190,11 @@ function ticketTimeLines() {
   const lines = [];
   if (t.showReset) {
     if (t.dailyOn && t.nextRefreshDaily) lines.push(`每日 ${minutesToHHMM(t.resetMin)} 刷新票额`);
-    else if (t.nextRefreshAt) lines.push(`下次刷新：${formatCnTime(t.nextRefreshAt)}`);
+    else if (t.nextRefreshAt) lines.push(`下次刷新票额：${formatCnTime(t.nextRefreshAt)}`);
   }
   if (t.showSchedule) {
-    if (!t.open && t.openAt) lines.push(`${formatCnTime(t.openAt)} 开启购票`);
-    if (t.open && t.closeAt) lines.push(`${formatCnTime(t.closeAt)} 截止购票`);
+    if (!t.open && t.openAt) lines.push(`预计 ${formatCnTime(t.openAt)} 开启购票`);
+    if (t.open && t.closeAt) lines.push(`购票将于 ${formatCnTime(t.closeAt)} 截止`);
   }
   return lines;
 }
@@ -325,13 +327,13 @@ async function openTicketView() {
   showTicketTitle();
   if (!$("ticketResult").hidden) clearTicketForm();   // 登记成功后再进来：空白表单
 
-  setTicketMode("blocked", "加载中…");
+  setTicketMode("blocked", "正在读取购票状态…");
   const st = await callWorker({ action: "get_ticket_status" });
   if (seq !== ticketViewSeq || $("view-ticket").hidden) return;
   if (!st || !st.ok) {
     ticketState.showReset = ticketState.showSchedule = false;
     renderTicketStock(null);
-    setTicketMode("blocked", "加载失败，请刷新重试");
+    setTicketMode("blocked", "购票状态读取失败，检查一下网络后刷新页面再试");
     return;
   }
   applyTicketMeta(st);
@@ -340,7 +342,7 @@ async function openTicketView() {
   applyTicketPerPerson(st.perPerson, !!st.allowPending);
   renderTicketStock(st);
   const blocked = !st.open
-    ? (st.openAt && ticketState.showSchedule ? `${TICKET_MSG_CLOSED}，${formatCnTime(st.openAt)} 开启` : TICKET_MSG_CLOSED)
+    ? (st.openAt && ticketState.showSchedule ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 国服时间开启）` : TICKET_MSG_CLOSED)
     : ticketState.soldOut ? ticketSoldOutText() : "";
   if (blocked) {
     setTicketMode("blocked", blocked);
@@ -413,7 +415,8 @@ async function submitTicket(e) {
   const btn = $("ticketSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...ticketGate.proof() });
+  const proof = ticketGate.proof();
+  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof });
   ticketState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
@@ -435,11 +438,14 @@ async function submitTicket(e) {
     openTicketNotice(TICKET_MSG_CLOSED);
   } else if (data.error === "cooldown") {
     if (Number.isInteger(data.cooldownMin)) ticketState.cooldownMin = data.cooldownMin;
-    const wait = Number(data.waitSec) || 60;
+    const wait = Number(data.waitSec);
+    if (!wait) return setMsg(msg, TICKET_ERRORS.cooldown);
     ticketState.cooldownUntil = Date.now() + wait * 1000;
     setMsg(msg, ticketCooldownText(wait));
+  } else if (data.error === "captcha" && proof?.verifyPass) {
+    setMsg(msg, "人机验证凭证已过期或用过，已换一题，请重新验证后提交");
   } else {
-    setMsg(msg, data.error === "captcha" ? CAPTCHA_FAILED_MSG : TICKET_ERRORS[data.error] || "提交失败，请稍后再试");
+    setMsg(msg, TICKET_ERRORS[data.error] || "提交失败，请稍后再试");
   }
 }
 
@@ -450,9 +456,9 @@ function showTicketResult(p, data) {
   const word = data.roundWord || roundWord();
   /* overLimit / dup 只有管理页打开了「对客户显示」时 Worker 才会给 */
   const warn = [];
-  if (data.overLimit) warn.push(`${word}票额已满，本单为超额登记，待工作人员确认。`);
+  if (data.overLimit) warn.push(`提交时${word}票额已满，本单为超额登记，需等待工作人员确认。`);
   if (data.dup) warn.push("联系方式或持票人与其他登记重复，待工作人员核对。");
-  const note = warn.length ? `${warn.join("")}请截图保存并留意活动群 ${GROUP_QQ}。` : `请截图保存，付款与取票请留意活动群 ${GROUP_QQ}。`;
+  const note = warn.length ? `${warn.join("")}请截图保存本页，并留意活动群 ${GROUP_QQ}。` : `请截图保存本页，付款与取票请留意活动群 ${GROUP_QQ}。`;
   const rows = [
     ["联系方式", p.contact],
     ["购票数量", `${p.qty} 张`],
@@ -577,7 +583,7 @@ function saveTicketImage() {
   /* 不能直接下载时（旧版 iOS Safari）在新窗口打开，长按保存 */
   const openInWindow = () => {
     const w = window.open();
-    if (!w) return showToast("无法打开新窗口，请直接截屏");
+    if (!w) return showToast("浏览器拦截了新窗口，请直接截屏保存");
     w.document.write(`<title>购票登记</title><img src="${canvas.toDataURL("image/png")}" style="max-width:100%">`);
     showToast("长按图片保存");
   };
@@ -608,7 +614,7 @@ async function lookupTicket() {
   /* 作废的持票人划掉；超额 / 重复只有管理页打开了「对客户显示」时才会有 */
   list.innerHTML = data.items.map((o) => `
     <div class="ticket-lookup-item${o.voided ? " is-void" : o.overLimit ? " is-over" : ""}">
-      <div class="tli-head">${escapeHtml(ticketRoundLabel(o.day))} · 第 ${o.seq} 号 · ${o.qty} 张${o.voided ? " · 已作废" : o.overLimit ? " · 超额登记，待确认" : ""}</div>
+      <div class="tli-head">${escapeHtml(ticketRoundLabel(o.day))} · 第 ${o.seq} 号 · ${o.qty} 张${o.voided ? " · 此单已作废，请联系活动群确认" : o.overLimit ? " · 超额登记，待确认" : ""}</div>
       <div class="tli-body">${o.holders.map((h) => (h.voided ? `<span class="tli-void"><s>${escapeHtml(formatHolder(h))}</s> 已作废</span>` : escapeHtml(formatHolder(h)))).join("、")}</div>
       ${o.dup && !o.voided ? `<div class="tli-note">联系方式或持票人与其他登记重复，待核对</div>` : ""}
     </div>`).join("");
@@ -715,7 +721,7 @@ function paintTicketIdle(left) {
   el.hidden = !ticketState.showIdle;
   if (el.hidden) return;
   const sec = Math.max(0, Math.ceil(left / 1000));
-  el.textContent = `剩余 ${Math.floor(sec / 60)}:${pad2(sec % 60)}，超时将返回首页`;
+  el.textContent = `请在 ${Math.floor(sec / 60)}:${pad2(sec % 60)} 内完成提交，超时将返回首页`;
   el.classList.toggle("is-urgent", sec <= 60);
 }
 

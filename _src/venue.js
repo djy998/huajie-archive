@@ -1,6 +1,6 @@
 /* 花舞之街 · 场地使用登记。选项 key 与 Worker 一致 */
 const VENUE_TITLE = "场地使用登记";
-const VENUE_INTRO = "感谢您对薰风花语町与花舞之街的关注。请填写以下信息，其他疑问可写在备注中。";
+const VENUE_INTRO = "感谢大人对【薰风花语町】与【花舞之街】的青睐和垂询！为了更好地对接您的需求，从而为您量身打造完美的活动体验，烦请协助提供以下信息。有任何疑问和需求等也欢迎在下方填写！";
 const VENUE_MIN_DAYS = 1;
 const VENUE_MAX_DAYS = 90;
 
@@ -71,23 +71,23 @@ const VENUE_PLACE_GROUPS = [
 const VENUE_PLACE_LABELS = new Map(VENUE_PLACE_GROUPS.flatMap((g) => g.places));
 
 const VENUE_TEXT = {
-  identity: { label: "申请身份", desc: "个人逛街、参观或挂机无需登记" },
-  purpose: { label: "使用意向" },
-  teamName: { label: "部队名称或简称" },
-  groupName: { label: "团体名称" },
-  charId: { label: "角色 id", desc: "如：乔薇塔@梦羽宝境" },
-  contact: { label: "联系方式", desc: "QQ 或邮箱" },
-  date: { label: "预约日期", desc: "多个日期请分别登记" },
-  places: { label: "预约场地", desc: "莫古力区梦羽宝境高脚孤丘 22、23 区扩建区，场地可能调整" },
-  service: { label: "活动相关服务", desc: "可协助联系店家或老师，费用与细节由双方商定" },
-  remark: { label: "备注", desc: "其他询问或需求" },
+  identity: { label: "您的申请身份", desc: "使用意向为个人逛街/进店参观/挂机的客人，无需填写此登记表，感谢您对于我们的关注和支持！" },
+  purpose: { label: "您的使用意向" },
+  teamName: { label: "您所代表部队的名称或简称" },
+  groupName: { label: "您所代表店家/乐队/剧团等团体的名称" },
+  charId: { label: "您或者团体代表的游戏角色id", desc: "如：乔薇塔@梦羽宝境" },
+  contact: { label: "您或者团体代表的联系方式", desc: "QQ 或邮箱等" },
+  date: { label: "您想要预约使用的日期", desc: "如果需要预约多个日期，麻烦您对应填写多个登记表，对此造成的不便表示歉意！" },
+  places: { label: "您想要预约使用的场地", desc: "场地在莫古力区-梦羽宝境-高脚孤丘22和23扩建区。场地情况可能会发生变动，敬请谅解" },
+  service: { label: "您是否想要活动相关服务？", desc: "我们尽量帮忙联系可能的店家或老师，具体费用和事项待您和对方商谈。" },
+  remark: { label: "备注", desc: "对于场地等任何询问、想法或需求都可以自由填写，我们在联系您时会做出答复！" },
 };
 
 const VENUE_ERRORS = {
   closed: STATIC_MODE_MSG,
   bad_identity: "请选择申请身份",
   bad_identity_other: "请补充申请身份",
-  bad_purpose: "请选择使用意向",
+  bad_purpose: "请选择您的使用意向",
   bad_purpose_other: "请补充使用意向",
   bad_team_name: "请填写部队名称",
   bad_char_id: "请填写角色 id",
@@ -103,6 +103,7 @@ const VENUE_ERRORS = {
   not_found: "登记不存在，请刷新列表",
   rate_limited: "提交过于频繁，请稍后再试",
   server_error: "服务器错误，请稍后再试",
+  unknown_action: "网站后台暂时无法接收登记，请联系活动群群主",
 };
 
 /* 文字对照（结果页、管理页共用） */

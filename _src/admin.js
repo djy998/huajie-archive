@@ -3,7 +3,7 @@
 /* ==== 1. 内部入口与公告板 ==== */
 /* 密码由 Worker 校验：A / B 仅公告，C 为管理员，查看密码进入只读页 */
 function adminErr(data, fallback, map = {}) {
-  if (!data) return "网络连接失败";
+  if (!data) return "连接失败，检查一下网络后再试";
   if (map[data.error]) return map[data.error];
   if (data.error === "auth" || !data.error) return "登录已失效，请重新登录";
   if (data.error === "rate_limited") return "操作过于频繁，请稍后再试";
@@ -76,13 +76,17 @@ async function checkInternalPassword() {
   const msg = $("internalMsg");
   const btn = $("internalSubmit");
 
+  if (!WORKER_URL) {
+    setMsg(msg, "数据库还没配置好，暂时无法验证密码。");
+    return;
+  }
   btn.disabled = true;
   setMsg(msg, "验证中…");
   const data = await callWorker({ action: "get_announcements", password: input.value });
   btn.disabled = false;
 
   if (!data) {
-    setMsg(msg, "网络连接失败");
+    setMsg(msg, "连接失败，检查一下网络后再试");
     return;
   }
   if (data.error === "viewer_closed") {
@@ -214,7 +218,16 @@ async function compressImage(file, maxDim) {
   }
 }
 
-function bindImageUpload(prefix, maxDim, onChange) {
+const IMAGE_UPLOAD_TEXT = {
+  notImage: "请选择图片",
+  tooBig: () => "图片不能超过 50MB",
+  processing: "处理中…",
+  decodeFail: "无法读取该图片",
+  rateLimited: "上传过于频繁，请稍后再试",
+  failed: "上传失败，请重试",
+};
+
+function bindImageUpload(prefix, maxDim, onChange, text = IMAGE_UPLOAD_TEXT) {
   const input = $(`${prefix}Input`);
   const pick = $(`${prefix}PickBtn`);
   const status = $(`${prefix}Status`);
@@ -224,9 +237,9 @@ function bindImageUpload(prefix, maxDim, onChange) {
     const file = input.files[0];
     input.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) { setMsg(status, "请选择图片"); return; }
-    if (file.size > IMAGE_MAX_BYTES) { setMsg(status, "图片不能超过 50MB"); return; }
-    setMsg(status, "处理中…");
+    if (!file.type.startsWith("image/")) { setMsg(status, text.notImage); return; }
+    if (file.size > IMAGE_MAX_BYTES) { setMsg(status, text.tooBig(file)); return; }
+    setMsg(status, text.processing);
     pick.disabled = true;
     try {
       const { base64, contentType } = await compressImage(file, maxDim);
@@ -236,7 +249,7 @@ function bindImageUpload(prefix, maxDim, onChange) {
       setMsg(status, "");
       onChange(new URL(`image/${data.key}`, workerBase()).href);
     } catch (e) {
-      setMsg(status, e.message === "decode fail" ? "无法读取该图片" : e.message === "rate_limited" ? "上传过于频繁，请稍后再试" : "上传失败，请重试");
+      setMsg(status, e.message === "decode fail" ? text.decodeFail : e.message === "rate_limited" ? text.rateLimited : text.failed);
     }
     pick.disabled = false;
   });
@@ -272,7 +285,7 @@ function cancelEditAnnouncement() {
 }
 
 async function deleteAnnouncement(id) {
-  if (!confirm("删除这条公告？")) return;
+  if (!confirm("确定要删除这条公告吗？删除后无法恢复。")) return;
   const data = await callWorker({ action: "delete_announcement", password: internalAdminPassword, id });
   if (!data || !data.ok) {
     showToast("删除失败，请重试");
@@ -375,7 +388,11 @@ const ADMIN_PANEL_REFRESH = {
   venueAdminPanel: () => refreshVenueAdmin(),
   popupAdminPanel: () => refreshPopupAdmin(),
   huayuAdminPanel: () => refreshHuayuAdmin(),
-  surveyAdminPanel: () => refreshSurveyAdmin(),
+  surveyAdminPanel: () => {
+    if (typeof window.mountSurvey === "function") return refreshSurveyAdmin();
+    $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
+    return null;
+  },
 };
 
 function stashAdminPanels() {
@@ -421,7 +438,9 @@ async function refreshLockdownStatus() {
     return;
   }
   siteLockdown = !!data.value;
-  status.textContent = data.value ? "当前状态：已关闭" : "当前状态：已开启";
+  status.textContent = data.value
+    ? "当前状态：已关闭（纯静态展示，复制附言 / 活动群 / 场地登记 / 活动问卷 / 点赞都不可用）"
+    : "当前状态：已开启（正常运行）";
   $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
   $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
 }
@@ -439,11 +458,11 @@ function initLockdownToggle() {
     });
     btn.disabled = false;
     if (!data || !data.ok) {
-      setMsg(msg, adminErr(data, "切换失败"));
+      setMsg(msg, adminErr(data, "切换失败，请重新登录内部入口后再试"));
       return;
     }
     siteLockdown = !!data.value;
-    showToast(data.value ? "分享功能已关闭" : "分享功能已开启");
+    showToast(data.value ? "分享功能已关闭（纯静态展示）" : "分享功能已开启");
     refreshLockdownStatus();
   });
 }
@@ -457,7 +476,9 @@ async function refreshCaptchaSwitch() {
     return;
   }
   applyCaptchaEnabled(!!data.enabled);
-  status.textContent = data.enabled ? "当前状态：已开启" : "当前状态：已关闭";
+  status.textContent = data.enabled
+    ? "当前状态：已开启（正常验证）"
+    : "当前状态：已关闭（全站不验证，任何人都能直接提交，请尽快开回来）";
   $("captchaToggleBtn").textContent = data.enabled ? "关闭人机验证" : "开启人机验证";
   $("captchaToggleBtn").dataset.current = data.enabled ? "1" : "0";
 }
@@ -475,7 +496,7 @@ function initCaptchaSwitch() {
     });
     btn.disabled = false;
     if (!data || !data.ok) {
-      setMsg(msg, adminErr(data, "切换失败"));
+      setMsg(msg, adminErr(data, "切换失败，请重新登录内部入口后再试"));
       return;
     }
     applyCaptchaEnabled(!!data.enabled);
@@ -504,12 +525,12 @@ async function saveStarlight(value) {
   buttons.forEach((b) => { b.disabled = false; });
 
   if (!data || !data.ok) {
-    setMsg(msg, adminErr(data, "保存失败"));
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试"));
     return;
   }
   applyStarlight(value);
   syncStarlightPanel();
-  showToast(value ? "已保存" : "已清除");
+  showToast(value ? "星芒节时段已保存，期间全站天气显示为小雪" : "已清除星芒节覆盖，天气恢复正常计算");
 }
 
 function initStarlightPanel() {
@@ -678,9 +699,9 @@ const setIdle = (el, v) => { if (el && document.activeElement !== el) el.value =
 
 function renderTicketSettings(st) {
   /* ---- 基本 ---- */
-  setTicketSwitch($("ticketOpenBtn"), st.open, "已开放", "已关闭");
-  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许", "不允许");
-  setTicketSwitch($("ticketTestBtn"), !!st.testMode, "显示", "不显示");
+  setTicketSwitch($("ticketOpenBtn"), st.open, "已开放（点击关闭）", "已关闭（点击开放）");
+  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许待定（点击关闭）", "不允许待定（点击开启）");
+  setTicketSwitch($("ticketTestBtn"), !!st.testMode, "显示「（测试）」（点击去掉）", "不显示（点击加上）");
   setIdle($("ticketTitleInput"), st.title || TICKET_TITLE);
   $("ticketTitlePreview").textContent = `访客看到：${st.title || TICKET_TITLE}${st.testMode ? "（测试）" : ""}`;
   $("ticketTitlePreview").hidden = false;
@@ -697,11 +718,11 @@ function renderTicketSettings(st) {
     <p>票额：基础 <b>${cur.base}</b> 张${cur.extra ? ` ${cur.extra > 0 ? "+" : "−"} 临时 <b>${Math.abs(cur.extra)}</b> 张` : ""} = <b>${cur.quota}</b> 张
       · 已售 <b>${st.sold}</b> · 余 <b>${st.remaining}</b></p>`;
   $("ticketExtraClearBtn").disabled = !cur.extra;
-  setTicketSwitch($("ticketDailyBtn"), st.dailyOn !== false, "开", "关");
+  setTicketSwitch($("ticketDailyBtn"), st.dailyOn !== false, "开（点击关闭）", "关（点击打开）");
   setIdle($("ticketResetInput"), minutesToHHMM(st.resetMin || 0));
   setIdle($("ticketLimitInput"), String(st.limit));
   document.querySelectorAll(".ta-daily-only").forEach((el) => el.classList.toggle("is-off", st.dailyOn === false));
-  /* 「本轮也改」仅当本轮由每日刷新开始时有效 */
+  /* 「当前这一轮也改」仅当本轮由每日刷新开始时有效 */
   $("ticketLimitCurWrap").hidden = !(cur.source === "daily" || cur.source === "init");
   if (!ticketAdmin.pointsDirty) renderTicketPoints(st.points || [], cur.startAt);
   renderTicketNext(st);
@@ -710,12 +731,12 @@ function renderTicketSettings(st) {
   const mode = st.remainingMode || "full";
   setIdle($("ticketRemainModeSelect"), mode);
   const stockHtml = ticketStockHtml(mode, st.remaining, st.stockLevel, st.roundWord || "今日");
-  $("ticketRemainPreview").textContent = `访客看到：${stockHtml ? stockHtml.replace(/<[^>]+>/g, "") : "不显示"}`
+  $("ticketRemainPreview").textContent = `访客现在看到：${stockHtml ? stockHtml.replace(/<[^>]+>/g, "") : "（不显示余票）"}`
     + (mode === "range" ? " · ≤10 张为「余票10张以内」，≤ 票额一半为「余票不多」" : "");
   $("ticketRemainPreview").hidden = false;
-  setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示", "不显示");
-  setTicketSwitch($("ticketShowResetBtn"), st.showReset !== false, "显示", "不显示");
-  setTicketSwitch($("ticketViewerBtn"), st.viewerEnabled !== false, "已开放", "已关闭");
+  setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示（点击隐藏）", "不显示（点击显示）");
+  setTicketSwitch($("ticketShowResetBtn"), st.showReset !== false, "显示（点击隐藏）", "不显示（点击显示）");
+  setTicketSwitch($("ticketViewerBtn"), st.viewerEnabled !== false, "已开放（点击关闭）", "已关闭（点击开放）");
   renderTicketFlagSwitches(st);
   setIdle($("ticketIdleInput"), String(st.idleMin ?? 10));
   /* 与首页隔离时停留时限失效 */
@@ -753,7 +774,7 @@ function renderTicketPoints(points, curStart) {
 function ticketPointRowHtml(at = "", qty = "") {
   return `<div class="ta-point" data-point>
     <input type="datetime-local" class="ta-point-at" value="${escapeHtml(at)}" aria-label="刷新时间">
-    <input type="number" class="ta-point-qty" min="0" max="100000" step="1" inputmode="numeric" value="${escapeHtml(String(qty))}" placeholder="票额" aria-label="票额">
+    <input type="number" class="ta-point-qty" min="0" max="100000" step="1" inputmode="numeric" value="${escapeHtml(String(qty))}" placeholder="票额" aria-label="这一轮的票额">
     <span class="ta-point-unit">张</span>
     <button type="button" class="tt-act is-void" data-point-del>删除</button>
   </div>`;
@@ -767,7 +788,7 @@ function renderTicketNext(st) {
   $("ticketNextSaveBtn").disabled = !next;
   input.disabled = !next;
   if (!next) {
-    info.textContent = "无";
+    info.textContent = "不会再刷新";
     setIdle(input, "");
     $("ticketNextResetBtn").hidden = true;
     note.textContent = "每日刷新已关闭且没有自定义刷新点，票额不再重置。";
@@ -778,7 +799,7 @@ function renderTicketNext(st) {
   setIdle(input, String(next.qty));
   $("ticketNextResetBtn").hidden = !next.override;
   const lines = [];
-  if (next.override) lines.push(`本次单独设为 ${next.qty} 张，默认 ${next.defaultQty} 张。`);
+  if (next.override) lines.push(`已单独设为 ${next.qty} 张（默认是 ${next.defaultQty} 张），只对这一次刷新有效。`);
   else if (next.kind === "custom") lines.push("与对应的自定义刷新点同步。");
   else lines.push(`默认 ${next.defaultQty} 张，修改仅对本次有效。`);
   if (next.pendingOverride) lines.push(`${formatCnTime(next.pendingOverride.at)} 的每日刷新已单独设为 ${next.pendingOverride.qty} 张。`);
@@ -850,7 +871,7 @@ function renderTicketOrders() {
       <td class="tt-actions"><div class="tt-acts">${acts}</div></td>
       <td class="tt-pick-cell">${pick}</td>
     </tr>`;
-  }).join("") : `<tr><td colspan="8" class="tt-empty">${ticketAdmin.search ? "无匹配订单" : "暂无订单"}</td></tr>`;
+  }).join("") : `<tr><td colspan="8" class="tt-empty">${ticketAdmin.search ? "没有符合搜索条件的订单" : "暂无订单"}</td></tr>`;
 
   if (ticketAdmin.edit) {
     const o = orders.find((x) => x.id === ticketAdmin.edit.id);
@@ -945,7 +966,7 @@ async function saveTicketEdit() {
     if (err) { setMsg(msg, `第 ${i + 1} 位持票人：${err}`); return; }
     if (!h.server) { setMsg(msg, `第 ${i + 1} 位持票人：请选择区服`); return; }
   }
-  if (!ticketActiveHolders(holders).length) { setMsg(msg, "至少保留一位持票人"); return; }
+  if (!ticketActiveHolders(holders).length) { setMsg(msg, "至少要留一位持票人；整单不要了请用「作废」"); return; }
   setMsg(msg, "");
   $("teSave").disabled = true;
   const data = await callWorker({
@@ -960,16 +981,16 @@ async function saveTicketEdit() {
       bad_contact: "请填写联系方式", bad_holders: "持票人数量需为 1–50",
       bad_holder_name: "有持票人未填写 id", bad_holder_server: "有持票人未选择区服",
       bad_holder_name_format: "持票人 id 格式不符",
-      no_active_holder: "至少保留一位持票人", bad_day: "所选轮次不存在",
+      no_active_holder: "至少要留一位持票人；整单不要了请用「作废」", bad_day: "所选轮次不存在，刷新后再试",
     };
-    setMsg(msg, adminErr(data, "保存失败", ERR));
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", ERR));
     if (data?.error === "conflict") { closeTicketEdit(); await refreshTicketAdmin(); }
     return;
   }
   ticketAdminApplyOrder(data.order, data.status);
   closeTicketEdit();
   renderTicketAdmin();
-  showToast(data.overQuota ? `已保存，${ticketRoundLabel(data.order.day)}已超出票额` : `第 ${data.order.seq} 号已保存`);
+  showToast(data.overQuota ? `已保存。注意：${ticketRoundLabel(data.order.day)}这一轮已经超出票额` : `第 ${data.order.seq} 号已保存`);
 }
 
 function ticketAdminApplyOrder(order, status) {
@@ -1008,23 +1029,23 @@ async function ticketPartialVoid(index, voided) {
   const o = ticketAdmin.orders.find((x) => x.id === ticketAdmin.edit?.id);
   if (!o) return;
   const h = o.holders[index];
-  if (voided && !confirm(`作废第 ${o.seq} 号中的「${formatHolder(h)}」？`)) return;
+  if (voided && !confirm(`确定作废第 ${o.seq} 号里的「${formatHolder(h)}」这一张吗？\n\n这张的票额会放回这一轮，之后可以再恢复。`)) return;
   const data = await callWorker({ action: "ticket_admin_void_holder", password: internalAdminPassword, id: o.id, index, voided, rev: o.rev });
   if (!data || !data.ok) {
     const ERR = {
       conflict: "订单已被修改，已刷新",
-      last_holder: "至少保留一张",
+      last_holder: "至少要留一张；整单不要了请用「作废」",
       order_voided: "该订单已作废",
       not_changed: "状态已变化，已刷新",
     };
-    setMsg($("tpMsg"), adminErr(data, "操作失败", ERR));
+    setMsg($("tpMsg"), adminErr(data, "操作失败，请重新登录内部入口后再试", ERR));
     if (["conflict", "not_changed"].includes(data?.error)) { await refreshTicketAdmin(); }
     return;
   }
   ticketAdminApplyOrder(data.order, data.status);
   renderTicketAdmin();
   showToast(voided ? `已作废第 ${data.order.seq} 号的一张，现在 ${data.order.qty} 张`
-    : `已恢复，现 ${data.order.qty} 张${data.becameOver ? "，已标为超额" : ""}`);
+    : `已恢复，现在 ${data.order.qty} 张${data.becameOver ? "（这一轮票额不够，这一单标成了超额）" : ""}`);
 }
 
 async function ticketAdminVoid(id, voided) {
@@ -1037,7 +1058,7 @@ async function ticketAdminVoid(id, voided) {
       await refreshTicketAdmin();
       return;
     }
-    setMsg(msg, adminErr(data, "操作失败"));
+    setMsg(msg, adminErr(data, "操作失败，请重新登录内部入口后再试"));
     return;
   }
   ticketAdminApplyOrder(data.order, data.status);
@@ -1056,12 +1077,12 @@ async function ticketTogglePickup(id, picked, input) {
   if (data && data.order) ticketAdminApplyOrder(data.order);
   if (!data || !data.ok) {
     const ERR = {
-      not_changed: "状态已变化，已同步",
+      not_changed: "这一单已经是这个状态了（可能别人刚勾过），已同步",
       order_voided: "该订单已作废",
       no_permission: "无取票勾选权限",
       viewer_closed: "「购票情况」已关闭",
     };
-    setMsg(msg, adminErr(data, "勾选失败", ERR));
+    setMsg(msg, adminErr(data, "勾选失败，请重新登录后再试", ERR));
     if (!data?.order) input.checked = !picked;
     renderTicketAdmin();
     return;
@@ -1258,7 +1279,7 @@ function ticketUnpickedHtml(live) {
   const head = `<div class="ta-list-head"><h3 class="ta-stat-title">未取票名单</h3><span>${list.length} 单 / ${tickets} 张</span>
     ${list.length ? `<button type="button" class="tt-act" data-copy-unpicked="full">复制完整名单</button>
     <button type="button" class="tt-act" data-copy-unpicked="ids">复制持票人</button>` : ""}</div>`;
-  if (!list.length) return `${head}<p class="fb-empty">无</p>`;
+  if (!list.length) return `${head}<p class="fb-empty">没有未取票的有效订单</p>`;
   return `${head}<details class="ta-unpicked"${list.length <= 30 ? " open" : ""}><summary>${list.length <= 30 ? "名单" : `展开 · ${list.length} 单`}</summary><div class="ticket-table-wrap"><table class="ticket-table">
     <thead><tr><th>轮次</th><th>序号</th><th>联系方式</th><th>张数</th><th>持票人</th></tr></thead><tbody>${list.map((o) => `<tr>
       <td>${escapeHtml(ticketRoundLabel(o.day))}</td><td>${o.seq}</td><td>${escapeHtml(o.contact)}</td><td>${o.qty}</td>
@@ -1291,7 +1312,7 @@ async function copyTicketUnpicked(mode) {
     box.hidden = false;
     box.focus();
     box.select();
-    showToast("已全选，请手动复制");
+    showToast("自动复制失败，已全选，请手动复制（Ctrl+C / 长按）");
   }
 }
 
@@ -1310,7 +1331,7 @@ async function refreshTicketAdmin() {
     return false;
   }
   if (!data || !data.ok) {
-    $("ticketAdminStatus").textContent = adminErr(data, "读取失败");
+    $("ticketAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return false;
   }
   ticketAdmin.status = data.status;
@@ -1342,12 +1363,12 @@ async function ticketAdminSet(patch, okMsg) {
       bad_points: "刷新点最多 60 个",
       bad_point_time: "刷新点时间无效",
       bad_point_qty: "刷新点票额需为 0 以上的整数",
-      no_next_refresh: "没有下一次刷新",
-      bad_next_qty: "票额需为 0 以上的整数",
+      no_next_refresh: "现在没有下一次刷新（每日刷新关着，也没有自定义刷新点）",
+      bad_next_qty: "下一次刷新的票额需为 0 以上的整数",
       bad_guide: "须知格式无效",
       guide_too_long: "须知最多 12000 字",
     };
-    setMsg(msg, adminErr(data, "保存失败", TICKET_SET_ERRORS));
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", TICKET_SET_ERRORS));
     return false;
   }
   ticketAdmin.status = data.status;
@@ -1674,7 +1695,7 @@ function initTicketAdmin() {
     if (n === null) return;
     const applyCur = !$("ticketLimitCurWrap").hidden && $("ticketLimitCurChk").checked;
     ticketAdminSet({ limit: n, limitApplyCurrent: applyCur },
-      `每日票额：${n} 张${applyCur ? "，含本轮" : "，自下次刷新起"}`);
+      applyCur ? `每日票额已设为 ${n} 张（当前这一轮也改成 ${n} 张）` : `每日票额已设为 ${n} 张（从下一次每日刷新开始）`);
   };
   $("ticketLimitSaveBtn").addEventListener("click", saveLimit);
   onEnter("ticketLimitInput", saveLimit);
@@ -1723,7 +1744,7 @@ function initTicketAdmin() {
     const n = intInput("ticketNextInput", 0, 100000, "下一次刷新的票额需为 0 以上的整数");
     if (n === null) return;
     if (ticketAdmin.pointsDirty && ticketAdmin.status?.nextRefresh?.kind === "custom"
-      && !confirm("自定义刷新点有未保存的修改，将被覆盖，继续？")) return;
+      && !confirm("自定义刷新点列表里有还没保存的修改，会被这次保存覆盖。继续吗？")) return;
     ticketAdmin.pointsDirty = false;
     ticketAdminSet({ nextQty: n }, `下一次刷新的票额已设为 ${n} 张`);
   };
@@ -1875,19 +1896,19 @@ function initTicketAdmin() {
   }));
   $("ticketExportBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
     if (!(await refreshTicketAdmin())) {
-      setMsg(msg, "读取失败");
+      setMsg(msg, "读取购票数据失败，未导出");
       return;
     }
     try {
       await exportTicketExcel();
     } catch (err) {
       console.error(err);
-      setMsg(msg, "导出失败");
+      setMsg(msg, "导出失败：表格组件加载不出来，检查一下网络后再试");
     }
   }));
   $("ticketClearBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, async (msg) => {
     if (!(await refreshTicketAdmin())) {
-      setMsg(msg, "读取失败");
+      setMsg(msg, "读取购票数据失败，未执行清空");
       return;
     }
     const n = ticketAdmin.orders.length;
@@ -1898,13 +1919,13 @@ function initTicketAdmin() {
         await exportTicketExcel("_清空前备份");
       } catch (err) {
         console.error(err);
-        setMsg(msg, "备份失败，已取消清空");
+        setMsg(msg, "备份导出失败，已取消清空。检查网络后再试");
         return;
       }
     }
     const data = await callWorker({ action: "ticket_admin_clear", password: internalAdminPassword, confirm: "CLEAR" });
     if (!data || !data.ok) {
-      setMsg(msg, adminErr(data, "清空失败"));
+      setMsg(msg, adminErr(data, "清空失败，请重新登录内部入口后再试"));
       return;
     }
     await refreshTicketAdmin();
@@ -1960,7 +1981,7 @@ function renderFeedbackAdmin() {
 async function refreshFeedbackAdmin() {
   const data = await callWorker({ action: "feedback_admin_list", password: internalAdminPassword });
   if (!data || !data.ok) {
-    $("feedbackAdminStatus").textContent = adminErr(data, "读取失败");
+    $("feedbackAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return false;
   }
   feedbackAdmin.items = data.items;
@@ -1989,13 +2010,13 @@ function initFeedbackAdmin() {
     setMsg(msg, "");
     const act = btn.dataset.fbAct;
     if (act === "copy") { copyText(item.contact, "联系方式已复制", item.contact); return; }
-    if (act === "delete" && !confirm("删除这条反馈？")) return;
+    if (act === "delete" && !confirm("确定删除这条反馈吗？删除后无法恢复。")) return;
     btn.disabled = true;
     const data = act === "mark"
       ? await callWorker({ action: "feedback_admin_mark", password: internalAdminPassword, id, handled: !item.handled })
       : await callWorker({ action: "feedback_admin_delete", password: internalAdminPassword, id });
     btn.disabled = false;
-    if (!data || !data.ok) { setMsg(msg, adminErr(data, "操作失败")); return; }
+    if (!data || !data.ok) { setMsg(msg, adminErr(data, "操作失败，请重新登录内部入口后再试")); return; }
     if (act === "mark") item.handled = !!data.handled;
     else feedbackAdmin.items = feedbackAdmin.items.filter((i) => i.id !== id);
     renderFeedbackAdmin();
@@ -2063,7 +2084,7 @@ function renderVenueAdmin() {
 async function refreshVenueAdmin() {
   const data = await callWorker({ action: "venue_admin_list", password: internalAdminPassword });
   if (!data || !data.ok) {
-    $("venueAdminStatus").textContent = adminErr(data, "读取失败");
+    $("venueAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return false;
   }
   venueAdmin.items = data.items;
@@ -2111,7 +2132,7 @@ async function saveVenueAdmin(e) {
   });
   btn.disabled = false;
   if (!data || !data.ok) {
-    setMsg(msg, adminErr(data, "保存失败", VENUE_ERRORS));
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", VENUE_ERRORS));
     return;
   }
   const at = venueAdmin.items.findIndex((i) => i.id === data.item.id);
@@ -2132,7 +2153,7 @@ async function venueAdminVoid(item, voided) {
       await refreshVenueAdmin();
       return;
     }
-    setMsg(msg, adminErr(data, "操作失败"));
+    setMsg(msg, adminErr(data, "操作失败，请重新登录内部入口后再试"));
     return;
   }
   const at = venueAdmin.items.findIndex((i) => i.id === data.item.id);
@@ -2168,7 +2189,7 @@ function initVenueAdmin() {
       openVenueEditor(item);
       return;
     }
-    if (act === "void" && !confirm(`作废登记 #${id}？`)) return;
+    if (act === "void" && !confirm(`确定作废登记 #${id}（${venueDateLabel(item.date)} · ${item.charId || item.contact}）吗？\n\n作废后不会删除，切到「已作废」还能恢复。`)) return;
     btn.disabled = true;
     try { await venueAdminVoid(item, act === "void"); } finally { btn.disabled = false; }
   });
@@ -2240,7 +2261,7 @@ function renderSurveyAdminStats() {
     ...SURVEY_ITEMS.filter((it) => it.kind === "score" && !it.card),
     ...SURVEY_ITEMS.filter((it) => it.kind === "score" && it.card),
   ];
-  const overview = `<div class="sv-overview"><p class="sv-stat-sec">评分一览 · 平均分</p><dl class="sv-overview-list">`
+  const overview = `<div class="sv-overview"><p class="sv-stat-sec">评分一览（平均分，满分 10 分）</p><dl class="sv-overview-list">`
     + scoreItems.map((it) => {
       const s = st[it.key];
       return `<div class="sv-ov-item${s.n ? "" : " is-empty"}"><dt>${escapeHtml(it.card ? `项目 · ${it.card.title}` : it.short || it.label)}</dt>`
@@ -2278,7 +2299,7 @@ function renderSurveyAdminStats() {
       }
       return `<div class="sv-stat"><p class="sv-stat-title">${escapeHtml(it.label)}</p>`
         + `<p class="sv-stat-meta">${s.n ? `${s.n} 条` : "暂无"}</p>`
-        + surveyTextsHtml("查看", s.texts, seq) + `</div>`;
+        + surveyTextsHtml("展开查看", s.texts, seq) + `</div>`;
     }).join("");
     return `<p class="sv-stat-sec">${SURVEY_SECTION_NO[si] || si + 1}、${escapeHtml(sec.title)}</p>${inner}`;
   }).join("");
@@ -2322,7 +2343,7 @@ function renderSurveyAdmin() {
   $("surveyAdminStatus").textContent = items.length
     ? `共 ${items.length} 份 · 有效 ${valid} 份${voided ? ` · 已作废 ${voided} 份` : ""}`
     : "暂无答卷";
-  setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "已开放", "已关闭");
+  setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "已开放（点击关闭）", "已关闭（点击开放）");
   $("surveyLockNote").hidden = !surveyAdmin.lockdown;
   const view = $("surveyViewSelect").value;
   $("surveyFilterState").hidden = view !== "list";
@@ -2419,11 +2440,11 @@ async function surveyAdminVoid(item, voided) {
   const data = await callWorker({ action: "survey_admin_void", password: internalAdminPassword, id: item.id, voided });
   if (!data || !data.ok) {
     if (data && data.error === "not_changed") {
-      setMsg(msg, "状态已变化，已刷新");
+      setMsg(msg, "这份答卷的状态已经变过了，已为你刷新");
       await refreshSurveyAdmin();
       return;
     }
-    setMsg(msg, adminErr(data, "操作失败"));
+    setMsg(msg, adminErr(data, "操作失败，请重新登录内部入口后再试"));
     return;
   }
   const at = surveyAdmin.items.findIndex((i) => i.id === data.item.id);
@@ -2443,13 +2464,13 @@ function initSurveyAdmin() {
   $("surveyOpenBtn").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     const next = !surveyAdmin.open;
-    if (!next && !confirm("关闭问卷？已收到的答卷不受影响。")) return;
+    if (!next && !confirm("确定关闭问卷吗？\n\n关闭后访客看到「问卷已经结束收集」，不能再提交；已经收到的答卷不受影响，之后随时可以再开放。")) return;
     setMsg($("surveyAdminMsg"), "");
     btn.disabled = true;
     try {
       const data = await callWorker({ action: "survey_admin_set", password: internalAdminPassword, survey: SURVEY.id, open: next });
       if (!data || !data.ok) {
-        setMsg($("surveyAdminMsg"), adminErr(data, "切换失败"));
+        setMsg($("surveyAdminMsg"), adminErr(data, "切换失败，请重新登录内部入口后再试"));
         return;
       }
       surveyAdmin.open = data.open;
@@ -2465,12 +2486,12 @@ function initSurveyAdmin() {
     setMsg(msg, "");
     btn.disabled = true;
     try {
-      if (!(await refreshSurveyAdmin())) { setMsg(msg, "读取失败"); return; }
+      if (!(await refreshSurveyAdmin())) { setMsg(msg, "读取问卷数据失败，未导出"); return; }
       if (!surveyAdminValid().length) { setMsg(msg, "暂无有效答卷"); return; }
       await exportSurveyExcel();
     } catch (err) {
       console.error(err);
-      setMsg(msg, "导出失败");
+      setMsg(msg, "导出失败：表格组件加载不出来，检查一下网络后再试");
     } finally {
       btn.disabled = false;
     }
@@ -2543,7 +2564,7 @@ async function refreshPopupAdmin() {
   if (!data || !data.ok) {
     popupAdmin.saved = null;
     renderPopupAdminStatus();
-    setMsg($("popupAdminMsg"), adminErr(data, "读取失败"));
+    setMsg($("popupAdminMsg"), adminErr(data, "读取失败，请重新登录内部入口后再试"));
     return;
   }
   /* 表单有未保存的修改时保留 */
@@ -2577,7 +2598,7 @@ async function savePopupAdmin(extra = {}) {
     ...extra,
   });
   if (!data || !data.ok) {
-    setMsg($("popupAdminMsg"), adminErr(data, "保存失败", POPUP_ERRORS));
+    setMsg($("popupAdminMsg"), adminErr(data, "保存失败，请重新登录内部入口后再试", { ...POPUP_ERRORS, auth: "登录状态失效了，重新登录内部入口后再试" }));
     return false;
   }
   popupAdmin.saved = data.popup;
@@ -2592,12 +2613,19 @@ function initPopupAdmin() {
   bindImageUpload("popupImage", 2560, (url) => {
     popupAdmin.imageUrl = url;
     showImagePreview("popupImage", url);
-    if (url) setMsg($("popupImageStatus"), "已上传，保存后生效");
+    if (url) setMsg($("popupImageStatus"), "已上传，记得点「保存」");
+  }, {
+    notImage: "只能选图片",
+    tooBig: (file) => `图片太大了（${(file.size / 1024 / 1024).toFixed(1)}MB），限 50MB`,
+    processing: "图片处理中…",
+    decodeFail: "这张图浏览器打不开，换一张试试（或先转成 JPG / PNG）",
+    rateLimited: "上传太频繁了（每小时 10 张），歇一会儿再试",
+    failed: "图片上传失败，请重试",
   });
 
   $("popupSaveBtn").addEventListener("click", () => withAdminBusy($("popupSaveBtn"), async () => {
     if (await savePopupAdmin()) {
-      showToast(popupAdmin.saved.enabled ? "已保存" : "已保存，弹窗未开启");
+      showToast(popupAdmin.saved.enabled ? "已保存，访客打开首页会看到新内容" : "已保存（弹窗目前是关着的）");
     }
   }));
 
@@ -2619,7 +2647,7 @@ function initPopupAdmin() {
     }
     const data = await callWorker({ action: "popup_admin_set", password: internalAdminPassword, enabled: turnOn });
     if (!data || !data.ok) {
-      setMsg($("popupAdminMsg"), adminErr(data, "切换失败", { empty: "请先保存内容" }));
+      setMsg($("popupAdminMsg"), adminErr(data, "切换失败，请重新登录内部入口后再试", { empty: "请先保存内容" }));
       return;
     }
     popupAdmin.saved = data.popup;
@@ -2669,7 +2697,7 @@ function renderHuayuAdmin(d) {
     + (d.updatedAt ? ` · 更新于 ${formatCnTime(d.updatedAt)}` : "");
   const input = $("huayuKeyInput");
   if (document.activeElement !== input) input.value = d.key || "";
-  $("huayuOldText").textContent = d.oldCount ? `保留 ${d.oldCount} 个旧密钥` : "无旧密钥";
+  $("huayuOldText").textContent = d.oldCount ? `保留着 ${d.oldCount} 个旧密钥，用它们写的花语仍能解开` : "没有保留旧密钥";
   $("huayuClearOldBtn").hidden = !d.oldCount;
   applyHuayuMode(d);
 }
@@ -2697,7 +2725,7 @@ async function refreshHuayuAdmin() {
   loadHuayuJs().catch(() => {});
   const data = await callWorker({ action: "huayu_admin_get", password: internalAdminPassword });
   if (!data || !data.ok) {
-    $("huayuAdminStatus").textContent = adminErr(data, "读取失败");
+    $("huayuAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return;
   }
   renderHuayuAdmin(data);
@@ -2710,7 +2738,7 @@ async function saveHuayuAdmin(patch, okMsg, btn) {
   const data = await callWorker({ action: "huayu_admin_set", password: internalAdminPassword, ...patch });
   if (btn) btn.disabled = false;
   if (!data || !data.ok) {
-    setMsg(msg, adminErr(data, "保存失败", HUAYU_ADMIN_ERRORS));
+    setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", HUAYU_ADMIN_ERRORS));
     return false;
   }
   renderHuayuAdmin(data);
@@ -2760,7 +2788,7 @@ async function huayuAdminConvert(dir, btn) {
   try {
     await loadHuayuJs();
   } catch (e) {
-    setMsg(msg, "加载失败，请刷新页面");
+    setMsg(msg, "花语脚本 huayu.js 没有加载成功（没上传或被缓存挡住），刷新页面再试");
     return;
   }
   const H = window.HJHuayu;
@@ -2813,7 +2841,7 @@ function initHuayuAdmin() {
     const algo = Number(e.target.value);
     syncSegments($("huayuAlgoSeg"));
     $("huayuAlgoNote").textContent = HUAYU_ALGO_NOTE[algo] || "";
-    const ok = await saveHuayuAdmin({ algo }, `生成改用${algo === 1 ? "一代" : "二代"}`);
+    const ok = await saveHuayuAdmin({ algo }, `访客写花语改用${algo === 1 ? "一代" : "二代"}算法`);
     if (!ok) refreshHuayuAdmin();
   });
   $("huayuKeyShow").addEventListener("change", (e) => {
@@ -2828,7 +2856,7 @@ function initHuayuAdmin() {
     if (e.key === "Enter") $("huayuKeySaveBtn").click();
   });
   $("huayuKeyRandomBtn").addEventListener("click", (e) => {
-    saveHuayuAdmin({ randomKey: true }, "已换成随机密钥", e.currentTarget);
+    saveHuayuAdmin({ randomKey: true }, "已换成一个随机密钥", e.currentTarget);
   });
   /* 清除旧密钥需在 4 秒内点两次 */
   $("huayuClearOldBtn").addEventListener("click", (e) => {
@@ -2854,7 +2882,7 @@ function initHuayuAdmin() {
   $("huayuAdminSealBtn").addEventListener("click", (e) => huayuAdminConvert("seal", e.currentTarget));
   $("huayuAdminOpenBtn").addEventListener("click", (e) => huayuAdminConvert("open", e.currentTarget));
   $("huayuAdminCopyBtn").addEventListener("click", () => {
-    copyText(huayuAdmin.resultCopy, "已复制", "复制失败");
+    copyText(huayuAdmin.resultCopy, "已复制", "复制失败，请手动选中复制");
   });
   $("huayuVisitRefreshBtn").addEventListener("click", refreshHuayuVisits);
 }
@@ -2881,12 +2909,12 @@ const ADMIN_PANELS_HTML = `
   <p class="hint" id="starlightStatus">当前状态：加载中…</p>
   <div class="starlight-fields">
     <label class="starlight-field">
-      <span>开始</span>
+      <span>从（国服时间）</span>
       <input type="datetime-local" id="starlightStart">
     </label>
     <span class="starlight-sep" aria-hidden="true">—</span>
     <label class="starlight-field">
-      <span>结束</span>
+      <span>到（国服时间）</span>
       <input type="datetime-local" id="starlightEnd">
     </label>
   </div>
@@ -2954,7 +2982,7 @@ const ADMIN_PANELS_HTML = `
         </span>
       </div>
       <div class="ticket-admin-row">
-        <label class="ticket-admin-key" for="ticketCooldownInput">再次购票间隔（分钟）</label>
+        <label class="ticket-admin-key" for="ticketCooldownInput">再次购票间隔（分钟，0 = 不限）</label>
         <span class="ticket-limit-edit">
           <input type="number" id="ticketCooldownInput" min="0" max="1440" step="1" inputmode="numeric">
           <button type="button" id="ticketCooldownSaveBtn">保存</button>
@@ -2990,7 +3018,7 @@ const ADMIN_PANELS_HTML = `
         <label class="ticket-admin-key" for="ticketLimitInput">每日票额（张）</label>
         <span class="ticket-limit-edit">
           <input type="number" id="ticketLimitInput" min="0" max="100000" step="1" inputmode="numeric">
-          <label class="audience-opt ta-inline-opt" id="ticketLimitCurWrap"><input type="checkbox" id="ticketLimitCurChk" checked><span>本轮也改</span></label>
+          <label class="audience-opt ta-inline-opt" id="ticketLimitCurWrap"><input type="checkbox" id="ticketLimitCurChk" checked><span>当前这一轮也改</span></label>
           <button type="button" id="ticketLimitSaveBtn">保存</button>
         </span>
       </div>
@@ -3036,27 +3064,27 @@ const ADMIN_PANELS_HTML = `
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">向访客显示超额标记</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showOver" data-on="显示" data-off="不显示"
+        <button type="button" class="ticket-switch" data-ta-flag="showOver" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
                 data-toast-on="已显示超额标记" data-toast-off="已隐藏超额标记">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">向访客显示重复标记</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showDup" data-on="显示" data-off="不显示"
+        <button type="button" class="ticket-switch" data-ta-flag="showDup" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
                 data-toast-on="已显示重复标记" data-toast-off="已隐藏重复标记">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">购票留言栏</span>
-        <button type="button" class="ticket-switch" data-ta-flag="messageOn" data-on="开启" data-off="关闭"
+        <button type="button" class="ticket-switch" data-ta-flag="messageOn" data-on="有（点击去掉）" data-off="没有（点击加上）"
                 data-toast-on="已开启留言栏" data-toast-off="已关闭留言栏">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示网站标题</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showBrand" data-on="显示" data-off="不显示"
-                data-toast-on="已显示网站标题" data-toast-off="已隐藏网站标题">—</button>
+        <span class="ticket-admin-key">显示网站标题（标题、地址、时间天气）</span>
+        <button type="button" class="ticket-switch" data-ta-flag="showBrand" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                data-toast-on="购票页显示网站标题" data-toast-off="购票页不显示网站标题、地址和时间天气">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">与首页隔离</span>
-        <button type="button" class="ticket-switch" data-ta-flag="isolated" data-on="已隔离" data-off="未隔离"
+        <button type="button" class="ticket-switch" data-ta-flag="isolated" data-on="已隔离（点击取消）" data-off="不隔离（点击隔离）"
                 data-toast-on="购票页已与首页隔离" data-toast-off="已取消隔离"
                 data-confirm-on="与首页隔离？&#10;&#10;购票页将没有返回按钮，首页不显示入口，停留时限失效。">—</button>
       </div>
@@ -3069,8 +3097,8 @@ const ADMIN_PANELS_HTML = `
       </div>
       <div class="ticket-admin-row ta-idle-row">
         <span class="ticket-admin-key">向访客显示剩余时间</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showIdle" data-on="显示" data-off="不显示"
-                data-toast-on="已显示剩余时间" data-toast-off="已隐藏剩余时间">—</button>
+        <button type="button" class="ticket-switch" data-ta-flag="showIdle" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+                data-toast-on="购票页显示剩余时间" data-toast-off="购票页不显示剩余时间">—</button>
       </div>
       <p class="ticket-sched-note" id="ticketIdleIsoNote" hidden>已与首页隔离，停留时限不生效。</p>
     </section>
@@ -3079,8 +3107,8 @@ const ADMIN_PANELS_HTML = `
       <h3 class="ta-group-title">购票须知</h3>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">显示购票须知</span>
-        <button type="button" class="ticket-switch" data-ta-flag="guideOn" data-on="显示" data-off="不显示"
-                data-toast-on="购票须知已开启" data-toast-off="购票须知已关闭">—</button>
+        <button type="button" class="ticket-switch" data-ta-flag="guideOn" data-on="显示（点击关闭）" data-off="不显示（点击打开）"
+                data-toast-on="购票须知已开启" data-toast-off="购票须知已关闭：首页入口直接进购票页，购票页也没有须知按钮">—</button>
       </div>
       <details class="ta-guide" id="ticketGuideEditor">
         <summary>编辑购票须知正文 <span id="ticketGuideState"></span></summary>
@@ -3101,31 +3129,31 @@ const ADMIN_PANELS_HTML = `
           <button type="button" id="ticketGuideResetBtn" class="ticket-btn-ghost">恢复默认</button>
         </div>
         <p class="form-msg" id="ticketGuideMsg" hidden></p>
-        <p class="ta-sub-title">预览</p>
+        <p class="ta-sub-title">预览（访客看到的样子）</p>
         <div class="ta-guide-preview" id="ticketGuidePreview"></div>
       </details>
     </section>
 
     <section class="ta-group">
-      <h3 class="ta-group-title">只读端</h3>
+      <h3 class="ta-group-title">只读端（查看密码登录的「购票情况」）</h3>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">「购票情况」查看页</span>
         <button type="button" class="ticket-switch" id="ticketViewerBtn" aria-pressed="false">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">显示「售票统计」</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示" data-off="不显示"
+        <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
                 data-toast-on="只读端可查看售票统计" data-toast-off="只读端不可查看售票统计">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示「活动问卷」</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerSurvey" data-on="显示" data-off="不显示"
+        <span class="ticket-admin-key">显示「活动问卷」（只读）</span>
+        <button type="button" class="ticket-switch" data-ta-flag="viewerSurvey" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
                 data-toast-on="只读端可查看活动问卷" data-toast-off="只读端不可查看活动问卷">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">可以勾选取票</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerPickup" data-on="可以" data-off="不可以"
-                data-toast-on="只读端可勾选取票" data-toast-off="只读端不可勾选取票">—</button>
+        <button type="button" class="ticket-switch" data-ta-flag="viewerPickup" data-on="可以（点击关闭）" data-off="不可以（点击打开）"
+                data-toast-on="只读端可以勾选取票了（操作会记日志）" data-toast-off="只读端不可勾选取票">—</button>
       </div>
       <div class="ticket-admin-row">
         <label class="ticket-admin-key" for="ticketLogHoursInput">操作日志合并间隔（小时）</label>
@@ -3250,22 +3278,22 @@ const ADMIN_PANELS_HTML = `
   <p class="hint" id="popupAdminStatus">当前状态：加载中…</p>
   <button type="button" id="popupToggleBtn" disabled>切换</button>
 
-  <label class="popup-admin-label" for="popupTitleInput">标题</label>
+  <label class="popup-admin-label" for="popupTitleInput">标题（选填）</label>
   <input type="text" id="popupTitleInput" maxlength="60" placeholder="例如：中秋月轮祭 活动回顾上线啦" autocomplete="off">
   <label class="popup-admin-label" for="popupBodyInput">正文</label>
-  <textarea id="popupBodyInput" maxlength="3000" placeholder="网址会自动转为链接"></textarea>
+  <textarea id="popupBodyInput" maxlength="3000" placeholder="写点什么…（可以换行；http 开头的网址会自动变成链接）"></textarea>
   <p class="popup-admin-count" id="popupBodyCount">0 / 3000</p>
 
   <div class="announcement-image-field">
     <input type="file" id="popupImageInput" accept="image/*" hidden>
-    <button type="button" id="popupImagePickBtn" class="pill-btn-outline">配图</button>
+    <button type="button" id="popupImagePickBtn" class="pill-btn-outline">配图（限 50MB）</button>
     <span class="form-msg" id="popupImageStatus" hidden></span>
     <div class="announcement-image-preview" id="popupImagePreview" hidden>
       <img id="popupImagePreviewImg" alt="">
       <button type="button" id="popupImageRemoveBtn" aria-label="移除图片">×</button>
     </div>
   </div>
-  <p class="hint popup-admin-note">仅一张，上传前自动压缩为 WebP。</p>
+  <p class="hint popup-admin-note">配图只能一张。上传前会自动压成 WebP（长边不超过 2560 像素），访客手机上也打得开；动图会变成静态图。</p>
 
   <div class="popup-admin-btns">
     <button type="button" id="popupSaveBtn">保存</button>
@@ -3275,7 +3303,7 @@ const ADMIN_PANELS_HTML = `
 </div>
 <div class="gate-card admin-card huayu-admin" id="huayuAdminPanel" data-close-only-x="1" hidden>
   <h2>花语加密</h2>
-  <p class="hint">首页「更多」中的「且听花间语」。明文在浏览器中压缩后由后端加密，密钥仅保存在后端，不保存明文和花语。</p>
+  <p class="hint">首页「更多」中的「听得花间语」。明文在浏览器中压缩后由后端加密，密钥仅保存在后端，不保存明文和花语。</p>
   <p class="hint" id="huayuAdminStatus">当前状态：加载中…</p>
 
   <section class="ta-group">
@@ -3291,8 +3319,8 @@ const ADMIN_PANELS_HTML = `
   <section class="ta-group">
     <h3 class="ta-group-title">加密算法</h3>
     <div class="alarm-seg" id="huayuAlgoSeg">
-      <label><input type="radio" name="huayuAlgo" value="1"><span>一代</span></label>
-      <label><input type="radio" name="huayuAlgo" value="2"><span>二代</span></label>
+      <label><input type="radio" name="huayuAlgo" value="1"><span>一代算法（V1）</span></label>
+      <label><input type="radio" name="huayuAlgo" value="2"><span>二代算法（V2）</span></label>
     </div>
     <p class="ta-group-hint" id="huayuAlgoNote"></p>
     <p class="ta-group-hint">用于访客生成花语；解读时自动识别两代。</p>
@@ -3300,7 +3328,7 @@ const ADMIN_PANELS_HTML = `
 
   <section class="ta-group">
     <h3 class="ta-group-title">站点密钥</h3>
-    <p class="ta-group-hint">更换后保留最近 5 个旧密钥，旧花语仍可解读。</p>
+    <p class="ta-group-hint">访客写的花语、这里选「站点密钥」写的花语都用它加密。<br>换了密钥以后，以前的花语仍能用旧密钥解开（最多保留 5 个）。</p>
     <div class="hy-key-row">
       <input type="password" id="huayuKeyInput" maxlength="128" autocomplete="off" spellcheck="false" placeholder="站点密钥">
       <button type="button" id="huayuKeySaveBtn">保存</button>
@@ -3349,7 +3377,7 @@ const ADMIN_PANELS_HTML = `
 
   <section class="ta-group">
     <h3 class="ta-group-title">打开记录</h3>
-    <p class="ta-group-hint">访客通过人机验证后打开「且听花间语」的记录，访客标识由 IP 散列得到，不保存 IP 本身。</p>
+    <p class="ta-group-hint">访客通过人机验证后打开「听得花间语」的记录，访客标识由 IP 散列得到，不保存 IP 本身。</p>
     <p class="ta-group-hint" id="huayuVisitSummary">加载中…</p>
     <ol class="hy-visits" id="huayuVisitList"></ol>
     <div class="popup-admin-btns"><button type="button" id="huayuVisitRefreshBtn">刷新</button></div>
@@ -3389,7 +3417,12 @@ function mountAdminPanels() {
 mountAdminPanels();
 [
   initInternal, initAdminPanels, initLockdownToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
-  initViewerPills, initFeedbackAdmin, initVenueAdmin, initSurveyAdmin, initPostAnnouncement, initPopupAdmin, initHuayuAdmin,
+  initViewerPills, initFeedbackAdmin,
+  typeof window.buildVenueForm === "function" ? initVenueAdmin
+    : () => console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用"),
+  typeof window.mountSurvey === "function" ? initSurveyAdmin
+    : () => console.error("[活动问卷] survey.js 没有加载成功，管理页的「活动问卷」不可用"),
+  initPostAnnouncement, initPopupAdmin, initHuayuAdmin,
 ].forEach((init) => {
   try { init(); } catch (e) { console.error(e); }
 });

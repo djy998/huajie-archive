@@ -18,8 +18,8 @@
 <meta name="twitter:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
 <link rel="icon" type="image/png" href="assets/site/favicon.png">
 <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-<link rel="preload" as="script" href="boot.js?v=20261001a">
-<link rel="preload" as="style" href="style.css?v=20261001a">
+<link rel="preload" as="script" href="boot.js?v=20261002a">
+<link rel="preload" as="style" href="style.css?v=20261002a">
 <style>body{margin:0;background:#1c1830}html.css-wait body{visibility:hidden}html.boot-pending,html.boot-pending body{overflow:hidden}html.boot-pending body>header,html.boot-pending body>main,html.boot-pending body>footer{visibility:hidden}#skyBase{transition:opacity .8s ease}html.boot-pending:not(.sky-ready) #skyBase{opacity:0}#bootOverlay{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:18px}html.boot-pending #bootOverlay{display:flex}html.boot-leaving #bootOverlay{display:flex;opacity:0;transition:opacity .45s ease;pointer-events:none}#bootImageBtn{position:relative;appearance:none;-webkit-appearance:none;border:none;background:none;padding:0;margin:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;transition:transform .2s ease}#bootImageBtn:hover{transform:scale(1.04)}#bootImageBtn:before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 8px 30px #00000059;pointer-events:none}#bootSpinner{position:relative;display:block;animation:bootIdle 36s linear infinite;pointer-events:none;will-change:transform}@keyframes bootIdle{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootImage{display:block;width:min(56vw,280px);height:auto;will-change:transform;-webkit-user-drag:none;user-select:none;pointer-events:none}#bootImage.is-spinning{animation:bootSpin 1s ease-in-out}@keyframes bootSpin{0%{transform:rotate(0)}to{transform:rotate(720deg)}}#bootImage.is-looping{animation:bootLoop .7s ease-in-out infinite}@keyframes bootLoop{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootFx{position:fixed;inset:0;z-index:650;pointer-events:none;overflow:hidden}.boot-petal,.boot-star,.boot-twinkle{position:absolute}#bootFx.is-full .boot-petal,#bootFx.is-full .boot-star,#bootFx.is-full .boot-twinkle{will-change:transform,opacity}.boot-petal{background:center / contain no-repeat;animation:bootPetal 1.3s cubic-bezier(.2,.7,.3,1) both}#bootFx.is-full .boot-petal{filter:drop-shadow(0 1px 2px rgba(60,42,10,.3))}@keyframes bootPetal{0%{transform:translate(-50%,-50%) scale(.4) rotate(0);opacity:0}10%{opacity:1}55%{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(1) rotate(calc(var(--br) * .6))}75%{opacity:.9}to{transform:translate(calc(-50% + var(--bx) * 1.12),calc(-50% + var(--by) * 1.12 + 46px)) scale(.75) rotate(var(--br));opacity:0}}.boot-star{border-radius:50%;background:#fff4d6;box-shadow:0 0 7px 2px #fff4d6cc;animation:bootStar .9s ease-out both}@keyframes bootStar{0%{transform:translate(-50%,-50%) scale(1.2);opacity:0}8%{opacity:1}to{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(.2);opacity:0}}.boot-twinkle{border-radius:50%;background:#fff4d6;box-shadow:0 0 5px 1px #fff4d6b3;animation:bootTwinkle .45s ease-in-out both}@keyframes bootTwinkle{0%,to{transform:translate(-50%,-50%) scale(.4);opacity:0}50%{transform:translate(-50%,-50%) scale(1.25);opacity:1}}#bootHint{min-height:1.5em;color:#c9bfe0;font:600 .9rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em;opacity:0;transition:opacity .3s ease}#bootOverlay.is-waiting #bootHint{opacity:1;animation:bootPulse 1.4s ease-in-out infinite}@keyframes bootPulse{50%{opacity:.45}}@media(prefers-reduced-motion:reduce){#bootSpinner,#bootImage.is-spinning,#bootImage.is-looping,#bootOverlay.is-waiting #bootHint{animation:none}#skyBase,html.boot-leaving #bootOverlay{transition:none}}</style>
 <noscript><link rel="stylesheet" href="style.css"></noscript>
 </head>
@@ -30,7 +30,7 @@
 </button>
 <p id="bootHint" role="status" aria-live="polite">正在进入花街…</p>
 </div>
-<script src="boot.js?v=20261001a"></script>
+<script src="boot.js?v=20261002a"></script>
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
@@ -320,7 +320,7 @@ controlslist="nodownload" hidden></video>
 <p class="hint">仅限内部使用</p>
 <label for="internalPassword" class="visually-hidden">密码</label>
 <div class="password-field">
-<input type="password" id="internalPassword" placeholder="密码" autocomplete="current-password" maxlength="64">
+<input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
 </div>
 <label class="password-show-label">
 <input type="checkbox" id="internalPasswordShow"> 显示密码
@@ -414,24 +414,24 @@ controlslist="nodownload" hidden></video>
 <dt>点赞</dt>
 <dd>可以重复点赞，每日最多 10 次</dd>
 <dt>图片</dt>
-<dd>电脑端左键放大、右键缩小、按住拖动；相册图片打开即为原图</dd>
+<dd>电脑端鼠标左键放大图片，鼠标右键缩小图片，长按拖拽图片。花街介绍中相册的图片打开即原图。</dd>
 <dt>海报</dt>
-<dd>打开后上下滑动浏览</dd>
+<dd>点击打开后直接滚动/上下滑动浏览</dd>
 <dt>人机验证</dt>
-<dd>国内网络不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
+<dd>国内玩家，网络连接不佳时推荐使用手动验证，贴心地为豆芽和数字过敏玩家准备了多种方式</dd>
 <dt>场地使用登记</dt>
-<dd>借用花街场地举办活动时填写</dd>
+<dd>如果您需要使用花街场地进行活动，欢迎填写该问卷</dd>
 </dl>
 <p class="about-sub">右上方</p>
 <dl class="about-list">
 <dt>音量按钮</dt>
-<dd>B 站视频仅跟随静音</dd>
+<dd>对于外链视频（b站视频）无法生效，仅在静音时对视频静音</dd>
 <dt>动画按钮</dt>
 <dd>完整、轻量、关闭三档。完整含飘落花叶、星光与悬停图，轻量仅保留点击与翻页动画。电脑默认完整，手机默认轻量</dd>
 <dt>花语工具</dt>
 <dd>花街文化宣传和彩蛋工具，仅娱乐目的，禁止用于任何非法用途，网站不承担任何连带或赔偿责任，但保留依法向有关部门报告可疑行为的权利。</dd>
 </dl>
-<p>网站试运行中，意见与建议请提交至<button type="button" class="about-inline-link" data-about-goto="feedback">反馈与建议</button>。</p>
+<p>网站仍在试运行，有想法和建议欢迎点击旁边的<button type="button" class="about-inline-link" data-about-goto="feedback">“反馈与建议”</button>按钮。</p>
 <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
 </div>
 </div>
@@ -450,7 +450,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <div class="about-field">
 <label class="about-label is-required" for="feedbackContent">内容</label>
-<p class="about-hint" id="feedbackContentHint">问题或想法</p>
+<p class="about-hint" id="feedbackContentHint">说说遇到的问题或想法吧</p>
 <textarea id="feedbackContent" maxlength="1000" placeholder="请填写"></textarea>
 <p class="about-count"><span id="feedbackCount">0</span> / 1000</p>
 </div>
@@ -458,7 +458,7 @@ controlslist="nodownload" hidden></video>
 <label class="audience-opt about-check" for="feedbackWantContact">
 <input type="checkbox" id="feedbackWantContact"><span>留下联系方式</span>
 </label>
-<input type="text" id="feedbackContact" maxlength="60" placeholder="QQ、游戏 id@服务器或邮箱" hidden>
+<input type="text" id="feedbackContact" maxlength="60" placeholder="QQ、游戏 id@服务器或邮箱等" hidden>
 </div>
 <div class="verify-host about-verify" id="feedbackVerify"></div>
 <div class="about-submit-row">
@@ -468,6 +468,7 @@ controlslist="nodownload" hidden></video>
 </form>
 <div class="about-done" id="feedbackDone" hidden>
 <p class="about-done-title">收到啦，谢谢你的反馈！</p>
+<p class="about-hint">我们会认真看每一条留言。</p>
 <button type="button" class="share-site-btn" id="feedbackAgainBtn">再写一条</button>
 </div>
 </div>
@@ -506,7 +507,7 @@ controlslist="nodownload" hidden></video>
 <div class="gate-card alarm-card">
 <button type="button" class="info-close" id="alarmClose" aria-label="关闭">×</button>
 <h2>闹铃</h2>
-<p class="hint">仅保存在本机，页面打开时才会响铃</p>
+<p class="hint">闹铃与倒计时保存在本机浏览器里，页面开着才会响铃</p>
 <div class="tabs alarm-tabs" role="tablist">
 <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-alarm-tab="alarm">闹铃</button>
 <button type="button" class="tab-btn" role="tab" aria-selected="false" data-alarm-tab="countdown">倒计时</button>
@@ -562,7 +563,7 @@ controlslist="nodownload" hidden></video>
 <p class="alarm-hint" id="cdNowHint">现在：国服 --:--:-- · 艾欧泽亚 --:--</p>
 </div>
 <div class="alarm-field" id="cdCnWrap">
-<span class="alarm-label">时长</span>
+<span class="alarm-label">倒计时时长</span>
 <div class="alarm-dur-row">
 <input type="number" id="cdCnH" min="0" max="99" step="1" value="0" aria-label="时"><span>时</span>
 <input type="number" id="cdCnM" min="0" max="59" step="1" value="5" aria-label="分"><span>分</span>
@@ -571,7 +572,7 @@ controlslist="nodownload" hidden></video>
 <p class="alarm-hint" id="cdCnHint"></p>
 </div>
 <div class="alarm-field" id="cdEtWrap" hidden>
-<span class="alarm-label">时长</span>
+<span class="alarm-label">倒计时时长</span>
 <div class="alarm-dur-row">
 <input type="number" id="cdEtH" min="0" max="23" step="1" value="0" aria-label="艾欧泽亚时"><span>时</span>
 <input type="number" id="cdEtM" min="0" max="59" step="1" value="20" aria-label="艾欧泽亚分"><span>分</span>
@@ -580,7 +581,7 @@ controlslist="nodownload" hidden></video>
 </div>
 <label class="alarm-check" for="cdLoop">
 <input type="checkbox" id="cdLoop">
-<span>结束后自动循环</span>
+<span>倒计时结束后自动循环</span>
 </label>
 <div class="alarm-field alarm-row2 alarm-row2-gap">
 <div>
@@ -603,7 +604,7 @@ controlslist="nodownload" hidden></video>
 <div class="info-overlay" id="huayuOverlay" role="dialog" aria-modal="true" aria-labelledby="huayuTitle" data-close-only-x="1" hidden>
 <div class="gate-card huayu-card" id="huayuCard">
 <button type="button" class="info-close" id="huayuClose" aria-label="关闭">×</button>
-<h2 id="huayuTitle">且听花间语</h2>
+<h2 id="huayuTitle">听得花间语</h2>
 <p class="hint" id="huayuHint"></p>
 <label class="alarm-label" for="huayuInput" id="huayuInputLabel">花语</label>
 <textarea id="huayuInput" maxlength="400000" spellcheck="false"></textarea>
@@ -654,11 +655,11 @@ controlslist="nodownload" hidden></video>
 <div class="tab-panel" id="infoPanelRecord" hidden></div>
 </div>
 </div>
-<script src="verify.js?v=20261001a"></script>
-<script src="config.js?v=20261001a"></script>
-<script src="main.js?v=20261001a"></script>
-<script src="ticket.js?v=20261001a"></script>
-<script src="venue.js?v=20261001a"></script>
-<script src="survey.js?v=20261001a"></script>
+<script src="verify.js?v=20261002a"></script>
+<script src="config.js?v=20261002a"></script>
+<script src="main.js?v=20261002a"></script>
+<script src="ticket.js?v=20261002a"></script>
+<script src="venue.js?v=20261002a"></script>
+<script src="survey.js?v=20261002a"></script>
 </body>
 </html>

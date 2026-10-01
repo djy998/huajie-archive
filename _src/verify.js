@@ -110,7 +110,8 @@
   }
 
   const isManualMode = (mode) => MANUAL_MODES.indexOf(mode) >= 0;
-  const hintNoteHtml = (hint) => '<p class="verify-hint-note">点击文字填入' + (hint.len ? "，答案共 " + hint.len + " 字" : "") + "</p>";
+  const hintNoteHtml = (hint, lead) => '<p class="verify-hint-note">' + lead + "（点字可以填进输入框）"
+    + (hint.len ? "，答案共 " + hint.len + " 个字" : "") + "：</p>";
 
   function rememberManual(mode) {
     store.set(K_MANUAL_AT, Date.now());
@@ -130,7 +131,7 @@
   }
 
   function errText(data) {
-    if (!data) return "网络连接失败";
+    if (!data) return "连接失败，检查一下网络后再试";
     switch (data.error) {
       case "rate_limited": return "操作过于频繁，请稍后再试";
       case "wrong": return "请重新作答";
@@ -298,7 +299,7 @@
       if (!el) return;
       if (this.proof) { el.innerHTML = ""; el.hidden = true; return; }
       el.innerHTML = this.mode === "cf"
-        ? '<button type="button" class="verify-switch-btn" data-act="manual">改用手动验证</button>'
+        ? '<button type="button" class="verify-switch-btn" data-act="manual">自动验证不成功？点击手动验证</button>'
         : '<button type="button" class="verify-mini" data-act="auto">返回自动验证</button>';
       el.hidden = false;
     }
@@ -440,13 +441,13 @@
       const icon = t.iconData;
       const img = icon
         ? '<img class="verify-job-icon" src="' + icon + '" alt="职业图标" width="72" height="72" loading="eager">'
-        : '<span class="verify-job-fallback">图标加载失败</span>';
+        : '<span class="verify-job-fallback">图标加载失败，点「换一题」再试</span>';
       const options = (t.options || []).map((name) =>
         '<button type="button" class="verify-opt" data-act="opt" data-value="' + name + '">' + name + "</button>"
       ).join("");
       return ''
         + '<div class="verify-job">' + img + "</div>"
-        + '<p class="verify-q">选择图标对应的职业</p>'
+        + '<p class="verify-q">请选出这个图标对应的职业：</p>'
         + '<div class="verify-options">' + options + "</div>"
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一题</button></div>';
     }
@@ -459,7 +460,7 @@
       const hintBox = this.hint
         ? '<div class="verify-hint-chars">' + chars + "</div>"
         : "";
-      const hintNote = this.hint ? hintNoteHtml(this.hint) : "";
+      const hintNote = this.hint ? hintNoteHtml(this.hint, "从下面这些字里拼出诗词") : "";
       return ''
         + '<p class="verify-q">飞花令：写一句含「'
         +   '<canvas class="verify-canvas verify-key-canvas" role="img" aria-label="令字"></canvas>'
@@ -479,7 +480,7 @@
     /* 理科生：算术题 */
     tplMath(t) {
       return ''
-        + '<p class="verify-q">计算</p>'
+        + '<p class="verify-q">请计算：</p>'
         + '<div class="verify-expr-wrap">'
         +   '<canvas class="verify-canvas verify-expr-canvas" role="img" aria-label="算术题"></canvas>'
         + "</div>"
@@ -507,7 +508,7 @@
           '<button type="button" class="verify-char" data-act="char" data-value="' + c + '">' + c + "</button>"
         ).join("");
         wrap.innerHTML = '<button type="button" class="verify-mini" data-act="hint">提示</button>'
-          + hintNoteHtml(this.hint) + '<div class="verify-hint-chars">' + chars + "</div>";
+          + hintNoteHtml(this.hint, "从下面这些字里拼一句就行") + '<div class="verify-hint-chars">' + chars + "</div>";
         const input = this.body.querySelector(".verify-input");
         if (input) input.focus({ preventScroll: true });
       } else {
