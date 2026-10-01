@@ -58,6 +58,7 @@ const INFO_RECORD_VIDEOS = [
     page: 1,
     danmaku: false,
     title: "薰风花语町建成记录",
+    cover: "infogal/record-xunfeng.webp",
   },
 ];
 
