@@ -4,7 +4,7 @@
   const version = new URL(document.currentScript.src).searchParams.get("v") || "";
   const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const VISITED_KEY = "hj_visited_2";
+  const VISITED_KEY = "hj_visited_3";   // 改名即让所有人重新看一次开屏
 
   /* 直接打开购票页或问卷时不显示开屏 */
   const hash = location.hash;

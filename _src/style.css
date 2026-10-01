@@ -4029,7 +4029,9 @@ body.day-mode .sv-texts li { background: rgba(255,252,240,.6); }
   overflow-wrap: anywhere;
 }
 .site-popup-body a { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 3px; }
-.site-popup-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.site-popup-actions { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; }
+.site-popup-mutes { display: flex; flex-direction: column; gap: 8px; }
+.site-popup-mutes[hidden] { display: none; }
 body.day-mode .site-popup-body { color: var(--day-lilac); }
 body.day-mode .site-popup-body a { color: var(--day-lilac); }
 body.day-mode .site-popup-image { background: rgba(255,252,240,.35); }

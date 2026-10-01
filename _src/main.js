@@ -12,6 +12,7 @@ const STORE = {
   calXy: "hj_cal_xy",
   alarms: "hj_alarm_items",
   popupMute: "hj_popup_mute",
+  popupNever: "hj_popup_never",
   popupSeen: "hj_popup_seen",
   ticketLook: "hj_ticket_look",
   ticketGuideAck: "hj_ticket_guide_ack",
@@ -1216,7 +1217,9 @@ const todayKey = () => ymdKey(new Date());
 function maybeShowSitePopup() {
   const p = sitePopup;
   if (!p || $("view-home").hidden || document.documentElement.classList.contains("boot-pending") || anyModalOpen()) return;
-  if (session.get(STORE.popupSeen) === String(p.rev) || storage.get(STORE.popupMute) === `${p.rev}|${todayKey()}`) return;
+  const rev = String(p.rev);
+  if (session.get(STORE.popupSeen) === rev || storage.get(STORE.popupNever) === rev
+    || storage.get(STORE.popupMute) === `${rev}|${todayKey()}`) return;
   session.set(STORE.popupSeen, p.rev);
   openSitePopup(p);
 }
@@ -1232,7 +1235,7 @@ function openSitePopup(p, preview = false) {
   const body = $("sitePopupBody");
   body.innerHTML = linkify(escapeHtml(p.body || ""));
   body.hidden = !(p.body || "").trim();
-  $("sitePopupMuteBtn").hidden = preview;
+  $("sitePopupMutes").hidden = preview;
   $("sitePopupOverlay").hidden = false;
   $("sitePopupBox").scrollTop = 0;
   playEnterAnim($("sitePopupBox"));
@@ -1252,6 +1255,12 @@ function initSitePopup() {
     if (sitePopup) storage.set(STORE.popupMute, `${sitePopup.rev}|${todayKey()}`);
     closeSitePopup();
     showToast("今日不再显示");
+  });
+  /* 本版公告不再弹出，直到管理页保存新内容或访客清除网站数据 */
+  $("sitePopupNeverBtn").addEventListener("click", () => {
+    if (sitePopup) storage.set(STORE.popupNever, sitePopup.rev);
+    closeSitePopup();
+    showToast("不再显示");
   });
   closeOnBackdrop($("sitePopupOverlay"), closeSitePopup);
 }
