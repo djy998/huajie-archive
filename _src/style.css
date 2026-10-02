@@ -4744,6 +4744,7 @@ body.day-mode .maint-title { color: var(--day-gold); }
 .pz-admin-field > span, .pz-admin-label { font-size: .78rem; color: var(--text-mute); text-align: center; }
 .pz-admin-label { display: block; margin: 14px 0 8px; }
 .pz-admin-seg { flex-wrap: wrap; max-width: 520px; margin: 0 auto; }
+.pz-admin-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px; }
 .pz-admin-image { margin: 0 auto 10px; text-align: center; }
 .pz-admin-image img { display: block; max-width: min(100%, 480px); max-height: 320px; margin: 0 auto 6px; border-radius: 10px; border: 1px solid var(--line); }
 .pz-admin-note { color: var(--lantern-soft); }
@@ -4829,6 +4830,9 @@ html.pz-open .toast { z-index: 460; }
 }
 @keyframes pzFullIn { to { opacity: 1; } }
 .pz-table.is-done .pz-shadow { opacity: 0; }
+.pz-grid { position: absolute; z-index: 0; display: none; pointer-events: none; }
+.pz-table.show-grid .pz-grid { display: block; }
+.pz-table.is-done .pz-grid { display: none; }
 
 .pz-hud {
   position: absolute; left: 0; right: 0; top: 0; z-index: 3;

@@ -17,7 +17,7 @@ def heading_chars():
     html = (SRC / "index.html").read_text(encoding="utf-8")
     cfg = (SRC / "config.js").read_text(encoding="utf-8")
     js = "".join((SRC / f).read_text(encoding="utf-8")
-                 for f in ["main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "verify.js"])
+                 for f in ["main.js", "ticket.js", "venue.js", "survey.js", "admin.js", "verify.js", "puzzle.js"])
     parts = []
     parts += re.findall(r"<h[1-3][^>]*>(.*?)</h[1-3]>", html + js, re.S)
     parts += re.findall(r'class="[^"]*(?:section-title|info-title|about-thanks|about-done-title|guide-sign|tab-sec-title)[^"]*"[^>]*>(.*?)<', html, re.S)
@@ -27,6 +27,7 @@ def heading_chars():
     survey = (SRC / "survey.js").read_text(encoding="utf-8")
     parts += re.findall(r'^\s*title:\s*"([^"]*)"', survey, re.M)
     parts += re.findall(r'SURVEY_SECTION_NO\s*=\s*(\[[^\]]*\])', survey)
+    parts += re.findall(r'CONTEST_DEFAULT_TITLE\s*=\s*"([^"]*)"', js)   # 大赛标题（毛笔字）的默认名称
     return sorted(set(ch for ch in "".join(parts) if ord(ch) > 0x2E7F))
 
 

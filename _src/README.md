@@ -40,6 +40,8 @@
 - 中断继续：管理页「花街拼图」开关，默认关闭。开启时进度存在访客本机 `hj_puzzle_save`；关闭时关掉拼图即放弃本局（× 要点两次）。
 - 限时模式鱼丽及以上通关时，调用 `huayu_seal`（`v: 1, purpose: "puzzle"`）用一代花语生成通关码，去掉「听花语：」前缀。管理页「花语加密」或访客花语工具粘贴通关码即可解读。
 - 大赛拼图：管理页设置名称、时段、难度、图片（裁剪后走公告配图上传，存 R2）。时段内拼图首页出现入口，正计时；开局时 Worker 发开局凭证，通关后访客填写游戏 ID，`puzzle_contest_submit` 按服务器时间核对耗时并记入 `puzzle_records`，再生成一代通关码。更换图片或难度算新一届（`contest_rev`）。
+- 网格提示：拼图区画虚线拼块格子，打开时拼块放到正确格子附近会吸附过去。大赛里「显示原图 / 仅显示边框图块 / 网格提示」是否可用由管理页勾选（`puzzle_contest_tools` 按位存，默认全开）。
+- 毛笔字标题：`tools/make-brush-font.py` 也会扫描 `puzzle.js` 的标题；改了拼图标题文字要重新生成 `brush.woff2`。
 - Worker 接口：`puzzle_state`、`puzzle_contest_start`、`puzzle_contest_submit`、`puzzle_admin_get` / `_set` / `_records` / `_void`；`get_site_state` 带 `puzzle`。
 
 ## 全站开关

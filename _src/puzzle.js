@@ -3,7 +3,8 @@
    - 难度：鱼信 / 鱼丽 / 光风院霁月；模式：休闲（正计时）/ 限时（倒计时），两者独立
    - 限时模式鱼丽及以上通关时，用一代花语（Worker 站点密钥）生成通关码，不带「听花语：」前缀
    - 中断继续（管理页开关，默认关闭）：开启时进度保存在本机，关掉页面或切走后可从中断处继续
-   - 大赛拼图（管理页设置时段、难度、图片）：正计时，通关后填写游戏 ID 登记成绩并生成一代通关码
+   - 大赛拼图（管理页设置时段、难度、图片，以及原图 / 边框块 / 网格提示是否可用）：正计时，通关后填写游戏 ID 登记成绩并生成一代通关码
+   - 网格提示：中间拼图区显示虚线拼块格子，拼块放到对应格子附近会吸附过去
    坐标约定：每个拼块组的局部坐标即原图坐标，组只记录原图左上角在桌面上的位置 (x, y)；
    两组位置一致即拼对，合并只需把拼块搬进同一个组 */
 (() => {
@@ -96,6 +97,9 @@
   const isContestSrc = (src) => /\/image\/announcements\/[\w-]+\.(?:webp|jpg|png)$/.test(src || "");
   const contestImageUrl = (key) => new URL(`image/${key}`, workerBase()).href;
   const nowMs = () => (typeof hjNow === "function" ? hjNow() : Date.now());
+  /* 大赛里可用的工具：原图、只看边框块、网格提示（旧版 Worker 不下发时全部可用） */
+  const readTools = (t) => ({ preview: t?.preview !== false, edges: t?.edges !== false, grid: t?.grid !== false });
+  const toolOn = (name) => !G?.contest || readTools(G.contest.tools)[name];
 
   function applyState(st, fromServer) {
     PZ.resume = !!st?.resume;
@@ -279,6 +283,7 @@
     plus: '<circle cx="11" cy="11" r="6.5"/><path d="M11 8v6M8 11h6M16 16l4 4"/>',
     minus: '<circle cx="11" cy="11" r="6.5"/><path d="M8 11h6M16 16l4 4"/>',
     edge: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M9 9h6v6H9z" stroke-dasharray="2 2"/>',
+    grid: '<path d="M4 4h16v16H4zM4 12h16M12 4v16" stroke-dasharray="2.4 2"/>',
     pause: '<path d="M9 6v12M15 6v12"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
   };
@@ -296,6 +301,7 @@
   <div class="pz-tools">
     <button type="button" class="pz-tool" id="pzPreviewBtn" aria-pressed="false" aria-label="查看原图" title="查看原图">${icon("eye")}</button>
     <button type="button" class="pz-tool" id="pzEdgeBtn" aria-pressed="false" aria-label="只看边框块" title="只看边框块">${icon("edge")}</button>
+    <button type="button" class="pz-tool" id="pzGridBtn" aria-pressed="false" aria-label="网格提示" title="网格提示">${icon("grid")}</button>
     <button type="button" class="pz-tool pz-zoom" id="pzZoomOut" aria-label="缩小" title="缩小">${icon("minus")}</button>
     <button type="button" class="pz-tool pz-zoom" id="pzZoomIn" aria-label="放大" title="放大">${icon("plus")}</button>
     <button type="button" class="pz-tool" id="pzFitBtn" aria-label="适应屏幕" title="适应屏幕">${icon("fit")}</button>
@@ -330,14 +336,12 @@
     <div class="pz-btn-row"><button type="button" class="pz-primary" id="pzStartBtn">开始拼图</button></div>
     <div class="pz-last" id="pzLastBox" hidden></div>
     <details class="pz-help">
-      <summary>怎么玩</summary>
+      <summary>游玩方法</summary>
       <ul>
         <li>拖动拼块，相邻的拼块靠近时会自动吸附；全部拼成一整张即通关</li>
         <li>拖动空白处移动桌面；滚轮或双指捏合缩放</li>
-        <li>右上角可以查看原图、只显示边框块、适应屏幕或暂停</li>
-        <li id="pzHelpSave"></li>
-        <li>限时模式下，鱼丽、光风院霁月难度通关可获得通关码</li>
-        <li>大赛开放期间，这里会出现大赛入口；大赛为正计时，通关后填写游戏 ID 登记成绩并获得通关码</li>
+        <li>右上角可以查看原图、只显示边框块、显示网格提示、适应屏幕或暂停</li>
+        <li>打开网格提示后，拼块放到对应的虚线格子附近会自动吸附</li>
       </ul>
     </details>
   </div>
@@ -453,6 +457,7 @@
     $("pzPreviewBtn").addEventListener("click", () => togglePreview());
     $("pzPreview").addEventListener("click", () => togglePreview(false));
     $("pzEdgeBtn").addEventListener("click", toggleEdges);
+    $("pzGridBtn").addEventListener("click", () => toggleGrid());
     initInput();
     window.addEventListener("resize", onResize);
     document.addEventListener("visibilitychange", () => {
@@ -491,7 +496,7 @@
     $("pzTimedSub").textContent = `倒计时 ${DIFFS[diff].limitMin} 分钟`;
     const tips = [];
     if (mode === "timed") {
-      tips.push(CODE_DIFFS.includes(diff) ? "限时内通关可获得通关码" : "鱼丽及以上难度限时通关可获得通关码");
+      tips.push("在规定时间内完成拼图");
     } else {
       tips.push("慢慢拼，不限时间");
     }
@@ -514,9 +519,6 @@
         ? `大赛 · ${save.contest.title} · ${d.name} · 已用 ${fmtClock(save.elapsed)} · 完成 ${prog}%`
         : `${d.name} · ${modeLabel(save)} · ${time} · 完成 ${prog}%`;
     }
-    $("pzHelpSave").textContent = PZ.resume
-      ? "进度自动保存在本机，关掉页面后可以继续；切到后台时计时暂停"
-      : "切到后台时计时暂停；关掉拼图即放弃本局";
     renderContest();
     renderLast();
     syncSetup();
@@ -639,7 +641,10 @@
     }
     await setupGame({
       src: contestImageUrl(data.image), diff: data.diff, mode: "casual", seed: (Math.random() * 2 ** 31) >>> 0, elapsed: 0,
-      contest: { token: data.token, rev: Number(data.rev) || 0, title: data.title || CONTEST_DEFAULT_TITLE, end: Number(data.end) || 0 },
+      contest: {
+        token: data.token, rev: Number(data.rev) || 0, title: data.title || CONTEST_DEFAULT_TITLE, end: Number(data.end) || 0,
+        tools: readTools(data.tools || PZ.contest?.tools),
+      },
     });
   }
 
@@ -784,15 +789,21 @@
       seed: opts.seed, W, H, cols: grid.cols, rows: grid.rows, pw, ph, pad: Math.ceil(Math.min(pw, ph) * PAD),
       tw: size.tw, th: size.th, elapsed: Number(opts.elapsed) || 0, limit: DIFFS[opts.diff].limitMin * 60000,
       pieces: [], groups: [], z: 1, done: false, timeUp: false, running: false, tickAt: 0, edgesOnly: false,
-      contest: opts.contest || null,
+      contest: opts.contest || null, gridOn: false,
     };
     G.edges = makeEdges(G.cols, G.rows, G.seed);
     const table = $("pzTable");
     table.style.width = G.tw + "px";
     table.style.height = G.th + "px";
-    table.classList.remove("is-edges", "is-done");
+    table.classList.remove("is-edges", "is-done", "show-grid");
     $("pzEdgeBtn").setAttribute("aria-pressed", "false");
+    $("pzEdgeBtn").classList.remove("is-on");
     $("pzPreviewImg").src = src;
+    $("pzPreviewBtn").hidden = !toolOn("preview");
+    $("pzEdgeBtn").hidden = !toolOn("edges");
+    $("pzGridBtn").hidden = !toolOn("grid");
+    G.gridEl = null;
+    toggleGrid(toolOn("grid") && !!(storage.json(STORE_PREF) || {}).grid, true);
 
     for (let r = 0; r < G.rows; r++) {
       for (let c = 0; c < G.cols; c++) {
@@ -897,10 +908,17 @@
     g.el.style.zIndex = String(G.z++);
   }
 
-  /* 松手后吸附：与相邻拼块所在组的位置差在容差内即合并 */
+  /* 松手后吸附：网格提示打开时先吸到拼图区里的正确位置，再与相邻拼块所在组合并（位置差在容差内） */
   function snap(g) {
     const tol = clamp(Math.max(G.pw * 0.2, 16 / view.s), 0, Math.min(G.pw, G.ph) * 0.42);
     let merged = 0;
+    let gridded = false;
+    const gx = (G.tw - G.W) / 2, gy = (G.th - G.H) / 2;
+    if (G.gridOn && (g.x !== gx || g.y !== gy) && Math.abs(g.x - gx) <= tol && Math.abs(g.y - gy) <= tol) {
+      g.x = gx;
+      g.y = gy;
+      gridded = true;
+    }
     for (let again = true; again;) {
       again = false;
       for (const p of g.pieces) {
@@ -921,7 +939,7 @@
     }
     clampGroup(g);
     placeGroup(g);
-    if (merged) {
+    if (merged || gridded) {
       clickSound();
       g.el.classList.remove("is-snapped");
       void g.el.offsetWidth;
@@ -946,6 +964,7 @@
     stopTimer();
     clearTimeout(saveTimer);
     if (G) G.pieces.forEach((p) => { p.cv.width = p.cv.height = 0; p.sc.width = p.sc.height = 0; });
+    if (G?.gridEl) G.gridEl.width = G.gridEl.height = 0;
     G = null;
     drag = null;
     if (built) $("pzTable").innerHTML = "";
@@ -1201,7 +1220,7 @@
   /* ==== 工具按钮 ==== */
   function togglePreview(force) {
     const box = $("pzPreview");
-    const on = force === undefined ? box.hidden : !!force;
+    const on = (force === undefined ? box.hidden : !!force) && toolOn("preview");
     box.hidden = !on;
     if (on) box.style.top = Math.round(hudInset() + 8) + "px";
     $("pzPreviewBtn").setAttribute("aria-pressed", String(on));
@@ -1209,12 +1228,65 @@
   }
 
   function toggleEdges() {
-    if (!G) return;
+    if (!G || !toolOn("edges")) return;
     G.edgesOnly = !G.edgesOnly;
     $("pzTable").classList.toggle("is-edges", G.edgesOnly);
     $("pzEdgeBtn").setAttribute("aria-pressed", String(G.edgesOnly));
     $("pzEdgeBtn").classList.toggle("is-on", G.edgesOnly);
     showToast(G.edgesOnly ? "只显示边框块" : "显示全部拼块");
+  }
+
+  /* 网格提示：拼图区里画虚线拼块格子（每条边只画一次），第一次打开时才画 */
+  function toggleGrid(force, quiet) {
+    if (!G) return;
+    const on = force === undefined ? !G.gridOn : !!force;
+    if (on && !toolOn("grid")) return;
+    G.gridOn = on;
+    if (on && !G.gridEl) G.gridEl = renderGrid();
+    $("pzTable").classList.toggle("show-grid", on);
+    $("pzGridBtn").setAttribute("aria-pressed", String(on));
+    $("pzGridBtn").classList.toggle("is-on", on);
+    if (quiet) return;
+    storage.set(STORE_PREF, JSON.stringify({ ...(storage.json(STORE_PREF) || {}), grid: on }));
+    showToast(on ? "已显示网格提示" : "已隐藏网格提示");
+  }
+
+  function renderGrid() {
+    const { W, H, pw, ph, cols, rows, edges } = G;
+    const unit = Math.min(pw, ph);
+    const lw = Math.max(1.5, unit * 0.018);
+    const m = Math.ceil(unit * 0.35);   // 凸起会伸出拼图区
+    const cv = el("canvas", "pz-grid");
+    cv.width = Math.ceil(W + m * 2);
+    cv.height = Math.ceil(H + m * 2);
+    Object.assign(cv.style, {
+      left: (G.tw - W) / 2 - m + "px", top: (G.th - H) / 2 - m + "px", width: cv.width + "px", height: cv.height + "px",
+    });
+    const ctx = cv.getContext("2d");
+    ctx.translate(m, m);
+    ctx.fillStyle = "rgba(20,16,32,.16)";
+    ctx.fillRect(0, 0, W, H);
+    const curve = (pts) => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < 10; i += 3) ctx.bezierCurveTo(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], pts[i + 2][0], pts[i + 2][1]);
+      ctx.stroke();
+    };
+    ctx.lineCap = "round";
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = "rgba(255,255,255,.5)";
+    ctx.setLineDash([unit * 0.07, unit * 0.06]);
+    for (let r = 1; r < rows; r++) {
+      for (let c = 0; c < cols; c++) curve(edges.h[r][c].map(([l, w]) => [(c + l) * pw, r * ph + w * ph]));
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 1; c < cols; c++) curve(edges.v[r][c].map(([l, w]) => [c * pw + w * pw, (r + l) * ph]));
+    }
+    ctx.lineWidth = lw * 1.4;
+    ctx.strokeStyle = "rgba(255,255,255,.7)";
+    ctx.strokeRect(0, 0, W, H);
+    $("pzTable").prepend(cv);
+    return cv;
   }
 
   /* ==== 计时 ==== */

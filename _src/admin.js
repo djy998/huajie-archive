@@ -2987,6 +2987,10 @@ function renderPuzzleAdmin(d) {
   $("pzAdminStart").value = c.start ? epochToCnLocal(c.start) : "";
   $("pzAdminEnd").value = c.end ? epochToCnLocal(c.end) : "";
   setHuayuSeg("pzAdminDiffSeg", c.diff);
+  const tools = c.tools || {};
+  $("pzAdminToolPreview").checked = tools.preview !== false;
+  $("pzAdminToolEdges").checked = tools.edges !== false;
+  $("pzAdminToolGrid").checked = tools.grid !== false;
   $("pzAdminContestStatus").textContent = `当前：${pzContestStatusText(c, now)}`;
   $("pzAdminToggleBtn").textContent = c.enabled ? "关闭大赛" : "开启大赛";
   showPzAdminImage();
@@ -3021,6 +3025,7 @@ function pzContestForm() {
     end: cnLocalToEpoch($("pzAdminEnd").value),
     diff: huayuSegValue("pzAdminDiffSeg") || "easy",
     image: puzzleAdmin.image || "",
+    tools: { preview: $("pzAdminToolPreview").checked, edges: $("pzAdminToolEdges").checked, grid: $("pzAdminToolGrid").checked },
   };
 }
 
@@ -3826,6 +3831,12 @@ const ADMIN_PANELS_HTML = `
       <label class="is-active"><input type="radio" name="pzAdminDiff" value="easy" checked><span>鱼信 36块</span></label>
       <label><input type="radio" name="pzAdminDiff" value="normal"><span>鱼丽 60块</span></label>
       <label><input type="radio" name="pzAdminDiff" value="hard"><span>光风院霁月 128块</span></label>
+    </div>
+    <span class="pz-admin-label">大赛中可以使用</span>
+    <div class="pz-admin-tools">
+      <label class="audience-opt"><input type="checkbox" id="pzAdminToolPreview" checked><span>显示原图</span></label>
+      <label class="audience-opt"><input type="checkbox" id="pzAdminToolEdges" checked><span>仅显示边框图块</span></label>
+      <label class="audience-opt"><input type="checkbox" id="pzAdminToolGrid" checked><span>网格提示</span></label>
     </div>
     <span class="pz-admin-label">图片</span>
     <div class="pz-admin-image">
