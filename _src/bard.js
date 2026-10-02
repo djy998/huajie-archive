@@ -1,15 +1,17 @@
 /* 花舞之街 · 吟游诗人模拟器。从「更多」打开时按需加载，依赖 main.js 的工具（$、storage、showToast、siteVolume、bgm、makeWidgetDraggable…）
    - 玩法参考 blossom（github.com/alexbainter/blossom，MIT）：点击处的高度决定音高，左右决定声像；
      每个音隔 7~12 秒回响一次并逐渐变弱，最多同时循环最近的 15 个音，随手点几下就成了一段循环的旋律
-   - 音阶为五声音阶（宫商角徵羽），怎么点都不会刺耳；钢琴、竖琴用 blossom 那样的宽音域（C2–C7 五个八度），
-     鲁特琴四个八度，其余乐器三个八度、音域参考游戏内乐器演奏
+   - 默认 C 大调五声音阶（宫商角徵羽），怎么点都不会刺耳；「高级功能」里可换 D 大调、七声音阶（加上 fa、si，能弹完整旋律，
+     回响叠在一起时偶尔不和谐）。钢琴、竖琴用 blossom 那样的宽音域（五个八度），鲁特琴四个八度，
+     其余乐器三个八度、音域参考游戏内乐器演奏；换成 D 大调时整体升高一个全音
    - 钢琴用 blossom 同款的真实采样（VSCO 2 社区版，CC0，assets/bard/，选到钢琴才下载，没下载好时用合成音顶上）；
      其余音色由 Web Audio 合成：拨弦（竖琴、鲁特琴、拨弦提琴）用 Karplus-Strong，
      拉弦与管乐用周期波形 + 滤波 + 包络 + 颤音；共用一个混响
    - 回响中的音保留自己的音色，演奏中换音色可以叠出合奏
    - 开始演奏后由全屏透明层接管点击（不会点到页面上的东西），再点按钮或按 Esc 结束；演奏时背景音乐暂停
-   - 小组件里三个勾选项（存本机）：辅助线（默认关，鼠标附近显示几档音高的横线和小五线谱）、
-     回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像） */
+   - 「高级功能」（开始演奏左边，点开向上展开，存本机）：辅助线（默认关，鼠标附近显示几档音高的横线和小五线谱）、
+     回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像）、音阶、音域。
+     演奏中也能改，已在回响的音保持弹下时的音高 */
 (() => {
   const STORE_INST = "hj_bard_inst";
   const STORE_XY = "hj_bard_xy";
@@ -21,7 +23,19 @@
   ];
   const BADGE_SRC = "jobicon/%E5%90%9F%E6%B8%B8%E8%AF%97%E4%BA%BA.png";
 
-  const SCALE = [0, 2, 4, 7, 9];                         // 大调五声音阶
+  /* 音阶（调）与音域（几声音阶）；sig 为五线谱上的调号（高音谱 / 低音谱上升号所在的音） */
+  const KEYS = [
+    { id: "C", label: "C 大调", shift: 0, sig: { treble: [], bass: [] } },
+    { id: "D", label: "D 大调", shift: 2, sig: { treble: [77, 72], bass: [53, 48] } },
+  ];
+  const SCALES = [
+    { id: "penta", label: "五声", degrees: [0, 2, 4, 7, 9], title: "do re mi sol la，怎么点都和谐" },
+    { id: "hepta", label: "七声", degrees: [0, 2, 4, 5, 7, 9, 11], title: "加上 fa、si，能弹完整旋律；回响叠在一起时偶尔不和谐" },
+  ];
+  const CHOICES = [
+    { key: "key", label: "音阶", list: KEYS },
+    { key: "scale", label: "音域", list: SCALES },
+  ];
   const LOOP_MAX = 15;                                   // 同时循环的音数、每个音的回响次数
   const LOOP_DELAY_MS = [7000, 12000];                   // 回响间隔，每次开始演奏时随机取
   const LOOP_FUDGE_MS = 250;                             // 每次回响额外的随机延迟（逐次累加，旋律慢慢错开）
@@ -132,8 +146,14 @@
 
   const touchFirst = () => matchMedia("(pointer: coarse)").matches;
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
-  const stepsOf = (inst) => SCALE.length * (inst.oct || 3) + 1;   // 含最高的 C
-  const stepMidi = (inst, step) => inst.low + Math.floor(step / SCALE.length) * 12 + SCALE[step % SCALE.length];
+  const pick = (list, id) => list.find((it) => it.id === id) || list[0];
+  const keyOf = () => pick(KEYS, B.opts.key);
+  const scaleOf = () => pick(SCALES, B.opts.scale).degrees;
+  const stepsOf = (inst, deg = scaleOf()) => deg.length * (inst.oct || 3) + 1;   // 含最高的主音
+  const stepMidi = (inst, step) => {
+    const deg = scaleOf();
+    return inst.low + keyOf().shift + Math.floor(step / deg.length) * 12 + deg[step % deg.length];
+  };
   /* 高音略收、低音略补，各音区听起来差不多响；2kHz 上下耳朵最敏感，再多收一些 */
   const loudness = (f) => clamp(Math.pow(262 / f, 0.2), 0.5, 1.6) * (f > 1500 ? Math.pow(1500 / f, 0.35) : 1);
 
@@ -148,7 +168,7 @@
     lastTap: 0,
     bgmWasOn: false,
     stopTimer: 0,
-    opts: Object.fromEntries(OPTIONS.map((o) => [o.key, o.def])),
+    opts: Object.fromEntries([...OPTIONS.map((o) => [o.key, o.def]), ...CHOICES.map((c) => [c.key, c.list[0].id])]),
     guide: null,
   };
 
@@ -555,7 +575,7 @@
   function playNote(note, vel) {
     if (!A.ctx || vel <= 0) return;
     const inst = INST[note.inst];
-    const midi = stepMidi(inst, note.step);
+    const midi = note.midi;
     const t = A.ctx.currentTime + 0.01;
     A.master.gain.setTargetAtTime(siteVolume.level, A.ctx.currentTime, 0.05);
     try {
@@ -575,10 +595,11 @@
     B.lastTap = now;
     B.count += 1;
     const palette = PALETTE[isDayMode() ? "day" : "night"];
-    const steps = stepsOf(INST[B.inst]);
+    const inst = INST[B.inst];
+    const steps = stepsOf(inst);
     const note = {
       inst: B.inst,
-      step: clamp(Math.floor((1 - y / vh) * steps), 0, steps - 1),
+      midi: stepMidi(inst, clamp(Math.floor((1 - y / vh) * steps), 0, steps - 1)),   // 回响沿用弹下时的音高
       pan: clamp((x / vw) * 2 - 1, -1, 1) * 0.6,
       x: x / vw,
       y: y / vh,
@@ -641,11 +662,15 @@
 
   /* ==== 辅助线：光标上下几档音高的横线 + 旁边一张小五线谱 ==== */
   const GUIDE_SPAN = 3;                                  // 上下各显示几档
-  const PITCH = { 0: ["C", "do", 1, 0], 2: ["D", "re", 2, 1], 4: ["E", "mi", 3, 2], 7: ["G", "sol", 5, 4], 9: ["A", "la", 6, 5] };
-  const pitchOf = (midi) => PITCH[((midi % 12) + 12) % 12];
+  const LETTERS = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  const LINE_POS = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];                // 在谱上的位置，升号与原音同位
+  const SOLFA = { 0: ["do", 1], 2: ["re", 2], 4: ["mi", 3], 5: ["fa", 4], 7: ["sol", 5], 9: ["la", 6], 11: ["si", 7] };
+  const pc = (midi) => ((midi % 12) + 12) % 12;
   const octOf = (midi) => Math.floor(midi / 12) - 1;
-  const noteName = (midi) => pitchOf(midi)[0] + octOf(midi);
-  const diatonic = (midi) => octOf(midi) * 7 + pitchOf(midi)[3];
+  const noteName = (midi) => LETTERS[pc(midi)] + octOf(midi);
+  const diatonic = (midi) => octOf(midi) * 7 + LINE_POS[pc(midi)];
+  const solfa = (midi) => SOLFA[pc(midi - keyOf().shift)];             // 首调唱名：D 大调时 D 为 do（1=D）
+  const SHARP = (x, y) => `<path class="bg-sig" d="M${x - 1.2} ${y - 5.5}v11M${x + 1.2} ${y - 6.5}v11M${x - 3} ${y - 1.2}l6-1.6M${x - 3} ${y + 2.6}l6-1.6"/>`;
   /* 谱号：五线在 y = 24…48，间距 6；ref 为最下一线的音（高音谱 E4、低音谱 G2） */
   const CLEFS = {
     treble: { ref: 30, svg: '<g class="bg-clef" transform="translate(5 22) scale(.95)"><path d="M12.6 18.6c0 2.6-4 3.1-5 .2-1-3.4 2.6-5.7 5.6-4.7 4 1.4 3.8 7.8-.6 9.3-5.4 1.8-9.6-2.7-7.6-8.2 1.4-3.8 5.6-6.3 7.6-10.2 1.4-2.8 1-6.6-1-7.4-2-.8-3.4 2.8-2.6 7.2L13.4 32c.6 3.6-2 5.2-4.4 3.8"/><circle cx="8.6" cy="34.4" r="1.9"/></g>' },
@@ -663,6 +688,7 @@
     let html = "";
     for (let i = 0; i < 5; i++) html += `<line class="bg-line" x1="2" x2="118" y1="${24 + i * 6}" y2="${24 + i * 6}"/>`;
     html += clef.svg;
+    keyOf().sig[bass ? "bass" : "treble"].forEach((m, i) => { html += SHARP(30 + i * 7, 48 - (diatonic(m) - clef.ref) * 3); });
     const mark = { "-12": "8va", "-24": "15ma", "12": "8vb", "24": "15mb" }[shift];
     if (mark) html += `<text class="bg-mark" x="6" y="${shift < 0 ? 10 : 72}">${mark}</text>`;
     notes.forEach((m, i) => {
@@ -720,12 +746,12 @@
       row.firstChild.textContent = noteName(stepMidi(inst, step));
     });
     g.band.style.cssText = `width:${w}px;height:${band.toFixed(1)}px;transform:translate(${left}px,${((1 - (cur + 1) / steps) * vh).toFixed(1)}px)`;
-    const key = inst.id + ":" + cur;
+    const key = [inst.id, B.opts.key, B.opts.scale, cur].join(":");
     if (key !== g.key) {
       g.key = key;
       const at = (st) => (st >= 0 && st < steps ? stepMidi(inst, st) : null);
       const midi = at(cur);
-      const [, sol, num] = pitchOf(midi);
+      const [sol, num] = solfa(midi);
       g.staff.innerHTML = staffSvg([at(cur - 1), midi, at(cur + 1)]);
       g.name.textContent = noteName(midi);
       g.sub.textContent = `${sol} · ${num}`;
@@ -866,6 +892,34 @@
     }
   }
 
+  /* 音阶 / 音域：之后弹的音按新的来；拨弦乐器重新预渲染 */
+  function setChoice(key, id) {
+    B.opts[key] = id;
+    storage.set(STORE_OPTS, JSON.stringify(B.opts));
+    syncChoices();
+    if (A.ctx) prerender(INST[B.inst]);
+  }
+
+  /* 音域选项上标出当前乐器一共几个音 */
+  function syncChoices() {
+    const w = $("bardWidget");
+    if (!w) return;
+    CHOICES.forEach((c) => w.querySelectorAll(`[data-choice="${c.key}"]`).forEach((r) => { r.checked = r.value === pick(c.list, B.opts[c.key]).id; }));
+    SCALES.forEach((s) => {
+      const span = w.querySelector(`[data-count="${s.id}"]`);
+      if (span) span.textContent = `${stepsOf(INST[B.inst], s.degrees)}音`;
+    });
+  }
+
+  function toggleAdvanced(open) {
+    const panel = $("bardAdv");
+    const btn = $("bardMore");
+    if (!panel || !btn) return;
+    panel.classList.toggle("is-open", open);
+    panel.inert = !open;
+    btn.setAttribute("aria-expanded", String(open));
+  }
+
   function setPos(right, top) {
     placeWidget($("bardWidget"), right, top);
     storage.set(STORE_XY, `${right},${top}`);
@@ -891,8 +945,19 @@
       </div>
       <label class="visually-hidden" for="bardInst">音色</label>
       <select class="bard-select" id="bardInst">${options}</select>
-      <div class="bard-opts">${OPTIONS.map((o) => `<label class="bard-opt" title="${o.title}"><input type="checkbox" data-opt="${o.key}"><span>${o.label}</span></label>`).join("")}</div>
-      <button class="bard-play" id="bardPlay" type="button" aria-pressed="false"></button>
+      <div class="bard-adv" id="bardAdv">
+        <div class="bard-adv-inner">
+          <div class="bard-opts">${OPTIONS.map((o) => `<label class="bard-opt" title="${o.title}"><input type="checkbox" data-opt="${o.key}"><span>${o.label}</span></label>`).join("")}</div>
+          ${CHOICES.map((c) => `<div class="bard-seg-row" role="radiogroup" aria-label="${c.label}">
+            <span class="bard-seg-label" aria-hidden="true">${c.label}</span>
+            <div class="bard-seg">${c.list.map((it) => `<label class="bard-seg-opt"${it.title ? ` title="${it.title}"` : ""}><input type="radio" name="bard-${c.key}" value="${it.id}" data-choice="${c.key}"><span>${it.label}${c.key === "scale" ? ` <small data-count="${it.id}"></small>` : ""}</span></label>`).join("")}</div>
+          </div>`).join("")}
+        </div>
+      </div>
+      <div class="bard-actions">
+        <button class="bard-more" id="bardMore" type="button" aria-expanded="false" aria-controls="bardAdv"><span>高级功能</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></button>
+        <button class="bard-play" id="bardPlay" type="button" aria-pressed="false"></button>
+      </div>
       <p class="bard-hint" id="bardHint"></p>`;
     document.body.appendChild(w);
 
@@ -904,13 +969,19 @@
       storage.set(STORE_INST, B.inst);
       prefetchSamples(INST[B.inst]);
       if (A.ctx) prerender(INST[B.inst]);
+      syncChoices();
     });
     const savedOpts = storage.json(STORE_OPTS) || {};
     OPTIONS.forEach((o) => { if (typeof savedOpts[o.key] === "boolean") B.opts[o.key] = savedOpts[o.key]; });
+    CHOICES.forEach((c) => { B.opts[c.key] = pick(c.list, savedOpts[c.key]).id; });
     w.querySelectorAll("[data-opt]").forEach((box) => {
       box.checked = B.opts[box.dataset.opt];
       box.addEventListener("change", () => setOption(box.dataset.opt, box.checked));
     });
+    w.querySelectorAll("[data-choice]").forEach((r) => r.addEventListener("change", () => { if (r.checked) setChoice(r.dataset.choice, r.value); }));
+    syncChoices();
+    toggleAdvanced(false);
+    $("bardMore").addEventListener("click", () => toggleAdvanced(!$("bardAdv").classList.contains("is-open")));
     $("bardPlay").addEventListener("click", () => (B.playing ? stop() : start()));
     $("bardClose").addEventListener("click", close);
     document.addEventListener("keydown", (e) => {
