@@ -2043,7 +2043,8 @@ function initVolume() {
   });
 }
 
-/* 「更多」菜单；dev: true 的项显示为开发中；花语图标为四瓣月见草，吟游诗人图标为职业图标里的竖琴 */
+/* 「更多」菜单；dev: true 的项显示为开发中；icon 为 SVG 路径，glyph 为单色图片图标（.ico-glyph-xxx，跟随文字颜色）；
+   花语图标为四瓣月见草，吟游诗人图标为游戏原版职业图标的字形 */
 const HUAYU_PETAL = "M12 11.2C8.9 9.6 7 5.9 8.9 3.9c1.1-1.1 2.5-.8 3.1.5.6-1.3 2-1.6 3.1-.5 1.9 2 0 5.7-3.1 7.3z";
 const MORE_ITEMS = [
   { id: "alarm", label: "闹铃", open: () => openAlarmModal(true),
@@ -2055,14 +2056,14 @@ const MORE_ITEMS = [
   { id: "puzzle", label: "花街拼图", open: () => openPuzzle(),
     icon: '<path d="M4.5 12.5v-1.8A2.7 2.7 0 0 1 7.2 8h9.6a2.7 2.7 0 0 1 2.7 2.7v1.8"/><rect x="3.5" y="12.5" width="17" height="8" rx="1.6"/>'
       + '<path d="M10.6 12.5v2.7h2.8v-2.7"/><path d="M12 2.6l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/><path d="M6.6 4.2v1.8M5.7 5.1h1.8M17.6 3.8v1.8M16.7 4.7h1.8"/>' },
-  { id: "bard", label: "吟游诗人模拟器", open: () => openBard(),
-    icon: '<path d="M6.2 7.6V5.4h9.6a2 2 0 0 1 2 2v6.8a6 6 0 0 1-6 6H9.4"/><path d="M9.2 9.2v6.2M11.8 9.2v6.2M14.4 9.2v6.2"/>' },
+  { id: "bard", label: "吟游诗人模拟器", open: () => openBard(), glyph: "bard" },
 ];
 
 function renderMorePanel() {
   $("morePanel").innerHTML = MORE_ITEMS.filter((f) => !f.shown || f.shown()).map((f) =>
     `<button type="button" class="more-item" data-more-id="${f.id}" aria-label="${f.label}" title="${f.label}${f.dev ? "（开发中）" : ""}">`
-    + `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg></button>`).join("");
+    + (f.glyph ? `<span class="ico-glyph ico-glyph-${f.glyph}" aria-hidden="true"></span>`
+      : `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${f.icon}</svg>`) + "</button>").join("");
 }
 
 function openVolPanel(open) {

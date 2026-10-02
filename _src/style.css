@@ -305,7 +305,7 @@ body.day-mode #dayNightToggle .ico-moon { display: none; }
 body.day-mode #dayNightToggle .ico-sun { display: block; }
 
 .fx-toggle { opacity: .4; }
-.fx-toggle.is-active { opacity: 1; color: var(--accent); }
+.fx-toggle.is-active { opacity: 1; }
 .fx-toggle .fx-ico-extra { transition: opacity .2s ease; }
 .fx-toggle.is-lite .fx-ico-extra { opacity: 0; }
 
@@ -313,10 +313,10 @@ body.day-mode #dayNightToggle .ico-sun { display: block; }
 @keyframes hjBusy { 50% { opacity: .35; } }
 
 .clock-toggle { opacity: .4; }
-.clock-toggle.is-active { opacity: 1; color: var(--accent); }
+.clock-toggle.is-active { opacity: 1; }
 
 .sound-toggle { opacity: .55; }
-.sound-toggle.is-on { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.sound-toggle.is-on { opacity: 1; border-color: var(--accent); }
 .hj-sound-icon {
   display: flex; align-items: center; justify-content: center;
   line-height: 1;
@@ -326,7 +326,7 @@ body.day-mode #dayNightToggle .ico-sun { display: block; }
 .sound-toggle.is-on .ico-vol-off { display: none; }
 .sound-toggle.is-on .ico-vol-on { display: block; }
 
-.more-toggle.is-active { color: var(--accent); border-color: var(--accent); }
+.more-toggle.is-active { border-color: var(--accent); }
 
 /* ==== 4. 头部：时间条与天气 ==== */
 .hj-clock {
@@ -540,6 +540,15 @@ body.day-mode .vol-track { background: rgba(90,60,20,.18); }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* 图片做成的单色图标：用遮罩填文字颜色，与线条图标同色 */
+.ico-glyph {
+  display: block;
+  width: 22px; height: 22px;
+  background-color: currentColor;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+.ico-glyph-bard { -webkit-mask-image: url("assets/site/bard-glyph.png"); mask-image: url("assets/site/bard-glyph.png"); }
 body.day-mode .more-item {
   color: var(--day-brown);
   background:

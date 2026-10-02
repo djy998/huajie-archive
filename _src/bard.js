@@ -1,8 +1,10 @@
 /* 花舞之街 · 吟游诗人模拟器。从「更多」打开时按需加载，依赖 main.js 的工具（$、storage、showToast、siteVolume、bgm、makeWidgetDraggable…）
    - 玩法参考 blossom（github.com/alexbainter/blossom，MIT）：点击处的高度决定音高，左右决定声像；
      每个音隔 7~12 秒回响一次并逐渐变弱，最多同时循环最近的 15 个音，随手点几下就成了一段循环的旋律
-   - 音阶为五声音阶（宫商角徵羽），怎么点都不会刺耳；每种乐器三个八度，音域参考游戏内乐器演奏
-   - 音色全部由 Web Audio 合成，不下载采样：拨弦（竖琴、鲁特琴、拨弦提琴）用 Karplus-Strong，钢琴用加法合成，
+   - 音阶为五声音阶（宫商角徵羽），怎么点都不会刺耳；钢琴、竖琴用 blossom 那样的宽音域（C2–C7 五个八度），
+     鲁特琴四个八度，其余乐器三个八度、音域参考游戏内乐器演奏
+   - 钢琴用 blossom 同款的真实采样（VSCO 2 社区版，CC0，assets/bard/，选到钢琴才下载，没下载好时用合成音顶上）；
+     其余音色由 Web Audio 合成：拨弦（竖琴、鲁特琴、拨弦提琴）用 Karplus-Strong，
      拉弦与管乐用周期波形 + 滤波 + 包络 + 颤音；共用一个混响
    - 回响中的音保留自己的音色，演奏中换音色可以叠出合奏
    - 开始演奏后由全屏透明层接管点击（不会点到页面上的东西），再点按钮或按 Esc 结束；演奏时背景音乐暂停 */
@@ -12,7 +14,6 @@
   const BADGE_SRC = "jobicon/%E5%90%9F%E6%B8%B8%E8%AF%97%E4%BA%BA.png";
 
   const SCALE = [0, 2, 4, 7, 9];                         // 大调五声音阶
-  const STEPS = SCALE.length * 3 + 1;                    // 三个八度，含最高的 C
   const LOOP_MAX = 15;                                   // 同时循环的音数、每个音的回响次数
   const LOOP_DELAY_MS = [7000, 12000];                   // 回响间隔，每次开始演奏时随机取
   const LOOP_FUDGE_MS = 250;                             // 每次回响额外的随机延迟（逐次累加，旋律慢慢错开）
@@ -22,20 +23,22 @@
   const MAX_VOICES = 40;
   const FADE_OUT_S = 0.9;
 
-  /* 乐器：low 为最低音的 MIDI 编号（C1 = 24，C4 = 60）；gain 已按实测响度校准。
+  /* 乐器：low 为最低音的 MIDI 编号（C1 = 24，C4 = 60），oct 为八度数（默认 3）；gain 已按实测响度校准。
      sustain 类：harm 为谐波振幅；cut 为低通截止（基频倍数，floor / ceil 为上下限 Hz，上限默认 8k），bright 为起音时的倍数；
      a / hold / rel 为起音、按住、释放（秒）；vib 为 [速率 Hz, 深度 音分, 延迟 秒]；
      noise 为气声 [音量, 中心频率（基频倍数）, Q, 起音时的额外气声]；scoop 为起音时从低多少音分滑上来；
      pluck 类：pos 为拨弦位置，bright 为起音亮度（基频倍数），stretch 为环路低通，t60 等为余音长短；
-     body 为共鸣滤波 [类型, 频率, 增益 dB, Q] */
+     body 为共鸣滤波 [类型, 频率, 增益 dB, Q]；verb 为送进混响的比例（默认 1）；
+     samples 为采样文件（前缀 + MIDI 编号 + .mp3），播放时取最近的采样变调 */
   const saw = (n, k = 1) => Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, k));
   const INSTRUMENTS = [
-    { id: "harp", name: "竖琴", group: "弦乐", low: 48, kind: "pluck", gain: 0.62,
+    { id: "harp", name: "竖琴", group: "弦乐", low: 36, oct: 5, kind: "pluck", gain: 0.62,
       pluck: { pos: 0.38, bright: 9, noise: 0.12, stretch: 0.5, t60: 5.6, t60Exp: 0.55, t60Min: 1.4, t60Max: 6.5, maxLen: 4 },
       body: [["highpass", 55], ["peaking", 230, 2.5, 0.9], ["highshelf", 3600, -5]] },
-    { id: "piano", name: "钢琴", group: "弦乐", low: 60, kind: "piano", gain: 0.8,
-      body: [["highpass", 45], ["highshelf", 4500, -3]] },
-    { id: "lute", name: "鲁特琴", group: "弦乐", low: 36, kind: "pluck", gain: 0.6,
+    { id: "piano", name: "钢琴", group: "弦乐", low: 36, oct: 5, kind: "piano", gain: 0.8, sampleGain: 1, verb: 0.3,
+      samples: { prefix: "assets/bard/piano-", notes: [37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97] },
+      body: [["highpass", 45], ["lowpass", 3000, 0, 0.5]] },
+    { id: "lute", name: "鲁特琴", group: "弦乐", low: 36, oct: 4, kind: "pluck", gain: 0.6,
       pluck: { pos: 0.17, bright: 18, noise: 0.3, stretch: 0.42, t60: 3.4, t60Exp: 0.5, t60Min: 0.9, t60Max: 4, maxLen: 3 },
       body: [["highpass", 70], ["peaking", 190, 3.5, 1.2], ["peaking", 1700, 2, 1.4], ["highshelf", 5200, -6]] },
     { id: "fiddle", name: "拨弦提琴", group: "弦乐", low: 36, kind: "pluck", gain: 0.78,
@@ -100,7 +103,7 @@
       body: [["highpass", 100], ["peaking", 620, 4, 1.2], ["peaking", 1800, 5, 1.4], ["highshelf", 4200, -6]] },
   ];
   const INST = Object.fromEntries(INSTRUMENTS.map((it) => [it.id, it]));
-  const DEFAULT_INST = "harp";
+  const DEFAULT_INST = "piano";
 
   /* 波纹颜色：白天深一些，夜里浅一些 */
   const PALETTE = {
@@ -120,6 +123,7 @@
 
   const touchFirst = () => matchMedia("(pointer: coarse)").matches;
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const stepsOf = (inst) => SCALE.length * (inst.oct || 3) + 1;   // 含最高的 C
   const stepMidi = (inst, step) => inst.low + Math.floor(step / SCALE.length) * 12 + SCALE[step % SCALE.length];
   /* 高音略收、低音略补，各音区听起来差不多响；2kHz 上下耳朵最敏感，再多收一些 */
   const loudness = (f) => clamp(Math.pow(262 / f, 0.2), 0.5, 1.6) * (f > 1500 ? Math.pow(1500 / f, 0.35) : 1);
@@ -138,7 +142,7 @@
   };
 
   /* ==== 音频 ==== */
-  const A = { ctx: null, master: null, mix: null, bodies: {}, waves: {}, cache: new Map(), voices: new Set(), noise: null, queue: [], idle: 0 };
+  const A = { ctx: null, master: null, dry: null, send: null, bodies: {}, waves: {}, cache: new Map(), samples: {}, voices: new Set(), noise: null, queue: [], idle: 0 };
 
   function ensureAudio() {
     if (A.ctx) return A.ctx;
@@ -154,7 +158,6 @@
     comp.ratio.value = 3.5;
     comp.attack.value = 0.006;
     comp.release.value = 0.25;
-    const mix = ctx.createGain();
     const dry = ctx.createGain();
     dry.gain.value = 0.8;
     const send = ctx.createBiquadFilter();
@@ -164,14 +167,14 @@
     verb.buffer = makeImpulse(ctx, 3.4);
     const wet = ctx.createGain();
     wet.gain.value = 0.46;
-    mix.connect(dry).connect(comp);
-    mix.connect(send).connect(verb).connect(wet).connect(comp);
+    dry.connect(comp);
+    send.connect(verb).connect(wet).connect(comp);
     comp.connect(master).connect(ctx.destination);
 
     const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const nd = noise.getChannelData(0);
     for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-    Object.assign(A, { ctx, master, mix, noise });
+    Object.assign(A, { ctx, master, dry, send, noise });
     return ctx;
   }
 
@@ -208,7 +211,13 @@
       node.connect(f);
       node = f;
     });
-    node.connect(A.mix);
+    node.connect(A.dry);
+    const verb = inst.verb ?? 1;
+    if (verb > 0) {
+      const g = A.ctx.createGain();
+      g.gain.value = verb;
+      node.connect(g).connect(A.send);
+    }
     A.bodies[inst.id] = input;
     return input;
   }
@@ -333,10 +342,42 @@
     return entry;
   }
 
-  /* 选中乐器后趁空闲把十六个音先算好，点击时不卡 */
+  /* 采样：打开小组件时先下载，开始演奏（有了 AudioContext）后再解码；失败时清掉记录，下次再试，期间用合成音 */
+  const rawSamples = {};
+  const sampleUrls = (inst) => inst.samples.notes.map((m) => [m, `${inst.samples.prefix}${m}.mp3`]);
+
+  function fetchSample(url) {
+    rawSamples[url] ??= fetch(url)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .catch((e) => { delete rawSamples[url]; throw e; });
+    return rawSamples[url];
+  }
+
+  function prefetchSamples(inst) {
+    if (!inst.samples || A.samples[inst.id]) return;
+    sampleUrls(inst).forEach(([, url]) => fetchSample(url).catch(() => {}));
+  }
+
+  function loadSamples(inst) {
+    if (!A.ctx || !inst.samples || A.samples[inst.id]) return;
+    const ctx = A.ctx;
+    const entry = { ready: false, buffers: new Map() };
+    A.samples[inst.id] = entry;
+    Promise.all(sampleUrls(inst).map(([m, url]) => fetchSample(url)
+      .then((data) => { delete rawSamples[url]; return new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject)); })
+      .then((buf) => entry.buffers.set(m, buf))))
+      .then(() => { entry.ready = true; })
+      .catch(() => { if (A.samples[inst.id] === entry) delete A.samples[inst.id]; });
+  }
+
+  /* 选中乐器后趁空闲把各音先算好，点击时不卡；有采样的乐器改为下载采样 */
   function prerender(inst) {
     if (!A.ctx || inst.kind === "sustain") return;
-    A.queue = Array.from({ length: STEPS }, (_, i) => [inst, stepMidi(inst, i)]);
+    if (inst.samples) {
+      loadSamples(inst);
+      return;
+    }
+    A.queue = Array.from({ length: stepsOf(inst) }, (_, i) => [inst, stepMidi(inst, i)]);
     if (A.idle) return;
     const idle = window.requestIdleCallback || ((fn) => setTimeout(() => {
       const t0 = performance.now();
@@ -383,12 +424,19 @@
     }
   }
 
+  function sampleFor(inst, midi) {
+    const entry = A.samples[inst.id];
+    if (!entry || !entry.ready) return null;
+    const near = inst.samples.notes.reduce((a, b) => (Math.abs(b - midi) < Math.abs(a - midi) ? b : a));
+    return { buffer: entry.buffers.get(near), rate: Math.pow(2, (midi - near) / 12), gain: inst.sampleGain };
+  }
+
   function playSample(inst, midi, t, vel, pan) {
-    const { buffer, rate } = noteBuffer(inst, midi);
+    const { buffer, rate, gain = inst.gain } = sampleFor(inst, midi) || noteBuffer(inst, midi);
     const src = A.ctx.createBufferSource();
     src.buffer = buffer;
     src.playbackRate.value = rate;
-    const out = voiceOut(inst, pan, inst.gain * vel * loudness(mtof(midi)), t);
+    const out = voiceOut(inst, pan, gain * vel * loudness(mtof(midi)), t);
     src.connect(out);
     src.start(t);
     trackVoice(src, [src, out], (now) => {
@@ -507,9 +555,10 @@
     B.lastTap = now;
     B.count += 1;
     const palette = PALETTE[isDayMode() ? "day" : "night"];
+    const steps = stepsOf(INST[B.inst]);
     const note = {
       inst: B.inst,
-      step: clamp(Math.floor((1 - y / vh) * STEPS), 0, STEPS - 1),
+      step: clamp(Math.floor((1 - y / vh) * steps), 0, steps - 1),
       pan: clamp((x / vw) * 2 - 1, -1, 1) * 0.6,
       x: x / vw,
       y: y / vh,
@@ -699,7 +748,8 @@
     $("bardInst").addEventListener("change", (e) => {
       B.inst = INST[e.target.value] ? e.target.value : DEFAULT_INST;
       storage.set(STORE_INST, B.inst);
-      if (B.playing) prerender(INST[B.inst]);
+      prefetchSamples(INST[B.inst]);
+      if (A.ctx) prerender(INST[B.inst]);
     });
     $("bardPlay").addEventListener("click", () => (B.playing ? stop() : start()));
     $("bardClose").addEventListener("click", close);
@@ -732,6 +782,7 @@
       return;
     }
     w.hidden = false;
+    prefetchSamples(INST[B.inst]);
     $("bardPlay").focus({ preventScroll: true });
   }
 
