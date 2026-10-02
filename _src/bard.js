@@ -7,10 +7,18 @@
      其余音色由 Web Audio 合成：拨弦（竖琴、鲁特琴、拨弦提琴）用 Karplus-Strong，
      拉弦与管乐用周期波形 + 滤波 + 包络 + 颤音；共用一个混响
    - 回响中的音保留自己的音色，演奏中换音色可以叠出合奏
-   - 开始演奏后由全屏透明层接管点击（不会点到页面上的东西），再点按钮或按 Esc 结束；演奏时背景音乐暂停 */
+   - 开始演奏后由全屏透明层接管点击（不会点到页面上的东西），再点按钮或按 Esc 结束；演奏时背景音乐暂停
+   - 小组件里三个勾选项（存本机）：辅助线（默认关，鼠标附近显示几档音高的横线和小五线谱）、
+     回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像） */
 (() => {
   const STORE_INST = "hj_bard_inst";
   const STORE_XY = "hj_bard_xy";
+  const STORE_OPTS = "hj_bard_opts";
+  const OPTIONS = [
+    { key: "guide", label: "辅助线", def: false, title: "鼠标附近显示音高横线与五线谱" },
+    { key: "echo", label: "回响循环", def: true, title: "弹过的音隔一阵自动复读、逐渐变弱" },
+    { key: "pan", label: "音色位置", def: true, title: "点在左边声音偏左，点在右边偏右" },
+  ];
   const BADGE_SRC = "jobicon/%E5%90%9F%E6%B8%B8%E8%AF%97%E4%BA%BA.png";
 
   const SCALE = [0, 2, 4, 7, 9];                         // 大调五声音阶
@@ -33,12 +41,12 @@
      所以钢琴照 blossom 的做法：不再送混响、不做音区响度补偿，只过 2.5k 低通 */
   const saw = (n, k = 1) => Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, k));
   const INSTRUMENTS = [
-    { id: "harp", name: "竖琴", group: "弦乐", low: 36, oct: 5, kind: "pluck", gain: 0.62,
-      pluck: { pos: 0.38, bright: 9, noise: 0.12, stretch: 0.5, t60: 5.6, t60Exp: 0.55, t60Min: 1.4, t60Max: 6.5, maxLen: 4 },
-      body: [["highpass", 55], ["peaking", 230, 2.5, 0.9], ["highshelf", 3600, -5]] },
     { id: "piano", name: "钢琴", group: "弦乐", low: 36, oct: 5, kind: "piano", gain: 0.8, sampleGain: 1.3, verb: 0,
       samples: { prefix: "assets/bard/piano-", notes: [37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97] },
       body: [["highpass", 40], ["lowpass", 2500]] },
+    { id: "harp", name: "竖琴", group: "弦乐", low: 36, oct: 5, kind: "pluck", gain: 0.62,
+      pluck: { pos: 0.38, bright: 9, noise: 0.12, stretch: 0.5, t60: 5.6, t60Exp: 0.55, t60Min: 1.4, t60Max: 6.5, maxLen: 4 },
+      body: [["highpass", 55], ["peaking", 230, 2.5, 0.9], ["highshelf", 3600, -5]] },
     { id: "lute", name: "鲁特琴", group: "弦乐", low: 36, oct: 4, kind: "pluck", gain: 0.6,
       pluck: { pos: 0.17, bright: 18, noise: 0.3, stretch: 0.42, t60: 3.4, t60Exp: 0.5, t60Min: 0.9, t60Max: 4, maxLen: 3 },
       body: [["highpass", 70], ["peaking", 190, 3.5, 1.2], ["peaking", 1700, 2, 1.4], ["highshelf", 5200, -6]] },
@@ -140,6 +148,8 @@
     lastTap: 0,
     bgmWasOn: false,
     stopTimer: 0,
+    opts: Object.fromEntries(OPTIONS.map((o) => [o.key, o.def])),
+    guide: null,
   };
 
   /* ==== 音频 ==== */
@@ -549,8 +559,9 @@
     const t = A.ctx.currentTime + 0.01;
     A.master.gain.setTargetAtTime(siteVolume.level, A.ctx.currentTime, 0.05);
     try {
-      if (inst.kind === "sustain") playSustain(inst, midi, t, vel, note.pan);
-      else playSample(inst, midi, t, vel, note.pan);
+      const pan = B.opts.pan ? note.pan : 0;
+      if (inst.kind === "sustain") playSustain(inst, midi, t, vel, pan);
+      else playSample(inst, midi, t, vel, pan);
     } catch (e) {
       console.error(e);
     }
@@ -577,7 +588,7 @@
     };
     playNote(note, 1);
     showRipple(note, 1, true);
-    scheduleEcho(note);
+    if (B.opts.echo) scheduleEcho(note);
   }
 
   /* blossom 的回响：较新的音、回响次数少的音更响；超出最近 15 个音的不再回响 */
@@ -586,7 +597,7 @@
     const wait = B.loopDelay + (note.plays - 1) * Math.random() * LOOP_FUDGE_MS;
     const id = setTimeout(() => {
       B.timers.delete(id);
-      if (!B.playing) return;
+      if (!B.playing || !B.opts.echo) return;
       const byCount = (LOOP_MAX - (B.count - note.count)) / LOOP_MAX;
       const byPlays = (LOOP_MAX - note.plays + 1) / LOOP_MAX;
       const vel = (byCount + byPlays) / 2;
@@ -628,10 +639,124 @@
     setTimeout(() => n.remove(), 1700);
   }
 
+  /* ==== 辅助线：光标上下几档音高的横线 + 旁边一张小五线谱 ==== */
+  const GUIDE_SPAN = 3;                                  // 上下各显示几档
+  const PITCH = { 0: ["C", "do", 1, 0], 2: ["D", "re", 2, 1], 4: ["E", "mi", 3, 2], 7: ["G", "sol", 5, 4], 9: ["A", "la", 6, 5] };
+  const pitchOf = (midi) => PITCH[((midi % 12) + 12) % 12];
+  const octOf = (midi) => Math.floor(midi / 12) - 1;
+  const noteName = (midi) => pitchOf(midi)[0] + octOf(midi);
+  const diatonic = (midi) => octOf(midi) * 7 + pitchOf(midi)[3];
+  /* 谱号：五线在 y = 24…48，间距 6；ref 为最下一线的音（高音谱 E4、低音谱 G2） */
+  const CLEFS = {
+    treble: { ref: 30, svg: '<g class="bg-clef" transform="translate(5 22) scale(.95)"><path d="M12.6 18.6c0 2.6-4 3.1-5 .2-1-3.4 2.6-5.7 5.6-4.7 4 1.4 3.8 7.8-.6 9.3-5.4 1.8-9.6-2.7-7.6-8.2 1.4-3.8 5.6-6.3 7.6-10.2 1.4-2.8 1-6.6-1-7.4-2-.8-3.4 2.8-2.6 7.2L13.4 32c.6 3.6-2 5.2-4.4 3.8"/><circle cx="8.6" cy="34.4" r="1.9"/></g>' },
+    bass: { ref: 18, svg: '<g class="bg-clef" transform="translate(5 24)"><path d="M3.4 6.2C4 2 9.2.4 12.6 2.6c4.4 2.8 2.8 10.4-2.4 14.2-2.4 1.8-5 3.2-7.6 4"/><circle cx="4.8" cy="6.6" r="2.2"/><circle cx="17.6" cy="3.4" r="1.15"/><circle cx="17.6" cy="9.2" r="1.15"/></g>' },
+  };
+
+  function staffSvg(notes) {
+    const cur = notes[1];
+    const bass = cur < 60;
+    let shift = 0;                                        // 超出谱表太多时记作高 / 低八度
+    while (!bass && cur + shift >= 86) shift -= 12;
+    while (bass && cur + shift < 36) shift += 12;
+    const clef = CLEFS[bass ? "bass" : "treble"];
+    const yOf = (m) => 48 - (diatonic(m + shift) - clef.ref) * 3;
+    let html = "";
+    for (let i = 0; i < 5; i++) html += `<line class="bg-line" x1="2" x2="118" y1="${24 + i * 6}" y2="${24 + i * 6}"/>`;
+    html += clef.svg;
+    const mark = { "-12": "8va", "-24": "15ma", "12": "8vb", "24": "15mb" }[shift];
+    if (mark) html += `<text class="bg-mark" x="6" y="${shift < 0 ? 10 : 72}">${mark}</text>`;
+    notes.forEach((m, i) => {
+      if (m == null) return;
+      const x = [50, 76, 102][i];
+      const y = yOf(m);
+      for (let ly = 18; ly >= y - 0.1; ly -= 6) html += `<line class="bg-ledger" x1="${x - 7}" x2="${x + 7}" y1="${ly}" y2="${ly}"/>`;
+      for (let ly = 54; ly <= y + 0.1; ly += 6) html += `<line class="bg-ledger" x1="${x - 7}" x2="${x + 7}" y1="${ly}" y2="${ly}"/>`;
+      html += `<ellipse class="bg-head${i === 1 ? " is-cur" : ""}" cx="${x}" cy="${y}" rx="4" ry="2.9" transform="rotate(-20 ${x} ${y})"/>`;
+    });
+    return `<svg viewBox="0 -2 120 80" aria-hidden="true">${html}</svg>`;
+  }
+
+  function buildGuide(stage) {
+    const el = document.createElement("div");
+    el.className = "bard-guide";
+    el.innerHTML = '<div class="bard-guide-band"></div>'
+      + Array.from({ length: GUIDE_SPAN * 2 + 1 }, (_, i) => `<div class="bard-guide-row${i === GUIDE_SPAN ? " is-cur" : ""}"><span></span></div>`).join("")
+      + '<div class="bard-guide-card"><div class="bard-guide-staff"></div><div class="bard-guide-name"><b></b><small></small></div></div>';
+    stage.appendChild(el);
+    B.guide = {
+      el,
+      band: el.querySelector(".bard-guide-band"),
+      rows: [...el.querySelectorAll(".bard-guide-row")],
+      card: el.querySelector(".bard-guide-card"),
+      staff: el.querySelector(".bard-guide-staff"),
+      name: el.querySelector(".bard-guide-name b"),
+      sub: el.querySelector(".bard-guide-name small"),
+      key: "",
+      raf: 0,
+      x: 0,
+      y: 0,
+      hideTimer: 0,
+    };
+  }
+
+  function paintGuide() {
+    const g = B.guide;
+    if (!g) return;
+    g.raf = 0;
+    if (!B.opts.guide) return;
+    const inst = INST[B.inst];
+    const steps = stepsOf(inst);
+    const { vw, vh } = viewportSize();
+    const band = vh / steps;
+    const cur = clamp(Math.floor((1 - g.y / vh) * steps), 0, steps - 1);
+    const w = Math.min(360, vw - 16);
+    const left = clamp(g.x - w / 2, 8, vw - w - 8);
+    g.rows.forEach((row, i) => {
+      const k = i - GUIDE_SPAN;
+      const step = cur + k;
+      row.hidden = step < 0 || step >= steps;
+      if (row.hidden) return;
+      row.style.cssText = `width:${w}px;transform:translate(${left}px,${((1 - (step + 0.5) / steps) * vh - 16).toFixed(1)}px);opacity:${k ? (1 - Math.abs(k) * 0.22).toFixed(2) : 1}`;
+      row.firstChild.textContent = noteName(stepMidi(inst, step));
+    });
+    g.band.style.cssText = `width:${w}px;height:${band.toFixed(1)}px;transform:translate(${left}px,${((1 - (cur + 1) / steps) * vh).toFixed(1)}px)`;
+    const key = inst.id + ":" + cur;
+    if (key !== g.key) {
+      g.key = key;
+      const at = (st) => (st >= 0 && st < steps ? stepMidi(inst, st) : null);
+      const midi = at(cur);
+      const [, sol, num] = pitchOf(midi);
+      g.staff.innerHTML = staffSvg([at(cur - 1), midi, at(cur + 1)]);
+      g.name.textContent = noteName(midi);
+      g.sub.textContent = `${sol} · ${num}`;
+    }
+    const cw = g.card.offsetWidth;
+    const ch = g.card.offsetHeight;
+    const cx = g.x + 30 + cw <= vw - 8 ? g.x + 30 : g.x - 30 - cw;
+    g.card.style.transform = `translate(${Math.max(8, cx)}px,${clamp(g.y - ch / 2, 8, vh - ch - 8)}px)`;
+    g.el.classList.add("is-on");
+  }
+
+  function moveGuide(e) {
+    const g = B.guide;
+    if (!g || !B.opts.guide) return;
+    g.x = e.clientX;
+    g.y = e.clientY;
+    if (!g.raf) g.raf = requestAnimationFrame(paintGuide);
+    /* 触屏没有悬停：按下或拖动时显示，松手一会儿后收起 */
+    clearTimeout(g.hideTimer);
+    if (e.pointerType === "touch") g.hideTimer = setTimeout(hideGuide, 1500);
+  }
+
+  function hideGuide() {
+    if (B.guide) B.guide.el.classList.remove("is-on");
+  }
+
   function onStagePointer(e) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     if (A.ctx && A.ctx.state !== "running") A.ctx.resume().catch(() => {});
+    moveGuide(e);
     tapNote(e.clientX, e.clientY);
   }
 
@@ -672,7 +797,10 @@
     tip.className = "bard-tip";
     tip.textContent = touchFirst() ? "点任意位置演奏 · 越往上音越高" : "点击任意位置演奏 · 越往上音越高 · Esc 结束";
     stage.appendChild(tip);
+    buildGuide(stage);
     stage.addEventListener("pointerdown", onStagePointer);
+    stage.addEventListener("pointermove", moveGuide);
+    stage.addEventListener("pointerleave", (e) => { if (e.pointerType !== "touch") hideGuide(); });
     stage.addEventListener("contextmenu", (e) => e.preventDefault());
     document.body.appendChild(stage);
     document.documentElement.classList.add("bard-on");
@@ -697,6 +825,11 @@
         A.ctx.suspend().catch(() => {});
       }, FADE_OUT_S * 1000 + 200);
     }
+    if (B.guide) {
+      cancelAnimationFrame(B.guide.raf);
+      clearTimeout(B.guide.hideTimer);
+      B.guide = null;
+    }
     const stage = $("bardStage");
     if (stage) {
       stage.id = "";
@@ -720,6 +853,17 @@
     $("bardWidget").classList.toggle("is-playing", B.playing);
     $("bardHint").textContent = !B.playing ? "开始后点页面任意位置，越往上音越高"
       : touchFirst() ? "再点一下按钮结束" : "再点一下按钮或按 Esc 结束";
+  }
+
+  function setOption(key, on) {
+    B.opts[key] = on;
+    storage.set(STORE_OPTS, JSON.stringify(B.opts));
+    if (key === "guide" && !on) hideGuide();
+    /* 关掉回响：正在排队的复读一并取消 */
+    if (key === "echo" && !on) {
+      B.timers.forEach((id) => clearTimeout(id));
+      B.timers.clear();
+    }
   }
 
   function setPos(right, top) {
@@ -747,6 +891,7 @@
       </div>
       <label class="visually-hidden" for="bardInst">音色</label>
       <select class="bard-select" id="bardInst">${options}</select>
+      <div class="bard-opts">${OPTIONS.map((o) => `<label class="bard-opt" title="${o.title}"><input type="checkbox" data-opt="${o.key}"><span>${o.label}</span></label>`).join("")}</div>
       <button class="bard-play" id="bardPlay" type="button" aria-pressed="false"></button>
       <p class="bard-hint" id="bardHint"></p>`;
     document.body.appendChild(w);
@@ -759,6 +904,12 @@
       storage.set(STORE_INST, B.inst);
       prefetchSamples(INST[B.inst]);
       if (A.ctx) prerender(INST[B.inst]);
+    });
+    const savedOpts = storage.json(STORE_OPTS) || {};
+    OPTIONS.forEach((o) => { if (typeof savedOpts[o.key] === "boolean") B.opts[o.key] = savedOpts[o.key]; });
+    w.querySelectorAll("[data-opt]").forEach((box) => {
+      box.checked = B.opts[box.dataset.opt];
+      box.addEventListener("change", () => setOption(box.dataset.opt, box.checked));
     });
     $("bardPlay").addEventListener("click", () => (B.playing ? stop() : start()));
     $("bardClose").addEventListener("click", close);
