@@ -5512,6 +5512,15 @@ body.day-mode .bard-tip { color: var(--day-ink); background: rgba(255,249,235,.7
 .gm-label { flex: none; font-size: .82rem; color: var(--text-mute); letter-spacing: .06em; }
 .gm-msg { margin: 10px 4px 0; font-size: .86rem; line-height: 1.6; text-align: center; color: #e8a49b; }
 .gm-msg.is-ok { color: #a9dcb0; }
+.gm-msg.is-ask { color: #ffb347; font-weight: 600; }
+.gm-confirm { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+.gm-confirm[hidden] { display: none; }
+.gm-setup-players { display: flex; align-items: center; gap: 6px; }
+.games-card input.gm-num-s { width: 52px; }
+.gm-turn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+.gm-turn-text { font-size: .9rem; color: var(--text-soft); }
+.gm-turn-text b { font-size: 1.05rem; color: var(--lantern-soft); }
+.gm-row-tight { margin-top: 8px; }
 .gm-foot { margin: 14px 0 0; font-size: .76rem; line-height: 1.7; text-align: center; color: var(--text-mute); }
 .gm-foot:empty { display: none; }
 
@@ -5850,6 +5859,9 @@ body.day-mode .gm-custom,
 body.day-mode .gm-board-phrase > i { color: var(--day-lilac); }
 body.day-mode .gm-msg { color: #a03a26; }
 body.day-mode .gm-msg.is-ok { color: #2f6b34; }
+body.day-mode .gm-msg.is-ask { color: #b35a00; }
+body.day-mode .gm-turn-text { color: var(--day-cream); }
+body.day-mode .gm-turn-text b { color: #a0461a; }
 body.day-mode .gm-macro-meta.is-over,
 body.day-mode .gm-kw-info.is-empty { color: #a03a26; }
 body.day-mode :is(.gm-macro, .gm-hint, .gm-answer, .gm-spy-card, .gm-chip) { background: rgba(255,252,240,.42); border-color: rgba(138,90,28,.28); }
@@ -5913,6 +5925,7 @@ body.day-mode .games-card select {
   .gm-kw-now { gap: 12px; }
   .gm-kw-big { width: 64px; height: 64px; font-size: 2.6rem; }
   .games-card input.gm-num { width: 72px; }
+  .games-card input.gm-num-s { width: 48px; }
   .gm-spy-cards { gap: 8px; }
   .gm-spy-word { font-size: 1.12rem; }
   .gm-answer-line { font-size: 1.15rem; letter-spacing: .14em; }

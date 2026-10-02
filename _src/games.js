@@ -5,7 +5,7 @@
    - 飞花令：任意字序（简单版）/ 严格字序（困难版：第 N 位发言人的令字在第 N 个字，7 位一轮）。
      令字取自简单版规则里的四十个字，随机出题只抽有解的字（严格字序要 1~7 字每个位置都有诗句）；
      「提示」给 10 个字拼一句（同人机验证的文科生），「答案」直接给一句并注明出处；
-     「核对」检查发言人的诗句：令字和位置对不对、题库里有没有、本局有没有人说过；
+     「核对」检查发言人的诗句：令字和位置对不对、本局有没有人说过、题库出处；题库外的句子主持人点「确认过关」才算过关；
      自带题库约 1230 句常见名篇，另有约 2.6 万句扩充题库在 games-poems.js，打开时在后台加载
    - 谁是卧底：从同一类 FF14 词语里抽两个，一个给平民、一个给卧底 */
 (() => {
@@ -13,6 +13,7 @@
   const STORE_MACRO = "hj_games_macro_";        // + 宏 id，存改过的规则宏
   const STORE_POEM_MODE = "hj_games_poem_mode";
   const STORE_SPY_KIND = "hj_games_spy_kind";
+  const STORE_BOMB_PLAYERS = "hj_games_bomb_players";
   const MACRO_MAX_LINES = 15;                   // 游戏里一个宏最多 15 行
 
   const GAMES = [
@@ -536,7 +537,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   const BOMB_MAX = 999999999;
   const BOMB_SPARKS = 14;
   const BOMB_TENSE = 5;              // 范围只剩几个数时进入紧张时刻
-  const B = { lo: 1, hi: 1000, lo0: 1, hi0: 1000, bomb: 0, guesses: [], over: false, peek: false };
+  const B = { lo: 1, hi: 1000, lo0: 1, hi0: 1000, bomb: 0, guesses: [], over: false, peek: false, players: 4, turn: 1 };
+  const BOMB_PLAYERS_MAX = 99;
 
   const bombHtml = () => `
     ${macroHtml("bomb")}
@@ -554,6 +556,11 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
           <label><input type="radio" name="gmBombMode" value="set">指定</label>
         </div>
         <input id="gmBombSet" class="gm-num" type="text" inputmode="numeric" maxlength="9" placeholder="炸弹" aria-label="指定炸弹数字" hidden>
+      </div>
+      <div class="gm-setup-players">
+        <label class="gm-label" for="gmBombPlayers">玩家</label>
+        <input id="gmBombPlayers" class="gm-num gm-num-s" type="text" inputmode="numeric" maxlength="2" value="4" aria-label="玩家人数">
+        <span class="gm-label">人</span>
       </div>
       <button type="button" class="gm-btn" id="gmBombStart">开局</button>
     </div>
@@ -579,7 +586,12 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
         ${Array.from({ length: BOMB_SPARKS }, (_, i) => `<i style="--a:${Math.round(i * 360 / BOMB_SPARKS + (i % 2) * 9)}deg;--d:${i % 3 === 0 ? 46 : i % 3 === 1 ? 38 : 30}vmin"></i>`).join("")}
       </div>
     </div>
-    <div class="gm-row">
+    <div class="gm-turn" id="gmBombTurnBox">
+      <button type="button" class="gm-pos-step" data-turn="-1" aria-label="上一位玩家">‹</button>
+      <span class="gm-turn-text">当前玩家：<b id="gmBombTurn">1号</b></span>
+      <button type="button" class="gm-pos-step" data-turn="1" aria-label="下一位玩家">›</button>
+    </div>
+    <div class="gm-row gm-row-tight">
       <input id="gmBombGuess" type="text" inputmode="numeric" maxlength="9" autocomplete="off" placeholder="输入猜的数字" aria-label="猜的数字">
       <button type="button" class="gm-btn gm-btn-main" id="gmBombGo">猜</button>
     </div>
@@ -621,7 +633,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     } else {
       bomb = randInt(lo, hi);
     }
-    Object.assign(B, { lo, hi, lo0: lo, hi0: hi, bomb, guesses: [], over: false, peek: false });
+    Object.assign(B, { lo, hi, lo0: lo, hi0: hi, bomb, guesses: [], over: false, peek: false, turn: 1 });
     el(r, "#gmBombStage").classList.remove("is-boom", "is-boomed");
     G.root.closest(".games-card")?.classList.remove("is-shaking");
     el(r, "#gmBombGuess").value = "";
@@ -666,6 +678,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     peek.disabled = B.over;
     el(r, "#gmBombGo").disabled = B.over;
     el(r, "#gmBombGuess").disabled = B.over;
+    el(r, "#gmBombTurn").textContent = `${B.turn}号`;
+    r.querySelectorAll("[data-turn]").forEach((b) => { b.disabled = B.over; });
   }
 
   /* 字号：范围越小越大，同时不超出舞台宽度 */
@@ -705,9 +719,9 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (n < B.lo || n > B.hi) return nudge(input, msg, `要猜 ${B.lo} 到 ${B.hi} 之间的数（含两端）`);
     input.value = "";
     if (n === B.bomb) {
-      B.guesses.push({ n, hit: true });
+      B.guesses.push({ n, hit: true, turn: B.turn });
       B.over = true;
-      setMsg(msg, `${n} 就是炸弹，惩罚时间到～`);
+      setMsg(msg, `${n} 就是炸弹，${B.turn}号中招，惩罚时间到～`);
       bombRender();
       boom();
       return;
@@ -715,7 +729,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const tense = bombTense();   // 紧张时刻：提示和播报只说不是炸弹，记录划掉，范围照样缩小
     const before = { lo: B.lo, hi: B.hi };
     if (n < B.bomb) B.lo = n; else B.hi = n;   // 猜的数就是新的边界（含两端）
-    B.guesses.push({ n, ...before, range: [B.lo, B.hi], miss: tense });
+    B.guesses.push({ n, ...before, range: [B.lo, B.hi], miss: tense, turn: B.turn });
+    B.turn = (B.turn % B.players) + 1;   // 轮到下一位，最后一位之后回到 1 号
     setMsg(msg, tense ? `${n}不是炸弹！` : `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
     bombRender();
     input.focus({ preventScroll: true });
@@ -724,6 +739,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   function bombUndo() {
     const g = B.guesses.pop();
     if (!g) return;
+    if (g.turn) B.turn = g.turn;
     if (g.hit) {
       B.over = false;
       el(G.root, "#gmBombStage").classList.remove("is-boom", "is-boomed");
@@ -780,6 +796,26 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       if (e.key === "Enter") bombStart();
     }));
     el(panel, "#gmBombGo").addEventListener("click", bombGuess);
+    /* 玩家人数改了马上生效；当前玩家超出人数时回到 1 号 */
+    const players = el(panel, "#gmBombPlayers");
+    const savedPlayers = Number(storage.get(STORE_BOMB_PLAYERS));
+    if (Number.isInteger(savedPlayers) && savedPlayers >= 1 && savedPlayers <= BOMB_PLAYERS_MAX) B.players = savedPlayers;
+    players.value = B.players;
+    players.addEventListener("input", () => {
+      const n = readInt(players.value);
+      if (n === null || n < 1 || n > BOMB_PLAYERS_MAX) return;
+      B.players = n;
+      storage.set(STORE_BOMB_PLAYERS, n);
+      if (B.turn > n) B.turn = 1;
+      bombRender();
+    });
+    players.addEventListener("blur", () => { players.value = B.players; });
+    el(panel, "#gmBombTurnBox").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-turn]");
+      if (!b || B.over) return;
+      B.turn = ((B.turn - 1 + Number(b.dataset.turn) + B.players) % B.players) + 1;
+      bombRender();
+    });
     el(panel, "#gmBombGuess").addEventListener("keydown", (e) => { if (e.key === "Enter") bombGuess(); });
     el(panel, "#gmBombGuess").addEventListener("animationend", (e) => e.target.classList.remove("is-wrong"));
     el(panel, "#gmBombUndo").addEventListener("click", bombUndo);
@@ -857,6 +893,10 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       <button type="button" class="gm-btn gm-btn-main" id="gmPoemCheck">核对</button>
     </div>
     <p class="gm-msg" id="gmPoemMsg" hidden></p>
+    <div class="gm-confirm" id="gmPoemConfirm" hidden>
+      <button type="button" class="gm-mini gm-btn-main" id="gmPoemYes">确认过关</button>
+      <button type="button" class="gm-mini" id="gmPoemNo">不算</button>
+    </div>
     <div class="gm-actions">
       <button type="button" class="gm-mini" id="gmPoemHint">提示</button>
       <button type="button" class="gm-mini" id="gmPoemAnswer">答案</button>
@@ -883,6 +923,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   }
 
   function setKeyword(kw) {
+    setPending(null);
     P.kw = kw;
     P.pos = 1;
     P.said.clear();
@@ -891,6 +932,13 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     setMsg(el(G.root, "#gmPoemMsg"), "");
     el(G.root, "#gmPoemInput").value = "";
     poemRender();
+  }
+
+  /* 等主持人确认的题库外句子 */
+  function setPending(line) {
+    P.pending = line;
+    el(G.root, "#gmPoemConfirm").hidden = !line;
+    el(G.root, "#gmPoemMsg").classList.toggle("is-ask", !!line);
   }
 
   function resetSuggest() {
@@ -905,6 +953,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   }
 
   function setPos(pos) {
+    setPending(null);
     P.pos = ((pos - 1 + POEM_SLOTS) % POEM_SLOTS) + 1;
     resetSuggest();
     poemRender();
@@ -1004,6 +1053,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const raw = input.value;
     const kw = P.kw;
     msg.classList.remove("is-ok");
+    setPending(null);
     if (/[A-Za-z0-9]/.test(raw)) return nudge(input, msg, "只能填汉字和标点");
     const lines = splitLines(raw);
     if (!lines.length) return nudge(input, msg, "先输入发言人的诗句");
@@ -1022,10 +1072,21 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       line = at;
     }
     const hit = lines.map((l) => POEM_BY_TEXT.get(l)).find((p) => p && p.text.includes(kw) && (!P.strict || p.text[P.pos - 1] === kw));
-    const key = hit ? hit.text : line;
+    if (!hit) {   // 题库里没有：等主持人确认后才算过关
+      setPending(line);
+      setMsg(msg, "请主持人确认是否是诗句");
+      return;
+    }
+    poemPass(hit.text, `出自${hit.author}《${hit.title}》`);
+  }
+
+  /* 过关：记下这句，严格字序轮到下一位 */
+  function poemPass(key, src) {
+    const r = G.root;
+    const input = el(r, "#gmPoemInput");
+    const msg = el(r, "#gmPoemMsg");
     P.said.add(key);
     input.value = "";
-    const src = hit ? `出自${hit.author}《${hit.title}》` : "题库里没有这句，请主持人确认是诗词";
     if (P.strict) {
       const done = P.pos;
       setPos(P.pos + 1);
@@ -1040,6 +1101,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   }
 
   function setPoemMode(strict) {
+    setPending(null);
     P.strict = strict;
     storage.set(STORE_POEM_MODE, strict ? "strict" : "free");
     G.root.querySelectorAll("input[name=gmPoemMode]").forEach((i) => { i.checked = (i.value === "strict") === strict; });
@@ -1078,6 +1140,16 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       setPos(P.pos + 1);
     });
     el(panel, "#gmPoemCheck").addEventListener("click", poemCheck);
+    el(panel, "#gmPoemYes").addEventListener("click", () => {
+      const line = P.pending;
+      if (!line) return;
+      setPending(null);
+      poemPass(line, "主持人确认是诗句");
+    });
+    el(panel, "#gmPoemNo").addEventListener("click", () => {
+      setPending(null);
+      setMsg(el(panel, "#gmPoemMsg"), "主持人判定不是诗句，不算过关");
+    });
     const input = el(panel, "#gmPoemInput");
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) poemCheck(); });
     input.addEventListener("animationend", () => input.classList.remove("is-wrong"));
