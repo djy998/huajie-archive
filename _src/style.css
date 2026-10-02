@@ -5823,7 +5823,6 @@ body.day-mode .bard-tip { color: var(--day-ink); background: rgba(255,249,235,.7
 .gm-spy-cards.is-flip .gm-spy-card { animation: gmFlip .42s ease both; }
 .gm-spy-cards.is-flip .gm-spy-card.is-spy { animation-delay: .08s; }
 @keyframes gmFlip { 0% { transform: rotateX(80deg); opacity: .2; } 100% { transform: none; opacity: 1; } }
-.gm-spy-group { margin: 10px 0 0; font-size: .8rem; text-align: center; color: var(--text-mute); }
 
 /* 白天 */
 body.day-mode .gm-label,
@@ -5835,7 +5834,6 @@ body.day-mode .gm-foot,
 body.day-mode .gm-kw-info,
 body.day-mode .gm-hint-note,
 body.day-mode .gm-answer-src,
-body.day-mode .gm-spy-group,
 body.day-mode .gm-spy-role,
 body.day-mode .gm-custom,
 body.day-mode .gm-board-phrase > i { color: var(--day-lilac); }

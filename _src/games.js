@@ -1,6 +1,6 @@
 /* 花舞之街 · 小游戏助手。从「更多」打开时按需加载，弹窗外壳在 index.html（#gamesOverlay），依赖 main.js 的工具（$、storage、showToast、copyText、escapeHtml…）
    给 rp 店主持用的三个小游戏，每个都带一段规则宏（可以改，改过的存本机，能恢复默认）：
-   - 数字炸弹：炸弹藏在两数之间（不含两端），每猜一次缩小一次范围，范围越小字越大、引线越短，猜中就爆炸
+   - 数字炸弹：炸弹藏在范围里（含两端），每猜一次缩小一次范围，范围越小字越大、引线越短，猜中就爆炸
    - 飞花令：任意字序（简单版）/ 严格字序（困难版：第 N 位发言人的令字在第 N 个字，7 位一轮）。
      令字取自简单版规则里的四十个字，随机出题只抽有解的字（严格字序要 1~7 字每个位置都有诗句）；
      「提示」给 10 个字拼一句（同人机验证的文科生），「答案」直接给一句并注明出处；
@@ -28,12 +28,12 @@
 /p 努力挣扎着不被炸到吧（笑）` },
     poemEasy: { label: "飞花令 · 简单版", text: `/y【飞花令（简单版本）】游戏规则 <wait.2>
 /y 先给大家来个简单版本的试试吧！ <wait.2>
-/y 古代的飞花令是是古代的行酒令之一，因唐代诗人韩翃的名诗《寒食》中有“春城无处不飞花”一句，故名“飞花令”。<wait.2>
+/y 古代的飞花令是古代的行酒令之一，因唐代诗人韩翃的名诗《寒食》中有“春城无处不飞花”一句，故名“飞花令”。<wait.2>
 /y 在古代需要大家作诗 放到现在则需要大家背诗~ <wait.2>
 /y 大家执行Roll点 【/dice】 通过大小决定顺序并且由最大的人从以下字中选择一个字设置关键词 <wait.2>
 /y 春江花月夜，秋山风雨天。夏日湖水岸，冬朝海云关。南窗柳色暖，北庭鸟声寒。西楼人心愁，东家酒梦残。<wait.2>
 /y 再次提醒 在上述话中只需要选择一个当关键词就好 <wait.2>
-/y 举个例子 关键词是花 则接下来的诗句均要带花 例如”夜来风雨声，花落知多少。“”感时花溅泪，恨别鸟惊心。"  <wait.2>
+/y 举个例子 关键词是花 则接下来的诗句均要带花 例如“夜来风雨声，花落知多少。”“感时花溅泪，恨别鸟惊心。”  <wait.2>
 /y 当有人接不出来 或者出错皆不可算过关哦 需要进行真心话大冒险的惩罚  <wait.2>
 /y 提示 这边对关键字在诗句的位置没有限定，只要诗句含有这个字或者这个字的意象即可 <wait.2>
 /y 那 要试试看吗？还是说直接进入困难版本的呢？ <wait.2>` },
@@ -45,13 +45,13 @@
 /y 让我看看大家的语文都是谁教的吧！<wait.2>` },
     spy: { label: "谁是卧底", text: `/p 【谁是卧底】游戏规则：<wait.2>
 /p 首先使用【/random】指令roll点，数字最大的人则为主持人。<wait.2>
-/p 主持人想出一对相近的词语，比如【龙骑士】和【机工】。<wait.2>
+/p 主持人想出一对相近的词语，比如【龙骑士】和【机工士】。<wait.2>
 /p 然后使用私聊频道把其中一个词发给1~2个【卧底】（根据玩家人数调整），另一个词发给其他的【平民】。<wait.3>
 /p 每人每轮只能说一句话描述自己拿到的词语（不能直接说出那个词语）。<wait.2>
 /p 既不能让卧底发现，也要给同伴以暗示。<wait.2>
 /p 每轮描述完毕，所有人投票选出怀疑是卧底的那个人，得票数最多的人出局；平票则进入下一轮描述。<wait.3>
 /p 若最后仅剩三人（包含卧底），则卧底获胜；反之，则平民获胜。<wait.2>
-/p 一起来找出我们中x出的那个叛徒吧！` },
+/p 一起来找出卧底吧！` },
   };
 
   /* ==== 飞花令题库：作者|篇名|句 句 句（只收单句，不含标点） ==== */
@@ -610,13 +610,13 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const hi = readInt(el(r, "#gmBombMax").value);
     const msg = el(r, "#gmBombMsg");
     if (lo === null || hi === null) return setMsg(msg, "范围请填整数");
-    if (hi - lo < 2) return setMsg(msg, "上限至少要比下限大 2，中间才放得下炸弹");
+    if (hi <= lo) return setMsg(msg, "上限要比下限大");
     let bomb;
     if (el(r, "input[name=gmBombMode]:checked").value === "set") {
       bomb = readInt(el(r, "#gmBombSet").value);
-      if (bomb === null || bomb <= lo || bomb >= hi) return setMsg(msg, `指定的炸弹要在 ${lo} 和 ${hi} 之间（不含两端）`);
+      if (bomb === null || bomb < lo || bomb > hi) return setMsg(msg, `指定的炸弹要在 ${lo} 到 ${hi} 之间（含两端）`);
     } else {
-      bomb = randInt(lo + 1, hi - 1);
+      bomb = randInt(lo, hi);
     }
     Object.assign(B, { lo, hi, lo0: lo, hi0: hi, bomb, guesses: [], over: false, peek: false });
     el(r, "#gmBombStage").classList.remove("is-boom", "is-boomed");
@@ -628,10 +628,10 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
 
   /* 0（刚开局）→ 1（只剩一个数） */
   function bombHeat() {
-    const span0 = B.hi0 - B.lo0;
-    const span = B.hi - B.lo;
-    if (span0 <= 2) return 1;
-    return clamp(1 - Math.log(span - 1 || 1) / Math.log(span0 - 1), 0, 1);
+    const count0 = B.hi0 - B.lo0 + 1;
+    const count = B.hi - B.lo + 1;
+    if (count0 <= 1) return 1;
+    return clamp(1 - Math.log(count) / Math.log(count0), 0, 1);
   }
 
   function bombRender() {
@@ -641,16 +641,16 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     stage.style.setProperty("--heat", heat.toFixed(3));
     stage.style.setProperty("--heat-pct", `${Math.round(heat * 100)}%`);
     stage.classList.toggle("is-hot", !B.over && heat >= 0.6);
-    stage.classList.toggle("is-critical", !B.over && B.hi - B.lo <= 2);
+    stage.classList.toggle("is-critical", !B.over && B.hi === B.lo);
     el(r, ".gm-lo").textContent = B.lo;
     el(r, ".gm-hi").textContent = B.hi;
     fitBombRange();
     placeFuse(heat);
 
-    const left = B.hi - B.lo - 1;
+    const left = B.hi - B.lo + 1;
     el(r, "#gmBombTip").textContent = B.over
       ? `炸弹就是 ${B.bomb}！第 ${B.guesses.length} 次猜中`
-      : `炸弹在两数之间（不含两端）· 还剩 ${left} 个数 · 已猜 ${B.guesses.length} 次`;
+      : `炸弹在范围里（含两端）· 还剩 ${left} 个数 · 已猜 ${B.guesses.length} 次`;
     el(r, "#gmBombHist").innerHTML = B.guesses.map((g, i) => (g.hit
       ? `<span class="gm-chip is-hit" title="第 ${i + 1} 次：${g.n} 就是炸弹">${g.n}</span>`
       : `<span class="gm-chip" title="第 ${i + 1} 次猜 ${g.n}">${g.range[0]}～${g.range[1]}</span>`)).join("");
@@ -696,7 +696,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const msg = el(r, "#gmBombMsg");
     const n = readInt(input.value);
     if (n === null) return nudge(input, msg, "请输入整数");
-    if (n <= B.lo || n >= B.hi) return nudge(input, msg, `要猜 ${B.lo} 和 ${B.hi} 之间的数（不含两端）`);
+    if (n < B.lo || n > B.hi) return nudge(input, msg, `要猜 ${B.lo} 到 ${B.hi} 之间的数（含两端）`);
     input.value = "";
     if (n === B.bomb) {
       B.guesses.push({ n, hit: true });
@@ -707,10 +707,9 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       return;
     }
     const before = { lo: B.lo, hi: B.hi };
-    if (n < B.bomb) B.lo = n; else B.hi = n;   // 炸弹比猜的大：下限抬到 n
+    if (n < B.bomb) B.lo = n + 1; else B.hi = n - 1;   // 猜的数排除掉，范围含两端
     B.guesses.push({ n, ...before, range: [B.lo, B.hi] });
-    const left = B.hi - B.lo - 1;
-    setMsg(msg, left === 1 ? `${n} 没炸！只剩 ${B.lo + 1} 一个数了，下一位躲不掉啦` : `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
+    setMsg(msg, B.lo === B.hi ? `${n} 没炸！只剩 ${B.lo} 一个数了，下一位躲不掉啦` : `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
     bombRender();
     input.focus({ preventScroll: true });
   }
@@ -776,7 +775,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     el(panel, "#gmBombUndo").addEventListener("click", bombUndo);
     el(panel, "#gmBombPeek").addEventListener("click", () => { B.peek = !B.peek; bombRender(); });
     el(panel, "#gmBombCopy").addEventListener("click", bombAnnounce);
-    B.bomb = randInt(B.lo + 1, B.hi - 1);
+    B.bomb = randInt(B.lo, B.hi);
     bombRender();
   }
 
@@ -1103,7 +1102,6 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
         <button type="button" class="gm-mini" data-copy="spy">复制</button>
       </div>
     </div>
-    <p class="gm-spy-group" id="gmSpyGroup"></p>
     <div class="gm-actions">
       <button type="button" class="gm-btn gm-btn-main" id="gmSpyNext">换一组词</button>
       <button type="button" class="gm-mini" id="gmSpySwap">交换</button>
@@ -1135,8 +1133,6 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const r = G.root;
     el(r, "#gmSpyCiv").textContent = S.civ;
     el(r, "#gmSpySpy").textContent = S.spy;
-    const kindLabel = SPY_KINDS.find(([k]) => k === S.group.kind)[1];
-    el(r, "#gmSpyGroup").textContent = `同一类：${kindLabel === S.group.name ? kindLabel : `${kindLabel} · ${S.group.name}`}`;
     const cards = el(r, "#gmSpyCards");
     cards.classList.toggle("is-hidden", S.hidden);
     const hide = el(r, "#gmSpyHide");
