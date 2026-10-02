@@ -1,6 +1,7 @@
 /* 花舞之街 · 小游戏助手。从「更多」打开时按需加载，弹窗外壳在 index.html（#gamesOverlay），依赖 main.js 的工具（$、storage、showToast、copyText、escapeHtml…）
    给 rp 店主持用的三个小游戏，每个都带一段规则宏（可以改，改过的存本机，能恢复默认）：
-   - 数字炸弹：炸弹藏在范围里（含两端），每猜一次缩小一次范围，范围越小字越大、引线越短，猜中就爆炸
+   - 数字炸弹：炸弹藏在范围里（含两端），猜的数成为新的边界，范围越小字越大、引线越短；
+     只剩 3 个数时进入紧张时刻（字号最大、红光像心跳一样闪），之后猜不中只回「xxx不是炸弹！」，猜中就爆炸
    - 飞花令：任意字序（简单版）/ 严格字序（困难版：第 N 位发言人的令字在第 N 个字，7 位一轮）。
      令字取自简单版规则里的四十个字，随机出题只抽有解的字（严格字序要 1~7 字每个位置都有诗句）；
      「提示」给 10 个字拼一句（同人机验证的文科生），「答案」直接给一句并注明出处；
@@ -533,6 +534,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   /* ==== 数字炸弹 ==== */
   const BOMB_MAX = 999999999;
   const BOMB_SPARKS = 14;
+  const BOMB_TENSE = 3;              // 范围只剩几个数时进入紧张时刻
   const B = { lo: 1, hi: 1000, lo0: 1, hi0: 1000, bomb: 0, guesses: [], over: false, peek: false };
 
   const bombHtml = () => `
@@ -626,12 +628,14 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     bombRender();
   }
 
-  /* 0（刚开局）→ 1（只剩一个数） */
+  const bombTense = () => !B.over && B.hi - B.lo + 1 <= BOMB_TENSE;
+
+  /* 0（刚开局）→ 1（进入紧张时刻） */
   function bombHeat() {
     const count0 = B.hi0 - B.lo0 + 1;
     const count = B.hi - B.lo + 1;
-    if (count0 <= 1) return 1;
-    return clamp(1 - Math.log(count) / Math.log(count0), 0, 1);
+    if (count0 <= BOMB_TENSE || count <= BOMB_TENSE) return 1;
+    return clamp(1 - Math.log(count - BOMB_TENSE + 1) / Math.log(count0 - BOMB_TENSE + 1), 0, 1);
   }
 
   function bombRender() {
@@ -641,18 +645,18 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     stage.style.setProperty("--heat", heat.toFixed(3));
     stage.style.setProperty("--heat-pct", `${Math.round(heat * 100)}%`);
     stage.classList.toggle("is-hot", !B.over && heat >= 0.6);
-    stage.classList.toggle("is-critical", !B.over && B.hi === B.lo);
+    stage.classList.toggle("is-tense", bombTense());
     el(r, ".gm-lo").textContent = B.lo;
     el(r, ".gm-hi").textContent = B.hi;
     fitBombRange();
     placeFuse(heat);
 
-    const left = B.hi - B.lo + 1;
     el(r, "#gmBombTip").textContent = B.over
       ? `炸弹就是 ${B.bomb}！第 ${B.guesses.length} 次猜中`
-      : `炸弹在范围里（含两端）· 还剩 ${left} 个数 · 已猜 ${B.guesses.length} 次`;
+      : `炸弹在范围里（含两端）· 已猜 ${B.guesses.length} 次`;
     el(r, "#gmBombHist").innerHTML = B.guesses.map((g, i) => (g.hit
       ? `<span class="gm-chip is-hit" title="第 ${i + 1} 次：${g.n} 就是炸弹">${g.n}</span>`
+      : g.miss ? `<span class="gm-chip is-miss" title="第 ${i + 1} 次：${g.n} 不是炸弹">${g.n}</span>`
       : `<span class="gm-chip" title="第 ${i + 1} 次猜 ${g.n}">${g.range[0]}～${g.range[1]}</span>`)).join("");
     el(r, "#gmBombUndo").disabled = !B.guesses.length;
     const peek = el(r, "#gmBombPeek");
@@ -672,7 +676,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const heat = B.over ? 1 : bombHeat();
     const digits = String(B.lo).length + String(B.hi).length;
     const fit = w / (digits * 0.6 + 1.7);
-    range.style.fontSize = `${Math.round(Math.max(22, Math.min(30 + 92 * Math.pow(heat, 1.4), fit)))}px`;
+    const size = bombTense() ? fit : Math.min(30 + 80 * Math.pow(heat, 1.4), fit * 0.85);   // 紧张时刻撑满舞台宽度
+    range.style.fontSize = `${Math.round(Math.max(22, size))}px`;
   }
 
   /* 引线随范围缩短，火花跟着走 */
@@ -706,10 +711,15 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       boom();
       return;
     }
-    const before = { lo: B.lo, hi: B.hi };
-    if (n < B.bomb) B.lo = n + 1; else B.hi = n - 1;   // 猜的数排除掉，范围含两端
-    B.guesses.push({ n, ...before, range: [B.lo, B.hi] });
-    setMsg(msg, B.lo === B.hi ? `${n} 没炸！只剩 ${B.lo} 一个数了，下一位躲不掉啦` : `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
+    if (bombTense()) {   // 紧张时刻：范围不再变，只说不是炸弹
+      B.guesses.push({ n, miss: true });
+      setMsg(msg, `${n}不是炸弹！`);
+    } else {
+      const before = { lo: B.lo, hi: B.hi };
+      if (n < B.bomb) B.lo = n; else B.hi = n;   // 猜的数就是新的边界（含两端）
+      B.guesses.push({ n, ...before, range: [B.lo, B.hi] });
+      setMsg(msg, `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
+    }
     bombRender();
     input.focus({ preventScroll: true });
   }
@@ -720,7 +730,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (g.hit) {
       B.over = false;
       el(G.root, "#gmBombStage").classList.remove("is-boom", "is-boomed");
-    } else {
+    } else if (!g.miss) {
       B.lo = g.lo;
       B.hi = g.hi;
     }
