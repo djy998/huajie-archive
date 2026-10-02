@@ -322,7 +322,6 @@
 <div class="pz-cards" id="pzCards">
   <div class="gate-card pz-card" id="pzSetup">
     <h2>花街拼图</h2>
-    <p class="hint">每局从花街相册里随机抽一张图</p>
     <div class="pz-contest" id="pzContestBox" hidden>
       <p class="pz-contest-title" id="pzContestTitle"></p>
       <p class="pz-contest-meta" id="pzContestMeta"></p>
@@ -507,7 +506,7 @@
     if (mode === "timed") {
       tips.push("在规定时间内完成拼图");
     } else {
-      tips.push("慢慢拼，不限时间");
+      tips.push("无时间限制");
     }
     if (PZ.resume && storage.json(STORE_SAVE)) tips.push("开始新的一局会覆盖未完成的拼图");
     $("pzSetupHint").textContent = tips.join("；");

@@ -28,7 +28,7 @@
 | 4 | `main.js` | 路由、视图、弹窗、时间条、特效、通用工具（`$`、`callWorker`、`escapeHtml`、`createFormGate`…） |
 | 5 | `ticket.js` / `venue.js` / `survey.js` | 各自一个功能，依赖 `main.js` 的工具 |
 
-按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
+按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
 
 ### 约定
 

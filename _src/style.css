@@ -492,6 +492,7 @@ body.day-mode .vol-track { background: rgba(90,60,20,.18); }
 .more-panel.is-open .more-item:nth-child(2) { animation-delay: .09s; }
 .more-panel.is-open .more-item:nth-child(3) { animation-delay: .16s; }
 .more-panel.is-open .more-item:nth-child(4) { animation-delay: .23s; }
+.more-panel.is-open .more-item:nth-child(5) { animation-delay: .3s; }
 @keyframes hjMoreDrop {
   from { opacity: 0; transform: translateY(-10px) scale(.85); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -4987,7 +4988,7 @@ html.pz-open .toast { z-index: 460; }
   user-select: text;
 }
 .pz-card { width: 100%; max-width: 440px; margin: auto; padding: 30px 26px 26px; }
-.pz-card h2 { font-size: 2rem; }
+.pz-card h2 { font-size: 2rem; margin-bottom: 16px; }
 .pz-card .hint { margin-bottom: 16px; }
 .pz-label { display: block; margin: 14px 0 8px; font-size: .86rem; font-weight: 600; letter-spacing: .12em; color: var(--text-soft); }
 .pz-seg { flex-wrap: wrap; }
@@ -5084,4 +5085,250 @@ body.day-mode .pz-last { border-color: rgba(138,90,28,.32); }
   .pz-group.is-gliding, .pz-shadow { transition: none; }
   .pz-full { animation-duration: .01s; animation-delay: 0s; }
   .pz-group.is-snapped .pz-pc-layer, .pz-timer.is-urgent { animation: none; }
+}
+
+/* ==== 28. 吟游诗人模拟器 ==== */
+/* 小组件平时与日历同层；演奏时浮在全屏演奏层（.bard-stage）之上 */
+.bard-widget {
+  position: fixed; top: 112px; right: 16px; z-index: 72;
+  width: 236px;
+  padding: 10px 12px 12px;
+  color: var(--text);
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 46%, rgba(255,255,255,.06) 100%),
+    rgba(26,21,46,.5);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 20px;
+  box-shadow: 0 10px 26px rgba(10,7,22,.38), inset 0 1px 0 rgba(255,255,255,.22);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: blur(14px) saturate(1.25);
+  animation: bardPop .28s cubic-bezier(.34,1.3,.64,1);
+}
+html.bard-on .bard-widget { z-index: 490; }
+html.bard-on .toast { z-index: 495; }
+@keyframes bardPop {
+  from { opacity: 0; transform: scale(.92) translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+.bard-widget.is-nudge { animation: bardNudge .45s ease; }
+@keyframes bardNudge {
+  30% { transform: translateY(-5px); }
+  60% { transform: translateY(2px); }
+}
+
+.bard-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bard-widget.is-drag,
+.bard-widget.is-drag .bard-head { cursor: grabbing; }
+.bard-title {
+  display: flex; align-items: center; gap: 7px;
+  min-width: 0;
+  font-size: .92rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  white-space: nowrap;
+  color: var(--cream);
+  text-shadow: 0 1px 3px rgba(10,7,22,.55);
+}
+.bard-badge {
+  width: 24px; height: 24px;
+  flex: none;
+  filter: drop-shadow(0 1px 2px rgba(10,7,22,.4));
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.bard-tool {
+  width: 24px; height: 24px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cream);
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.2);
+}
+.bard-tool:hover { border-color: var(--accent); color: var(--accent-soft); }
+.bard-tool .ico { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.bard-select {
+  display: block;
+  width: 100%;
+  padding: 9px 32px 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--serif);
+  font-size: .9rem;
+  color: var(--cream);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 13px center,
+    var(--ink-2);
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: dark;
+  cursor: var(--cursor-img), pointer;
+}
+.bard-select:focus { outline: none; border-color: var(--accent); }
+
+.bard-play {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: .9rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: 0 4px 12px rgba(10,7,22,.28), inset 0 1px 0 rgba(255,255,255,.35);
+  transition: filter .2s, transform .15s, background .2s, color .2s;
+}
+.bard-play:hover { filter: brightness(1.08); }
+.bard-play:active { transform: scale(.97); }
+.bard-play .ico { width: 14px; height: 14px; flex: none; fill: currentColor; }
+.bard-play.is-on {
+  color: #ffe6ea;
+  background: rgba(190,84,110,.5);
+  border-color: rgba(240,160,178,.75);
+  animation: bardPulse 1.6s ease-in-out infinite;
+}
+@keyframes bardPulse {
+  50% { box-shadow: 0 0 0 4px rgba(240,160,178,.2), 0 4px 12px rgba(10,7,22,.28), inset 0 1px 0 rgba(255,255,255,.35); }
+}
+.bard-hint {
+  margin-top: 7px;
+  font-size: .72rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-mute);
+}
+
+body.day-mode .bard-widget {
+  color: #5b4326;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.32) 100%),
+    rgba(255,249,235,.62);
+  border-color: rgba(255,255,255,.55);
+  box-shadow: 0 10px 26px rgba(96,64,16,.22), inset 0 1px 0 rgba(255,255,255,.75);
+}
+body.day-mode .bard-title { color: var(--day-ink); text-shadow: 0 1px 0 rgba(255,255,255,.65); }
+body.day-mode .bard-tool { background: rgba(122,84,32,.08); border-color: rgba(122,84,32,.25); color: var(--day-brown); }
+body.day-mode .bard-select {
+  color: var(--day-cream);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 13px center,
+    #f6e3bb;
+  border-color: #c98f3a;
+  color-scheme: light;
+}
+body.day-mode .bard-play { box-shadow: 0 4px 12px rgba(96,64,16,.2), inset 0 1px 0 rgba(255,255,255,.5); }
+body.day-mode .bard-play.is-on { color: #fff; background: #b3486a; border-color: #b3486a; }
+body.day-mode .bard-hint { color: var(--day-brown-soft); }
+
+/* 演奏层：接管整页的点击，四周略暗表示正在演奏 */
+.bard-stage {
+  position: fixed; inset: 0; z-index: 480;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: var(--cursor-img), pointer;
+  background: radial-gradient(ellipse at 50% 50%, rgba(12,9,26,0) 55%, rgba(12,9,26,.32) 100%);
+  animation: bardFadeIn .4s ease both;
+}
+body.day-mode .bard-stage { background: radial-gradient(ellipse at 50% 50%, rgba(90,60,20,0) 55%, rgba(90,60,20,.18) 100%); }
+.bard-stage.is-leaving { opacity: 0; transition: opacity .35s ease; pointer-events: none; }
+@keyframes bardFadeIn { from { opacity: 0; } }
+
+/* 波纹：--c 为 "r g b"，--o 为力度；点下去的那一下另有一个小光点（.bard-pop） */
+.bard-ripple,
+.bard-pop {
+  position: absolute;
+  width: var(--d); height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.bard-ripple {
+  background: radial-gradient(circle closest-side, rgb(var(--c) / .5) 0%, rgb(var(--c) / .2) 48%, rgb(var(--c) / .72) 86%, rgb(var(--c) / 0) 100%);
+  opacity: var(--o);
+  transform: scale(.06);
+  animation: bardRipple 5s cubic-bezier(.15,.55,.3,1) forwards;
+}
+@keyframes bardRipple {
+  45%  { opacity: calc(var(--o) * .62); }
+  100% { transform: scale(1); opacity: 0; }
+}
+.bard-pop {
+  --d: 96px;
+  background: radial-gradient(circle closest-side, rgb(255 255 255 / .92) 0%, rgb(var(--c) / .85) 42%, rgb(var(--c) / 0) 100%);
+  transform: scale(.25);
+  animation: bardTap .7s ease-out forwards;
+}
+@keyframes bardTap { to { transform: scale(1); opacity: 0; } }
+.bard-ripple.is-calm { transform: scale(.45); will-change: auto; animation: bardFadeOut 2.4s ease-out forwards; }
+@keyframes bardFadeOut { to { opacity: 0; } }
+
+.bard-note {
+  position: absolute;
+  width: 26px; height: 26px;
+  margin: -13px 0 0 -13px;
+  color: rgb(var(--c));
+  filter: drop-shadow(0 1px 3px rgba(10,7,22,.45));
+  pointer-events: none;
+  animation: bardNote 1.6s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.bard-note svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bard-note circle { fill: currentColor; }
+@keyframes bardNote {
+  0%   { opacity: 0; transform: translateY(6px) scale(.6); }
+  15%  { opacity: 1; transform: translate(calc(var(--dx) * .2), -8px) scale(1.05) rotate(calc(var(--rot) * .3)); }
+  100% { opacity: 0; transform: translate(var(--dx), -72px) scale(.9) rotate(var(--rot)); }
+}
+
+.bard-tip {
+  position: absolute; left: 50%; bottom: 34px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--cream);
+  background: rgba(26,21,46,.6);
+  border: 1px solid rgba(255,255,255,.2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: bardTip 4.5s ease forwards;
+}
+@keyframes bardTip {
+  0%       { opacity: 0; transform: translate(-50%, 10px); }
+  10%, 80% { opacity: 1; transform: translate(-50%, 0); }
+  100%     { opacity: 0; transform: translate(-50%, 0); }
+}
+body.day-mode .bard-tip { color: var(--day-ink); background: rgba(255,249,235,.72); border-color: rgba(255,255,255,.6); }
+
+@media (max-width: 640px) {
+  .bard-widget { top: 96px; right: 8px; width: min(236px, calc(100vw - 16px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bard-widget, .bard-widget.is-nudge, .bard-stage, .bard-play.is-on { animation: none; }
+  .bard-tip { animation-name: bardTipCalm; }
+  @keyframes bardTipCalm { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
 }

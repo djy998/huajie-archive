@@ -18,11 +18,12 @@
 | `admin.js` | 内部入口与管理页，进入 `#internal` 时加载 |
 | `huayu.js`、`huayu/` | 花语，打开时加载 |
 | `puzzle.js` | 花街拼图（「更多」里的百宝箱），打开时加载 |
+| `bard.js` | 吟游诗人模拟器（「更多」里的竖琴），打开时加载 |
 | `sw.js` | 离线缓存 |
 | `build.mjs` | 生成发布版 |
 | `tools/` | 缩略图、标题字体子集 |
 
-脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、`assets/lib/exceljs.min.js` 按需加载。
+脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
@@ -43,6 +44,13 @@
 - 网格提示：拼图区画虚线拼块格子，打开时拼块放到正确格子附近会吸附过去。大赛里「显示原图 / 仅显示边框图块 / 网格提示」是否可用由管理页勾选（`puzzle_contest_tools` 按位存，默认全开）。
 - 原图 / 仅显示边框图块 / 网格提示每局默认关闭；本局用过哪些写进通关码（「辅助功能」一行）和大赛记录（`aids`）。
 - Worker 接口：`puzzle_state`、`puzzle_contest_start`、`puzzle_contest_submit`、`puzzle_admin_get` / `_set` / `_records` / `_void`；`get_site_state` 带 `puzzle`。
+
+## 吟游诗人模拟器
+
+- 玩法参考 [blossom](https://github.com/alexbainter/blossom)（MIT）：开始演奏后点页面任意位置，高度决定音高（大调五声音阶，三个八度），左右决定声像。每个音隔 7~12 秒回响一次、逐渐变弱，最多循环最近 15 个音。再点按钮或按 Esc 结束。
+- 乐器表在 `bard.js` 开头的 `INSTRUMENTS`：弦乐 8 种、管乐 10 种，音域参考游戏内乐器演奏（`low` 为最低音的 MIDI 编号）。音色全部用 Web Audio 合成，不下载采样；`gain` 已按实测响度校准，新增或改动音色后要重新比对音量。
+- 回响中的音保留自己的音色，演奏中换音色可以叠出合奏。演奏时背景音乐暂停，结束后恢复；站内静音时不能开始。
+- 只用到本机：选的音色存 `hj_bard_inst`，小组件位置存 `hj_bard_xy`（拖标题栏移动，双击复位）。
 
 ## 全站开关
 
