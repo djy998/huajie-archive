@@ -19,11 +19,12 @@
 | `huayu.js`、`huayu/` | 花语，打开时加载 |
 | `puzzle.js` | 花街拼图（「更多」里的百宝箱），打开时加载 |
 | `bard.js` | 吟游诗人模拟器（「更多」里的竖琴），打开时加载 |
+| `games.js` | 小游戏助手（「更多」里的羽毛笔）：数字炸弹、飞花令、谁是卧底，打开时加载 |
 | `sw.js` | 离线缓存 |
 | `build.mjs` | 生成发布版 |
 | `tools/` | 缩略图、标题字体子集 |
 
-脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard、`assets/lib/exceljs.min.js` 按需加载。
+脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard、games、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
@@ -55,6 +56,19 @@
 - 回响中的音保留自己的音色，演奏中换音色可以叠出合奏。演奏时背景音乐暂停，结束后恢复；站内静音时不能开始。
 - 「更多」里的入口图标取自游戏原版职业图标的字形（`assets/site/bard-glyph.png`，只留形状作遮罩，颜色跟随其他按钮），不要改画。
 - 只用到本机：选的音色存 `hj_bard_inst`，小组件位置存 `hj_bard_xy`（拖标题栏移动，双击复位）。
+
+## 小游戏助手
+
+- 给 rp 店主持用，只在本机运行，不调用 Worker。弹窗外壳在 `index.html`（`#gamesOverlay`），内容与玩法在 `games.js`。
+- 每个游戏带一段规则宏（`MACROS`），可展开编辑、一键复制；改过的存本机 `hj_games_macro_<id>`，「恢复默认」删掉即回到默认内容。超过 15 行会提示（游戏里一个宏最多 15 行）。播报类复制沿用该宏第一行的频道（`/p`、`/y`）。
+- 数字炸弹：炸弹在两数之间（不含两端），随机或指定；猜一次缩小一次范围，范围越小字越大、引线越短，只剩一个数时进入「必炸」状态，猜中播放爆炸动画。可撤销一步、偷看炸弹、复制当前范围的播报。
+- 飞花令：「任意字序」对应简单版规则，「严格字序」对应困难版（第 N 位发言人的令字在第 N 个字，7 位一轮，核对通过自动轮到下一位）。令字盘是简单版规则里的四十个字，也可以自定。
+  - 题库在 `POEM_SRC`（`作者|篇名|句 句 句`，只收单句、不含标点，约 1200 句），每句都要注明出处。改动后检查：严格字序下哪些令字缺位置，网页上会把它们显示为虚线框，「随机令字」不会抽到。
+  - 「提示」从一句答案里取字、补足 10 个打乱（同人机验证的文科生）；「答案」给整句和出处，「换一句」优先给本局没出现过的。
+  - 「核对」：令字（严格字序还看位置）→ 本局是否说过 → 题库出处；题库外的句子提示主持人自行判断。繁体会先转成简体（`TRAD_PAIRS`）。
+- 谁是卧底：词库在 `SPY_SRC`（`大类|小类|词 词 词`），每次从同一小类里抽两个词，平民 / 卧底各一；可按大类筛选、交换、遮住，最近 40 组不重复。新增大类要同时在 `SPY_KINDS` 登记名称。
+- 只存本机：当前页签 `hj_games_tab`、飞花令玩法 `hj_games_poem_mode`、词语类型 `hj_games_spy_kind`；对局进度只在打开的页面里，刷新即重来。
+- 「更多」里的入口图标是羽毛笔（`assets/site/games-glyph.png`，白色形状作遮罩，颜色跟随其他按钮）。
 
 ## 全站开关
 

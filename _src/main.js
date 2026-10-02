@@ -2044,7 +2044,7 @@ function initVolume() {
 }
 
 /* 「更多」菜单；dev: true 的项显示为开发中；icon 为 SVG 路径，glyph 为单色图片图标（.ico-glyph-xxx，跟随文字颜色）；
-   花语图标为四瓣月见草，吟游诗人图标为游戏原版职业图标的字形 */
+   花语图标为四瓣月见草，吟游诗人图标为游戏原版职业图标的字形，小游戏助手图标为羽毛笔 */
 const HUAYU_PETAL = "M12 11.2C8.9 9.6 7 5.9 8.9 3.9c1.1-1.1 2.5-.8 3.1.5.6-1.3 2-1.6 3.1-.5 1.9 2 0 5.7-3.1 7.3z";
 const MORE_ITEMS = [
   { id: "alarm", label: "闹铃", open: () => openAlarmModal(true),
@@ -2057,6 +2057,7 @@ const MORE_ITEMS = [
     icon: '<path d="M4.5 12.5v-1.8A2.7 2.7 0 0 1 7.2 8h9.6a2.7 2.7 0 0 1 2.7 2.7v1.8"/><rect x="3.5" y="12.5" width="17" height="8" rx="1.6"/>'
       + '<path d="M10.6 12.5v2.7h2.8v-2.7"/><path d="M12 2.6l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/><path d="M6.6 4.2v1.8M5.7 5.1h1.8M17.6 3.8v1.8M16.7 4.7h1.8"/>' },
   { id: "bard", label: "吟游诗人模拟器", open: () => openBard(), glyph: "bard" },
+  { id: "games", label: "小游戏助手", open: () => openGames(), glyph: "games" },
 ];
 
 function renderMorePanel() {
@@ -3331,6 +3332,23 @@ function openBard() {
   );
 }
 
+/* 小游戏助手：弹窗外壳在 index.html，内容与玩法都在 games.js，打开时加载 */
+function openGames() {
+  closeAllModals();
+  $("gamesOverlay").hidden = false;
+  playFadeOnly($("gamesCard"));
+  loadLateScript("games.js", () => !!window.HJGames).then(
+    () => window.HJGames.open(),
+    () => setMsg($("gamesLoadMsg"), "小游戏助手没加载出来，检查一下网络再试"),
+  );
+}
+
+const closeGames = () => { $("gamesOverlay").hidden = true; };
+
+function initGames() {
+  $("gamesClose").addEventListener("click", closeGames);
+}
+
 
 /* ==== 14. 下拉与日期选择 ==== */
 /* 鼠标操作时以站内弹层代替浏览器面板；触屏保留系统选择器，日期类仅在 Chromium 上替换 */
@@ -3769,6 +3787,7 @@ const MODALS = [
   { overlay: "alarmOverlay", closeBtn: "alarmClose", close: closeAlarmModal },
   { overlay: "huayuOverlay", closeBtn: "huayuClose", close: closeHuayuModal },
   { overlay: "puzzleOverlay", closeBtn: "puzzleClose", close: closePuzzle },
+  { overlay: "gamesOverlay", closeBtn: "gamesClose", close: closeGames },
   { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: closeSitePopup },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
@@ -3853,7 +3872,7 @@ function initApp() {
     initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
-    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initPickers,
+    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
     initClock, initHashRoute, initSitePopup, loadSiteState,
   ].forEach((init) => {
     try { init(); } catch (e) { console.error(e); }

@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261002n">
-  <link rel="preload" as="style" href="style.css?v=20261002n">
+  <link rel="preload" as="script" href="boot.js?v=20261003b">
+  <link rel="preload" as="style" href="style.css?v=20261003b">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -192,7 +192,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261002n"></script>
+<script src="boot.js?v=20261003b"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -854,6 +854,14 @@
   </div>
 </div>
 
+<div class="info-overlay" id="gamesOverlay" role="dialog" aria-modal="true" aria-labelledby="gamesTitle" data-close-only-x="1" hidden>
+  <div class="gate-card games-card" id="gamesCard">
+    <button type="button" class="info-close" id="gamesClose" aria-label="关闭">×</button>
+    <h2 id="gamesTitle">小游戏助手</h2>
+    <div id="gamesRoot"><p class="form-msg" id="gamesLoadMsg" hidden></p></div>
+  </div>
+</div>
+
 <div class="puzzle-overlay" id="puzzleOverlay" role="dialog" aria-modal="true" aria-label="花街拼图" data-close-only-x="1" hidden>
   <div id="puzzleRoot"></div>
   <button type="button" class="pz-close" id="puzzleClose" aria-label="关闭拼图" title="关闭（进度自动保存）">×</button>
@@ -884,11 +892,11 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261002n"></script>
-<script src="config.js?v=20261002n"></script>
-<script src="main.js?v=20261002n"></script>
-<script src="ticket.js?v=20261002n"></script>
-<script src="venue.js?v=20261002n"></script>
-<script src="survey.js?v=20261002n"></script>
+<script src="verify.js?v=20261003b"></script>
+<script src="config.js?v=20261003b"></script>
+<script src="main.js?v=20261003b"></script>
+<script src="ticket.js?v=20261003b"></script>
+<script src="venue.js?v=20261003b"></script>
+<script src="survey.js?v=20261003b"></script>
 </body>
 </html>
