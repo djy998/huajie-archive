@@ -1,11 +1,12 @@
 /* 花舞之街 · 小游戏助手。从「更多」打开时按需加载，弹窗外壳在 index.html（#gamesOverlay），依赖 main.js 的工具（$、storage、showToast、copyText、escapeHtml…）
    给 rp 店主持用的三个小游戏，每个都带一段规则宏（可以改，改过的存本机，能恢复默认）：
    - 数字炸弹：炸弹藏在范围里（含两端），猜的数成为新的边界，范围越小字越大、引线越短；
-     只剩 3 个数时进入紧张时刻（字号最大、红光像心跳一样闪），之后猜不中只回「xxx不是炸弹！」，猜中就爆炸
+     只剩 5 个数时进入紧张时刻（字号最大、红光像心跳一样闪），之后猜不中回「xxx不是炸弹！」（范围照样缩小），猜中就爆炸
    - 飞花令：任意字序（简单版）/ 严格字序（困难版：第 N 位发言人的令字在第 N 个字，7 位一轮）。
      令字取自简单版规则里的四十个字，随机出题只抽有解的字（严格字序要 1~7 字每个位置都有诗句）；
      「提示」给 10 个字拼一句（同人机验证的文科生），「答案」直接给一句并注明出处；
-     「核对」检查发言人的诗句：令字和位置对不对、题库里有没有、本局有没有人说过
+     「核对」检查发言人的诗句：令字和位置对不对、题库里有没有、本局有没有人说过；
+     自带题库约 1230 句常见名篇，另有约 2.6 万句扩充题库在 games-poems.js，打开时在后台加载
    - 谁是卧底：从同一类 FF14 词语里抽两个，一个给平民、一个给卧底 */
 (() => {
   const STORE_TAB = "hj_games_tab";
@@ -380,7 +381,7 @@
   const POEM_HINT_FILLER = "春风花月山水云天江夜秋白红明雪千人心日星辰光影香色声情露霜舟楼台烟波草木林泉石径归去来客愁乡梦醉酒杯歌长短高远清寒暖新旧时年人家国城池门关塞孤野晚晓晨昏朝暮恨思忆泪笑欢";
   /* 繁体、异体 → 简体（同 Worker） */
   const TRAD_PAIRS = "風风雲云紅红綠绿藍蓝黃黄聲声來来時时見见開开歸归與与無无萬万裏里裡里為为東东陽阳陰阴誰谁盡尽邊边處处過过還还這这個个們们麼么於于後后從从對对頭头樓楼葉叶樹树語语詩诗詞词書书畫画夢梦覺觉獨独燈灯飛飞鳥鸟馬马魚鱼龍龙鳳凤鶴鹤鴻鸿蟬蝉鶯莺鵲鹊鴉鸦雞鸡鴨鸭國国門门關关牆墙閣阁臺台園园簾帘帳帐愛爱戀恋憶忆記记識识視视聞闻聽听說说問问淚泪歡欢樂乐熱热涼凉溫温節节歲岁霧雾煙烟電电蒼苍賦赋經经傳传劍剑賞赏賢贤聖圣舊旧點点蕭萧簫箫鏡镜鑑鉴隨随雖虽隻只雙双幾几幹干纖纤豔艳艷艳麗丽羅罗織织線线約约結结絕绝鄉乡鄰邻詠咏誦诵讀读慶庆獻献禮礼禪禅緣缘塵尘築筑蓋盖滿满灑洒濕湿斷断續续殘残壓压歷历飲饮飽饱餓饿軍军戰战敵敌將将師师義义讓让認认論论該该謝谢訪访許许誤误調调課课談谈貴贵賤贱質质貨货財财貧贫賽赛車车輪轮輕轻載载島岛嶼屿巖岩嶺岭峯峰峽峡灘滩灣湾濤涛湧涌沒没瀉泻澗涧淵渊濱滨爐炉燒烧燭烛爛烂爭争擊击掃扫飄飘驅驱驚惊驟骤馳驰騎骑驛驿鳴鸣叢丛絲丝鮮鲜豐丰曉晓晝昼暉晖曖暧圍围圖图墻墙徑径觀观規规覽览觸触詳详謹谨贊赞窓窗牕窗"
-    + "濺溅惱恼閒闲閑闲靜静臨临憐怜隱隐宮宫銀银寶宝盞盏濃浓淺浅漁渔鷺鹭帶带潛潜遠远遙遥寧宁爾尔長长興兴亂乱戲戏華华漢汉際际蘭兰嬌娇薺荠蓮莲楊杨嘆叹歎叹號号細细紛纷縷缕繞绕綿绵終终給给總总縱纵繡绣陣阵陸陆閉闭間间闌阑闊阔鬢鬓髮发發发麥麦齊齐兒儿親亲請请費费買买賣卖農农運运進进遲迟選选釣钓鐘钟錦锦鐵铁雜杂難难靈灵韻韵響响頃顷須须顏颜願愿顧顾餘余館馆鷗鸥";
+    + "濺溅惱恼閒闲閑闲靜静臨临憐怜隱隐宮宫銀银寶宝盞盏濃浓淺浅漁渔鷺鹭帶带潛潜遠远遙遥寧宁爾尔長长興兴亂乱戲戏華华漢汉際际蘭兰嬌娇薺荠蓮莲楊杨嘆叹歎叹號号細细紛纷縷缕繞绕綿绵終终給给總总縱纵繡绣陣阵陸陆閉闭間间闌阑闊阔鬢鬓髮发發发麥麦齊齐兒儿親亲請请費费買买賣卖農农運运進进遲迟選选釣钓鐘钟錦锦鐵铁雜杂難难靈灵韻韵響响頃顷須须顏颜願愿顧顾餘余館馆鷗鸥沈沉";
 
   /* ==== 谁是卧底词库：大类|小类|词 词 词（同一小类里抽两个） ==== */
   const SPY_KINDS = [
@@ -534,7 +535,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   /* ==== 数字炸弹 ==== */
   const BOMB_MAX = 999999999;
   const BOMB_SPARKS = 14;
-  const BOMB_TENSE = 3;              // 范围只剩几个数时进入紧张时刻
+  const BOMB_TENSE = 5;              // 范围只剩几个数时进入紧张时刻
   const B = { lo: 1, hi: 1000, lo0: 1, hi0: 1000, bomb: 0, guesses: [], over: false, peek: false };
 
   const bombHtml = () => `
@@ -711,15 +712,11 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       boom();
       return;
     }
-    if (bombTense()) {   // 紧张时刻：范围不再变，只说不是炸弹
-      B.guesses.push({ n, miss: true });
-      setMsg(msg, `${n}不是炸弹！`);
-    } else {
-      const before = { lo: B.lo, hi: B.hi };
-      if (n < B.bomb) B.lo = n; else B.hi = n;   // 猜的数就是新的边界（含两端）
-      B.guesses.push({ n, ...before, range: [B.lo, B.hi] });
-      setMsg(msg, `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
-    }
+    const tense = bombTense();   // 紧张时刻：提示和播报只说不是炸弹，记录划掉，范围照样缩小
+    const before = { lo: B.lo, hi: B.hi };
+    if (n < B.bomb) B.lo = n; else B.hi = n;   // 猜的数就是新的边界（含两端）
+    B.guesses.push({ n, ...before, range: [B.lo, B.hi], miss: tense });
+    setMsg(msg, tense ? `${n}不是炸弹！` : `${n} 没炸！范围缩到 ${B.lo} ～ ${B.hi}`);
     bombRender();
     input.focus({ preventScroll: true });
   }
@@ -730,7 +727,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (g.hit) {
       B.over = false;
       el(G.root, "#gmBombStage").classList.remove("is-boom", "is-boomed");
-    } else if (!g.miss) {
+    } else {
       B.lo = g.lo;
       B.hi = g.hi;
     }
@@ -755,7 +752,10 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
 
   function bombAnnounce() {
     const head = macroChannel("bomb") + "【数字炸弹】";
-    const text = B.over ? `${head}砰！炸弹就是 ${B.bomb}～` : `${head}现在的范围：${B.lo}～${B.hi}`;
+    const last = B.guesses[B.guesses.length - 1];
+    const text = B.over ? `${head}砰！炸弹就是 ${B.bomb}～`
+      : last?.miss ? `${head}${last.n}不是炸弹！`
+      : `${head}现在的范围：${B.lo}～${B.hi}`;
     copyText(text, "已复制播报，粘贴到游戏聊天栏", "复制失败");
   }
 
@@ -795,20 +795,34 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   const poemNorm = (text) => Array.from(String(text ?? ""), (ch) => TRAD.get(ch) || ch).filter(isHan).join("");
 
   const POEMS = [];
-  for (const row of POEM_SRC.split("\n")) {
-    const [author, title, body] = row.split("|");
-    if (body) for (const text of body.trim().split(/\s+/)) POEMS.push({ text, author, title });
-  }
-  const POEM_BY_TEXT = new Map(POEMS.map((p) => [p.text, p]));
+  const POEM_BY_TEXT = new Map();
   const poemCache = new Map();
+  /* tier：0 = 自带的常见名篇，1 = 扩充题库；同一句只留第一次出现的出处 */
+  function addPoems(src, tier) {
+    for (const row of src.split("\n")) {
+      const [author, title, body] = row.split("|");
+      if (!body) continue;
+      for (const text of body.trim().split(/\s+/)) {
+        if (POEM_BY_TEXT.has(text)) continue;
+        const p = { text, author, title, tier };
+        POEMS.push(p);
+        POEM_BY_TEXT.set(text, p);
+      }
+    }
+    poemCache.clear();
+  }
+  addPoems(POEM_SRC, 0);
+  /* 能拿来出提示、给答案的句子：4~9 个字（太短不像一句诗，太长凑不进 10 个提示字） */
+  const suggestable = (p) => p.text.length >= 4 && p.text.length <= 9;
   /* 含令字的句子；pos 给了就只要令字在第 pos 个字的 */
   function poemsWith(kw, pos = 0) {
     const key = kw + pos;
     if (!poemCache.has(key)) poemCache.set(key, POEMS.filter((p) => (pos ? p.text[pos - 1] === kw : p.text.includes(kw))));
     return poemCache.get(key);
   }
+  const suggestPool = (kw, pos = 0) => poemsWith(kw, pos).filter(suggestable);
   /* 严格字序下哪些位置没有诗句 */
-  const strictGaps = (kw) => Array.from({ length: POEM_SLOTS }, (_, i) => i + 1).filter((pos) => !poemsWith(kw, pos).length);
+  const strictGaps = (kw) => Array.from({ length: POEM_SLOTS }, (_, i) => i + 1).filter((pos) => !poemsWith(kw, pos).some(suggestable));
   const POEM_KEYS = POEM_BOARD.join("");
 
   const P = { strict: false, kw: "", pos: 1, said: new Set(), shown: new Set(), cur: null, hintOn: false, answerOn: false };
@@ -854,14 +868,18 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
 
   /* 当前要求下可用的句子，优先没说过、没给过的 */
   function poemPool() {
-    return poemsWith(P.kw, P.strict ? P.pos : 0);
+    return suggestPool(P.kw, P.strict ? P.pos : 0);
   }
   function pickPoem() {
     const pool = poemPool();
     if (!pool.length) return null;
     const fresh = pool.filter((p) => !P.said.has(p.text) && !P.shown.has(p.text) && p !== P.cur);
     const unsaid = pool.filter((p) => !P.said.has(p.text) && p !== P.cur);
-    return randomItem(fresh.length ? fresh : unsaid.length ? unsaid : pool);
+    const list = fresh.length ? fresh : unsaid.length ? unsaid : pool;
+    /* 先给常见名篇，其次五言、七言整句，最后才是其他 */
+    const famous = list.filter((p) => p.tier === 0);
+    const regular = list.filter((p) => p.text.length === 5 || p.text.length === 7);
+    return randomItem(famous.length ? famous : regular.length ? regular : list);
   }
 
   function setKeyword(kw) {
@@ -903,7 +921,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       const gaps = P.strict ? strictGaps(b.dataset.kw) : [];
       b.classList.toggle("is-on", b.dataset.kw === kw);
       b.classList.toggle("is-partial", gaps.length > 0);
-      b.title = gaps.length ? `严格字序下第 ${gaps.join("、")} 字暂无收录` : `题库里有 ${poemsWith(b.dataset.kw).length} 句`;
+      b.title = gaps.length ? `严格字序下第 ${gaps.join("、")} 字暂无收录` : `题库里有 ${suggestPool(b.dataset.kw).length} 句`;
     });
     el(r, "#gmPoemPos").hidden = !P.strict;
     el(r, "#gmPoemNext").hidden = !P.strict;
@@ -1229,8 +1247,18 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     setTab(storage.get(STORE_TAB));
   }
 
+  /* 扩充题库在后台加载，没加载好时先用自带题库 */
+  function loadPoemExtra() {
+    if (G.extraLoading) return;
+    G.extraLoading = loadLateScript("games-poems.js", () => typeof window.HJGamesPoems === "string").then(() => {
+      addPoems(window.HJGamesPoems, 1);
+      if (P.kw) poemRender();
+    }, () => { G.extraLoading = null; });
+  }
+
   function open() {
     build();
+    loadPoemExtra();
     if (G.tab === "bomb") requestAnimationFrame(() => bombRender());
   }
 
