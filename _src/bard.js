@@ -29,15 +29,16 @@
      noise 为气声 [音量, 中心频率（基频倍数）, Q, 起音时的额外气声]；scoop 为起音时从低多少音分滑上来；
      pluck 类：pos 为拨弦位置，bright 为起音亮度（基频倍数），stretch 为环路低通，t60 等为余音长短；
      body 为共鸣滤波 [类型, 频率, 增益 dB, Q]；verb 为送进混响的比例（默认 1）；
-     samples 为采样文件（前缀 + MIDI 编号 + .mp3），播放时取最近的采样变调 */
+     samples 为采样文件（前缀 + MIDI 编号 + .mp3），播放时取最近的采样变调；采样自带混响与各音区的自然响度，
+     所以钢琴照 blossom 的做法：不再送混响、不做音区响度补偿，只过 2.5k 低通 */
   const saw = (n, k = 1) => Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, k));
   const INSTRUMENTS = [
     { id: "harp", name: "竖琴", group: "弦乐", low: 36, oct: 5, kind: "pluck", gain: 0.62,
       pluck: { pos: 0.38, bright: 9, noise: 0.12, stretch: 0.5, t60: 5.6, t60Exp: 0.55, t60Min: 1.4, t60Max: 6.5, maxLen: 4 },
       body: [["highpass", 55], ["peaking", 230, 2.5, 0.9], ["highshelf", 3600, -5]] },
-    { id: "piano", name: "钢琴", group: "弦乐", low: 36, oct: 5, kind: "piano", gain: 0.8, sampleGain: 1, verb: 0.3,
+    { id: "piano", name: "钢琴", group: "弦乐", low: 36, oct: 5, kind: "piano", gain: 0.8, sampleGain: 1.3, verb: 0,
       samples: { prefix: "assets/bard/piano-", notes: [37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97] },
-      body: [["highpass", 45], ["lowpass", 3000, 0, 0.5]] },
+      body: [["highpass", 40], ["lowpass", 2500]] },
     { id: "lute", name: "鲁特琴", group: "弦乐", low: 36, oct: 4, kind: "pluck", gain: 0.6,
       pluck: { pos: 0.17, bright: 18, noise: 0.3, stretch: 0.42, t60: 3.4, t60Exp: 0.5, t60Min: 0.9, t60Max: 4, maxLen: 3 },
       body: [["highpass", 70], ["peaking", 190, 3.5, 1.2], ["peaking", 1700, 2, 1.4], ["highshelf", 5200, -6]] },
@@ -149,27 +150,35 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     let ctx;
-    try { ctx = new AC({ latencyHint: "interactive" }); } catch (e) { try { ctx = new AC(); } catch (err) { return null; } }
+    /* 手机上缓冲区放大一些，CPU 忙时不至于断音爆音 */
+    const latencyHint = touchFirst() ? "balanced" : "interactive";
+    try { ctx = new AC({ latencyHint }); } catch (e) { try { ctx = new AC(); } catch (err) { return null; } }
     const master = ctx.createGain();
     master.gain.value = 0;
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18;
-    comp.knee.value = 18;
-    comp.ratio.value = 3.5;
-    comp.attack.value = 0.006;
-    comp.release.value = 0.25;
+    /* 末级限幅：音叠得再多也不冲过 0 dBFS（削波就是「滋滋」声） */
+    const bus = ctx.createGain();
+    bus.gain.value = 0.7;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -9;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 16;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.2;
     const dry = ctx.createGain();
-    dry.gain.value = 0.8;
+    dry.gain.value = 0.85;
     const send = ctx.createBiquadFilter();
     send.type = "highpass";
     send.frequency.value = 200;
+    const sendLp = ctx.createBiquadFilter();
+    sendLp.type = "lowpass";
+    sendLp.frequency.value = 5000;
     const verb = ctx.createConvolver();
-    verb.buffer = makeImpulse(ctx, 3.4);
+    verb.buffer = makeImpulse(ctx, 2.8);
     const wet = ctx.createGain();
-    wet.gain.value = 0.46;
-    dry.connect(comp);
-    send.connect(verb).connect(wet).connect(comp);
-    comp.connect(master).connect(ctx.destination);
+    wet.gain.value = 0.5;
+    dry.connect(bus);
+    send.connect(sendLp).connect(verb).connect(wet).connect(bus);
+    bus.connect(limiter).connect(master).connect(ctx.destination);
 
     const noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const nd = noise.getChannelData(0);
@@ -178,7 +187,7 @@
     return ctx;
   }
 
-  /* 混响：越往后越暗的衰减噪声 */
+  /* 混响：越往后越暗的衰减噪声；起头就先压掉高频，免得有嘶嘶声 */
   function makeImpulse(ctx, seconds) {
     const sr = ctx.sampleRate;
     const len = Math.floor(sr * seconds);
@@ -189,7 +198,7 @@
       let lp = 0;
       for (let i = pre; i < len; i++) {
         const t = (i - pre) / sr;
-        const k = 0.2 + 0.72 * (i / len);
+        const k = 0.5 + 0.45 * (i / len);
         lp += (1 - k) * (Math.random() * 2 - 1 - lp);
         const fadeIn = Math.min(1, t / 0.008);
         d[i] = lp * Math.exp((-6.9 * t) / (seconds * 0.82)) * fadeIn;
@@ -344,7 +353,7 @@
 
   /* 采样：打开小组件时先下载，开始演奏（有了 AudioContext）后再解码；失败时清掉记录，下次再试，期间用合成音 */
   const rawSamples = {};
-  const sampleUrls = (inst) => inst.samples.notes.map((m) => [m, `${inst.samples.prefix}${m}.mp3`]);
+  const sampleUrls = (inst) => inst.samples.notes.map((m) => [m, `${inst.samples.prefix}${m}.mp3?v=${HJ.version}`]);
 
   function fetchSample(url) {
     rawSamples[url] ??= fetch(url)
@@ -428,15 +437,15 @@
     const entry = A.samples[inst.id];
     if (!entry || !entry.ready) return null;
     const near = inst.samples.notes.reduce((a, b) => (Math.abs(b - midi) < Math.abs(a - midi) ? b : a));
-    return { buffer: entry.buffers.get(near), rate: Math.pow(2, (midi - near) / 12), gain: inst.sampleGain };
+    return { buffer: entry.buffers.get(near), rate: Math.pow(2, (midi - near) / 12), gain: inst.sampleGain, flat: true };
   }
 
   function playSample(inst, midi, t, vel, pan) {
-    const { buffer, rate, gain = inst.gain } = sampleFor(inst, midi) || noteBuffer(inst, midi);
+    const { buffer, rate, gain = inst.gain, flat } = sampleFor(inst, midi) || noteBuffer(inst, midi);
     const src = A.ctx.createBufferSource();
     src.buffer = buffer;
     src.playbackRate.value = rate;
-    const out = voiceOut(inst, pan, gain * vel * loudness(mtof(midi)), t);
+    const out = voiceOut(inst, pan, gain * vel * (flat ? 1 : loudness(mtof(midi))), t);
     src.connect(out);
     src.start(t);
     trackVoice(src, [src, out], (now) => {
