@@ -5,6 +5,7 @@
    - 中断继续（管理页开关，默认关闭）：开启时进度保存在本机，关掉页面或切走后可从中断处继续
    - 大赛拼图（管理页设置时段、难度、图片，以及原图 / 边框块 / 网格提示是否可用）：正计时，通关后填写游戏 ID 登记成绩并生成一代通关码
    - 网格提示：中间拼图区显示虚线拼块格子，拼块放到对应格子附近会吸附过去
+   - 原图 / 边框块 / 网格提示每局默认关闭；用过哪些会写进通关码和大赛记录
    坐标约定：每个拼块组的局部坐标即原图坐标，组只记录原图左上角在桌面上的位置 (x, y)；
    两组位置一致即拼对，合并只需把拼块搬进同一个组 */
 (() => {
@@ -100,6 +101,14 @@
   /* 大赛里可用的工具：原图、只看边框块、网格提示（旧版 Worker 不下发时全部可用） */
   const readTools = (t) => ({ preview: t?.preview !== false, edges: t?.edges !== false, grid: t?.grid !== false });
   const toolOn = (name) => !G?.contest || readTools(G.contest.tools)[name];
+  const TOOL_NAMES = { preview: "显示原图", edges: "仅显示边框图块", grid: "网格提示" };
+  const aidsText = (aids) => (aids && aids.length ? aids.map((a) => TOOL_NAMES[a] || a).join("、") : "未使用");
+  /* 本局用过的辅助功能（打开过一次就算） */
+  function markUsed(name) {
+    if (!G || G.done || G.used[name]) return;
+    G.used[name] = true;
+    saveSoon();
+  }
 
   function applyState(st, fromServer) {
     PZ.resume = !!st?.resume;
@@ -652,7 +661,7 @@
   async function submitContest(rec, rawPlayer) {
     const player = String(rawPlayer || "").trim();
     if (!player || player.length > 20) return { ok: false, msg: SUBMIT_ERRORS.bad_player };
-    const data = await callWorker({ action: "puzzle_contest_submit", token: rec.contest.token, player, elapsed: rec.ms });
+    const data = await callWorker({ action: "puzzle_contest_submit", token: rec.contest.token, player, elapsed: rec.ms, aids: rec.aids || [] });
     if (!data) return { ok: false, msg: "连接失败，检查网络后再点一次" };
     if (!data.ok) {
       const msg = SUBMIT_ERRORS[data.error] || "登记失败，稍后再试";
@@ -790,6 +799,7 @@
       tw: size.tw, th: size.th, elapsed: Number(opts.elapsed) || 0, limit: DIFFS[opts.diff].limitMin * 60000,
       pieces: [], groups: [], z: 1, done: false, timeUp: false, running: false, tickAt: 0, edgesOnly: false,
       contest: opts.contest || null, gridOn: false,
+      used: { preview: !!opts.used?.preview, edges: !!opts.used?.edges, grid: !!opts.used?.grid },
     };
     G.edges = makeEdges(G.cols, G.rows, G.seed);
     const table = $("pzTable");
@@ -803,7 +813,8 @@
     $("pzEdgeBtn").hidden = !toolOn("edges");
     $("pzGridBtn").hidden = !toolOn("grid");
     G.gridEl = null;
-    toggleGrid(toolOn("grid") && !!(storage.json(STORE_PREF) || {}).grid, true);
+    togglePreview(false);
+    toggleGrid(false, true);   // 辅助功能每局默认关闭
 
     for (let r = 0; r < G.rows; r++) {
       for (let c = 0; c < G.cols; c++) {
@@ -1225,6 +1236,7 @@
     if (on) box.style.top = Math.round(hudInset() + 8) + "px";
     $("pzPreviewBtn").setAttribute("aria-pressed", String(on));
     $("pzPreviewBtn").classList.toggle("is-on", on);
+    if (on) markUsed("preview");
   }
 
   function toggleEdges() {
@@ -1233,6 +1245,7 @@
     $("pzTable").classList.toggle("is-edges", G.edgesOnly);
     $("pzEdgeBtn").setAttribute("aria-pressed", String(G.edgesOnly));
     $("pzEdgeBtn").classList.toggle("is-on", G.edgesOnly);
+    if (G.edgesOnly) markUsed("edges");
     showToast(G.edgesOnly ? "只显示边框块" : "显示全部拼块");
   }
 
@@ -1247,7 +1260,7 @@
     $("pzGridBtn").setAttribute("aria-pressed", String(on));
     $("pzGridBtn").classList.toggle("is-on", on);
     if (quiet) return;
-    storage.set(STORE_PREF, JSON.stringify({ ...(storage.json(STORE_PREF) || {}), grid: on }));
+    if (on) markUsed("grid");
     showToast(on ? "已显示网格提示" : "已隐藏网格提示");
   }
 
@@ -1387,12 +1400,13 @@
     syncClock();
     storage.set(STORE_SAVE, JSON.stringify({
       v: SAVE_VERSION, src: G.src, diff: G.diff, mode: G.mode, overtime: G.overtime, seed: G.seed, contest: G.contest,
-      cols: G.cols, rows: G.rows, tw: G.tw, th: G.th, elapsed: Math.round(G.elapsed), savedAt: Date.now(),
+      cols: G.cols, rows: G.rows, tw: G.tw, th: G.th, elapsed: Math.round(G.elapsed), savedAt: Date.now(), used: G.used,
       groups: G.groups.map((g) => [Math.round(g.x * 10) / 10, Math.round(g.y * 10) / 10, g.pieces.map((p) => p.i)]),
     }));
   }
 
   /* ==== 通关 ==== */
+  const usedAids = () => Object.keys(TOOL_NAMES).filter((name) => G.used[name]);
   function finish() {
     if (G.done) return;
     syncClock();
@@ -1416,11 +1430,11 @@
     const rec = G.contest
       ? {
         contest: { token: G.contest.token, title: G.contest.title, rev: G.contest.rev }, diff: G.diff, mode: "casual",
-        pieces: G.pieces.length, ms: Math.round(G.elapsed), at: nowMs(), eligible: true, submitted: false, code: "",
+        pieces: G.pieces.length, ms: Math.round(G.elapsed), at: nowMs(), aids: usedAids(), eligible: true, submitted: false, code: "",
       }
       : {
         diff: G.diff, mode: G.overtime ? "casual" : G.mode, overtime: G.overtime, pieces: G.pieces.length,
-        ms: Math.round(G.elapsed), limitMs: G.limit, at: nowMs(), img: imgNo(G.src),
+        ms: Math.round(G.elapsed), limitMs: G.limit, at: nowMs(), img: imgNo(G.src), aids: usedAids(),
         eligible: G.mode === "timed" && !G.overtime && CODE_DIFFS.includes(G.diff), code: "",
       };
     storage.set(STORE_LAST, JSON.stringify(rec));
@@ -1438,6 +1452,7 @@
       ["模式", rec.overtime ? "限时（超时后完成）" : MODES[rec.mode] + (rec.mode === "timed" ? `（${d.limitMin} 分钟）` : "")],
       ["耗时", fmtClock(rec.ms, true)],
       ...(rec.mode === "timed" ? [["剩余", fmtClock(rec.limitMs - rec.ms, true)]] : []),
+      ["辅助功能", aidsText(rec.aids)],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
@@ -1451,11 +1466,13 @@
       ["大赛", rec.contest.title],
       ["难度", `${d.name}（${d.level} · ${rec.pieces} 块）`],
       ["耗时", fmtClock(rec.ms, true)],
+      ["辅助功能", aidsText(rec.aids)],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
     $("pzSubmitBox").hidden = !!rec.submitted;
     $("pzCodeBox").hidden = !rec.submitted;
+    $("pzCodeText").textContent = "";
     $("pzSubmitBtn").disabled = false;
     setMsg($("pzSubmitMsg"), "");
     $("pzPlayerInput").value = storage.get(STORE_PLAYER) || "";
@@ -1472,6 +1489,7 @@
         `玩家：${rec.player}`,
         `难度：${d.name}（${rec.pieces}块）`,
         `耗时：${fmtClock(rec.ms, true)}`,
+        `辅助功能：${aidsText(rec.aids)}`,
         `通关时间：${formatCnSeconds(rec.at)}`,
         `登记号：No.${rec.no}`,
       ].join("\n");
@@ -1480,6 +1498,7 @@
       "花舞之街拼图·限时通关",
       `难度：${d.name}（${rec.pieces}块）`,
       `耗时：${fmtClock(rec.ms, true)} / 限时 ${d.limitMin} 分钟`,
+      `辅助功能：${aidsText(rec.aids)}`,
       `通关时间：${formatCnSeconds(rec.at)}`,
       `相册图：${rec.img}`,
     ].join("\n");

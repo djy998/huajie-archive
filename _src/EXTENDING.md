@@ -24,7 +24,7 @@
 | 建成记录视频 | `INFO_RECORD_VIDEOS`：`aid`、`cid` 在 B 站视频页的分享嵌入代码里；`cover` 可以不填 |
 | 首页卡片底图、天空 | `TILE_BG`、`SKY_IMAGES`，替换同名图片时把 `?v=` 加一 |
 
-加了新图片，在 `_src` 目录运行 `python tools/make-thumbs.py` 生成缩略图。活动标题出现新字时，运行 `python tools/make-brush-font.py` 重新生成标题字体。所需依赖写在两个脚本的开头。
+加了新图片，在 `_src` 目录运行 `python tools/make-thumbs.py` 生成缩略图。标题字体已经带了约 2900 个常用字（按需下载），只有标题用到生僻字时才需要运行 `python tools/make-brush-font.py` 重新生成。所需依赖写在两个脚本的开头。
 
 ## 加一个页面（视图）
 

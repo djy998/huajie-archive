@@ -23,7 +23,7 @@
 | `tools/` | 缩略图、标题字体子集 |
 
 脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、`assets/lib/exceljs.min.js` 按需加载。
-字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
+字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
 
@@ -41,7 +41,7 @@
 - 限时模式鱼丽及以上通关时，调用 `huayu_seal`（`v: 1, purpose: "puzzle"`）用一代花语生成通关码，去掉「听花语：」前缀。管理页「花语加密」或访客花语工具粘贴通关码即可解读。
 - 大赛拼图：管理页设置名称、时段、难度、图片（裁剪后走公告配图上传，存 R2）。时段内拼图首页出现入口，正计时；开局时 Worker 发开局凭证，通关后访客填写游戏 ID，`puzzle_contest_submit` 按服务器时间核对耗时并记入 `puzzle_records`，再生成一代通关码。更换图片或难度算新一届（`contest_rev`）。
 - 网格提示：拼图区画虚线拼块格子，打开时拼块放到正确格子附近会吸附过去。大赛里「显示原图 / 仅显示边框图块 / 网格提示」是否可用由管理页勾选（`puzzle_contest_tools` 按位存，默认全开）。
-- 毛笔字标题：`tools/make-brush-font.py` 也会扫描 `puzzle.js` 的标题；改了拼图标题文字要重新生成 `brush.woff2`。
+- 原图 / 仅显示边框图块 / 网格提示每局默认关闭；本局用过哪些写进通关码（「辅助功能」一行）和大赛记录（`aids`）。
 - Worker 接口：`puzzle_state`、`puzzle_contest_start`、`puzzle_contest_submit`、`puzzle_admin_get` / `_set` / `_records` / `_void`；`get_site_state` 带 `puzzle`。
 
 ## 全站开关
@@ -57,6 +57,6 @@
 3. 生成发布版（Node.js 18+）：`cd _src && npm install esbuild && node build.mjs`，同时生成 `activity/`、`previous/` 两个独立入口。
 4. 上传 `_src/` 与根目录中有变化的文件。
 
-新增图片后运行 `python tools/make-thumbs.py`；标题出现新字时运行 `python tools/make-brush-font.py`。
+新增图片后运行 `python tools/make-thumbs.py`；标题字体已含约 2900 个常用字，标题用到生僻字时再运行 `python tools/make-brush-font.py`（会重写 `style.css` 开头的 @font-face）。
 
 停用离线缓存：按 `sw.js` 开头的说明替换根目录的 `sw.js`。

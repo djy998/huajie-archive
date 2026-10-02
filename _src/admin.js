@@ -2944,6 +2944,8 @@ function initHuayuAdmin() {
 /* ==== 花街拼图 ==== */
 /* 中断继续开关；大赛的时段、难度、图片（裁剪后走公告配图上传）；参赛记录 */
 const PZ_ADMIN_DIFFS = { easy: "鱼信 · 36块", normal: "鱼丽 · 60块", hard: "光风院霁月 · 128块" };
+const PZ_ADMIN_AIDS = { preview: "原图", edges: "边框", grid: "网格" };
+const pzAidsText = (aids, sep = "、") => (aids && aids.length ? aids.map((a) => PZ_ADMIN_AIDS[a] || a).join(sep) : "");
 const PZ_ADMIN_ERRORS = {
   no_image: "请先上传并裁剪大赛图片",
   bad_range: "开启大赛需要填写开始和结束时间，结束要晚于开始",
@@ -3239,20 +3241,21 @@ function renderPuzzleRecords() {
     <td class="pz-rec-player">${escapeHtml(r.player)}</td>
     <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
     <td title="开局到登记 ${escapeHtml(pzFmtMs(r.serverMs))}">${escapeHtml(pzFmtMs(r.elapsed))}</td>
+    <td>${escapeHtml(pzAidsText(r.aids) || "—")}</td>
     <td>${escapeHtml(formatCnSeconds(r.at))}</td>
     <td title="${escapeHtml(geoTitle(r.geo))}">${escapeHtml(geoText(r.geo) || "—")}</td>
     <td class="hy-visit-id">${escapeHtml(r.visitor)}</td>
     <td><button type="button" class="pz-rec-void" data-id="${r.id}" data-voided="${r.voided ? 1 : 0}">${r.voided ? "恢复" : "作废"}</button></td>
-  </tr>`).join("") || `<tr><td colspan="9" class="pz-rec-empty">暂无记录</td></tr>`;
+  </tr>`).join("") || `<tr><td colspan="10" class="pz-rec-empty">暂无记录</td></tr>`;
 }
 
 function exportPuzzleRecords() {
   const list = pzRecordsShown();
   if (!list.length) return showToast("没有可导出的记录");
   const safe = (v) => (/^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v));   // 防止表格软件把 ID 当公式
-  const head = ["名次", "登记号", "届", "玩家ID", "难度", "块数", "耗时(秒)", "耗时", "开局到登记(秒)", "登记时间", "IP属地", "访客标识", "状态"];
+  const head = ["名次", "登记号", "届", "玩家ID", "难度", "块数", "耗时(秒)", "耗时", "开局到登记(秒)", "辅助功能", "登记时间", "IP属地", "访客标识", "状态"];
   const rows = list.map((r) => [r.rank || "", r.id, r.rev, safe(r.player), PZ_ADMIN_DIFFS[r.diff] || r.diff, r.pieces,
-    (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed), (r.serverMs / 1000).toFixed(1), formatCnSeconds(r.at),
+    (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed), (r.serverMs / 1000).toFixed(1), pzAidsText(r.aids) || "未使用", formatCnSeconds(r.at),
     geoText(r.geo), r.visitor, r.voided ? "已作废" : "有效"]);
   const csv = [head, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const stamp = epochToCnLocal(Date.now()).replace(/[-:]/g, "").replace("T", "-");
@@ -3879,7 +3882,7 @@ const ADMIN_PANELS_HTML = `
   </section>
   <section class="ta-group">
     <h3 class="ta-group-title">参赛记录</h3>
-    <p class="ta-group-hint">耗时为拼图计时（暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。IP 属地与访客标识不含 IP 本身。</p>
+    <p class="ta-group-hint">耗时为拼图计时（暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。「辅助」为本局用过的原图、边框块、网格提示。IP 属地与访客标识不含 IP 本身。</p>
     <div class="pz-rec-tools">
       <select id="pzRecRound" aria-label="届"><option value="cur">本届</option></select>
       <select id="pzRecSort" aria-label="排序"><option value="time">按耗时</option><option value="at">按登记时间</option></select>
@@ -3890,7 +3893,7 @@ const ADMIN_PANELS_HTML = `
     <p class="ta-group-hint" id="pzRecSummary"></p>
     <div class="ticket-table-wrap">
       <table class="ticket-table pz-rec-table">
-        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>辅助</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
         <tbody id="pzRecBody"></tbody>
       </table>
     </div>
