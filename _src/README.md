@@ -19,14 +19,15 @@
 | `huayu.js`、`huayu/` | 花语，打开时加载 |
 | `puzzle.js` | 花街拼图（「更多」里的百宝箱），打开时加载 |
 | `bard.js` | 吟游诗人模拟器（「更多」里的竖琴），打开时加载 |
+| `bard-stage.js` | 舞台演奏（吟游诗人模拟器「高级功能」里的全屏音游），点入口按钮时加载 |
 | `games.js` | 小游戏助手（「更多」里的羽毛笔）：数字炸弹、飞花令、谁是卧底，打开时加载 |
 | `games-poems.js` | 飞花令扩充题库（约 7.5 万句），小游戏助手打开后在后台加载 |
 | `sw.js` | 离线缓存 |
 | `build.mjs` | 生成发布版 |
 | `package.json`、`package-lock.json`、`.nvmrc` | 锁定构建用的 esbuild 与 Node 版本 |
-| `tools/` | 缩略图、标题字体子集 |
+| `tools/` | 缩略图、标题字体子集；`tools/stage-build/` 为舞台演奏的曲库、谱面、音轨生成器与冒烟测试 |
 
-脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard、games（及 games-poems）、`assets/lib/exceljs.min.js` 按需加载。
+脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard（及 bard-stage）、games（及 games-poems）、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
@@ -60,6 +61,19 @@
 - 回响中的音保留自己的音色，演奏中换音色可以叠出合奏。演奏时背景音乐暂停，结束后恢复；站内静音时不能开始。
 - 「更多」里的入口图标取自游戏原版职业图标的字形（`assets/site/bard-glyph.png`，只留形状作遮罩，颜色跟随其他按钮），不要改画。
 - 只用到本机：选的音色存 `hj_bard_inst`，小组件位置存 `hj_bard_xy`（拖标题栏移动，双击复位）。
+
+## 舞台演奏（音游）
+
+- 入口：吟游诗人模拟器「高级功能」里的「熟练了？来舞台演奏！」，按需加载 `bard-stage.js`，全屏一层（`#hjStage`），自带固定配色，不跟白天 / 夜晚模式变。发声借用 `bard.js` 的音源：`HJBard.playMidi(音高, 力度, 乐器, 声像, 推后秒数)`、`unlock`、`prepare`。
+- 玩法：气泡出现在音高对应的高度上（越高音越高），外圈收缩到与核心重合时弹它就发出这个音；伴奏 `<audio>` 自动播放，也是全场时钟（`currentTime` 平滑后减判定延迟）。判定 Perfect / Great / Good / Miss，没有血量；漏掉的音不出声；声像固定居中。
+- 操作（设置里可改，默认按设备）：手机、平板点气泡（判定半径约一个气泡直径，气泡沿旋律左右铺开）；电脑键盘轨道，屏幕按宽度分 2~4 条（<760 px 两条、<1180 px 三条，也可手选），音越低越靠左，默认键位 F J / F 空格 J / D F J K，按 `e.code` 认键（中文输入法开着也能弹），改键撞车时自动对调。
+- 谱面省掉的旋律音（轻松难度约省一半）按时间用轻音补上；开「示范旋律」改放示范轨，示范轨加载失败时整条旋律用轻音代替。第一拍前有四下预备拍并显示 3·2·1。
+- 学习模式：不计分，气泡到判定点还没弹就把伴奏停在这一拍，弹中才继续。
+- 界面分层：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、星级筛选、点一下试听 8 秒）/ 设置窗口（音量即全站音量、音色、示范旋律、操作方式、轨道与键位、判定延迟与校准）/ 玩法说明。Esc 与手机返回键都是「回到上一层」（打开时 `history.pushState`）。
+- 延迟校准放 `assets/bard/stage/metronome.mp3`（`tools/stage-build/metronome.py` 生成，拍点改了要同步 `bard-stage.js` 的 `CAL`），跟着按键或点圆圈，取后几下偏差的中位数。
+- 曲库与音轨在 `assets/bard/stage/`：`songs.json`（曲目信息、三档谱面 `notes`、完整旋律 `mel`，时间单位秒）、`<id>.acc.mp3` 伴奏、`<id>.perf.mp3` 示范、`midi/` 扒谱成果、`bg.jpg` 舞台背景。改曲子：改 `tools/stage-build/songs_*.py`，`python3 build.py --only-json` 只重写 `songs.json`（几秒），去掉参数则连音频一起重出（约 8 分钟）；`python3 check.py` 体检曲库。
+- 冒烟测试：`npm i --no-save jsdom && node tools/stage-build/smoke.mjs`（用 jsdom 跑 `bard-stage.js` 本体，期望「全部通过」）。
+- 只用到本机：`hj_stage_*`（曲目、难度、模式、音色、示范、操作方式、轨道、键位、延迟、星级筛选、各曲各难度的最高分）。
 
 ## 小游戏助手
 

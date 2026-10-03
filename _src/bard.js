@@ -11,7 +11,9 @@
    - 开始演奏后由全屏透明层接管点击（不会点到页面上的东西），再点按钮或按 Esc 结束；演奏时背景音乐暂停
    - 「高级功能」（开始演奏左边，点开向上展开，存本机）：辅助线（默认关，鼠标附近显示几档音高的横线和小五线谱）、
      回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像）、音阶、音域。
-     演奏中也能改，已在回响的音保持弹下时的音高 */
+     演奏中也能改，已在回响的音保持弹下时的音高
+   - 「高级功能」里的「熟练了？来舞台演奏！」按需加载 bard-stage.js（全屏音游），舞台借用这里的音源：
+     HJBard.playMidi（按音高出声，可推后几十毫秒排程）、unlock（叫醒音频）、prepare（预备乐器）、instruments、instName */
 (() => {
   const STORE_INST = "hj_bard_inst";
   const STORE_XY = "hj_bard_xy";
@@ -587,6 +589,46 @@
     }
   }
 
+  /* ==== 舞台演奏（音游，bard-stage.js）用：按指定音高出声，沿用同一套合成器与全站音量；delay 为从现在起推后的秒数（补音、预备拍提前排好） ==== */
+  function stagePlay(midi, vel, instId, pan, delay) {
+    const ctx = ensureAudio();
+    if (!ctx) return false;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const inst = INST[instId] || INST[B.inst] || INST[DEFAULT_INST];
+    const now = ctx.currentTime;
+    const t = now + 0.006 + Math.max(0, Number(delay) || 0);
+    A.master.gain.setTargetAtTime(siteVolume.level, now, 0.04);
+    try {
+      if (inst.kind === "sustain") playSustain(inst, midi, t, vel, pan || 0);
+      else playSample(inst, midi, t, vel, pan || 0);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  }
+
+  /* 舞台在模拟器之外：叫醒音频；模拟器刚结束演奏时会排一个「淡出后挂起音频」，这里取消掉，残留的回响直接停 */
+  function stageUnlock() {
+    const ctx = ensureAudio();
+    if (!ctx) return false;
+    clearTimeout(B.stopTimer);
+    if (!B.playing) {
+      A.voices.forEach((v) => v.stop(ctx.currentTime));
+      A.voices.clear();
+    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    A.master.gain.cancelScheduledValues(ctx.currentTime);
+    A.master.gain.setTargetAtTime(siteVolume.level, ctx.currentTime, 0.02);
+    return true;
+  }
+
+  /* 开演前把要用的乐器先备好（钢琴下载采样，拨弦类预渲染） */
+  function stagePrepare(instId) {
+    if (!ensureAudio() || !INST[instId]) return;
+    prerender(INST[instId]);
+  }
+
   /* ==== 演奏：点击与回响 ==== */
   function tapNote(x, y) {
     const { vw, vh } = viewportSize();
@@ -948,6 +990,7 @@
       <div class="bard-adv" id="bardAdv">
         <div class="bard-adv-inner">
           <div class="bard-opts">${OPTIONS.map((o) => `<label class="bard-opt" title="${o.title}"><input type="checkbox" data-opt="${o.key}"><span>${o.label}</span></label>`).join("")}</div>
+          <button class="bard-stage-btn" id="bardStageBtn" type="button" title="全屏舞台：跟着收缩的气泡把旋律点出来"><span class="bss-ico" aria-hidden="true">♪</span><span>熟练了？来舞台演奏！</span></button>
           ${CHOICES.map((c) => `<div class="bard-seg-row" role="radiogroup" aria-label="${c.label}">
             <span class="bard-seg-label" aria-hidden="true">${c.label}</span>
             <div class="bard-seg">${c.list.map((it) => `<label class="bard-seg-opt"${it.title ? ` title="${it.title}"` : ""}><input type="radio" name="bard-${c.key}" value="${it.id}" data-choice="${c.key}"><span>${it.label}${c.key === "scale" ? ` <small data-count="${it.id}"></small>` : ""}</span></label>`).join("")}</div>
@@ -984,6 +1027,7 @@
     $("bardMore").addEventListener("click", () => toggleAdvanced(!$("bardAdv").classList.contains("is-open")));
     $("bardPlay").addEventListener("click", () => (B.playing ? stop() : start()));
     $("bardClose").addEventListener("click", close);
+    $("bardStageBtn").addEventListener("click", openStage);
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || !B.playing) return;
       e.preventDefault();
@@ -1001,6 +1045,18 @@
       },
     });
     syncButton();
+  }
+
+  /* 打开全屏舞台演奏（音游）：脚本按需加载，加载前先把自由演奏收起来 */
+  function openStage() {
+    stop();
+    const go = () => window.HJStage?.open();
+    if (window.HJStage) { go(); return; }
+    if (typeof loadLateScript !== "function") { showToast("舞台脚本没加载上，刷新页面再试一次"); return; }
+    loadLateScript("bard-stage.js", () => !!window.HJStage).then(
+      go,
+      () => showToast("舞台没搭起来，检查一下网络再试"),
+    );
   }
 
   function open() {
@@ -1023,5 +1079,12 @@
     if (w) w.hidden = true;
   }
 
-  window.HJBard = { open, close, stop };
+  window.HJBard = {
+    open, close, stop, openStage,
+    playMidi: stagePlay,
+    unlock: stageUnlock,
+    prepare: stagePrepare,
+    instName: () => B.inst,
+    instruments: INSTRUMENTS.map((i) => ({ id: i.id, name: i.name, group: i.group })),
+  };
 })();
