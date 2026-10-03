@@ -231,7 +231,7 @@ async function main() {
     const n1 = notes[1];
     P.until(n1.t + 0.4);
     check("判定窗过了还多等一下（排队中的点按还算数）", P.st().judged[1] === -1);
-    P.until(n1.t + 0.52);                         // 轻松难度 0.4 秒判定窗 + 0.1 秒余量之后才算漏
+    P.until(n1.t + 0.57);                         // 轻松难度 0.45 秒判定窗 + 0.1 秒余量之后才算漏
     const hitsAfter = P.midi.slice(before).filter((m) => m.vel >= 0.8);
     check("漏掉的音不出声", P.st().judged[1] === 3 && hitsAfter.length === 0, `judged=${P.st().judged[1]} sounds=${hitsAfter.length}`);
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
@@ -285,12 +285,16 @@ async function main() {
     check("点气泡：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
     const n0 = st.notes[0];
     P.until(n0.t - 0.02);
-    P.pointer(n0.x + st.g.size * 1.2, n0.y);        // 点在气泡旁边（判定圈 1.3 个气泡）
+    P.pointer(n0.x + st.g.size * 1.5, n0.y);        // 点在气泡旁边（判定圈 1.6 个气泡）
     check("点在气泡旁边也算弹中", P.st().judged[0] >= 0 && P.st().judged[0] < 3, `judged=${P.st().judged[0]}`);
     const n1 = st.notes[1];
     P.until(n1.t);
     P.pointer(n1.x + st.g.size * 3, Math.max(0, n1.y - st.g.size * 3));
     check("点得太远不算", P.st().judged[1] === -1);
+    const n2 = st.notes[2];
+    P.until(n2.t);
+    P.pointer(n2.x + st.g.size * 2, n2.y);
+    check("下一个该弹的气泡：偏 2 个气泡也算", P.st().judged[2] >= 0 && P.st().judged[2] < 3, `judged=${P.st().judged[2]}`);
     P.click(P.btn("回到大厅"));
     check("演奏中 ✕ 回大厅", P.st().view === "lobby" && !P.st().clock.run);
   }

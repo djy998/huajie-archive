@@ -40,6 +40,14 @@ async function run(song, diff, mode) {
     if (d < 1) over++;
     if (d < 1.8) { close++; if (ns[i].c === ns[j].c) same++; }
   }
+  /* 视线范围：相邻两个音跳多远、同时在场的气泡最远相隔多远（单位：气泡直径） */
+  const jumps = [], spreads = [];
+  ns.forEach((n, i) => {
+    if (i) jumps.push(Math.hypot(n.x - ns[i - 1].x, n.y - ns[i - 1].y) / size);
+    let far = 0;
+    for (let j = i + 1; j < ns.length && ns[j].t - n.t < W; j++) far = Math.max(far, Math.hypot(ns[j].x - n.x, ns[j].y - n.y) / size);
+    spreads.push(far);
+  });
   let jack = 0, sameHand = 0, fast = 0;
   const lanesUsed = [0, 0, 0, 0];
   const L = st.lanes;
@@ -53,7 +61,7 @@ async function run(song, diff, mode) {
     else if (hand(n.lane) >= 0 && hand(n.lane) === hand(p.lane)) sameHand++;
   });
   win.close();
-  return { n: ns.length, over, close, same, worst, jack, sameHand, fast, lanesUsed };
+  return { n: ns.length, over, close, same, worst, jack, sameHand, fast, lanesUsed, jumps, spreads };
 }
 const MODES = [
   { name: "键盘4", input: "keys", lanes: "4", w: 1280, h: 800 },
@@ -66,10 +74,12 @@ for (const s of SONGS.songs.filter((s) => !only || s.id === only)) {
   for (const diff of ["easy", "normal", "hard"]) for (const m of MODES) {
     const r = await run(s, diff, m);
     const k = `${m.name}/${diff}`;
-    tot[k] ??= { notes: 0, over: 0, same: 0, worst: 9, worstSong: "", jack: 0, sameHand: 0, fast: 0, lanes: [0, 0, 0, 0] };
+    tot[k] ??= { notes: 0, over: 0, same: 0, worst: 9, worstSong: "", jack: 0, sameHand: 0, fast: 0, lanes: [0, 0, 0, 0], jumps: [], spreads: [] };
+    tot[k].jumps.push(...r.jumps); tot[k].spreads.push(...r.spreads);
     tot[k].jack += r.jack; tot[k].sameHand += r.sameHand; tot[k].fast += r.fast; r.lanesUsed.forEach((c, i) => { tot[k].lanes[i] += c; });
     tot[k].notes += r.n; tot[k].over += r.over; tot[k].same += r.same;
     if (r.worst < tot[k].worst) { tot[k].worst = r.worst; tot[k].worstSong = s.id; }
   }
 }
-for (const [k, v] of Object.entries(tot)) console.log(`${k.padEnd(12)} 音 ${String(v.notes).padStart(6)}  重叠对 ${String(v.over).padStart(5)}  近而同色 ${v.same}  最近 ${v.worst.toFixed(2)} 个气泡（${v.worstSong}）${v.fast ? `  快速连打 ${v.fast}：同键 ${v.jack} 同手 ${v.sameHand}  各轨 ${v.lanes.join("/")}` : ""}`);
+const q = (a, f) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor(f * (b.length - 1))].toFixed(2) : "-"; };
+for (const [k, v] of Object.entries(tot)) console.log(`${k.padEnd(12)} 跳距 中位 ${q(v.jumps, 0.5)} / 90% ${q(v.jumps, 0.9)}  同屏最远 中位 ${q(v.spreads, 0.5)} / 90% ${q(v.spreads, 0.9)}  音 ${String(v.notes).padStart(6)}  重叠对 ${String(v.over).padStart(5)}  近而同色 ${v.same}  最近 ${v.worst.toFixed(2)} 个气泡（${v.worstSong}）${v.fast ? `  快速连打 ${v.fast}：同键 ${v.jack} 同手 ${v.sameHand}  各轨 ${v.lanes.join("/")}` : ""}`);

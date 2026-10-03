@@ -26,16 +26,17 @@
   };
   /* approach：气泡提前多久出现；win：Perfect / Great / Good 的判定半窗（秒）；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: [0.16, 0.27, 0.4], size: 0.44, tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: [0.12, 0.21, 0.32], size: 0.38, tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: [0.09, 0.16, 0.25], size: 0.32, tap: 0.2 },
+    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], size: 0.44, tap: 0.24 },
+    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], size: 0.38, tap: 0.21 },
+    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], size: 0.32, tap: 0.2 },
   ];
   /* 输入：判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数）
      点按排队的时间用 e.timeStamp 补回来，但最多补 TS_MAX 秒；有的手机浏览器（如一些 App 内置浏览器）的 timeStamp
      不是 performance.now 的时基，一旦对不上就整局不再用 */
   const INPUT_GRACE = 0.1;
   const TS_MAX = 0.05;
-  const TAP_R = 1.3;
+  const TAP_R = 1.6;
+  const TAP_NEXT_R = 2.2;                               // 下一个该弹的（外圈加粗那个）再多给一圈：附近没别的气泡可算时，点偏一点也算它
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
     { id: "great", label: "GREAT", pts: 200, vel: 0.9 },
@@ -890,32 +891,30 @@
   }
 
   /* ==== 气泡摆放（谱面的几条规矩）====
-     - 同时在屏幕上的气泡尽量不重叠：每个音在一组候选位置里挑「重叠最少、离音高最近、走位最顺」的一个；
-       实在太密也只会擦边，不会整个叠在一起
-     - 高度大致跟着音高（越高越往上），为了躲开别的气泡可以上下挪一点
-     - 键盘：轨道不再按音高划分。旋律往上倾向往右、往下倾向往左，但先保证不叠；
-       快速连打（间隔 < 0.2 秒）不连按同一个键、两只手交替
-     - 点气泡：沿着旋律左右走，间距按时间（隔得越久走得越远），尽量顺着一个方向走、不在原地来回
+     - 同时在屏幕上的气泡尽量不重叠：每个音在一组候选位置里挑代价最小的一个；实在太密也只会擦边，不会整个叠在一起
+     - 待在视线里：下一个气泡就出现在上一个旁边（间隔越久离得稍远，最远约 2.3 个气泡），整体往屏幕中间收，
+       不会一会儿左边一会儿右边、一会儿顶上一会儿底下
+     - 高度跟着旋律的走向：音往上走，气泡往上挪（每半音约 0.18 个气泡，一步最多 1.4 个），而不是按绝对音高铺满整屏
+     - 点气泡：尽量顺着一个方向走，不急转回头
+     - 键盘：轨道不按音高划分，换轨尽量就近；快速连打（间隔 < 0.2 秒）不连按同一个键、两只手交替
      - 挨得近（同时在场、中心距离不到 1.8 个气泡）的两个气泡一定不同色；先到的气泡叠在上面 */
   function placeNotes(g, dm) {
     const keys = S.mode === "keys";
     const { w, size, top, bottom, laneW } = g;
     const W = dm.approach + 0.35;                       // 两个音同时在屏幕上的最大时间差（出现 → 判定完消失）
-    const DMIN = size * 1.12;
-    const span = Math.max(S.hi - S.lo, 10);
-    const pad = (span - (S.hi - S.lo)) / 2;
-    const pitchY = (m) => bottom - clamp((m - S.lo + pad) / span, 0, 1) * (bottom - top);
-    const yOffs = [0, -0.6, 0.6, -1.2, 1.2, -1.8, 1.8, -2.6, 2.6];
+    const DMIN = size * 1.15;
     const margin = size * 0.72 + 8;
-    const usable = Math.max(1, w - margin * 2);
-    const xCols = Array.from({ length: 11 }, (_, i) => margin + (usable * i) / 10);
-    const speed = usable / 3;
-    const sMin = Math.min(usable, size * 1.15);
-    const sMax = Math.max(sMin, usable * 0.5);
+    const left = margin;
+    const right = Math.max(margin + 1, w - margin);
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+    const PULL = size * 2.4;                            // 离中心超过这么远，往回拉的力度明显变大
+    const mid = (S.lo + S.hi) / 2;
     const d = keys ? Math.max(0, Math.min(laneW * 0.3, (laneW - size) / 2)) : 0;
     const xOffs = d > 2 ? [0, -d, d] : [0];
     const L = S.lanes;
     const hand = (l) => (L === 3 ? (l === 1 ? -1 : l > 1 ? 1 : 0) : l < L / 2 ? 0 : 1);   // 三条轨道时中间是拇指（空格）
+    const ANG = Array.from({ length: 16 }, (_, k) => (k * Math.PI) / 8);
     const notes = S.notes;
     let j0 = 0;
     notes.forEach((n, i) => {
@@ -924,12 +923,27 @@
       const p = i ? notes[i - 1] : null;
       const pp = i > 1 ? notes[i - 2] : null;
       const dt = p ? n.t - p.t : 9;
-      const yp = pitchY(n.m);
-      const ys = yOffs.map((k) => clamp(yp + k * size, top, bottom));
+      const step = p ? n.m - p.m : 0;
+      const yWant = p ? p.y - clamp(step * 0.18, -1.4, 1.4) * size : cy - clamp((n.m - mid) * 0.12, -1.5, 1.5) * size;
+      const want = clamp(size * (1.2 + dt), size * 1.3, size * 2.3);   // 点气泡：和上一个隔多远
       let best = null;
       let bestCost = Infinity;
-      const tryAt = (x, y, lane, cost) => {
-        let c = cost + (0.6 * Math.abs(y - yp)) / size;
+      const tryAt = (x0, y0, lane, cost) => {
+        const x = keys ? x0 : clamp(x0, left, right);
+        const y = clamp(y0, top, bottom);
+        let c = cost + (0.35 * Math.abs(y - yWant)) / size;
+        const r = (keys ? Math.abs(y - cy) : Math.hypot(x - cx, y - cy)) / PULL;
+        c += 0.9 * r * r;                               // 往中间收
+        if (p && step && Math.abs(p.y - y) > size * 0.2 && Math.sign(p.y - y) !== Math.sign(step)) c += 0.8;   // 音往上走气泡别往下
+        if (p && !keys) {
+          const jump = Math.hypot(x - p.x, y - p.y);
+          c += (0.7 * Math.abs(jump - want)) / size;
+          if (pp) {                                     // 别急转回头
+            const ax = p.x - pp.x, ay = p.y - pp.y, bx = x - p.x, by = y - p.y;
+            const cos = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1);
+            if (cos < -0.5) c += 0.4;
+          }
+        }
         if (c >= bestCost) return;
         for (const q of near) {
           const dist = Math.hypot(q.x - x, q.y - y);
@@ -944,12 +958,13 @@
       if (keys) {
         const fixed = n.lane >= 0;
         const lanes = fixed ? [n.lane] : Array.from({ length: L }, (_, l) => l);
+        const ys = [0, -0.5, 0.5, -1, 1, -1.5, 1.5, -2.2, 2.2, -3, 3].map((k) => yWant + k * size);
         for (const l of lanes) {
           let lc = 0;
           if (!fixed && p) {
-            const dmid = n.m - p.m;
-            const want = dmid === 0 ? 0 : Math.sign(dmid) * Math.min(L - 1, Math.max(1, Math.round(Math.abs(dmid) / 4)));
-            lc += 0.5 * Math.abs(l - p.lane - want);
+            const wantL = step === 0 ? 0 : Math.sign(step) * Math.min(L - 1, Math.max(1, Math.round(Math.abs(step) / 5)));
+            lc += 0.5 * Math.abs(l - p.lane - wantL);
+            lc += 0.7 * Math.max(0, Math.abs(l - p.lane) - 1);          // 换轨尽量就近，别一下跨过半个屏幕
             if (l === p.lane) lc += dt < 0.2 ? 4 : dt < 0.3 ? 1.5 : 0;
             if (dt < 0.2 && hand(l) >= 0 && hand(l) === hand(p.lane)) lc += 1.2;
             lc += 0.12 * near.filter((q) => q.lane === l).length;   // 别老挤在同一条
@@ -958,20 +973,18 @@
           }
           for (const xo of xOffs) for (const y of ys) tryAt(laneW * (l + 0.5) + xo, y, l, lc + (xo ? 0.15 : 0));
         }
+        /* 太密：在这些轨道的整个高度上找空位 */
+        if (bestCost > 30) {
+          for (const l of lanes) for (const xo of xOffs) for (let gy = top; gy <= bottom; gy += size * 0.5) tryAt(laneW * (l + 0.5) + xo, gy, l, 1 + (fixed ? 0 : 0.5 * Math.abs(l - (p ? p.lane : l))));
+        }
+      } else if (!p) {
+        for (const k of [0, -0.6, 0.6, -1.2, 1.2]) tryAt(cx + k * size, yWant, 0, 0);
       } else {
-        const want = clamp(dt * speed, sMin, sMax);
-        const dir = p && pp ? Math.sign(p.x - pp.x) : 0;
-        for (const x of xCols) {
-          let pc = 0;
-          if (p) {
-            pc += Math.abs(Math.abs(x - p.x) - want) / size;
-            /* 顺着上一步的方向走；撞墙了才折返 */
-            const room = dir > 0 ? margin + usable - p.x : p.x - margin;
-            if (dir && Math.sign(x - p.x) !== dir && room >= want * 0.9) pc += 0.6;
-          } else {
-            pc += Math.abs(x - (margin + usable / 2)) / usable;
-          }
-          for (const y of ys) tryAt(x, y, 0, pc);
+        for (const a of ANG) for (const f of [0.85, 1, 1.25]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0, 0);
+        /* 附近全被占了（极密的段落）：再往外找一圈，还不行就在整个屏幕上找空位（宁可远一点也不叠） */
+        if (bestCost > 30) for (const a of ANG) for (const f of [1.6, 2.1]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0, 0.5);
+        if (bestCost > 30) {
+          for (let gx = 0; gx <= 8; gx++) for (let gy = top; gy <= bottom; gy += size * 0.55) tryAt(left + ((right - left) * gx) / 8, gy, 0, 1);
         }
       }
       n.x = best.x;
@@ -1347,7 +1360,8 @@
     if (best) hit(best, tierOf(bestD, dm), t - best.t);
   }
 
-  /* 点气泡：判定窗内、离点按处 TAP_R 个气泡直径以内的音，时间越准、离得越近越优先 */
+  /* 点气泡：判定窗内、离点按处 TAP_R 个气泡直径以内的音，时间越准、离得越近越优先；
+     一个都没有时，下一个该弹的音在 TAP_NEXT_R 以内也算 */
   function tapAt(x, y, e) {
     const g = S.g;
     const R = g.size * TAP_R;
@@ -1368,8 +1382,16 @@
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
       const d = Math.hypot(n.x - x, n.y - y);
       if (d > R) continue;
-      const score = Math.abs(dt) / dm.win[2] + (d / R) * 0.6;   // 判定圈放大了，离得近的更优先，免得点到旁边那个
+      const score = Math.abs(dt) / dm.win[2] + (d / g.size) * 0.5;   // 判定圈大，点在谁身上就优先算谁，免得算到旁边那个
       if (score < bestScore) { bestScore = score; best = n; }
+    }
+    if (!best) {
+      for (let i = S.next; i < S.notes.length; i++) {
+        const n = S.notes[i];
+        if (S.judged[n.idx] >= 0 || n.t - t < -dm.win[2]) continue;   // 已经过了判定窗、等着判漏的不算
+        if (n.t - t <= dm.win[2] && Math.hypot(n.x - x, n.y - y) <= g.size * TAP_NEXT_R) best = n;
+        break;
+      }
     }
     if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
     else { S.ghosts += 1; ghost(x, y); }
