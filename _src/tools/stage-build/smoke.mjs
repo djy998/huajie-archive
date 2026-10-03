@@ -104,10 +104,14 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
   /* ago：事件其实发生在多少毫秒之前（模拟手机主线程忙、点按排队晚到） */
   P.key = (code, key = "x", extra = {}, ago = 0) => {
     const ev = new win.KeyboardEvent("keydown", { code, key, bubbles: true, cancelable: true, ...extra });
-    if (ago) Object.defineProperty(ev, "timeStamp", { value: P.now - ago });
+    Object.defineProperty(ev, "timeStamp", { value: ago === "epoch" ? Date.now() : P.now - ago });   // 和 performance.now 同一时基
     doc.dispatchEvent(ev);
   };
-  P.pointer = (x, y) => P.$("#hjsPlay").dispatchEvent(new win.MouseEvent("pointerdown", { clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0 }));
+  P.pointer = (x, y) => {
+    const ev = new win.MouseEvent("pointerdown", { clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(ev, "timeStamp", { value: P.now });
+    P.$("#hjsPlay").dispatchEvent(ev);
+  };
   P.btn = (text, root = doc) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent.trim() === text || b.getAttribute("aria-label") === text);
   return P;
 }
@@ -244,10 +248,10 @@ async function main() {
     P.advance(0.05);
     check("继续后从暂停处接着走", Math.abs(P.pos() - tPause - 0.05) < 1e-6, `${(P.pos() - tPause).toFixed(3)}`);
 
-    /* 主线程忙：点按晚 120 ms 才处理，按事件发生的时刻判定，照样 PERFECT */
-    P.until(notes[2].t + 0.12);
-    P.key(P.st().codes[4][notes[2].lane], "x", {}, 120);
-    check("按事件发生的时刻判定（晚处理不吃亏）", P.st().judged[2] === 0, `judged=${P.st().judged[2]}`);
+    /* 主线程忙：点按晚 200 ms 才处理，按事件时间补回 50 ms → 判成晚 150 ms，仍在轻松的 PERFECT（0.16 秒）以内 */
+    P.until(notes[2].t + 0.2);
+    P.key(P.st().codes[4][notes[2].lane], "x", {}, 200);
+    check("点按排队的时间按事件时间戳补回一点（最多 50 ms）", P.st().judged[2] === 0, `judged=${P.st().judged[2]}`);
     /* 一路弹到底 */
     for (let i = 3; i < notes.length; i++) {
       P.until(notes[i].t);
@@ -257,6 +261,7 @@ async function main() {
     const fin = P.st();
     check("弹完出结算", fin.finished && /演出结束/.test(P.$("#hjsModal").textContent));
     check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
+    check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
     check("本机纪录写入（新的 best2）", best[`${fin.song}:easy`] && best[`${fin.song}:easy`].score === fin.score);
@@ -324,6 +329,11 @@ async function main() {
     const total = chartOf(SHORT.id).n.length;
     check("示范旋律：补音列表是整首 MIDI", st.bg.length === total, `${st.bg.length}/${total}`);
     check("要弹的音用示范力度", st.bg.filter((n) => n.v === 0.5).length === SHORT.cnt[1]);
+    /* 有的浏览器 timeStamp 是 1970 年起的毫秒（或别的时基）：认出来就不用，按处理时刻判定，不会整局判早 */
+    const n0 = st.notes[0];
+    P.until(n0.t);
+    P.key(st.codes[st.lanes][n0.lane], "x", {}, "epoch");
+    check("时间戳时基不对时不拿来用（照样 PERFECT）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
   }
 
   /* 6. 谱面下载失败 → 回大厅并提示 */
