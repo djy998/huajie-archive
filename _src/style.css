@@ -6214,12 +6214,12 @@ body.day-mode .load-corner { box-shadow: 0 4px 12px rgba(96,64,16,.22), inset 0 
 .hjs.is-leaving { opacity: 0; }
 body.hjs-open { overflow: hidden; }
 /* 舞台盖满时（hjs-covered，淡入后加、开始淡出前去掉）：下面的网站不画、动画暂停；用 visibility 不用 display，滚动位置不变。
-   提示条和加载中的莫古力（.load-veil / .load-corner）照常显示 */
-body.hjs-covered > :not(#hjStage):not(#toast):not(.load-veil):not(.load-corner) { visibility: hidden !important; }
-body.hjs-covered > :not(#hjStage):not(#toast):not(.load-veil):not(.load-corner),
-body.hjs-covered > :not(#hjStage):not(#toast):not(.load-veil):not(.load-corner) *,
-body.hjs-covered > :not(#hjStage):not(#toast):not(.load-veil):not(.load-corner) *::before,
-body.hjs-covered > :not(#hjStage):not(#toast):not(.load-veil):not(.load-corner) *::after { animation-play-state: paused !important; }
+   只点名藏网站本身的内容（页头、正文、页脚、背景特效、各弹窗、模拟器小组件），不用「除了某几个都藏」的写法：
+   浮在舞台上面的东西（下拉选单 .hj-pop、加载中的莫古力、提示条…）都是动态挂到 body 上的，漏列一个就会看不见、点了没反应 */
+body.hjs-covered > :is(#maintNotice, #skyBase, #skyFade, #fxLayer, #fxClickLayer, .site-header, main, footer,
+  .info-overlay, .lightbox-overlay, .puzzle-overlay, #bardStage, #bardWidget) { visibility: hidden !important; }
+body.hjs-covered > :is(#maintNotice, #skyBase, #skyFade, #fxLayer, #fxClickLayer, .site-header, main, footer,
+  .info-overlay, .lightbox-overlay, .puzzle-overlay, #bardStage, #bardWidget) :is(*, *::before, *::after) { animation-play-state: paused !important; }
 body.hjs-open .toast { z-index: 540; }
 .hjs audio { display: none; }
 .hjs-safe { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
