@@ -6069,7 +6069,8 @@ body.day-mode .games-card select {
 }
 
 /* ==== 30. 加载提示 ==== */
-/* 访客在等的加载（请求、按需脚本、大图）超过 0.35 秒才出现，见 main.js 的 withLoadVeil：开屏同款莫古力转圈，盖住页面防止重复点击 */
+/* 两种加载提示，由 main.js 的 trackLoad 按「会不会挡住访客」挑选：
+   全屏遮罩 .load-veil（访客在等，盖住页面防止重复点击）与右下角小号转圈 .load-corner（后台在加载，不挡点击） */
 .load-veil {
   position: fixed; inset: 0; z-index: 560;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -6113,8 +6114,41 @@ body.day-mode .games-card select {
 body.day-mode .load-veil { background: radial-gradient(ellipse at 50% 45%, rgba(255,249,235,.4) 0%, rgba(240,220,180,.5) 100%); }
 body.day-mode .load-veil-spin { box-shadow: 0 8px 26px rgba(96,64,16,.28); }
 body.day-mode .load-veil-text { color: var(--day-brown); text-shadow: 0 1px 0 rgba(255,255,255,.7); }
+
+.load-corner {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 485;
+  width: 46px; height: 46px;
+  padding: 3px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-up-edge);
+  background: var(--glass-up);
+  box-shadow: 0 4px 12px rgba(10,7,22,.3), inset 0 1px 0 rgba(255,255,255,.24);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+  pointer-events: none;
+  animation: loadCornerIn .3s cubic-bezier(.34,1.4,.64,1) both;
+}
+.load-corner[hidden] { display: none; }
+.load-corner.is-leaving { opacity: 0; transform: scale(.7); transition: opacity .25s ease, transform .25s ease; }
+@keyframes loadCornerIn { from { opacity: 0; transform: scale(.6); } }
+.load-corner img {
+  display: block;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  -webkit-user-drag: none;
+  animation: loadVeilSpin 1.1s ease-in-out infinite;
+}
+html.hj-loading .load-corner { visibility: hidden; }
+body.day-mode .load-corner { box-shadow: 0 4px 12px rgba(96,64,16,.22), inset 0 1px 0 rgba(255,255,255,.8); }
+@media (max-width: 640px) {
+  .load-corner { width: 38px; height: 38px; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .load-veil { animation: none; }
-  .load-veil-spin img { animation-duration: 2.4s; animation-timing-function: linear; }
+  .load-veil, .load-corner { animation: none; }
+  .load-veil-spin img, .load-corner img { animation-duration: 2.4s; animation-timing-function: linear; }
   .load-veil-text { animation: none; }
 }

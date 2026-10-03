@@ -194,8 +194,8 @@ function workerImageUrl(url) {
 }
 
 /* 连不上或返回的不是 JSON 时为 null；业务错误为 { ok: false, error }。
-   访客在等结果的请求自动套上加载提示（见 visitorWaiting）；后台刷新、不挡操作的请求传 { quiet: true } */
-async function callWorker(payload, { quiet = false } = {}) {
+   load 为加载提示的方式（见下方「加载提示」）：默认 auto，访客刚点了东西在等结果时全屏，其余不提示 */
+async function callWorker(payload, { load = "auto" } = {}) {
   const req = (async () => {
     try {
       const res = await fetch(workerBase(), {
@@ -208,12 +208,12 @@ async function callWorker(payload, { quiet = false } = {}) {
       return null;
     }
   })();
-  return quiet || !visitorWaiting() ? req : withLoadVeil(req);
+  return trackLoad(req, load === "auto" ? (visitorWaiting() ? "block" : "none") : load);
 }
 
-/* 按需加载的脚本；失败后允许重试。都是访客要用才加载，默认套上加载提示，后台预取传 { quiet: true } */
+/* 按需加载的脚本；失败后允许重试。都是访客点了要用才加载，默认全屏提示；后台预取传 { load: "corner" } 或 "none" */
 const lateScripts = {};
-function loadLateScript(file, ready, { quiet = false } = {}) {
+function loadLateScript(file, ready, { load = "block" } = {}) {
   if (ready()) return Promise.resolve();
   lateScripts[file] ??= new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -222,87 +222,97 @@ function loadLateScript(file, ready, { quiet = false } = {}) {
     s.onerror = () => { s.remove(); reject(new Error(`${file} load failed`)); };
     document.head.appendChild(s);
   }).catch((e) => { delete lateScripts[file]; throw e; });
-  return quiet ? lateScripts[file] : withLoadVeil(lateScripts[file]);
+  return trackLoad(lateScripts[file], load);
 }
 
-/* ==== 加载提示：开屏同款的莫古力转圈 +「正在加载库啵……」 ====
-   - 全站通用：withLoadVeil(promise) 包住访客在等的事；callWorker、loadLateScript、大图都已接上
-   - 什么算「访客在等」：刚点过、按过回车 / 空格（VISITOR_WAIT_MS 内）发出的请求，或者已经有一件事在等时接着发出的请求；
-     定时刷新、进站时的后台读取不算，写在 runQuietly 里的也不算
-   - 等候超过 LOAD_VEIL_DELAY_MS 还没好才出现（网快时什么都看不到），出现后至少转 LOAD_VEIL_MIN_MS 再收起；
-     几件事同时在等时，全部结束才收起；期间盖住页面，不会被重复点击
-   - 超过 LOAD_VEIL_MAX_MS 还没好就先收起并提示，网络卡住时页面也不会一直点不了；那件事加载完照常继续 */
-const LOAD_VEIL_DELAY_MS = 350;
-const LOAD_VEIL_MIN_MS = 700;
-const LOAD_VEIL_MAX_MS = 12000;
+/* ==== 加载提示：开屏同款的莫古力 ====
+   trackLoad(promise, how) 按「会不会挡住访客」分两种：
+   - "block" 全屏遮罩：访客点了东西、要等它好了才能往下做（提交、打开要读数据的页面、按需脚本、没有缩略图的大图）。
+     盖住页面防止重复点击，下面写「正在加载库啵……」；超过 12 秒先收起并提示，网络卡住时页面也不会一直点不了
+   - "corner" 右下角小号转圈：有东西在加载，但不耽误访客做别的（进站读站点设置、点赞数、扩充题库、钢琴采样等），不挡点击
+   - "none" 不提示：定时刷新、后台再确认一次之类访客察觉不到的
+   callWorker 默认自动判断：访客刚点过、按过回车 / 空格（VISITOR_WAIT_MS 内），或已经有全屏提示在等时接着发出的请求，算 block，
+   其余算 none；定时器里的刷新写在 runQuietly 里。小号转圈的事若访客后来真要用到，再用 trackLoad(同一个 promise, "block") 升级成全屏，
+   例如站点设置还没读完时点了要人机验证的功能（siteStateReady）。
+   两种都是等候超过 delay 还没好才出现（网快时什么都看不到），出现后至少显示 min 再收起；全屏出现时小号转圈先藏起来 */
 const VISITOR_WAIT_MS = 1500;
-const loadVeil = { pending: 0, showTimer: 0, hideTimer: 0, capTimer: 0, shownAt: 0, gaveUp: false, gestureAt: 0, quiet: 0 };
+const LOAD_MODES = {
+  block: { delay: 350, min: 700, max: 12000, cls: "load-veil", html: '<span class="load-veil-spin"><img src="boot-moguri-v2.webp" alt="" draggable="false" decoding="async"></span><p class="load-veil-text">正在加载库啵……</p>' },
+  corner: { delay: 600, min: 900, max: 30000, cls: "load-corner", html: '<img src="boot-moguri-v2.webp" alt="" draggable="false" decoding="async">' },
+};
+const loadState = { gestureAt: 0, quiet: 0 };
+Object.values(LOAD_MODES).forEach((m) => Object.assign(m, { pending: 0, showTimer: 0, hideTimer: 0, capTimer: 0, shownAt: 0, gaveUp: false, el: null }));
 
-function initLoadVeil() {
-  const mark = () => { loadVeil.gestureAt = Date.now(); };
+function initLoadIndicators() {
+  const mark = () => { loadState.gestureAt = Date.now(); };
   ["pointerdown", "click", "submit"].forEach((t) => document.addEventListener(t, mark, { capture: true, passive: true }));
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") mark(); }, { capture: true, passive: true });
 }
 
-const visitorWaiting = () => !loadVeil.quiet && (loadVeil.pending > 0 || Date.now() - loadVeil.gestureAt < VISITOR_WAIT_MS);
+const visitorWaiting = () => !loadState.quiet && (LOAD_MODES.block.pending > 0 || Date.now() - loadState.gestureAt < VISITOR_WAIT_MS);
 
-/* 定时器、后台刷新里调用：期间同步发出的请求不弹提示 */
+/* 定时器、后台刷新里调用：期间同步发出的请求不提示 */
 function runQuietly(fn) {
-  loadVeil.quiet += 1;
-  try { return fn(); } finally { loadVeil.quiet -= 1; }
+  loadState.quiet += 1;
+  try { return fn(); } finally { loadState.quiet -= 1; }
 }
 
-function withLoadVeil(promise) {
-  const v = loadVeil;
-  v.pending += 1;
-  clearTimeout(v.hideTimer);
-  if (!v.shownAt && !v.showTimer && !v.gaveUp) v.showTimer = setTimeout(showLoadVeil, LOAD_VEIL_DELAY_MS);
+function trackLoad(promise, how = "block") {
+  const m = LOAD_MODES[how];
+  if (!m) return promise;
+  m.pending += 1;
+  clearTimeout(m.hideTimer);
+  if (!m.shownAt && !m.showTimer && !m.gaveUp) m.showTimer = setTimeout(() => showLoad(how), m.delay);
   const settle = () => {
-    v.pending -= 1;
-    if (v.pending > 0) return;
-    clearTimeout(v.showTimer);
-    clearTimeout(v.capTimer);
-    v.showTimer = 0;
-    v.gaveUp = false;
-    if (v.shownAt) v.hideTimer = setTimeout(hideLoadVeil, Math.max(0, v.shownAt + LOAD_VEIL_MIN_MS - Date.now()));
+    m.pending -= 1;
+    if (m.pending > 0) return;
+    clearTimeout(m.showTimer);
+    clearTimeout(m.capTimer);
+    m.showTimer = 0;
+    m.gaveUp = false;
+    if (m.shownAt) m.hideTimer = setTimeout(() => hideLoad(how), Math.max(0, m.shownAt + m.min - Date.now()));
   };
   promise.then(settle, settle);
   return promise;
 }
 
-function showLoadVeil() {
-  const v = loadVeil;
-  v.showTimer = 0;
+function showLoad(how) {
+  const m = LOAD_MODES[how];
+  const root = document.documentElement;
+  m.showTimer = 0;
   if (maintenanceActive()) return;
-  let el = $("loadVeil");
-  if (!el) {
-    el = document.createElement("div");
-    el.className = "load-veil";
-    el.id = "loadVeil";
-    el.setAttribute("role", "status");
-    el.innerHTML = '<span class="load-veil-spin"><img src="boot-moguri-v2.webp" alt="" draggable="false" decoding="async"></span><p class="load-veil-text">正在加载库啵……</p>';
-    document.body.appendChild(el);
+  /* 开屏还在时由开屏的莫古力代劳，进站后若还没好再出现 */
+  if (root.classList.contains("boot-pending")) { m.showTimer = setTimeout(() => showLoad(how), 250); return; }
+  if (!m.el) {
+    m.el = document.createElement("div");
+    m.el.className = m.cls;
+    m.el.setAttribute("role", "status");
+    if (how === "corner") m.el.setAttribute("aria-label", "正在加载库啵……");
+    m.el.innerHTML = m.html;
+    document.body.appendChild(m.el);
   }
-  el.classList.remove("is-leaving");
-  el.hidden = false;
-  v.shownAt = Date.now();
-  clearTimeout(v.capTimer);
-  v.capTimer = setTimeout(() => {
-    v.gaveUp = true;
-    hideLoadVeil();
-    showToast("网络有点慢，加载好了会自动继续");
-  }, LOAD_VEIL_MAX_MS - LOAD_VEIL_DELAY_MS);
+  m.el.classList.remove("is-leaving");
+  m.el.hidden = false;
+  m.shownAt = Date.now();
+  if (how === "block") root.classList.add("hj-loading");
+  clearTimeout(m.capTimer);
+  m.capTimer = setTimeout(() => {
+    m.gaveUp = true;
+    hideLoad(how);
+    if (how === "block") showToast("网络有点慢，加载好了会自动继续");
+  }, m.max - m.delay);
 }
 
-function hideLoadVeil() {
-  const el = $("loadVeil");
-  loadVeil.shownAt = 0;
-  if (!el || el.hidden) return;
-  el.classList.add("is-leaving");
+function hideLoad(how) {
+  const m = LOAD_MODES[how];
+  m.shownAt = 0;
+  if (how === "block") document.documentElement.classList.remove("hj-loading");
+  if (!m.el || m.el.hidden) return;
+  m.el.classList.add("is-leaving");
   setTimeout(() => {
-    if (loadVeil.shownAt) return;   // 收起途中又开始等了
-    el.hidden = true;
-    el.classList.remove("is-leaving");
+    if (m.shownAt) return;   // 收起途中又开始等了
+    m.el.hidden = true;
+    m.el.classList.remove("is-leaving");
   }, 260);
 }
 
@@ -924,7 +934,7 @@ async function isLockedDown(opts) {
 
 /* 互动功能在静态模式下拦截，同时重新读取开关 */
 async function blockedByStaticMode(opts) {
-  if (siteLockdown) isLockedDown({ quiet: true });
+  if (siteLockdown) isLockedDown({ load: "none" });
   else if (!(await isLockedDown(opts))) return false;
   showToast(STATIC_MODE_MSG);
   return true;
@@ -991,7 +1001,8 @@ let captchaPending = null;      // 通过后要做的事
 let captchaFailStreak = 0;      // Turnstile 凭证连续校验失败次数
 let captchaSession = 0;         // 丢弃过期回调用
 
-function requestCaptcha(pending) {
+async function requestCaptcha(pending) {
+  await siteStateReady();   // 人机验证开关以站点设置为准
   if (isCaptchaFresh()) runCaptchaPending(pending);
   else openCaptcha(pending);
 }
@@ -1021,7 +1032,7 @@ async function finishCaptcha(proof) {
   const msg = $("captchaMsg");
   setMsg(msg, "验证中…");
   /* 听得花间语：验证与打开记录一并提交 */
-  const data = await withLoadVeil(callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof }, { quiet: true }));
+  const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof }, { load: "block" });
   if (session !== captchaSession) return;
   if (data?.error === "closed") {
     closeCaptcha();
@@ -1154,7 +1165,7 @@ function openInfoModal() {
   $("infoOverlay").hidden = false;
   switchInfoTab("intro");
   playFadeOnly($("infoBox"));
-  isLockedDown({ quiet: true });
+  isLockedDown({ load: "none" });
 }
 
 function closeInfoModal() {
@@ -1438,7 +1449,7 @@ function openLightbox(src, mode, preview) {
   $("lightboxOverlay").hidden = false;
   if (img.complete && img.naturalWidth) img.onload();
   else if (!preview || preview === src) {
-    withLoadVeil(new Promise((resolve) => {
+    trackLoad(new Promise((resolve) => {
       lbWaitDone = resolve;
       img.addEventListener("load", resolve, { once: true });
       img.addEventListener("error", resolve, { once: true });
@@ -2598,7 +2609,7 @@ async function refreshLikes(root) {
   if (siteLockdown) return;
   const keys = [...new Set(likeButtonsIn(root).map((b) => b.dataset.likeKey))];
   if (!keys.length) return;
-  const data = await callWorker({ action: "get_likes", keys }, { quiet: true });
+  const data = await callWorker({ action: "get_likes", keys }, { load: "corner" });
   if (!data || !data.ok) return;
   likes.available = true;
   Object.assign(likes.counts, data.counts);
@@ -2617,10 +2628,10 @@ function setupDetailLike(data) {
 
 async function onLikeClick(btn) {
   const key = btn.dataset.likeKey;
-  if (!key || (await blockedByStaticMode({ quiet: true }))) return;
+  if (!key || (await blockedByStaticMode({ load: "corner" }))) return;
   if (likes.remaining <= 0) { showToast(LIKE_LIMIT_MSG); return; }
   btn.disabled = true;
-  const data = await callWorker({ action: "add_like", key }, { quiet: true });   // 按钮自己会变灰，不挡页面
+  const data = await callWorker({ action: "add_like", key }, { load: "corner" });   // 按钮自己会变灰，不挡页面
   btn.disabled = false;
   if (data && data.ok) {
     likes.liked.add(key);
@@ -3362,6 +3373,7 @@ async function huayuOpen(H, text) {
 let huayuVisited = false;
 async function requestHuayu() {
   if (huayuVisited) return openHuayuModal();
+  await siteStateReady();
   if (captchaOn) return openCaptcha("huayu");
   const data = await callWorker({ action: "huayu_visit" });
   if (data?.error === "captcha") return openCaptcha("huayu");
@@ -3853,9 +3865,19 @@ function initPickers() {
 
 /* ==== 15. 启动 ==== */
 /* 站点状态：分享功能、人机验证、星芒节、弹窗公告、花语开关、服务器时间 */
-async function loadSiteState() {
+/* 进站时读一次：首次进站算在开屏的等待里，之后右下角小号转圈，不挡浏览；
+   用到这些设置的操作（人机验证、花语）若赶在读完之前，就等它读完（转为全屏），免得按旧设置走错 */
+let siteStateLoading = null;
+const siteStateReady = () => (siteStateLoading ? trackLoad(siteStateLoading, "block") : Promise.resolve());
+
+function loadSiteState() {
+  siteStateLoading = readSiteState().catch((e) => console.error(e)).finally(() => { siteStateLoading = null; });
+  return siteStateLoading;
+}
+
+async function readSiteState() {
   const sentAt = Date.now();
-  const data = await callWorker({ action: "get_site_state" }, { quiet: true });
+  const data = await callWorker({ action: "get_site_state" }, { load: "corner" });
   if (!data || !data.ok) {
     applyStarlight(storage.json(STORE.starlight));
     return;
@@ -3864,7 +3886,7 @@ async function loadSiteState() {
   siteLockdown = !!data.lockdown;
   /* 旧版 Worker 的站点状态里没有 maintenance 时单独查询 */
   if ("maintenance" in data) applyMaintenance(!!data.maintenance);
-  else callWorker({ action: "get_maintenance" }, { quiet: true }).then((d) => { if (d && d.ok) applyMaintenance(!!d.value); });
+  else callWorker({ action: "get_maintenance" }, { load: "none" }).then((d) => { if (d && d.ok) applyMaintenance(!!d.value); });
   applyCaptchaEnabled(data.captcha !== false);
   applyStarlight(data.starlight);
   applySitePopup(data.popup);
@@ -3966,7 +3988,7 @@ function initApp() {
   const booting = document.documentElement.classList.contains("boot-pending");
   /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
   [
-    initLoadVeil, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
+    initLoadIndicators, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
     initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
@@ -3982,7 +4004,7 @@ function initApp() {
     if (!$("view-ticket").hidden || maintenanceActive()) return;
     firstBootInfoOpen = true;
     openInfoModal();
-  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true)] : []);
+  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true), siteStateLoading] : []);
 }
 
 document.addEventListener("DOMContentLoaded", initApp);

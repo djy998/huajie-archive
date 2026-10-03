@@ -1323,7 +1323,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   /* 扩充题库在后台加载，没加载好时先用自带题库 */
   function loadPoemExtra() {
     if (G.extraLoading) return;
-    G.extraLoading = loadLateScript("games-poems.js", () => typeof window.HJGamesPoems === "string", { quiet: true }).then(() => {
+    G.extraLoading = loadLateScript("games-poems.js", () => typeof window.HJGamesPoems === "string", { load: "corner" }).then(() => {
       addPoems(window.HJGamesPoems, 1);
       if (P.kw) poemRender();
     }, () => { G.extraLoading = null; });

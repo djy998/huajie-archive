@@ -1,4 +1,4 @@
-/* 花舞之街 · 吟游诗人模拟器。从「更多」打开时按需加载，依赖 main.js 的工具（$、storage、showToast、siteVolume、bgm、makeWidgetDraggable…）
+/* 花舞之街 · 吟游诗人模拟器。从「更多」打开时按需加载，依赖 main.js 的工具（$、storage、showToast、siteVolume、bgm、makeWidgetDraggable、trackLoad…）
    - 玩法参考 blossom（github.com/alexbainter/blossom，MIT）：点击处的高度决定音高，左右决定声像；
      每个音隔 7~12 秒回响一次并逐渐变弱，最多同时循环最近的 15 个音，随手点几下就成了一段循环的旋律
    - 默认 C 大调五声音阶（宫商角徵羽），怎么点都不会刺耳；「高级功能」里可换 D 大调、七声音阶（加上 fa、si，能弹完整旋律，
@@ -394,7 +394,7 @@
 
   function prefetchSamples(inst) {
     if (!inst.samples || A.samples[inst.id]) return;
-    sampleUrls(inst).forEach(([, url]) => fetchSample(url).catch(() => {}));
+    trackLoad(Promise.all(sampleUrls(inst).map(([, url]) => fetchSample(url).catch(() => {}))), "corner");   // 下载期间用合成钢琴，不挡演奏
   }
 
   function loadSamples(inst) {
@@ -402,11 +402,11 @@
     const ctx = A.ctx;
     const entry = { ready: false, buffers: new Map() };
     A.samples[inst.id] = entry;
-    Promise.all(sampleUrls(inst).map(([m, url]) => fetchSample(url)
+    trackLoad(Promise.all(sampleUrls(inst).map(([m, url]) => fetchSample(url)
       .then((data) => { delete rawSamples[url]; return new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject)); })
       .then((buf) => entry.buffers.set(m, buf))))
       .then(() => { entry.ready = true; })
-      .catch(() => { if (A.samples[inst.id] === entry) delete A.samples[inst.id]; });
+      .catch(() => { if (A.samples[inst.id] === entry) delete A.samples[inst.id]; }), "corner");
   }
 
   /* 选中乐器后趁空闲把各音先算好，点击时不卡；有采样的乐器改为下载采样 */
