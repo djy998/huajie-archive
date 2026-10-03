@@ -232,7 +232,7 @@ const ARCHIVE_EVENTS = [
     dateLabel: "2024年12月31日–2025年1月1日",
     location: "莫古力区 · 梦羽宝境 高脚孤丘22/23区扩建区",
     cover: "assets/gallery/gallery-020.jpg",
-    manual: { images: ["assets/gallery/gallery-021.jpg","assets/gallery/gallery-022.jpg","assets/gallery/gallery-023.jpg","assets/gallery/gallery-024.jpg"] },
+    manual: { images: ["assets/gallery/gallery-021.jpg","assets/gallery/gallery-022.jpg","assets/gallery/gallery-023.jpg","assets/gallery/gallery-044.webp"] },
     poster: { images: ["assets/gallery/gallery-025.jpg"] },
     review: {},
     areas: [
@@ -276,7 +276,7 @@ const ARCHIVE_EVENTS = [
     location: "莫古力区 · 梦羽宝境",
     cover: "assets/gallery/gallery-008.jpg",
     manual: { images: ["assets/gallery/gallery-009.jpg","assets/gallery/gallery-010.jpg","assets/gallery/gallery-011.jpg","assets/gallery/gallery-012.jpg","assets/gallery/gallery-013.jpg","assets/gallery/gallery-014.jpg","assets/gallery/gallery-015.jpg","assets/gallery/gallery-016.jpg","assets/gallery/gallery-017.jpg","assets/gallery/gallery-018.jpg"] },
-    poster: { images: ["assets/gallery/gallery-019.jpg"] },
+    poster: { images: ["assets/gallery/gallery-043.webp"] },
     review: {},
     hideReview: true,
     areas: [

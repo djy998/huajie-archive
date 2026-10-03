@@ -116,7 +116,10 @@ async function checkInternalPassword() {
   renderAnnouncements(data.items, data.isAdmin);
 
   $("adminPills").hidden = !data.isAdmin;
-  if (data.isAdmin) internalAdminPassword = input.value;
+  if (data.isAdmin) {
+    internalAdminPassword = input.value;
+    startAdminNewWatch();
+  }
 }
 
 /* D1 的 datetime('now') 为 UTC 文本，Safari 无法直接解析，手动按 UTC 读取 */
@@ -395,6 +398,67 @@ const ADMIN_PANEL_REFRESH = {
     return null;
   },
 };
+
+/* 新提交提示：反馈建议箱、场地预约、活动问卷各在本机记一份看过的最大编号。
+   登录后和之后每 5 分钟在后台读一次列表，有更大的编号就在按钮右上角亮圆点；打开对应面板读到数据即算看过。
+   场地预约只算访客在网站上登记的（后台录入、导入的不算） */
+const ADMIN_SEEN_STORE = "hj_admin_seen";
+const ADMIN_NEW_POLL_MS = 5 * 60 * 1000;
+const ADMIN_NEW = {
+  feedbackAdminPanel: { key: () => "feedback", refresh: () => refreshFeedbackAdmin() },
+  venueAdminPanel: { key: () => "venue", refresh: () => refreshVenueAdmin(), counts: (i) => !i.source || i.source === "web" },
+  surveyAdminPanel: {
+    key: () => `survey:${SURVEY.id}`, refresh: () => refreshSurveyAdmin(),
+    ready: () => typeof window.mountSurvey === "function",
+  },
+};
+const adminNew = { timer: 0, checkedAt: 0 };
+
+const adminPanelShowing = (id) => !$(id).hidden && !$("adminModalOverlay").hidden;
+
+function setAdminNewDot(panelId, on) {
+  const dot = $("adminPills").querySelector(`[data-admin-panel="${panelId}"] .admin-new-dot`);
+  if (dot) dot.hidden = !on;
+}
+
+/* 各面板读到列表后调用：面板开着就记为看过，否则和看过的编号比 */
+function noteAdminItems(panelId, items) {
+  const def = ADMIN_NEW[panelId];
+  if (!def || !internalAdminPassword) return;
+  const latest = items.reduce((m, i) => (def.counts && !def.counts(i) ? m : Math.max(m, Number(i.id) || 0)), 0);
+  const seen = storage.json(ADMIN_SEEN_STORE) || {};
+  const key = def.key();
+  if (adminPanelShowing(panelId)) {
+    if (seen[key] !== latest) {
+      seen[key] = latest;
+      storage.set(ADMIN_SEEN_STORE, JSON.stringify(seen));
+    }
+    setAdminNewDot(panelId, false);
+  } else {
+    setAdminNewDot(panelId, latest > (Number(seen[key]) || 0));
+  }
+}
+
+function checkAdminNew() {
+  if (!internalAdminPassword || document.hidden || $("view-internal").hidden) return;
+  adminNew.checkedAt = Date.now();
+  for (const [panelId, def] of Object.entries(ADMIN_NEW)) {
+    if (adminPanelShowing(panelId) || (def.ready && !def.ready())) continue;
+    runQuietly(def.refresh);
+  }
+}
+
+function startAdminNewWatch() {
+  clearInterval(adminNew.timer);
+  checkAdminNew();
+  adminNew.timer = setInterval(checkAdminNew, ADMIN_NEW_POLL_MS);
+}
+
+function initAdminNewWatch() {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && Date.now() - adminNew.checkedAt >= ADMIN_NEW_POLL_MS) checkAdminNew();
+  });
+}
 
 function stashAdminPanels() {
   [...$("adminModalHost").children].forEach((el) => {
@@ -2040,6 +2104,7 @@ async function refreshFeedbackAdmin() {
   }
   feedbackAdmin.items = data.items;
   feedbackAdmin.loaded = true;
+  noteAdminItems("feedbackAdminPanel", data.items);
   renderFeedbackAdmin();
   return true;
 }
@@ -2144,6 +2209,7 @@ async function refreshVenueAdmin() {
   venueAdmin.items = data.items;
   venueAdmin.today = data.today || cnDate(0);
   venueAdmin.loaded = true;
+  noteAdminItems("venueAdminPanel", data.items);
   renderVenueAdmin();
   return true;
 }
@@ -2421,6 +2487,7 @@ async function refreshSurveyAdmin() {
   surveyAdmin.open = data.open !== false;
   surveyAdmin.lockdown = !!data.lockdown;
   surveyAdmin.loaded = true;
+  noteAdminItems("surveyAdminPanel", surveyAdmin.items);
   renderSurveyAdmin();
   return true;
 }
@@ -3932,7 +3999,7 @@ function mountAdminPanels() {
 
 mountAdminPanels();
 [
-  initInternal, initAdminPanels, initLockdownToggle, initMaintToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
+  initInternal, initAdminPanels, initAdminNewWatch, initLockdownToggle, initMaintToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
   initViewerPills, initFeedbackAdmin,
   typeof window.buildVenueForm === "function" ? initVenueAdmin
     : () => console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用"),

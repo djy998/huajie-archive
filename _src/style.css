@@ -3496,6 +3496,33 @@ body.day-mode .ticket-title-preview { color: var(--day-lilac); }
   color: #fff;
   background: #c9463c;
 }
+/* 新提交提示：按钮右上角的小红点 */
+.admin-pills .tab-btn { position: relative; }
+.admin-pills .admin-new-dot {
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #e0533f;
+  box-shadow: 0 0 0 2px rgba(20,14,36,.75), 0 1px 4px rgba(8,6,18,.4);
+  pointer-events: none;
+}
+.admin-pills .admin-new-dot[hidden] { display: none; }
+.admin-pills .admin-new-dot::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  animation: admin-new-ping 2.2s ease-out infinite;
+}
+@keyframes admin-new-ping {
+  0% { transform: scale(1); opacity: .6; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-pills .admin-new-dot::after { animation: none; }
+}
+body.day-mode .admin-pills .admin-new-dot { box-shadow: 0 0 0 2px rgba(255,248,232,.9), 0 1px 4px rgba(96,64,16,.3); }
 .fb-admin-filters { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
 .fb-admin-filters select { flex: 0 1 auto; padding-top: 8px; padding-bottom: 8px; }
 .gate-card .fb-admin-filters button { padding: 8px 20px; font-size: .84rem; }

@@ -1,0 +1,14 @@
+{
+  "name": "huajie-site",
+  "private": true,
+  "description": "花舞之街 · 薰风花语町 网站源码，build.mjs 压缩输出到仓库根目录",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

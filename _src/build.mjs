@@ -1,5 +1,5 @@
 /* 将 _src 压缩输出到站点根目录，并生成 /activity/、/previous/。
-   用法：cd _src && npm install esbuild && node build.mjs [源码目录] [输出目录] */
+   用法：cd _src && npm ci && node build.mjs [源码目录] [输出目录]（esbuild 版本锁定在 package.json / package-lock.json） */
 import { transform } from "esbuild";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
