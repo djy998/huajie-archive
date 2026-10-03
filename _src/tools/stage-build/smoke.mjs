@@ -101,7 +101,12 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
     }
   };
   P.click = (el) => el.dispatchEvent(new win.MouseEvent("click", { bubbles: true, cancelable: true }));
-  P.key = (code, key = "x", extra = {}) => doc.dispatchEvent(new win.KeyboardEvent("keydown", { code, key, bubbles: true, cancelable: true, ...extra }));
+  /* ago：事件其实发生在多少毫秒之前（模拟手机主线程忙、点按排队晚到） */
+  P.key = (code, key = "x", extra = {}, ago = 0) => {
+    const ev = new win.KeyboardEvent("keydown", { code, key, bubbles: true, cancelable: true, ...extra });
+    if (ago) Object.defineProperty(ev, "timeStamp", { value: P.now - ago });
+    doc.dispatchEvent(ev);
+  };
   P.pointer = (x, y) => P.$("#hjsPlay").dispatchEvent(new win.MouseEvent("pointerdown", { clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0 }));
   P.btn = (text, root = doc) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent.trim() === text || b.getAttribute("aria-label") === text);
   return P;
@@ -220,7 +225,9 @@ async function main() {
 
     const before = P.midi.length;
     const n1 = notes[1];
-    P.until(n1.t + 0.4);                          // 轻松难度过了 0.36 秒算漏，下一个音至少隔 0.5 秒
+    P.until(n1.t + 0.4);
+    check("判定窗过了还多等一下（排队中的点按还算数）", P.st().judged[1] === -1);
+    P.until(n1.t + 0.52);                         // 轻松难度 0.4 秒判定窗 + 0.1 秒余量之后才算漏
     const hitsAfter = P.midi.slice(before).filter((m) => m.vel >= 0.8);
     check("漏掉的音不出声", P.st().judged[1] === 3 && hitsAfter.length === 0, `judged=${P.st().judged[1]} sounds=${hitsAfter.length}`);
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
@@ -237,14 +244,19 @@ async function main() {
     P.advance(0.05);
     check("继续后从暂停处接着走", Math.abs(P.pos() - tPause - 0.05) < 1e-6, `${(P.pos() - tPause).toFixed(3)}`);
 
+    /* 主线程忙：点按晚 120 ms 才处理，按事件发生的时刻判定，照样 PERFECT */
+    P.until(notes[2].t + 0.12);
+    P.key(P.st().codes[4][notes[2].lane], "x", {}, 120);
+    check("按事件发生的时刻判定（晚处理不吃亏）", P.st().judged[2] === 0, `judged=${P.st().judged[2]}`);
     /* 一路弹到底 */
-    for (let i = 2; i < notes.length; i++) {
+    for (let i = 3; i < notes.length; i++) {
       P.until(notes[i].t);
       P.key(P.st().codes[4][notes[i].lane], "x");
     }
     P.until(P.st().endT + 2);
     const fin = P.st();
     check("弹完出结算", fin.finished && /演出结束/.test(P.$("#hjsModal").textContent));
+    check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
     check("本机纪录写入（新的 best2）", best[`${fin.song}:easy`] && best[`${fin.song}:easy`].score === fin.score);
@@ -268,7 +280,7 @@ async function main() {
     check("点气泡：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
     const n0 = st.notes[0];
     P.until(n0.t - 0.02);
-    P.pointer(n0.x + st.g.size * 0.8, n0.y);        // 点在气泡旁边
+    P.pointer(n0.x + st.g.size * 1.2, n0.y);        // 点在气泡旁边（判定圈 1.3 个气泡）
     check("点在气泡旁边也算弹中", P.st().judged[0] >= 0 && P.st().judged[0] < 3, `judged=${P.st().judged[0]}`);
     const n1 = st.notes[1];
     P.until(n1.t);
