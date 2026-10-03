@@ -30,6 +30,8 @@
 
 按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`games.js`（打开小游戏助手）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
 
+按需加载统一走 `main.js` 的 `loadLateScript`。访客点了在等的加载会套上 `withLoadVeil`：超过 0.35 秒还没好，就盖上一层加载提示（开屏的莫古力转圈 +「正在加载库啵……」），出现后至少转 0.7 秒；网快时什么都看不到。后台预取（如 `games-poems.js`）传 `{ quiet: true }`，不弹提示。其它让访客干等的请求也可以包一层 `withLoadVeil(promise)`。
+
 ### 约定
 
 - 所有脚本都是普通 `<script>`，顶层的 `function` 声明就是全局函数。跨文件调用写成 `window.xxx?.()`，被调用的文件加载失败时也不会连带报错。
@@ -37,6 +39,7 @@
 - 页面上的文字统一用 `textContent` 写入。必须拼 HTML 时，所有变量都要经过 `escapeHtml`。
 - 路由用 hash（`#latest`、`#previous`、`#ti` …），对照表是 `main.js` 的 `ROUTES`。`/activity/`、`/previous/` 是 `build.mjs` 生成的独立入口：`<html data-page>` 决定显示哪个视图，`<base href="../">` 让相对路径仍然指向站点根目录。
 - 弹窗统一登记在 `main.js` 的 `MODALS`，Esc、返回键和 `closeAllModals` 都靠这张表。
+- 小按钮、选项一律用「凸起玻璃」：`style.css` 设计变量里的 `--glass-up`（平常）、`--glass-on`（选中 / 主按钮）、`--glass-sheen`（叠在任意底色上的高光），配 `--glass-up-edge`、`--glass-up-shadow` 等，白天整套自动换。悬停浮起、按下压进去写在「18. 按下反馈」里，新按钮把类名加进那组选择器即可。不要再做没有阴影的扁平按钮。
 
 ### 安全
 

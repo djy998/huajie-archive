@@ -2776,7 +2776,7 @@ async function refreshHuayuAdmin() {
   refreshHuayuVisits();
   $("huayuAdminStatus").textContent = "当前状态：加载中…";
   setMsg($("huayuSettingMsg"), "");
-  loadHuayuJs().catch(() => {});
+  loadHuayuJs({ quiet: true }).catch(() => {});   // 先在后台取，用到时多半已经好了
   const data = await callWorker({ action: "huayu_admin_get", password: internalAdminPassword });
   if (!data || !data.ok) {
     $("huayuAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");

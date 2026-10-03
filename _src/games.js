@@ -373,7 +373,8 @@
 韦庄|菩萨蛮|人人尽说江南好 游人只合江南老
 高骈|山亭夏日|绿树阴浓夏日长 楼台倒影入池塘 水晶帘动微风起
 唐文宗|夏日联句|我爱夏日长
-慧开|颂|春有百花秋有月 夏有凉风冬有雪 若无闲事挂心头 便是人间好时节`;
+慧开|颂|春有百花秋有月 夏有凉风冬有雪 若无闲事挂心头 便是人间好时节
+佚名|画|远看山有色 近听水无声 春去花还在 人来鸟不惊`;
 
   /* 令字：简单版规则里的四十个字，按原句排 */
   const POEM_BOARD = ["春江花月夜", "秋山风雨天", "夏日湖水岸", "冬朝海云关", "南窗柳色暖", "北庭鸟声寒", "西楼人心愁", "东家酒梦残"];
@@ -1322,7 +1323,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   /* 扩充题库在后台加载，没加载好时先用自带题库 */
   function loadPoemExtra() {
     if (G.extraLoading) return;
-    G.extraLoading = loadLateScript("games-poems.js", () => typeof window.HJGamesPoems === "string").then(() => {
+    G.extraLoading = loadLateScript("games-poems.js", () => typeof window.HJGamesPoems === "string", { quiet: true }).then(() => {
       addPoems(window.HJGamesPoems, 1);
       if (P.kw) poemRender();
     }, () => { G.extraLoading = null; });

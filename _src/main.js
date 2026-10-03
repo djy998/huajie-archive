@@ -207,9 +207,9 @@ async function callWorker(payload) {
   }
 }
 
-/* 按需加载的脚本；失败后允许重试 */
+/* 按需加载的脚本；失败后允许重试。访客点了在等的加载会套上加载提示，后台预取传 { quiet: true } */
 const lateScripts = {};
-function loadLateScript(file, ready) {
+function loadLateScript(file, ready, { quiet = false } = {}) {
   if (ready()) return Promise.resolve();
   lateScripts[file] ??= new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -218,7 +218,59 @@ function loadLateScript(file, ready) {
     s.onerror = () => { s.remove(); reject(new Error(`${file} load failed`)); };
     document.head.appendChild(s);
   }).catch((e) => { delete lateScripts[file]; throw e; });
-  return lateScripts[file];
+  return quiet ? lateScripts[file] : withLoadVeil(lateScripts[file]);
+}
+
+/* 加载提示：开屏同款的莫古力转圈 +「正在加载库啵……」。
+   等候超过 LOAD_VEIL_DELAY_MS 还没好才出现（网快时什么都看不到），出现后至少转 LOAD_VEIL_MIN_MS 再收起，免得一闪而过；
+   几件事同时在等时，全部结束才收起。期间盖住页面，不会被重复点击 */
+const LOAD_VEIL_DELAY_MS = 350;
+const LOAD_VEIL_MIN_MS = 700;
+const loadVeil = { pending: 0, showTimer: 0, hideTimer: 0, shownAt: 0 };
+
+function withLoadVeil(promise) {
+  const v = loadVeil;
+  v.pending += 1;
+  clearTimeout(v.hideTimer);
+  if (!v.shownAt && !v.showTimer) v.showTimer = setTimeout(showLoadVeil, LOAD_VEIL_DELAY_MS);
+  const settle = () => {
+    v.pending -= 1;
+    if (v.pending > 0) return;
+    clearTimeout(v.showTimer);
+    v.showTimer = 0;
+    if (v.shownAt) v.hideTimer = setTimeout(hideLoadVeil, Math.max(0, v.shownAt + LOAD_VEIL_MIN_MS - Date.now()));
+  };
+  promise.then(settle, settle);
+  return promise;
+}
+
+function showLoadVeil() {
+  loadVeil.showTimer = 0;
+  if (document.documentElement.classList.contains("hj-maint")) return;
+  let el = $("loadVeil");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "load-veil";
+    el.id = "loadVeil";
+    el.setAttribute("role", "status");
+    el.innerHTML = '<span class="load-veil-spin"><img src="boot-moguri-v2.webp" alt="" draggable="false" decoding="async"></span><p class="load-veil-text">正在加载库啵……</p>';
+    document.body.appendChild(el);
+  }
+  el.classList.remove("is-leaving");
+  el.hidden = false;
+  loadVeil.shownAt = Date.now();
+}
+
+function hideLoadVeil() {
+  const el = $("loadVeil");
+  loadVeil.shownAt = 0;
+  if (!el || el.hidden) return;
+  el.classList.add("is-leaving");
+  setTimeout(() => {
+    if (loadVeil.shownAt) return;   // 收起途中又开始等了
+    el.hidden = true;
+    el.classList.remove("is-leaving");
+  }, 260);
 }
 
 
@@ -3161,7 +3213,7 @@ const HUAYU_ERRORS = {
   net: "连接失败，检查一下网络后再试",
   no_js: "花语字典没加载出来，检查一下网络后重新打开",
 };
-const loadHuayuJs = () => loadLateScript("huayu.js", () => !!window.HJHuayu);
+const loadHuayuJs = (opts) => loadLateScript("huayu.js", () => !!window.HJHuayu, opts);
 const huayuErrorText = (res) => HUAYU_ERRORS[res && res.error] || "出了点问题，稍后再试";
 
 function applyHuayuMode({ mode, algo } = {}) {
@@ -3266,7 +3318,7 @@ let huayuVisited = false;
 async function requestHuayu() {
   if (huayuVisited) return openHuayuModal();
   if (captchaOn) return openCaptcha("huayu");
-  const data = await callWorker({ action: "huayu_visit" });
+  const data = await withLoadVeil(callWorker({ action: "huayu_visit" }));
   if (data?.error === "captcha") return openCaptcha("huayu");
   if (data?.error === "closed") {
     applyHuayuMode({ mode: data.mode });
