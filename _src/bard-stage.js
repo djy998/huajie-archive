@@ -30,9 +30,11 @@
     { id: "normal", label: "标准", approach: 1.35, win: [0.12, 0.21, 0.32], size: 0.38, tap: 0.21 },
     { id: "hard", label: "挑战", approach: 1.05, win: [0.09, 0.16, 0.25], size: 0.32, tap: 0.2 },
   ];
-  /* 输入：按事件发生的时刻判定（e.timeStamp），手机忙的那一帧排队晚到的点按不吃亏；
-     判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数） */
+  /* 输入：判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数）
+     点按排队的时间用 e.timeStamp 补回来，但最多补 TS_MAX 秒；有的手机浏览器（如一些 App 内置浏览器）的 timeStamp
+     不是 performance.now 的时基，一旦对不上就整局不再用 */
   const INPUT_GRACE = 0.1;
+  const TS_MAX = 0.05;
   const TAP_R = 1.3;
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
@@ -1013,6 +1015,7 @@
     S.learnHits = 0;
     S.counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     S.offs = [];                                        // 每次弹中的偏差（秒，正 = 晚），结算时给个平均
+    S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false };   // 手感诊断：掉帧、点按排队时间
     S.ghosts = 0;                                       // 点气泡时点空的次数
     S.playing = false;
     S.paused = false;
@@ -1128,6 +1131,7 @@
   function tick() {
     S.raf = 0;
     if (!S.playing || S.paused) return;
+    noteFrame();
     const dm = diffMeta();
     let t = S.frozen ? S.frozenT : songTime();
     if (!S.frozen) {
@@ -1250,12 +1254,16 @@
       tapAt(x, y, e);
     }
   }
-  /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣，最多扣 0.25 秒 */
+  /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣一点（最多 TS_MAX 秒） */
   function inputTime(e) {
     const t = songTime();
+    const dg = S.diag;
     const ts = e && Number(e.timeStamp);
-    if (!ts || ts > 1e12) return t;                    // 老浏览器的 timeStamp 是 1970 年起的毫秒，不能用
-    return t - clamp((performance.now() - ts) / 1000, 0, 0.25);
+    if (!dg || dg.tsBad || !ts) return t;
+    const wait = (performance.now() - ts) / 1000;
+    if (!(wait > -0.02 && wait < 1)) { dg.tsBad = true; return t; }   // 时基对不上（或 1970 年起的老格式）：这局不用了
+    if (dg.waits.length < 400) dg.waits.push(wait);
+    return t - clamp(wait, 0, TS_MAX);
   }
 
   function onKeyDown(e) {
@@ -1387,7 +1395,7 @@
       popJudge("对了", "is-ok");
     } else {
       S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120));
-      popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`);
+      popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`, off);
     }
     while (S.next < S.notes.length && S.judged[S.notes[S.next].idx] >= 0) S.next += 1;
     updateHud();
@@ -1401,12 +1409,31 @@
     updateHud();
   }
 
-  function popJudge(label, cls) {
+  function popJudge(label, cls, off) {
     const box = $id("hjsJudge");
     box.textContent = "";
+    const ms = Number.isFinite(off) ? Math.round(off * 1000) : 0;
     box.append(h("div", { class: `hjs-pop ${cls}` },
       h("b", { text: label }),
+      /* 不是 PERFECT 时标出早还是晚，一直「晚」就该去校准了 */
+      Math.abs(ms) >= 20 && cls !== "is-perfect" ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` }) : null,
       S.combo >= 2 && cls !== "is-miss" && cls !== "is-wait" ? h("small", { text: `${S.combo} 连击` }) : null));
+  }
+
+  /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿 */
+  function noteFrame() {
+    const dg = S.diag;
+    if (!dg) return;
+    const now = performance.now();
+    if (dg.last && now - dg.last < 1000) {
+      dg.frames += 1;
+      if (now - dg.last > 34) dg.slow += 1;
+      if (!dg.lite && dg.frames >= 90 && dg.slow / dg.frames > 0.2) {
+        dg.lite = true;
+        S.root.classList.add("is-lite");
+      }
+    }
+    dg.last = now;
   }
 
   function updateHud() {
@@ -1538,12 +1565,22 @@
   /* 结算里的手感诊断：平均早晚、点空几下；一直偏早 / 偏晚就提示去校准 */
   function timingNote() {
     const o = (S.offs || []).slice().sort((a, b) => a - b);
-    if (o.length < 8) return null;
-    const ms = Math.round(o[Math.floor(o.length / 2)] * 1000);
+    const ms = o.length ? Math.round(o[Math.floor(o.length / 2)] * 1000) : 0;
     const parts = [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`];
     if (S.mode === "tap" && S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
     const tip = Math.abs(ms) >= 35 ? "；一直这样的话，到设置 → 判定延迟 → 校准" : "";
-    return h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") + tip });
+    /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
+    const dg = S.diag || {};
+    const w = (dg.waits || []).slice().sort((a, b) => a - b);
+    const dev = [
+      `输出延迟 ${Math.round((S.clock ? S.clock.lat : 0) * 1000)} ms`,
+      dg.tsBad ? "点按时间戳不可用" : w.length ? `点按排队 ${Math.round(w[Math.floor(w.length / 2)] * 1000)} ms` : null,
+      dg.frames ? `掉帧 ${Math.round((100 * dg.slow) / dg.frames)}%${dg.lite ? "（已切省电画法）" : ""}` : null,
+      S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
+    ].filter(Boolean).join(" · ");
+    return h("div", {},
+      o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") + tip }) : null,
+      h("p", { class: "hjs-res-diag", text: dev }));
   }
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
