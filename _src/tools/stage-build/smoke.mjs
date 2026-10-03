@@ -169,9 +169,10 @@ async function main() {
     P.click(P.$$(".hjs-chips.is-cat .hjs-chip")[0]);
     check("分类回到全部", P.$$(".hjs-song").length === SONGS.songs.length);
 
-    P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[5]);
-    const five = SONGS.songs.filter((s) => s.diff === 5).length;
-    check("五星筛选", P.$$(".hjs-song").length === five, `${P.$$(".hjs-song").length}/${five}`);
+    check("曲库每首都有三档星级（轻松 1~3、标准 2~4、挑战 3~5，越难不越低）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.every((d, k) => d >= k + 1 && d <= k + 3) && s.diffs[0] <= s.diffs[1] && s.diffs[1] <= s.diffs[2]));
+    P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[4]);
+    const four = SONGS.songs.filter((s) => s.diffs[1] === 4).length;
+    check("四星筛选（按当前难度「标准」）", four > 0 && P.$$(".hjs-song").length === four && /星级按标准/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
     const row = P.$$(".hjs-song")[0];
     P.click(row);
     await sleep(5);
@@ -185,6 +186,14 @@ async function main() {
     P.click(P.btn("就弹这首"));
     check("就弹这首：关窗口、停试听、大厅换成这首", P.st().sheet === "" && P.st().preview === "" && P.$(".hjs-hero-t").textContent === target.t);
     P.key("Escape", "Escape");
+    {
+      const cur = SONGS.songs.find((x) => x.t === P.$(".hjs-hero-t").textContent);
+      const heroStars = () => (P.$(".hjs-hero .hjs-stars").textContent.match(/★/g) || []).length;
+      const before = heroStars();
+      P.click(P.btn("挑战"));
+      check("大厅星级跟着难度变（标准 → 挑战）", before === cur.diffs[1] && heroStars() === cur.diffs[2], `${before}→${heroStars()} ${cur.diffs}`);
+      P.click(P.btn("标准"));
+    }
     check("大厅里 Esc 关掉舞台", P.$("#hjStage").classList.contains("is-leaving"));
     check("关舞台时马上露出下面的网站", !P.doc.body.classList.contains("hjs-covered"));
   }

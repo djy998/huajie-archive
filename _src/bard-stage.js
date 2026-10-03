@@ -114,6 +114,11 @@
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
   const codeLabel = (c) => CODE_LABEL[c] || (/^Key/.test(c) ? c.slice(3) : /^Digit/.test(c) ? c.slice(5) : /^Numpad/.test(c) ? `小键盘 ${c.slice(6)}` : c);
   const starText = (n) => "★".repeat(clamp(n, 1, 5)) + "☆".repeat(5 - clamp(n, 1, 5));
+  /* 星级按档：songs.json 的 diffs = [轻松, 标准, 挑战]（轻松 1~3、标准 2~4、挑战 3~5 星）；旧曲库只有 diff（标准档） */
+  function starsOf(s, diffId = S.diff) {
+    const k = Math.max(0, DIFFS.findIndex((d) => d.id === diffId));
+    return clamp(num(Array.isArray(s.diffs) ? s.diffs[k] : s.diff, 3), 1, 5);
+  }
   /* est：MIDI 没对齐节拍网格，速度是估出来的 */
   const tempoOf = (s) => (num(s.bpm, 0) > 0 ? `${s.est ? "约 " : ""}${Math.round(s.bpm)} 拍/分` : "");
   const metaOf = (s) => [s.c, fmtTime(num(s.dur, 0)), tempoOf(s)].filter(Boolean).join(" · ");
@@ -291,7 +296,7 @@
     const q = S.query.trim().toLowerCase();
     return (S.data || []).filter((s) => {
       if (S.cat && s.tag !== S.cat) return false;
-      if (S.stars && clamp(num(s.diff, 3), 1, 5) !== S.stars) return false;
+      if (S.stars && starsOf(s) !== S.stars) return false;
       if (!q) return true;
       return [s.t, s.o, s.c, s.tag].some((x) => String(x || "").toLowerCase().includes(q));
     });
@@ -487,7 +492,7 @@
       h("h2", { class: "hjs-hero-t", text: s.t }),
       s.o ? h("p", { class: "hjs-hero-o", text: s.o }) : null,
       h("p", { class: "hjs-hero-meta" },
-        h("span", { class: "hjs-stars", title: `难度 ${clamp(num(s.diff, 3), 1, 5)} / 5`, text: starText(num(s.diff, 3)) }),
+        h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} / 5 星`, text: starText(starsOf(s)) }),
         h("span", { text: metaOf(s) }),
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null),
       s.note ? h("p", { class: "hjs-hero-note", text: s.note }) : null,
@@ -505,7 +510,7 @@
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "难度" }),
-        seg("难度", DIFFS.map((d, i) => ({ id: d.id, label: d.label, title: cnt[i] ? `${cnt[i]} 个音要弹` : undefined })), S.diff,
+        seg("难度", DIFFS.map((d, i) => ({ id: d.id, label: d.label, title: `${starsOf(s, d.id)} 星${cnt[i] ? ` · ${cnt[i]} 个音要弹` : ""}` })), S.diff,
           (v) => { S.diff = v; setRaw(K.diff, v); renderLobby(); })),
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "模式" }),
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
@@ -659,7 +664,7 @@
       h("div", { class: "hjs-chips", role: "radiogroup", "aria-label": "按难度筛选" },
         [0, 1, 2, 3, 4, 5].map((n) => h("button", {
           type: "button", class: `hjs-chip${S.stars === n ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.stars === n),
-          text: n ? `${"★".repeat(n)}` : "全部", title: n ? `难度 ${n} 星` : "全部难度",
+          text: n ? `${"★".repeat(n)}` : "全部", title: n ? `${diffMeta().label}难度 ${n} 星` : "全部难度",
           onclick: () => { S.stars = n; setRaw(K.stars, n); renderSheet(); },
         }))),
       h("div", { class: "hjs-sheet-body hjs-songs", id: "hjsSongs", role: "listbox", "aria-label": "曲目" }),
@@ -673,7 +678,7 @@
     if (!box) return;
     box.textContent = "";
     const list = filtered();
-    $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首`;
+    $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首 · 星级按${diffMeta().label}`;
     $id("hjsPickNow").textContent = S.song ? `已选：${S.song.t}` : "";
     if (!list.length) { box.append(h("p", { class: "hjs-empty", text: "没有找到这样的曲子，换个关键词试试" })); return; }
     list.forEach((s) => {
@@ -697,7 +702,7 @@
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null,
         h("span", { class: "hjs-song-side" },
           h("span", { class: "hjs-eq", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
-          h("span", { class: "hjs-stars", text: starText(num(s.diff, 3)) }))));
+          h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} 星`, text: starText(starsOf(s)) }))));
     });
   }
 
@@ -801,6 +806,7 @@
           "电脑选点气泡时：鼠标指着气泡，按键盘任意键也算点了它（放水模式不用按，移上去就行）",
           "电脑：屏幕按宽度分成几条轨道，气泡落在哪条轨道就按那条的键（大厅下方有键位提示，设置里能改）",
           "开头会有四下轻轻的预备拍",
+          "星级：每首曲子三档各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同一档在曲库里的疏密排；大厅和选曲窗口显示的是当前所选难度的星级",
           "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
           "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",

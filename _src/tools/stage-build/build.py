@@ -33,7 +33,8 @@ TRACK_INST = {
     "trumpet": "trumpet", "trombone": "trombone", "tuba": "tuba", "horn": "horn", "sax": "sax", "saxophone": "sax",
     "churchorgan": "clarinet", "organ": "clarinet", "fiddle": "fiddle",
 }
-STAR_CUTS = [0.12, 0.35, 0.65, 0.88]   # 按难度分排名切成 1~5 星
+STAR_CUTS = [0.3, 0.75]                # 每档里按难度分排名切成三段：轻松 1~3 星、标准 2~4 星、挑战 3~5 星
+LEVELS = (3, 2, 1)                     # 轻松 / 标准 / 挑战 在谱面里的级别（lvl ≥ 这个数的音要弹）
 
 
 def guess_inst(info):
@@ -78,14 +79,18 @@ def build_song(song):
     end = max(n["end"] for n in notes) - t0
     grid = info["grid"] is not None
     bpm = chart.main_bpm(info, t0, t0 + end) if grid else round(60 / extra["beat"])
-    avg, peak = chart.density(times[2])
     entry = {
         "id": song["id"], "t": song["t"], "o": song.get("o", ""), "c": song.get("c", ""), "tag": song["tag"],
-        "note": song.get("note", ""), "diff": 3, "dur": round(end, 1), "bpm": int(bpm), "est": not grid,
+        "note": song.get("note", ""), "diff": 3, "diffs": [3, 3, 3], "dur": round(end, 1), "bpm": int(bpm), "est": not grid,
         "beat": round(extra["beat"], 3), "inst": song.get("inst") or guess_inst(info), "range": [lo, hi],
         "cnt": [len(times[3]), len(times[2]), len(times[1])],
     }
-    stats = {"score": 0.6 * avg + 0.4 * peak, "avg": avg, "peak": peak, "all": len(notes), "covered": extra["covered"]}
+    # 每档各算一个难度分：平均每秒音数和最密 5 秒的每秒音数
+    scores = []
+    for L in LEVELS:
+        avg, peak = chart.density(times[L])
+        scores.append(0.6 * avg + 0.4 * peak)
+    stats = {"scores": scores, "all": len(notes), "covered": extra["covered"]}
     return entry, {"v": 2, "n": rows}, stats
 
 
@@ -110,15 +115,24 @@ def main():
         except Exception as e:
             raise SystemExit(f"!! {s['id']} 失败：{e!r}")
 
-    # 星级：按标准难度的音符密度（平均与最密 5 秒）在整个曲库里排名
-    order = sorted(range(len(built)), key=lambda i: built[i][2]["score"])
-    for rank, i in enumerate(order):
-        q = rank / max(1, len(order) - 1)
-        built[i][0]["diff"] = 1 + sum(1 for c in STAR_CUTS if q >= c)
+    # 星级：轻松 / 标准 / 挑战每档各一个。每档在整个曲库里按这一档的难度分排名，切成三段，
+    # 轻松占 1~3 星、标准 2~4 星、挑战 3~5 星（谱面按最小间隔挑音，同一档的疏密本来就接近，
+    # 所有档混在一起排的话，标准档几乎全是 3 星）。轻松简单而挑战很难的曲子，两档会差到 3 星。
+    # 同一首越难的档星级不低于前一档；diff 仍写标准档的星级，给旧版网页用
+    for k in range(len(LEVELS)):
+        order = sorted(range(len(built)), key=lambda i: built[i][2]["scores"][k])
+        for rank, i in enumerate(order):
+            q = rank / max(1, len(order) - 1)
+            built[i][0]["diffs"][k] = 1 + k + sum(1 for c in STAR_CUTS if q >= c)
+    for entry, _, _ in built:
+        d = entry["diffs"]
+        for k in range(1, len(d)):
+            d[k] = max(d[k], d[k - 1])
+        entry["diff"] = d[1]
 
     for entry, _, st in built:
         print("  %-24s %s %5.0fs %3d拍/分%s 轻松/标准/挑战 %4d/%4d/%4d（共 %4d）音域 %d-%d %s" % (
-            entry["id"], "★" * entry["diff"] + "☆" * (5 - entry["diff"]), entry["dur"], entry["bpm"],
+            entry["id"], "/".join(str(d) for d in entry["diffs"]) + "星", entry["dur"], entry["bpm"],
             "≈" if entry["est"] else " ", *entry["cnt"], st["all"], *entry["range"], entry["inst"]))
     if args.dry_run:
         return

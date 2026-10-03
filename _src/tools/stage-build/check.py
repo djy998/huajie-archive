@@ -75,7 +75,12 @@ for sid, entry in built.items():
         caution(f"{sid}: 有 {entry['dur'] / 60:.1f} 分钟长")
     if cnt[0] < 40:
         caution(f"{sid}: 轻松难度只有 {cnt[0]} 个音")
-    print(f"  {sid:24s} {'★' * entry['diff']:5s} {entry['dur']:6.1f}s 轻松/标准/挑战 {cnt[0]:4d}/{cnt[1]:4d}/{cnt[2]:4d}")
+    diffs = entry.get("diffs") or []
+    if len(diffs) != 3 or not all(1 <= d <= 5 for d in diffs):
+        problem(f"{sid}: 三档星级不对 {diffs}（先跑 build.py）")
+    elif not diffs[0] <= diffs[1] <= diffs[2]:
+        caution(f"{sid}: 星级不是越难越高 {diffs}")
+    print(f"  {sid:24s} {'/'.join(map(str, diffs)) + '星':8s} {entry['dur']:6.1f}s 轻松/标准/挑战 {cnt[0]:4d}/{cnt[1]:4d}/{cnt[2]:4d}")
 stale = sorted(f for f in os.listdir(CHART_DIR) if f.endswith(".json") and f[:-5] not in built) if os.path.isdir(CHART_DIR) else []
 for f in stale:
     caution(f"charts/{f} 是多余的（build.py 会自动删）")
