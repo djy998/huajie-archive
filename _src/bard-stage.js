@@ -5,7 +5,7 @@
      外圈缩到和核心重合的那一下就是判定点。弹中就用模拟器的乐器发出这个音
    - 两种操作（设置里可改，默认按设备自动选）：
      · 点气泡（手机、平板）：直接点气泡，点在旁边一点也算（判定半径约一个气泡直径）；气泡沿着旋律左右铺开，不会叠在一起
-     · 键盘轨道（电脑）：屏幕按宽度分成 2~4 条轨道（自动或手选），音越低越靠左，气泡在哪条轨道就按那条的键；
+     · 键盘轨道（电脑）：屏幕按宽度分成 2~4 条轨道（自动或手选），气泡在哪条轨道就按那条的键；
        按 e.code 认键，开着中文输入法也能弹；鼠标点轨道也行
    - 时钟：模拟器 AudioContext 的 currentTime（补音也排在这个钟上），帧间用 performance.now() 补齐；
      画面与判定 = 音频位置 − 输出延迟 − 判定延迟。暂停、切后台、学习模式都是停这个钟，不会错拍
@@ -51,7 +51,8 @@
     Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]", Minus: "-", Equal: "=", Backquote: "`",
     ShiftLeft: "左 Shift", ShiftRight: "右 Shift",
   };
-  const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 低 → 高
+  const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 按音高：低 → 高
+  const PALETTE = [...BAND_COLORS, "150 226 180", "246 150 120"];   // 后两色只在挨得近、撞色时补位
   const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
   const ICON = {
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
@@ -699,7 +700,7 @@
     if (mode === "keys") {
       opRows.push(row("轨道数", seg("轨道数", [
         { id: "auto", label: "自动" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" },
-      ], S.lanesPref, (v) => { S.lanesPref = v; setRaw(K.lanes, v); renderSheet(); }), S.lanesPref === "auto" ? `按屏幕宽度，现在 ${lanes} 条` : "屏幕均分，音越低越靠左"));
+      ], S.lanesPref, (v) => { S.lanesPref = v; setRaw(K.lanes, v); renderSheet(); }), S.lanesPref === "auto" ? `按屏幕宽度，现在 ${lanes} 条` : "屏幕均分，气泡落在哪条就按哪个键"));
       opRows.push(row("键位", h("div", { class: "hjs-keyrow" }, S.codes[lanes].map((c, i) => h("button", {
         type: "button", class: `hjs-keybtn${S.binding === i ? " is-bind" : ""}`, title: `第 ${i + 1} 条轨道`,
         text: S.binding === i ? "按新键…" : codeLabel(c),
@@ -825,7 +826,7 @@
     S.notes = [];
     S.bg = [];
     all.forEach((n) => {
-      if (n.l >= need) S.notes.push({ t: n.t, m: n.m, idx: S.notes.length, lane: 0, band: 0, x: 0, y: 0 });
+      if (n.l >= need) S.notes.push({ t: n.t, m: n.m, idx: S.notes.length, lane: -1, band: 0, c: 0, x: 0, y: 0 });
       else S.bg.push({ t: n.t, m: n.m, v: BG_VEL });
     });
     S.bgAll = all.map((n) => ({ t: n.t, m: n.m, v: n.l >= need ? DEMO_VEL : BG_VEL }));
@@ -838,7 +839,7 @@
     S.notes.forEach((n) => {
       const k = clamp((n.m - S.lo) / span, 0, 0.9999);
       n.band = Math.floor(k * 4);
-      n.lane = S.lanes ? Math.floor(k * S.lanes) : 0;
+      n.lane = S.lanes ? -1 : 0;                // 键盘轨道在第一次 layout 时排好，之后改窗口大小也不变
     });
     S.judged = new Int8Array(S.notes.length).fill(-1);
     S.next = 0;
@@ -878,44 +879,103 @@
     S.g = { w, h: hh, laneW, size, top, bottom };
     $id("hjsNotes").style.setProperty("--size", `${size.toFixed(1)}px`);
 
+    placeNotes(S.g, dm);
+    S.els.forEach((el, idx) => { placeEl(el, S.notes[idx]); el.style.setProperty("--c", PALETTE[S.notes[idx].c]); });
+  }
+
+  /* ==== 气泡摆放（谱面的几条规矩）====
+     - 同时在屏幕上的气泡尽量不重叠：每个音在一组候选位置里挑「重叠最少、离音高最近、走位最顺」的一个；
+       实在太密也只会擦边，不会整个叠在一起
+     - 高度大致跟着音高（越高越往上），为了躲开别的气泡可以上下挪一点
+     - 键盘：轨道不再按音高划分。旋律往上倾向往右、往下倾向往左，但先保证不叠；
+       快速连打（间隔 < 0.2 秒）不连按同一个键、两只手交替
+     - 点气泡：沿着旋律左右走，间距按时间（隔得越久走得越远），尽量顺着一个方向走、不在原地来回
+     - 挨得近（同时在场、中心距离不到 1.8 个气泡）的两个气泡一定不同色；先到的气泡叠在上面 */
+  function placeNotes(g, dm) {
+    const keys = S.mode === "keys";
+    const { w, size, top, bottom, laneW } = g;
+    const W = dm.approach + 0.35;                       // 两个音同时在屏幕上的最大时间差（出现 → 判定完消失）
+    const DMIN = size * 1.12;
     const span = Math.max(S.hi - S.lo, 10);
     const pad = (span - (S.hi - S.lo)) / 2;
-    S.notes.forEach((n) => { n.y = bottom - clamp((n.m - S.lo + pad) / span, 0, 1) * (bottom - top); });
-
-    if (keys) {
-      /* 同一条轨道里音高相近、又挨得很近的两个音：左右错开一点，免得叠成一个 */
-      const last = [];
-      const d = Math.max(0, Math.min(laneW * 0.32, (laneW - size) / 2));
-      S.notes.forEach((n) => {
-        const p = last[n.lane];
-        let off = 0;
-        if (p && n.t - p.t < dm.approach && Math.abs(p.y - n.y) < size * 0.75) off = p.off > 0 ? -d : d;
-        n.off = off;
-        n.x = laneW * (n.lane + 0.5) + off;
-        last[n.lane] = n;
-      });
-    } else {
-      /* 点气泡：沿着旋律左右来回铺开，间隔按时间走，最少隔一个气泡 */
-      const margin = size * 0.72 + 8;
-      const usable = Math.max(1, w - margin * 2);
-      const v = usable / 3;
-      const sMin = Math.min(usable, size * 1.1);
-      const sMax = Math.max(sMin, usable * 0.5);
-      let x = margin + usable / 2;
-      let dir = 1;
-      let prev = null;
-      S.notes.forEach((n) => {
-        if (prev) {
-          const stepX = clamp((n.t - prev.t) * v, sMin, sMax);
-          let nx = x + dir * stepX;
-          if (nx > margin + usable || nx < margin) { dir = -dir; nx = x + dir * stepX; }
-          x = clamp(nx, margin, margin + usable);
+    const pitchY = (m) => bottom - clamp((m - S.lo + pad) / span, 0, 1) * (bottom - top);
+    const yOffs = [0, -0.6, 0.6, -1.2, 1.2, -1.8, 1.8, -2.6, 2.6];
+    const margin = size * 0.72 + 8;
+    const usable = Math.max(1, w - margin * 2);
+    const xCols = Array.from({ length: 11 }, (_, i) => margin + (usable * i) / 10);
+    const speed = usable / 3;
+    const sMin = Math.min(usable, size * 1.15);
+    const sMax = Math.max(sMin, usable * 0.5);
+    const d = keys ? Math.max(0, Math.min(laneW * 0.3, (laneW - size) / 2)) : 0;
+    const xOffs = d > 2 ? [0, -d, d] : [0];
+    const L = S.lanes;
+    const hand = (l) => (L === 3 ? (l === 1 ? -1 : l > 1 ? 1 : 0) : l < L / 2 ? 0 : 1);   // 三条轨道时中间是拇指（空格）
+    const notes = S.notes;
+    let j0 = 0;
+    notes.forEach((n, i) => {
+      while (j0 < i && n.t - notes[j0].t >= W) j0 += 1;
+      const near = notes.slice(j0, i);
+      const p = i ? notes[i - 1] : null;
+      const pp = i > 1 ? notes[i - 2] : null;
+      const dt = p ? n.t - p.t : 9;
+      const yp = pitchY(n.m);
+      const ys = yOffs.map((k) => clamp(yp + k * size, top, bottom));
+      let best = null;
+      let bestCost = Infinity;
+      const tryAt = (x, y, lane, cost) => {
+        let c = cost + (0.6 * Math.abs(y - yp)) / size;
+        if (c >= bestCost) return;
+        for (const q of near) {
+          const dist = Math.hypot(q.x - x, q.y - y);
+          const tw = 1 - (0.5 * (n.t - q.t)) / W;          // 时间越近越要紧
+          if (dist < DMIN) c += 60 * tw * (1 + (4 * (DMIN - dist)) / DMIN);
+          else if (dist < size * 1.6) c += (0.8 * tw * (size * 1.6 - dist)) / size;
+          if (c >= bestCost) return;
         }
-        n.x = x;
-        prev = n;
-      });
-    }
-    S.els.forEach((el, idx) => placeEl(el, S.notes[idx]));
+        bestCost = c;
+        best = { x, y, lane };
+      };
+      if (keys) {
+        const fixed = n.lane >= 0;
+        const lanes = fixed ? [n.lane] : Array.from({ length: L }, (_, l) => l);
+        for (const l of lanes) {
+          let lc = 0;
+          if (!fixed && p) {
+            const dmid = n.m - p.m;
+            const want = dmid === 0 ? 0 : Math.sign(dmid) * Math.min(L - 1, Math.max(1, Math.round(Math.abs(dmid) / 4)));
+            lc += 0.5 * Math.abs(l - p.lane - want);
+            if (l === p.lane) lc += dt < 0.2 ? 4 : dt < 0.3 ? 1.5 : 0;
+            if (dt < 0.2 && hand(l) >= 0 && hand(l) === hand(p.lane)) lc += 1.2;
+            lc += 0.12 * near.filter((q) => q.lane === l).length;   // 别老挤在同一条
+          } else if (!fixed) {
+            lc += 0.5 * Math.abs(l - Math.floor(clamp((n.m - S.lo) / (S.hi - S.lo + 1), 0, 0.9999) * L));
+          }
+          for (const xo of xOffs) for (const y of ys) tryAt(laneW * (l + 0.5) + xo, y, l, lc + (xo ? 0.15 : 0));
+        }
+      } else {
+        const want = clamp(dt * speed, sMin, sMax);
+        const dir = p && pp ? Math.sign(p.x - pp.x) : 0;
+        for (const x of xCols) {
+          let pc = 0;
+          if (p) {
+            pc += Math.abs(Math.abs(x - p.x) - want) / size;
+            /* 顺着上一步的方向走；撞墙了才折返 */
+            const room = dir > 0 ? margin + usable - p.x : p.x - margin;
+            if (dir && Math.sign(x - p.x) !== dir && room >= want * 0.9) pc += 0.6;
+          } else {
+            pc += Math.abs(x - (margin + usable / 2)) / usable;
+          }
+          for (const y of ys) tryAt(x, y, 0, pc);
+        }
+      }
+      n.x = best.x;
+      n.y = best.y;
+      if (keys) n.lane = best.lane;
+      /* 颜色：默认按音高分四色；和挨得近的气泡撞色就换一种 */
+      const taken = new Set(near.filter((q) => Math.hypot(q.x - n.x, q.y - n.y) < size * 1.8).map((q) => q.c));
+      n.c = n.band;
+      for (let k = 0; k < PALETTE.length && taken.has(n.c); k++) n.c = (n.band + 1 + k) % PALETTE.length;
+    });
   }
 
   function renderLanes() {
@@ -1125,12 +1185,15 @@
   /* 画气泡：位置在布局时就定好，每帧只改收缩进度 */
   function draw(t, dm) {
     const ap = dm.approach;
+    let nextIdx = -1;
+    for (let i = S.next; i < S.notes.length; i++) if (S.judged[S.notes[i].idx] < 0) { nextIdx = S.notes[i].idx; break; }
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
       const n = S.notes[i];
       const dt = n.t - t;
       if (dt > ap) break;
       if (S.judged[n.idx] >= 0 || dt < -0.4) continue;
       const el = S.els.get(n.idx) || noteEl(n);
+      el.classList.toggle("is-next", n.idx === nextIdx);    // 下一个该弹的：外圈加粗
       const k = clamp(1 - dt / ap, 0, 1);
       el.style.setProperty("--k", k.toFixed(3));
       el.style.opacity = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
@@ -1142,7 +1205,8 @@
   }
   function noteEl(n) {
     const el = h("div", { class: "hjs-note" }, h("i", { class: "hjs-ring" }), h("i", { class: "hjs-core" }), h("i", { class: "hjs-name", text: midiName(n.m) }));
-    el.style.setProperty("--c", BAND_COLORS[n.band]);
+    el.style.setProperty("--c", PALETTE[n.c]);
+    el.style.zIndex = String(S.notes.length - n.idx);   // 先到的叠在上面
     placeEl(el, n);
     $id("hjsNotes").appendChild(el);
     S.els.set(n.idx, el);

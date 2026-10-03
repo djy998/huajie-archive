@@ -6432,6 +6432,7 @@ body.hjs-open .toast { z-index: 540; }
   text-shadow: 0 1px 4px rgba(0, 0, 0, .65);
   opacity: calc((var(--k) - .45) * 2);
 }
+.hjs-note.is-next .hjs-ring { border-width: 3px; border-color: rgb(var(--c)); }
 .hjs-note.is-wait .hjs-ring { border-color: #fff; animation: hjsPulse 1s ease-in-out infinite; }
 .hjs-note.is-wait .hjs-core { box-shadow: 0 0 28px rgb(var(--c) / .85); }
 @keyframes hjsPulse { 50% { scale: 1.16; opacity: .55; } }
