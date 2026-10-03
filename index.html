@@ -17,8 +17,8 @@
 <meta name="twitter:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
 <link rel="icon" type="image/png" href="assets/site/favicon.png">
 <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-<link rel="preload" as="script" href="boot.js?v=20261004b">
-<link rel="preload" as="style" href="style.css?v=20261004b">
+<link rel="preload" as="script" href="boot.js?v=20261004c">
+<link rel="preload" as="style" href="style.css?v=20261004c">
 <style>body{margin:0;background:#1c1830}html.css-wait body{visibility:hidden}html.boot-pending,html.boot-pending body{overflow:hidden}html.boot-pending body>header,html.boot-pending body>main,html.boot-pending body>footer{visibility:hidden}#skyBase{transition:opacity .8s ease}html.boot-pending:not(.sky-ready) #skyBase{opacity:0}#bootOverlay{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:18px}html.boot-pending #bootOverlay{display:flex}html.boot-leaving #bootOverlay{display:flex;opacity:0;transition:opacity .45s ease;pointer-events:none}#bootImageBtn{position:relative;appearance:none;-webkit-appearance:none;border:none;background:none;padding:0;margin:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;transition:transform .2s ease}#bootImageBtn:hover{transform:scale(1.04)}#bootImageBtn:before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 8px 30px #00000059;pointer-events:none}#bootSpinner{position:relative;display:block;animation:bootIdle 36s linear infinite;pointer-events:none;will-change:transform}@keyframes bootIdle{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootImage{display:block;width:min(56vw,280px);height:auto;will-change:transform;-webkit-user-drag:none;user-select:none;pointer-events:none}#bootImage.is-spinning{animation:bootSpin 1s ease-in-out}@keyframes bootSpin{0%{transform:rotate(0)}to{transform:rotate(720deg)}}#bootImage.is-looping{animation:bootLoop .7s ease-in-out infinite}@keyframes bootLoop{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootFx{position:fixed;inset:0;z-index:650;pointer-events:none;overflow:hidden}.boot-petal,.boot-star,.boot-twinkle{position:absolute}#bootFx.is-full .boot-petal,#bootFx.is-full .boot-star,#bootFx.is-full .boot-twinkle{will-change:transform,opacity}.boot-petal{background:center / contain no-repeat;animation:bootPetal 1.3s cubic-bezier(.2,.7,.3,1) both}#bootFx.is-full .boot-petal{filter:drop-shadow(0 1px 2px rgba(60,42,10,.3))}@keyframes bootPetal{0%{transform:translate(-50%,-50%) scale(.4) rotate(0);opacity:0}10%{opacity:1}55%{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(1) rotate(calc(var(--br) * .6))}75%{opacity:.9}to{transform:translate(calc(-50% + var(--bx) * 1.12),calc(-50% + var(--by) * 1.12 + 46px)) scale(.75) rotate(var(--br));opacity:0}}.boot-star{border-radius:50%;background:#fff4d6;box-shadow:0 0 7px 2px #fff4d6cc;animation:bootStar .9s ease-out both}@keyframes bootStar{0%{transform:translate(-50%,-50%) scale(1.2);opacity:0}8%{opacity:1}to{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(.2);opacity:0}}.boot-twinkle{border-radius:50%;background:#fff4d6;box-shadow:0 0 5px 1px #fff4d6b3;animation:bootTwinkle .45s ease-in-out both}@keyframes bootTwinkle{0%,to{transform:translate(-50%,-50%) scale(.4);opacity:0}50%{transform:translate(-50%,-50%) scale(1.25);opacity:1}}#bootHint{min-height:1.5em;color:#c9bfe0;font:600 .9rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em;opacity:0;transition:opacity .3s ease}#bootOverlay.is-waiting #bootHint{opacity:1;animation:bootPulse 1.4s ease-in-out infinite}@keyframes bootPulse{50%{opacity:.45}}#maintNotice{display:none}html.hj-maint #maintNotice{display:flex;position:fixed;inset:0;z-index:640;align-items:center;justify-content:center;padding:24px;text-align:center}#maintNotice p{margin:0;color:#f7f0e2;font:600 clamp(1.3rem,5vw,2rem)/1.6 "Noto Serif SC","Songti SC",serif;letter-spacing:.18em;text-shadow:0 2px 14px rgba(10,8,20,.75),0 0 2px rgba(10,8,20,.6)}html.hj-maint,html.hj-maint body{overflow:hidden}html.hj-maint #bootOverlay,html.hj-maint body>header,html.hj-maint body>main,html.hj-maint body>footer,html.hj-maint .info-overlay,html.hj-maint .lightbox-overlay,html.hj-maint .puzzle-overlay,html.hj-maint .bard-widget,html.hj-maint .bard-stage,html.hj-maint .toast{display:none!important}html.hj-maint #skyBase{opacity:1!important}@media(prefers-reduced-motion:reduce){#bootSpinner,#bootImage.is-spinning,#bootImage.is-looping,#bootOverlay.is-waiting #bootHint{animation:none}#skyBase,html.boot-leaving #bootOverlay{transition:none}}</style>
 <noscript><link rel="stylesheet" href="style.css"></noscript>
 </head>
@@ -30,7 +30,7 @@
 <p id="bootHint" role="status" aria-live="polite">正在进入花街…</p>
 </div>
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
-<script src="boot.js?v=20261004b"></script>
+<script src="boot.js?v=20261004c"></script>
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
@@ -679,11 +679,11 @@ controlslist="nodownload" hidden></video>
 <div class="tab-panel" id="infoPanelRecord" hidden></div>
 </div>
 </div>
-<script src="verify.js?v=20261004b"></script>
-<script src="config.js?v=20261004b"></script>
-<script src="main.js?v=20261004b"></script>
-<script src="ticket.js?v=20261004b"></script>
-<script src="venue.js?v=20261004b"></script>
-<script src="survey.js?v=20261004b"></script>
+<script src="verify.js?v=20261004c"></script>
+<script src="config.js?v=20261004c"></script>
+<script src="main.js?v=20261004c"></script>
+<script src="ticket.js?v=20261004c"></script>
+<script src="venue.js?v=20261004c"></script>
+<script src="survey.js?v=20261004c"></script>
 </body>
 </html>

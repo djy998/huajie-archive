@@ -24,7 +24,7 @@
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render",
+    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range",
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
   /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 轻松那档） */
@@ -42,9 +42,9 @@
      不是 performance.now 的时基，一旦对不上就整局不再用 */
   const INPUT_GRACE = 0.1;
   const TS_MAX = 0.05;
-  const TAP_R = 1.7;
+  /* 点击范围（设置里选）：r 为判定半径、next 为「下一个该弹的（外圈加粗那个）附近没别的气泡可算时」的放宽半径，都是气泡直径的倍数 */
+  const TAP_RANGES = { normal: { label: "正常", r: 1.4, next: 1.7 }, loose: { label: "宽松", r: 1.7, next: 2.2 } };
   const NEXT_LEAD = 0.3;                                // 下一个该弹的气泡离判定点不到这么多秒才加粗外圈（太早加粗会让人一亮就点、早一拍）
-  const TAP_NEXT_R = 2.2;                               // 下一个该弹的（外圈加粗那个）再多给一圈：附近没别的气泡可算时，点偏一点也算它
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
     { id: "great", label: "GREAT", pts: 200, vel: 0.9 },
@@ -84,7 +84,7 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal", render: "normal",
+    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal", render: "normal", range: "normal",
     codes: null, delayMs: 0, stars: 0, cat: "", query: "", binding: -1, cal: null, calMsg: "",
     gen: 0, mode: "tap", lanes: 4, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
@@ -206,6 +206,7 @@
     const judge = getRaw(K.judge, "normal");
     S.judge = JUDGE_MODES.some((m) => m.id === judge) ? judge : "normal";
     S.render = getRaw(K.render, "normal") === "simple" ? "simple" : "normal";
+    S.range = getRaw(K.range, "normal") === "loose" ? "loose" : "normal";
     applyRender();
     const ln = getRaw(K.lanes, "auto");
     S.lanesPref = ln === "auto" ? "auto" : String(clamp(num(ln, 4), LMIN, LMAX));
@@ -734,6 +735,12 @@
         { id: "auto", label: "自动" }, { id: "tap", label: "点气泡" }, { id: "keys", label: "键盘" },
       ], S.input, (v) => { S.input = v; setRaw(K.input, v); renderSheet(); }), `现在：${mode === "tap" ? "点气泡" : "键盘轨道"}`),
     ];
+    if (mode === "tap") {
+      const rg = TAP_RANGES[S.range];
+      opRows.push(row("点击范围", seg("点击范围", Object.entries(TAP_RANGES).map(([id, v]) => ({ id, label: v.label })), S.range,
+        (v) => { S.range = v; setRaw(K.range, v); renderSheet(); }),
+      `点在气泡 ${rg.r} 个直径以内算点中；附近没别的气泡时，下一个该点的（外圈加粗）偏出 ${rg.next} 个也算`));
+    }
     if (mode === "keys") {
       opRows.push(row("轨道数", seg("轨道数", [
         { id: "auto", label: "自动" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" },
@@ -772,7 +779,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge, K.render].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge, K.render, K.range].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -1464,11 +1471,12 @@
     if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
   }
 
-  /* 点气泡：判定窗内、离点按处 TAP_R 个气泡直径以内的音，时间越准、离得越近越优先；
-     一个都没有时，下一个该弹的音在 TAP_NEXT_R 以内也算 */
+  /* 点气泡：判定窗内、离点按处判定半径（TAP_RANGES 的 r 个气泡直径）以内的音，时间越准、离得越近越优先；
+     一个都没有时，下一个该弹的音在 next 个气泡直径以内也算 */
   function tapAt(x, y, e) {
     const g = S.g;
-    const R = g.size * TAP_R;
+    const rg = TAP_RANGES[S.range] || TAP_RANGES.normal;
+    const R = g.size * rg.r;
     if (S.frozen && S.waiting) {
       const n = S.waiting;
       if (Math.hypot(n.x - x, n.y - y) <= R * 1.5) learnHit(n);
@@ -1491,7 +1499,7 @@
       for (let i = S.next; i < S.notes.length; i++) {
         const n = S.notes[i];
         if (S.judged[n.idx] >= 0 || n.t - t < -dm.win[2]) continue;   // 已经过了判定窗、等着判漏的不算
-        if (n.t - t <= dm.win[2] && Math.hypot(n.x - x, n.y - y) <= g.size * TAP_NEXT_R) best = n;
+        if (n.t - t <= dm.win[2] && Math.hypot(n.x - x, n.y - y) <= g.size * rg.next) best = n;
         break;
       }
     }
@@ -1730,6 +1738,7 @@
       dg.frames ? frameNote(dg) : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
+      S.mode === "tap" && S.range === "loose" ? "宽松点击范围" : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
       o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,

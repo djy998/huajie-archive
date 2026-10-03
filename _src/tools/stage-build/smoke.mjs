@@ -279,7 +279,7 @@ async function main() {
 
   /* 3. 点气泡（手机）：旁边一点也算，远了不算 */
   {
-    const P = makePage({ coarse: true, width: 390, height: 844 });
+    const P = makePage({ coarse: true, width: 390, height: 844, prefs: { hj_stage_range: "loose" } });   // 宽松点击范围：1.7 / 2.2 个气泡
     await openStage(P);
     check("手机默认点气泡提示", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
     await go(P);
@@ -540,6 +540,31 @@ async function main() {
     const Q = makePage({ prefs: { hj_stage_render: "simple" } });
     await openStage(Q);
     check("下次打开仍是简单显示", Q.$("#hjStage").classList.contains("is-simple"));
+  }
+
+  /* 16. 点击范围：正常（默认）1.4 / 1.7 个气泡，宽松 1.7 / 2.2 */
+  {
+    const P = makePage({ coarse: true, width: 390, height: 844, prefs: { hj_stage_song: SHORT.id } });
+    await openStage(P);
+    P.click(P.btn("设置"));
+    check("设置里有点击范围（默认正常）", !!P.btn("宽松", P.$("#hjsSheetCard")) && /1\.4 个直径/.test(P.$("#hjsSheetCard").textContent));
+    P.click(P.btn("关闭", P.$("#hjsSheetCard")));
+    await go(P);
+    const st = P.st();
+    const ns = st.notes;
+    /* 找一个前后都隔得开的音，免得算到别的气泡上 */
+    const lone = (from) => ns.findIndex((a, i) => i >= from && i > 0 && ns[i + 1] && a.t - ns[i - 1].t > 0.6 && ns[i + 1].t - a.t > 0.6);
+    const i1 = lone(1);
+    ns.slice(0, i1).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
+    P.until(ns[i1].t);
+    const off = (n, d) => (n.x + st.g.size * d < P.win.innerWidth ? [n.x + st.g.size * d, n.y] : [n.x - st.g.size * d, n.y]);
+    P.pointer(...off(ns[i1], 1.55));
+    check("正常范围：偏 1.55 个气泡（下一个该点的）也算", P.st().judged[ns[i1].idx] >= 0 && P.st().judged[ns[i1].idx] < 3, `judged=${P.st().judged[ns[i1].idx]}`);
+    const i2 = lone(i1 + 1);
+    ns.slice(i1 + 1, i2).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
+    P.until(ns[i2].t);
+    P.pointer(...off(ns[i2], 1.9));
+    check("正常范围：偏 1.9 个气泡不算", P.st().judged[ns[i2].idx] === -1, `judged=${P.st().judged[ns[i2].idx]}`);
   }
 
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
