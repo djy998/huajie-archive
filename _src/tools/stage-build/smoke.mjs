@@ -267,7 +267,7 @@ async function main() {
     check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
     check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
-    check("有 MISS 就没有 FULL COMBO", !/FULL COMBO/.test(P.$("#hjsModal").textContent));
+    check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
     check("本机纪录按难度和判定模式分开写入", best[`${fin.song}:easy:normal`] && best[`${fin.song}:easy:normal`].score === fin.score && !best[`${fin.song}:easy`]);
@@ -444,7 +444,7 @@ async function main() {
       if (i === 5) check("连击数一直显示在判定字下方", P.$("#hjsComboN").textContent === "6" && !P.$("#hjsComboBig").classList.contains("is-zero"), P.$("#hjsComboN").textContent);
     }
     P.until(P.st().endT + 2);
-    check(`${judge}：全部弹中 → FULL COMBO!`, P.st().finished && /FULL COMBO!/.test(P.$("#hjsModal").textContent));
+    check(`${judge}：全部弹中 → FULL COMBO!`, P.st().finished && /FULL COMBO!/.test(P.$("#hjsModal").textContent) && !/null|undefined/.test(P.$("#hjsModal").textContent));
     if (judge === "loose") check("结算显示：难度挑战、判定宽松", /难度挑战/.test(P.$(".hjs-res-tags").textContent) && /判定宽松/.test(P.$(".hjs-res-tags").textContent));
   }
   /* 11. 放水模式：不用点，鼠标停在气泡上，到点自动算弹中；不记最高分 */
