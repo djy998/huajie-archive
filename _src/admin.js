@@ -362,7 +362,7 @@ function enterTicketViewer(password, perms) {
   refreshTicketAdmin();
   clearInterval(ticketViewTimer);
   ticketViewTimer = setInterval(() => {
-    if (!document.hidden && !$("view-internal").hidden && !$("ticketViewBoard").hidden && !panel.hidden) refreshTicketAdmin();
+    if (!document.hidden && !$("view-internal").hidden && !$("ticketViewBoard").hidden && !panel.hidden) runQuietly(refreshTicketAdmin);
   }, 60 * 1000);
 }
 
@@ -1992,7 +1992,7 @@ function initTicketAdmin() {
     if (document.hidden || isTicketViewer() || !internalAdminPassword) return;
     const panel = $("ticketAdminPanel");
     if (panel.hidden || $("adminModalOverlay").hidden || ticketAdmin.edit || ticketAdmin.tab === "settings") return;
-    refreshTicketAdmin();
+    runQuietly(refreshTicketAdmin);
   }, 60 * 1000);
 }
 

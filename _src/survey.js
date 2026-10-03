@@ -486,7 +486,7 @@ function surveyVisibleNow() {
 let surveyStatusSeq = 0;
 async function refreshSurveyStatus() {
   const seq = ++surveyStatusSeq;
-  const data = await callWorker({ action: "get_survey_status", survey: SURVEY.id });
+  const data = await callWorker({ action: "get_survey_status", survey: SURVEY.id }, { quiet: true });
   if (seq !== surveyStatusSeq || !data?.ok) return;
   siteLockdown = !!data.lockdown;
   if (surveyState.mode === "done" || surveyState.submitting) return;

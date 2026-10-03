@@ -322,7 +322,7 @@ async function openVenueView() {
   }
   setVenueMode(siteLockdown ? "blocked" : "form", STATIC_MODE_MSG);
   /* 再确认一次分享功能开关：管理员刚关掉的话这里挡住 */
-  const locked = await isLockedDown();
+  const locked = await isLockedDown({ quiet: true });   // 表单已经显示，后台再确认
   if (!$("view-venue").hidden && $("venueResult").hidden) setVenueMode(locked ? "blocked" : "form", STATIC_MODE_MSG);
 }
 

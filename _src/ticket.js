@@ -646,12 +646,12 @@ function scheduleTicketEntryCheck(st) {
 
 async function refreshTicketEntry() {
   ticketEntry.lastCheck = Date.now();
-  const st = await callWorker({ action: "get_ticket_status" });
+  const st = await callWorker({ action: "get_ticket_status" }, { quiet: true });
   if (!st?.ok) return;   // 读失败维持现状，切回页面时再查
   ticketEntry.status = st;
   const show = ticketEntryVisible(st);
   showTicketEntry(show);
-  if (show && st.guideOn !== false) loadTicketGuide();   // 须知先取回来，点的时候不用等
+  if (show && st.guideOn !== false) runQuietly(loadTicketGuide);   // 须知先取回来，点的时候不用等
   scheduleTicketEntryCheck(st);
 }
 
@@ -678,7 +678,7 @@ function loadTicketGuide() {
 
 async function openTicketGuide(mode) {
   ticketGuide.mode = mode;
-  if (!ticketGuide.loaded) await Promise.race([loadTicketGuide(), new Promise((r) => setTimeout(r, 2500))]);
+  if (!ticketGuide.loaded) await withLoadVeil(Promise.race([loadTicketGuide(), new Promise((r) => setTimeout(r, 2500))]));
   if (mode === "ack" && $("view-ticket").hidden) return;   // 等的时候人已经离开购票页了
   $("ticketGuideOkBtn").textContent = TICKET_GUIDE_OK_TEXT[mode];
   $("ticketGuideOverlay").hidden = false;

@@ -193,21 +193,25 @@ function workerImageUrl(url) {
   return m ? new URL(`image/${m[1]}`, workerBase()).href : url;
 }
 
-/* 连不上或返回的不是 JSON 时为 null；业务错误为 { ok: false, error } */
-async function callWorker(payload) {
-  try {
-    const res = await fetch(workerBase(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
-  } catch (e) {
-    return null;
-  }
+/* 连不上或返回的不是 JSON 时为 null；业务错误为 { ok: false, error }。
+   访客在等结果的请求自动套上加载提示（见 visitorWaiting）；后台刷新、不挡操作的请求传 { quiet: true } */
+async function callWorker(payload, { quiet = false } = {}) {
+  const req = (async () => {
+    try {
+      const res = await fetch(workerBase(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  })();
+  return quiet || !visitorWaiting() ? req : withLoadVeil(req);
 }
 
-/* 按需加载的脚本；失败后允许重试。访客点了在等的加载会套上加载提示，后台预取传 { quiet: true } */
+/* 按需加载的脚本；失败后允许重试。都是访客要用才加载，默认套上加载提示，后台预取传 { quiet: true } */
 const lateScripts = {};
 function loadLateScript(file, ready, { quiet = false } = {}) {
   if (ready()) return Promise.resolve();
@@ -221,23 +225,45 @@ function loadLateScript(file, ready, { quiet = false } = {}) {
   return quiet ? lateScripts[file] : withLoadVeil(lateScripts[file]);
 }
 
-/* 加载提示：开屏同款的莫古力转圈 +「正在加载库啵……」。
-   等候超过 LOAD_VEIL_DELAY_MS 还没好才出现（网快时什么都看不到），出现后至少转 LOAD_VEIL_MIN_MS 再收起，免得一闪而过；
-   几件事同时在等时，全部结束才收起。期间盖住页面，不会被重复点击 */
+/* ==== 加载提示：开屏同款的莫古力转圈 +「正在加载库啵……」 ====
+   - 全站通用：withLoadVeil(promise) 包住访客在等的事；callWorker、loadLateScript、大图都已接上
+   - 什么算「访客在等」：刚点过、按过回车 / 空格（VISITOR_WAIT_MS 内）发出的请求，或者已经有一件事在等时接着发出的请求；
+     定时刷新、进站时的后台读取不算，写在 runQuietly 里的也不算
+   - 等候超过 LOAD_VEIL_DELAY_MS 还没好才出现（网快时什么都看不到），出现后至少转 LOAD_VEIL_MIN_MS 再收起；
+     几件事同时在等时，全部结束才收起；期间盖住页面，不会被重复点击
+   - 超过 LOAD_VEIL_MAX_MS 还没好就先收起并提示，网络卡住时页面也不会一直点不了；那件事加载完照常继续 */
 const LOAD_VEIL_DELAY_MS = 350;
 const LOAD_VEIL_MIN_MS = 700;
-const loadVeil = { pending: 0, showTimer: 0, hideTimer: 0, shownAt: 0 };
+const LOAD_VEIL_MAX_MS = 12000;
+const VISITOR_WAIT_MS = 1500;
+const loadVeil = { pending: 0, showTimer: 0, hideTimer: 0, capTimer: 0, shownAt: 0, gaveUp: false, gestureAt: 0, quiet: 0 };
+
+function initLoadVeil() {
+  const mark = () => { loadVeil.gestureAt = Date.now(); };
+  ["pointerdown", "click", "submit"].forEach((t) => document.addEventListener(t, mark, { capture: true, passive: true }));
+  document.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") mark(); }, { capture: true, passive: true });
+}
+
+const visitorWaiting = () => !loadVeil.quiet && (loadVeil.pending > 0 || Date.now() - loadVeil.gestureAt < VISITOR_WAIT_MS);
+
+/* 定时器、后台刷新里调用：期间同步发出的请求不弹提示 */
+function runQuietly(fn) {
+  loadVeil.quiet += 1;
+  try { return fn(); } finally { loadVeil.quiet -= 1; }
+}
 
 function withLoadVeil(promise) {
   const v = loadVeil;
   v.pending += 1;
   clearTimeout(v.hideTimer);
-  if (!v.shownAt && !v.showTimer) v.showTimer = setTimeout(showLoadVeil, LOAD_VEIL_DELAY_MS);
+  if (!v.shownAt && !v.showTimer && !v.gaveUp) v.showTimer = setTimeout(showLoadVeil, LOAD_VEIL_DELAY_MS);
   const settle = () => {
     v.pending -= 1;
     if (v.pending > 0) return;
     clearTimeout(v.showTimer);
+    clearTimeout(v.capTimer);
     v.showTimer = 0;
+    v.gaveUp = false;
     if (v.shownAt) v.hideTimer = setTimeout(hideLoadVeil, Math.max(0, v.shownAt + LOAD_VEIL_MIN_MS - Date.now()));
   };
   promise.then(settle, settle);
@@ -245,8 +271,9 @@ function withLoadVeil(promise) {
 }
 
 function showLoadVeil() {
-  loadVeil.showTimer = 0;
-  if (document.documentElement.classList.contains("hj-maint")) return;
+  const v = loadVeil;
+  v.showTimer = 0;
+  if (maintenanceActive()) return;
   let el = $("loadVeil");
   if (!el) {
     el = document.createElement("div");
@@ -258,7 +285,13 @@ function showLoadVeil() {
   }
   el.classList.remove("is-leaving");
   el.hidden = false;
-  loadVeil.shownAt = Date.now();
+  v.shownAt = Date.now();
+  clearTimeout(v.capTimer);
+  v.capTimer = setTimeout(() => {
+    v.gaveUp = true;
+    hideLoadVeil();
+    showToast("网络有点慢，加载好了会自动继续");
+  }, LOAD_VEIL_MAX_MS - LOAD_VEIL_DELAY_MS);
 }
 
 function hideLoadVeil() {
@@ -272,7 +305,6 @@ function hideLoadVeil() {
     el.classList.remove("is-leaving");
   }, 260);
 }
-
 
 /* ==== 2. 视图与路由 ==== */
 /* #latest #survey #previous #event-<id> #mini-review #ti #venue #internal；/activity/、/previous/ 为独立入口 */
@@ -884,16 +916,16 @@ function initNav() {
 const STATIC_MODE_MSG = "功能未开放，敬请谅解~";
 let siteLockdown = false;
 
-async function isLockedDown() {
-  const data = await callWorker({ action: "get_lockdown" });
+async function isLockedDown(opts) {
+  const data = await callWorker({ action: "get_lockdown" }, opts);
   if (data) siteLockdown = !!data.value;
   return siteLockdown;
 }
 
 /* 互动功能在静态模式下拦截，同时重新读取开关 */
-async function blockedByStaticMode() {
-  if (siteLockdown) isLockedDown();
-  else if (!(await isLockedDown())) return false;
+async function blockedByStaticMode(opts) {
+  if (siteLockdown) isLockedDown({ quiet: true });
+  else if (!(await isLockedDown(opts))) return false;
   showToast(STATIC_MODE_MSG);
   return true;
 }
@@ -989,7 +1021,7 @@ async function finishCaptcha(proof) {
   const msg = $("captchaMsg");
   setMsg(msg, "验证中…");
   /* 听得花间语：验证与打开记录一并提交 */
-  const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof });
+  const data = await withLoadVeil(callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof }, { quiet: true }));
   if (session !== captchaSession) return;
   if (data?.error === "closed") {
     closeCaptcha();
@@ -1122,7 +1154,7 @@ function openInfoModal() {
   $("infoOverlay").hidden = false;
   switchInfoTab("intro");
   playFadeOnly($("infoBox"));
-  isLockedDown();
+  isLockedDown({ quiet: true });
 }
 
 function closeInfoModal() {
@@ -1380,10 +1412,14 @@ function setLightboxLong(long) {
   applyLightboxTransform();
 }
 
+/* 没有缩略图先垫着的大图，下载完之前是一片空白，套上加载提示；关掉大图时一并结束 */
+let lbWaitDone = null;
+
 function openLightbox(src, mode, preview) {
   lightboxMode = mode === "gallery" ? "gallery" : "normal";
   const img = $("lightboxImg");
   const seq = ++lbSeq;
+  lbWaitDone?.();
   resetLightboxTransform();
   setLightboxLong(false);
   img.onload = () => {
@@ -1401,10 +1437,19 @@ function openLightbox(src, mode, preview) {
   }
   $("lightboxOverlay").hidden = false;
   if (img.complete && img.naturalWidth) img.onload();
+  else if (!preview || preview === src) {
+    withLoadVeil(new Promise((resolve) => {
+      lbWaitDone = resolve;
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    }));
+  }
 }
 
 function closeLightbox() {
   lbSeq++;
+  lbWaitDone?.();
+  lbWaitDone = null;
   $("lightboxOverlay").hidden = true;
   $("lightboxImg").onload = null;
   $("lightboxImg").removeAttribute("src");
@@ -2553,7 +2598,7 @@ async function refreshLikes(root) {
   if (siteLockdown) return;
   const keys = [...new Set(likeButtonsIn(root).map((b) => b.dataset.likeKey))];
   if (!keys.length) return;
-  const data = await callWorker({ action: "get_likes", keys });
+  const data = await callWorker({ action: "get_likes", keys }, { quiet: true });
   if (!data || !data.ok) return;
   likes.available = true;
   Object.assign(likes.counts, data.counts);
@@ -2572,10 +2617,10 @@ function setupDetailLike(data) {
 
 async function onLikeClick(btn) {
   const key = btn.dataset.likeKey;
-  if (!key || (await blockedByStaticMode())) return;
+  if (!key || (await blockedByStaticMode({ quiet: true }))) return;
   if (likes.remaining <= 0) { showToast(LIKE_LIMIT_MSG); return; }
   btn.disabled = true;
-  const data = await callWorker({ action: "add_like", key });
+  const data = await callWorker({ action: "add_like", key }, { quiet: true });   // 按钮自己会变灰，不挡页面
   btn.disabled = false;
   if (data && data.ok) {
     likes.liked.add(key);
@@ -3318,7 +3363,7 @@ let huayuVisited = false;
 async function requestHuayu() {
   if (huayuVisited) return openHuayuModal();
   if (captchaOn) return openCaptcha("huayu");
-  const data = await withLoadVeil(callWorker({ action: "huayu_visit" }));
+  const data = await callWorker({ action: "huayu_visit" });
   if (data?.error === "captcha") return openCaptcha("huayu");
   if (data?.error === "closed") {
     applyHuayuMode({ mode: data.mode });
@@ -3810,7 +3855,7 @@ function initPickers() {
 /* 站点状态：分享功能、人机验证、星芒节、弹窗公告、花语开关、服务器时间 */
 async function loadSiteState() {
   const sentAt = Date.now();
-  const data = await callWorker({ action: "get_site_state" });
+  const data = await callWorker({ action: "get_site_state" }, { quiet: true });
   if (!data || !data.ok) {
     applyStarlight(storage.json(STORE.starlight));
     return;
@@ -3819,7 +3864,7 @@ async function loadSiteState() {
   siteLockdown = !!data.lockdown;
   /* 旧版 Worker 的站点状态里没有 maintenance 时单独查询 */
   if ("maintenance" in data) applyMaintenance(!!data.maintenance);
-  else callWorker({ action: "get_maintenance" }).then((d) => { if (d && d.ok) applyMaintenance(!!d.value); });
+  else callWorker({ action: "get_maintenance" }, { quiet: true }).then((d) => { if (d && d.ok) applyMaintenance(!!d.value); });
   applyCaptchaEnabled(data.captcha !== false);
   applyStarlight(data.starlight);
   applySitePopup(data.popup);
@@ -3921,7 +3966,7 @@ function initApp() {
   const booting = document.documentElement.classList.contains("boot-pending");
   /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
   [
-    initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
+    initLoadVeil, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
     initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,

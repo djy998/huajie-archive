@@ -6069,7 +6069,7 @@ body.day-mode .games-card select {
 }
 
 /* ==== 30. 加载提示 ==== */
-/* 按需加载等得久了才出现（main.js 的 withLoadVeil）：开屏同款莫古力转圈，盖住页面防止重复点击 */
+/* 访客在等的加载（请求、按需脚本、大图）超过 0.35 秒才出现，见 main.js 的 withLoadVeil：开屏同款莫古力转圈，盖住页面防止重复点击 */
 .load-veil {
   position: fixed; inset: 0; z-index: 560;
   display: flex; flex-direction: column; align-items: center; justify-content: center;

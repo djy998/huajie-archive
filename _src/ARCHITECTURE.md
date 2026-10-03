@@ -30,7 +30,13 @@
 
 按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`games.js`（打开小游戏助手）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
 
-按需加载统一走 `main.js` 的 `loadLateScript`。访客点了在等的加载会套上 `withLoadVeil`：超过 0.35 秒还没好，就盖上一层加载提示（开屏的莫古力转圈 +「正在加载库啵……」），出现后至少转 0.7 秒；网快时什么都看不到。后台预取（如 `games-poems.js`）传 `{ quiet: true }`，不弹提示。其它让访客干等的请求也可以包一层 `withLoadVeil(promise)`。
+加载提示（`main.js` 的 `withLoadVeil`）全站通用：访客在等的事超过 0.35 秒还没好，就盖上一层开屏同款的莫古力转圈 +「正在加载库啵……」，出现后至少转 0.7 秒，超过 12 秒先收起并提示「网络有点慢」，网快时什么都看不到。
+
+- `callWorker` 自动判断：访客刚点过 / 按过回车（1.5 秒内）发出的请求，或已经有一件事在等时接着发出的请求，算「在等」。进站读取、定时刷新不算。
+- 不挡操作的请求传 `{ quiet: true }`（点赞、后台再确认开关、购票入口刷新、拼图 / 问卷状态等）；定时器里的刷新包在 `runQuietly(fn)` 里。
+- `loadLateScript` 默认都套提示，后台预取（如 `games-poems.js`）传 `{ quiet: true }`。
+- 大图没有缩略图垫着时，下载完之前也算在等。
+- 其它让访客干等的事，直接 `await withLoadVeil(promise)`。
 
 ### 约定
 

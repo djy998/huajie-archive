@@ -118,7 +118,7 @@
   }
 
   async function refreshState() {
-    const data = await callWorker({ action: "puzzle_state" });
+    const data = await callWorker({ action: "puzzle_state" }, { quiet: true });   // 拼图照常能开，回来后再刷新选项
     if (data && data.ok) applyState(data, true);
     else if (data && data.error === "unknown_action") applyState(null, true);   // 旧版 Worker
     else return;
