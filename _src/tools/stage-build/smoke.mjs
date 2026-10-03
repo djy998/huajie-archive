@@ -295,6 +295,18 @@ async function main() {
     P.until(n2.t);
     P.pointer(n2.x + st.g.size * 2, n2.y);
     check("下一个该弹的气泡：偏 2 个气泡也算", P.st().judged[2] >= 0 && P.st().judged[2] < 3, `judged=${P.st().judged[2]}`);
+    /* 外圈加粗：找一个和前一个隔得开的音，离判定点还远时不加粗、0.3 秒内才加粗 */
+    {
+      const ns0 = P.st().notes;
+      const m = ns0.find((a, i) => i > 2 && a.t - ns0[i - 1].t > 0.9 && a.t > P.pos() + 1);
+      if (m) {
+        ns0.filter((a) => a.t < m.t && a.t > P.pos() + 0.05).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });   // 前面的都弹掉
+        P.until(m.t - 0.6);
+        const far = P.$$(".hjs-note.is-next").length;
+        P.until(m.t - 0.2);
+        check("下一个该弹的气泡快到点（0.3 秒内）才加粗外圈", far === 0 && P.$$(".hjs-note.is-next").length === 1, `${far}/${P.$$(".hjs-note.is-next").length}`);
+      }
+    }
     /* 先到先得：挨得近的两个音，稍晚一点点在两个中间偏后的位置，算给前一个，不往后错位 */
     const ns = P.st().notes;
     const k = ns.findIndex((a, i) => i > 3 && ns[i + 1] && ns[i + 1].t - a.t < 0.4 && Math.hypot(ns[i + 1].x - a.x, ns[i + 1].y - a.y) < st.g.size * 1.6);
@@ -400,6 +412,9 @@ async function main() {
     const P = makePage();
     await openStage(P);
     P.click(P.btn("设置"));
+    P.click(P.btn("关闭", P.$("#hjsSheetCard")));
+    P.click(P.btn("怎么玩"));
+    check("玩法说明讲清 MISS 和点空的区别", /MISS 和「点空」不一样/.test(P.$("#hjsSheetCard").textContent));
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));

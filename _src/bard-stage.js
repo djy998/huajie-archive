@@ -38,6 +38,7 @@
   const INPUT_GRACE = 0.1;
   const TS_MAX = 0.05;
   const TAP_R = 1.7;
+  const NEXT_LEAD = 0.3;                                // 下一个该弹的气泡离判定点不到这么多秒才加粗外圈（太早加粗会让人一亮就点、早一拍）
   const TAP_NEXT_R = 2.2;                               // 下一个该弹的（外圈加粗那个）再多给一圈：附近没别的气泡可算时，点偏一点也算它
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
@@ -747,7 +748,9 @@
           "每首曲子都是一份 MIDI：气泡是你要弹的音，其余的音（和声、这一档省掉的旋律）游戏会用轻音按时补上",
           "手机、平板：直接点气泡，点在旁边一点也算",
           "电脑：屏幕按宽度分成几条轨道，气泡落在哪条轨道就按那条的键（大厅下方有键位提示，设置里能改）",
-          "开头会有四下轻轻的预备拍；漏掉的音不会响",
+          "开头会有四下轻轻的预备拍",
+          "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
+          "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
           "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
           "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
@@ -1216,9 +1219,9 @@
       const n = S.notes[i];
       const dt = n.t - t;
       if (dt > ap) break;
-      if (S.judged[n.idx] >= 0 || dt < -0.6) continue;
+      if (S.judged[n.idx] >= 0 || dt < -0.6) { S.els.get(n.idx)?.classList.remove("is-next"); continue; }
       const el = S.els.get(n.idx) || noteEl(n);
-      el.classList.toggle("is-next", n.idx === nextIdx);    // 下一个该弹的：外圈加粗
+      el.classList.toggle("is-next", n.idx === nextIdx && dt <= NEXT_LEAD);   // 下一个该弹的：快到点时外圈才加粗
       const k = clamp(1 - dt / ap, 0, 1);
       el.style.setProperty("--k", k.toFixed(3));
       el.style.opacity = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
@@ -1241,7 +1244,7 @@
     const el = S.els.get(n.idx);
     if (!el) return;
     S.els.delete(n.idx);
-    el.classList.remove("is-wait");
+    el.classList.remove("is-wait", "is-next");
     el.classList.add(cls);
     setTimeout(() => el.remove(), ms);
   }
