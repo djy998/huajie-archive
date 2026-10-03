@@ -573,6 +573,25 @@ async function main() {
     check("正常范围：偏 1.9 个气泡不算", P.st().judged[ns[i2].idx] === -1, `judged=${P.st().judged[ns[i2].idx]}`);
   }
 
+  /* 17. 开演前先备好音色：warm 没好之前不开钟，好了才开演；要的音高包括谱面全部音和预备拍 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
+    let release;
+    const asked = [];
+    P.win.HJBard.warm = (inst, midis) => { asked.push([inst, midis.length]); return new Promise((r) => { release = release || r; if (inst === "harp" && midis.length === 1) r(); }); };
+    await openStage(P);
+    await go(P);
+    await sleep(20);
+    P.advance(0.5);
+    check("音色没备好时不开演、提示准备音色", !P.st().playing && /准备音色/.test(P.$("#hjsBanner").textContent), P.$("#hjsBanner").textContent);
+    const total = chartOf(SHORT.id).n.length;
+    check("备的是整首的音（要弹的 + 补音）和预备拍", asked.some(([, n]) => n === total) && asked.some(([i, n]) => i === "harp" && n === 1), JSON.stringify(asked));
+    release();
+    await sleep(20);
+    P.advance(0.05);
+    check("备好后开演", P.st().playing && P.st().clock.run);
+  }
+
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
   {
     const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });

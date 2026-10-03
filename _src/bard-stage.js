@@ -1136,8 +1136,22 @@
       prepare(s, chart);
       layout();
       updateHud();
-      waitAudio(gen, performance.now());
+      warmSounds().then(() => {
+        if (gen !== S.gen || S.view !== "play") return;
+        waitAudio(gen, performance.now());
+      });
     });
+  }
+
+  /* 开演前先把这首要用到的音色、音高备好（bard.js 的 HJBard.warm）：要弹的音、补音、预备拍；
+     超过 0.35 秒没好就出全屏转圈的莫古力（main.js 的 trackLoad），已经备过的曲子几乎不用等 */
+  function warmSounds() {
+    const warm = bard().warm;
+    if (!warm) return Promise.resolve();
+    const midis = [...S.notes, ...S.bgList].map((n) => n.m);
+    const job = Promise.all([warm(instId(), midis), warm(TICK.inst, [TICK.midi])]).catch(() => {});
+    banner("准备音色…", "is-wait");
+    return typeof trackLoad === "function" ? trackLoad(job, "block") : job;
   }
 
   /* 音频叫不醒（浏览器拦着自动出声）就请玩家点一下屏幕，点的那一下会重新开始 */

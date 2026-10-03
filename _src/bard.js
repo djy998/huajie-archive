@@ -380,7 +380,7 @@
     buffer.getChannelData(0).set(r.data);
     const entry = { buffer, rate: r.rate };
     A.cache.set(key, entry);
-    if (A.cache.size > CACHE_MAX) A.cache.delete(A.cache.keys().next().value);
+    if (A.cache.size > Math.max(CACHE_MAX, A.cacheMax || 0)) A.cache.delete(A.cache.keys().next().value);
     return entry;
   }
 
@@ -403,9 +403,9 @@
   function loadSamples(inst) {
     if (!A.ctx || !inst.samples || A.samples[inst.id]) return;
     const ctx = A.ctx;
-    const entry = { ready: false, buffers: new Map() };
+    const entry = { ready: false, buffers: new Map(), done: null };
     A.samples[inst.id] = entry;
-    trackLoad(Promise.all(sampleUrls(inst).map(([m, url]) => fetchSample(url)
+    entry.done = trackLoad(Promise.all(sampleUrls(inst).map(([m, url]) => fetchSample(url)
       .then((data) => { delete rawSamples[url]; return new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject)); })
       .then((buf) => entry.buffers.set(m, buf))))
       .then(() => { entry.ready = true; })
@@ -636,6 +636,37 @@
   function stagePrepare(instId) {
     if (!ensureAudio() || !INST[instId]) return;
     prerender(INST[instId]);
+  }
+
+  /* 舞台开演前：把这首曲子用到的每个音高都先算好（拨弦、合成钢琴的音是第一次弹到时才在主线程上算，
+     演奏中途碰到新音高就会掉帧）；钢琴等采样下载完（最多等 10 秒）。分小块算，每块 8 ms 左右，转圈的莫古力不卡。
+     返回 Promise，算完才开演 */
+  function stageWarm(instId, midis) {
+    const ctx = ensureAudio();
+    const inst = INST[instId];
+    if (!ctx || !inst || inst.kind === "sustain") return Promise.resolve();
+    if (inst.samples) {
+      loadSamples(inst);
+      const entry = A.samples[inst.id];
+      if (!entry || entry.ready || !entry.done) return Promise.resolve();
+      return Promise.race([entry.done.catch(() => {}), new Promise((r) => setTimeout(r, 10000))]);
+    }
+    /* 已经算过的也过一遍（只是挪到缓存最新的一端）；缓存上限放宽到够装下这一首的全部音高，别的曲子留下的按先进先出挤掉 */
+    const todo = [...new Set(midis)].filter((m) => Number.isFinite(m));
+    A.cacheMax = todo.length + 16;
+    return new Promise((resolve) => {
+      const step = () => {
+        const t0 = performance.now();
+        try {
+          while (todo.length && performance.now() - t0 < 8) noteBuffer(inst, todo.shift());
+        } catch (e) {
+          todo.length = 0;
+        }
+        if (todo.length) setTimeout(step, 0);
+        else resolve();
+      };
+      step();
+    });
   }
 
   /* ==== 演奏：点击与回响 ==== */
@@ -1093,6 +1124,7 @@
     playMidi: stagePlay,
     unlock: stageUnlock,
     prepare: stagePrepare,
+    warm: stageWarm,
     clock: stageClock,
     instName: () => B.inst,
     instruments: INSTRUMENTS.map((i) => ({ id: i.id, name: i.name, group: i.group })),
