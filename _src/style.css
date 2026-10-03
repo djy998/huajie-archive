@@ -6489,8 +6489,6 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-combo b { font-size: clamp(1.15rem, 3.4vw, 1.5rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 10px rgba(0, 0, 0, .55); }
 .hjs-combo small { font-size: .7rem; letter-spacing: .16em; color: var(--s-soft); text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
 .hjs-combo.is-zero { opacity: .45; }
-.hjs-combo.is-bump b { animation: hjsBump .22s ease-out; }
-@keyframes hjsBump { from { transform: scale(1.22); } to { transform: none; } }
 .hjs-banner:not(:empty):not(.is-hint) ~ .hjs-combo { opacity: 0; }
 .hjs-banner { position: absolute; left: 0; right: 0; top: 42%; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
 .hjs-banner:empty { display: none; }
@@ -6821,7 +6819,7 @@ body.hjs-open .toast { z-index: 540; }
   .hjs, .hjs-sheet { transition: none; }
   .hjs-sheet-card, .hjs-res { animation: none; }
   .hjs-pop { animation-duration: .9s; animation-timing-function: linear; }
-  .hjs-combo.is-bump b, .hjs-res-fc { animation: none; }
+  .hjs-res-fc { animation: none; }
   .hjs-note.is-wait .hjs-ring, .hjs-banner.is-wait span, .hjs-banner.is-hint span, .hjs-keybtn.is-bind, .hjs-eq i { animation: none; }
   .hjs-eq i { height: 8px; }
 }

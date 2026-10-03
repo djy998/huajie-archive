@@ -266,6 +266,7 @@ async function main() {
     check("弹完出结算", fin.finished && /演出结束/.test(P.$("#hjsModal").textContent));
     check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
     check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
+    check("帧率稳定时：掉帧 0%、认出 60 Hz", /掉帧 0%（60 Hz，最长一帧 1\d ms）/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
     check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
@@ -501,6 +502,29 @@ async function main() {
     P.until(n1.t);
     P.key("Space", " ");
     check("鼠标离气泡远时按键不算", P.st().judged[1] === -1);
+  }
+
+  /* 14. 掉帧诊断：单独掉一帧（60 Hz 下 33 ms）也要算，并指出最卡的那几秒 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy", hj_stage_input: "keys" } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    P.until(ns[0].t);
+    const k0 = Math.floor(P.pos() / 4) + 3;          // 往后第 3 个 4 秒段里，连着 20 次各掉一帧
+    P.until(k0 * 4 + 0.5);
+    const longFrame = () => {                         // 一帧 33 ms（60 Hz 下掉一帧）：旧算法要 34 ms 以上才算，算不到
+      P.now += 33;
+      P.audioT += 0.033;
+      const fs = P.frames;
+      P.frames = [];
+      fs.forEach((f) => f(P.now));
+    };
+    for (let i = 0; i < 20; i++) { longFrame(); P.advance(2 / 60); }
+    P.until(P.st().endT + 2);
+    const diag = P.$(".hjs-res-diag")?.textContent || "";
+    const span = `${Math.floor((k0 * 4) / 60)}:${String((k0 * 4) % 60).padStart(2, "0")}`;
+    check("单独掉一帧也计入、指出最卡的 4 秒", /掉帧 (<1|[1-9]\d*)%/.test(diag) && diag.includes(`最多在 ${span}`) && /最长一帧 3\d ms/.test(diag), diag);
   }
 
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */

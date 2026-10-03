@@ -1063,7 +1063,9 @@
     S.learnHits = 0;
     S.counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     S.offs = [];                                        // 每次弹中的偏差（秒，正 = 晚），结算时给个平均
-    S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false };   // 手感诊断：掉帧、点按排队时间
+    /* 手感诊断：掉帧、点按排队时间。base：本机一帧多长（开头 120 帧的中位数，按屏幕刷新率）；drop：比 base 长一半以上的帧；
+       buckets：每 4 秒歌曲时间里掉了几帧，结算时指出最卡的一段；max：最长一帧 */
+    S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map() };
     S.ghosts = 0;                                       // 点气泡时点空的次数
     S.playing = false;
     S.paused = false;
@@ -1529,7 +1531,8 @@
       Math.abs(ms) >= 20 && cls !== "is-perfect" ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` }) : null));
   }
 
-  /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿 */
+  /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿；
+     另按本机刷新率记掉帧（单独掉一帧也算）给结算的诊断行用 */
   function noteFrame() {
     const dg = S.diag;
     if (!dg) return;
@@ -1540,6 +1543,19 @@
       if (!dg.lite && dg.frames >= 90 && dg.slow / dg.frames > 0.2) {
         dg.lite = true;
         S.root.classList.add("is-lite");
+      }
+      const iv = now - dg.last;
+      if (!dg.base) {
+        dg.warm.push(iv);
+        if (dg.warm.length >= 120) { dg.warm.sort((a, b) => a - b); dg.base = dg.warm[60]; dg.warm = null; }
+      } else {
+        dg.n += 1;
+        dg.max = Math.max(dg.max, iv);
+        if (iv > dg.base * 1.5) {
+          dg.drop += 1;
+          const k = Math.floor(Math.max(0, clockRaw(S.clock) - S.clock.lat) / 4);
+          dg.buckets.set(k, (dg.buckets.get(k) || 0) + 1);
+        }
       }
     }
     dg.last = now;
@@ -1557,7 +1573,10 @@
       const up = S.combo > +n.textContent;
       n.textContent = String(S.combo);
       big.classList.toggle("is-zero", S.combo === 0);
-      if (up) { big.classList.remove("is-bump"); void big.offsetWidth; big.classList.add("is-bump"); }
+      /* 跳一下用 Web Animations，不用「删类 → 读 offsetWidth → 加类」：那样每涨一次连击都强制排版一次，密集段更卡 */
+      if (up && n.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        n.animate([{ transform: "scale(1.22)" }, { transform: "none" }], { duration: 220, easing: "ease-out" });
+      }
     }
   }
 
@@ -1696,12 +1715,22 @@
     const dev = [
       `输出延迟 ${Math.round((S.clock ? S.clock.lat : 0) * 1000)} ms`,
       dg.tsBad ? "点按时间戳不可用" : w.length ? `点按排队 ${Math.round(w[Math.floor(w.length / 2)] * 1000)} ms` : null,
-      dg.frames ? `掉帧 ${Math.round((100 * dg.slow) / dg.frames)}%${dg.lite ? "（已切省电画法）" : ""}` : null,
+      dg.frames ? frameNote(dg) : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
       o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
       h("p", { class: "hjs-res-diag", text: dev }));
+  }
+  /* 掉帧：按本机刷新率算（单独掉一帧也算），再标出最卡的那 4 秒在哪、最长一帧多久 */
+  function frameNote(dg) {
+    const lite = dg.lite ? "（已切省电画法）" : "";
+    if (!dg.base || !dg.n) return `掉帧 ${Math.round((100 * dg.slow) / dg.frames)}%${lite}`;
+    const pct = (100 * dg.drop) / dg.n;
+    let worst = null;
+    dg.buckets.forEach((c, k) => { if (!worst || c > worst.c) worst = { k, c }; });
+    const where = worst && worst.c >= 3 ? `，最多在 ${fmtTime(worst.k * 4)}~${fmtTime(worst.k * 4 + 4)}（${worst.c} 帧）` : "";
+    return `掉帧 ${pct < 1 && dg.drop ? "<1" : Math.round(pct)}%（${Math.round(1000 / dg.base)} Hz${where}，最长一帧 ${Math.round(dg.max)} ms）${lite}`;
   }
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
