@@ -92,7 +92,7 @@
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
     raf: 0, pump: 0, els: new Map(), clock: null, bannerKey: "",
     preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
-    bgmWasOn: false, closeTimer: 0, hist: false, closing: false, needTap: false,
+    bgmWasOn: false, closeTimer: 0, coverTimer: 0, hist: false, closing: false, needTap: false,
   };
 
   /* ==== 工具（storage、showToast、siteVolume、bgm 是 main.js 的全局） ==== */
@@ -200,7 +200,7 @@
     S.diff = DIFFS.some((d) => d.id === diff) ? diff : "normal";
     S.learn = getRaw(K.learn, "0") === "1";
     S.demo = getRaw(K.demo, "0") === "1";
-    S.inst = getRaw(K.inst, "");
+    S.inst = getRaw(K.inst, "song");                    // 默认跟随曲目（MIDI 原本的乐器）；"" 为跟随模拟器
     const input = getRaw(K.input, "tap");
     S.input = ["auto", "tap", "keys"].includes(input) ? input : "tap";
     const judge = getRaw(K.judge, "normal");
@@ -323,7 +323,7 @@
             h("span", { class: "hjs-stat" }, h("b", { id: "hjsScore", text: "0" }), h("small", { id: "hjsScoreL", text: "分数" })),
             h("span", { class: "hjs-stat" }, h("b", { id: "hjsCombo", text: "0" }), h("small", { text: "连击" }))),
           iconBtn("pause", "暂停", () => (S.paused ? resume() : pause()), "hjs-pause"),
-          iconBtn("close", "回到大厅", () => backToLobby()),
+          iconBtn("close", "结束演奏", () => backToLobby()),
           h("i", { class: "hjs-prog", "aria-hidden": "true" }, h("i", { id: "hjsProg" })))),
       h("div", { class: "hjs-modal", id: "hjsModal", hidden: true }),
       h("div", { class: "hjs-sheet", id: "hjsSheet", hidden: true, onpointerdown: (e) => { if (e.target.id === "hjsSheet") closeSheet(); } },
@@ -361,6 +361,8 @@
     void r.offsetWidth;
     r.classList.add("is-in");
     document.body.classList.add("hjs-open");
+    /* 舞台淡入盖满后，把下面的网站藏起来、停掉它的动画：被挡住的东西不再参与绘制 */
+    S.coverTimer = setTimeout(() => document.body.classList.add("hjs-covered"), 260);
     if (typeof bgm !== "undefined" && bgm.playing) { S.bgmWasOn = true; bgm.pause(); }
     try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
     bard().unlock?.();
@@ -381,6 +383,8 @@
     stopPlay();
     hideSheet();
     const r = S.root;
+    clearTimeout(S.coverTimer);
+    document.body.classList.remove("hjs-covered");
     r.classList.remove("is-in");
     r.classList.add("is-leaving");
     clearTimeout(S.closeTimer);
@@ -1720,7 +1724,7 @@
     card.append(h("div", { class: "hjs-res-btns" },
       h("button", { type: "button", class: "hjs-btn is-main", text: "再来一次", onclick: () => startSong() }),
       h("button", { type: "button", class: "hjs-btn", text: "下一首", onclick: () => { nextSong(); startSong(); } }),
-      h("button", { type: "button", class: "hjs-btn", text: "回大厅", onclick: backToLobby })));
+      h("button", { type: "button", class: "hjs-btn", text: "结束演奏", onclick: backToLobby })));
     modal(card);
   }
   /* 结算里的手感诊断：平均早晚、点空几下 */

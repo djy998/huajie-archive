@@ -6213,6 +6213,12 @@ body.day-mode .load-corner { box-shadow: 0 4px 12px rgba(96,64,16,.22), inset 0 
 .hjs.is-in { opacity: 1; }
 .hjs.is-leaving { opacity: 0; }
 body.hjs-open { overflow: hidden; }
+/* 舞台盖满时（hjs-covered，淡入后加、开始淡出前去掉）：下面的网站不画、动画暂停；用 visibility 不用 display，滚动位置不变 */
+body.hjs-covered > :not(#hjStage):not(#toast) { visibility: hidden !important; }
+body.hjs-covered > :not(#hjStage):not(#toast),
+body.hjs-covered > :not(#hjStage):not(#toast) *,
+body.hjs-covered > :not(#hjStage):not(#toast) *::before,
+body.hjs-covered > :not(#hjStage):not(#toast) *::after { animation-play-state: paused !important; }
 body.hjs-open .toast { z-index: 540; }
 .hjs audio { display: none; }
 .hjs-safe { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
@@ -6228,7 +6234,8 @@ body.hjs-open .toast { z-index: 540; }
   background: url("assets/bard/stage/bg.jpg") center/cover no-repeat;
   transition: filter .5s ease;
 }
-.hjs.is-playing .hjs-bg { filter: brightness(.86); }
+/* 演奏时背景压暗用遮罩的底色，不给整张背景图上 filter（滤镜层每帧合成更费） */
+.hjs.is-playing .hjs-veil { background-color: rgba(0, 0, 0, .14); }
 .hjs-veil {
   position: absolute; inset: 0;
   background:

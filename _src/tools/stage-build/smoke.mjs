@@ -146,6 +146,8 @@ async function main() {
     check("大厅先把当前曲目的谱面下好", P.fetched.some((u) => u.includes(`charts/${firstSong.id}.json`)));
     check("大厅不再提伴奏音轨", !/伴奏/.test(P.$("#hjsLobby").textContent));
     check("大厅有「离开舞台」按钮", !!P.btn("离开舞台"));
+    await sleep(300);
+    check("舞台盖满后下面的网站藏起来（hjs-covered）", P.doc.body.classList.contains("hjs-covered"));
     check("背景音乐被暂停", P.win.bgm.playing === false);
     check("开舞台时压入一条历史记录（返回键回上一层）", P.win.history.state && P.win.history.state.hjStage === 1);
     check("默认操作方式是点气泡（电脑也是）", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
@@ -184,6 +186,7 @@ async function main() {
     check("就弹这首：关窗口、停试听、大厅换成这首", P.st().sheet === "" && P.st().preview === "" && P.$(".hjs-hero-t").textContent === target.t);
     P.key("Escape", "Escape");
     check("大厅里 Esc 关掉舞台", P.$("#hjStage").classList.contains("is-leaving"));
+    check("关舞台时马上露出下面的网站", !P.doc.body.classList.contains("hjs-covered"));
   }
 
   /* 2. 键盘轨道：输入法、漏音、补音、预备拍、声像、暂停、结算 */
@@ -227,6 +230,7 @@ async function main() {
     check("中文输入法下按键照样判定（按 e.code）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
     const hitSound = P.midi.find((m) => m.vel === 1);
     check("弹中发出这个音，声像居中", hitSound && hitSound.midi === n0.m && hitSound.pan === 0);
+    check("弹中的音用曲目原本的乐器（默认跟随曲目）", hitSound && hitSound.inst === (["piano", "harp", "lute"].includes(SHORT.inst) ? SHORT.inst : "piano"), `${hitSound && hitSound.inst} / ${SHORT.inst}`);
     check("判定字显示在屏幕中间那层", /PERFECT/.test(P.$("#hjsJudge").textContent));
 
     const before = P.midi.length;
@@ -273,8 +277,9 @@ async function main() {
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
     check("本机纪录按难度和判定模式分开写入", best[`${fin.song}:easy:normal`] && best[`${fin.song}:easy:normal`].score === fin.score && !best[`${fin.song}:easy`]);
     check("结算分别显示难度和判定模式", /难度轻松/.test(P.$(".hjs-res-tags").textContent) && /判定正常/.test(P.$(".hjs-res-tags").textContent), P.$(".hjs-res-tags")?.textContent);
-    P.click(P.btn("回大厅"));
-    check("回大厅", P.st().view === "lobby" && /本机纪录/.test(P.$(".hjs-ctrl").textContent));
+    check("结算里是「结束演奏」，没有「回大厅」", !!P.btn("结束演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
+    P.click(P.btn("结束演奏", P.$("#hjsModal")));
+    check("结束演奏回到大厅", P.st().view === "lobby" && /本机纪录/.test(P.$(".hjs-ctrl").textContent));
   }
 
   /* 3. 点气泡（手机）：旁边一点也算，远了不算 */
@@ -324,8 +329,8 @@ async function main() {
       P.pointer(a.x + (b.x - a.x) * 0.55, a.y + (b.y - a.y) * 0.55);
       check("挨得近的两个音：稍晚点在中间，算给前一个（不错位）", P.st().judged[a.idx] >= 0 && P.st().judged[b.idx] === -1, `${P.st().judged[a.idx]}/${P.st().judged[b.idx]}`);
     }
-    P.click(P.btn("回到大厅"));
-    check("演奏中 ✕ 回大厅", P.st().view === "lobby" && !P.st().clock.run);
+    P.click(P.btn("结束演奏"));
+    check("演奏中 ✕（结束演奏）回大厅", P.st().view === "lobby" && !P.st().clock.run);
   }
 
   /* 4. 学习模式：停在这一拍；输出延迟也算进去 */
@@ -533,6 +538,7 @@ async function main() {
     await openStage(P);
     check("默认正常显示", !P.$("#hjStage").classList.contains("is-simple"));
     P.click(P.btn("设置"));
+    check("音色默认「跟随曲目」", P.$(".hjs-select")?.value === "song", P.$(".hjs-select")?.value);
     P.click(P.btn("简单显示", P.$("#hjsSheetCard")));
     check("切到简单显示：舞台加 is-simple、记在本机", P.$("#hjStage").classList.contains("is-simple") && P.mem.get("hj_stage_render") === "simple");
     P.click(P.btn("恢复默认设置", P.$("#hjsSheetCard")));
