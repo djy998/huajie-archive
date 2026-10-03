@@ -3,8 +3,9 @@
      （和声、谱面省掉的旋律音）由游戏按时间用轻音补上，整首曲子始终完整。不再有伴奏 / 示范音轨
    - 玩法：每个气泡出现在这个音的高度上（越往上音越高），外圈一边收缩一边等你，
      外圈缩到和核心重合的那一下就是判定点。弹中就用模拟器的乐器发出这个音
-   - 两种操作（设置里可改，默认按设备自动选）：
-     · 点气泡（手机、平板）：直接点气泡，点在旁边一点也算（判定半径约一个气泡直径）；气泡沿着旋律左右铺开，不会叠在一起
+   - 两种操作（设置里可改，默认点气泡；选「自动」时按设备选）：
+     · 点气泡（手机、平板）：直接点气泡，点在旁边一点也算（判定半径约一个气泡直径）；气泡沿着旋律左右铺开，不会叠在一起；
+       电脑上鼠标指着气泡按键盘任意键也算点（放水模式不用按）
      · 键盘轨道（电脑）：屏幕按宽度分成 2~4 条轨道（自动或手选），气泡在哪条轨道就按那条的键；
        按 e.code 认键，开着中文输入法也能弹；鼠标点轨道也行
    - 时钟：模拟器 AudioContext 的 currentTime（补音也排在这个钟上），帧间用 performance.now() 补齐；
@@ -13,25 +14,29 @@
    - 开头有四拍轻声预备拍（3·2·1），第一个气泡前就知道速度
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
    - 判定四档 Perfect / Great / Good / Miss，没有血量、不会失败；漏掉的音不出声
+   - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用轻松的判定窗）/
+     放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。本机纪录按 曲目 × 难度 × 判定模式 分开记
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
    - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
-     操作方式、轨道与键位、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
+     操作方式、轨道与键位、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
    - 曲目索引 assets/bard/stage/songs.json，每首的谱面 charts/<id>.json 点到才下载（_src/tools/stage-build 从 MIDI 生成） */
 (() => {
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay",
+    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge",
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
-  /* 判定半窗（秒）：Perfect / Great / Good，三档难度一样宽（难度只差在音多音少、气泡出现得早晚、大小） */
-  const WIN = [0.18, 0.3, 0.45];
-  /* approach：气泡提前多久出现；win：判定半窗；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
+  /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 轻松那档） */
+  const LOOSE_WIN = [0.18, 0.3, 0.45];
+  /* approach：气泡提前多久出现；win：正常判定的半窗；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: WIN, size: 0.44, tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: WIN, size: 0.38, tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: WIN, size: 0.32, tap: 0.2 },
+    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], size: 0.44, tap: 0.24 },
+    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], size: 0.38, tap: 0.21 },
+    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], size: 0.32, tap: 0.2 },
   ];
+  const JUDGE_MODES = [{ id: "normal", label: "正常" }, { id: "loose", label: "宽松" }, { id: "hover", label: "放水" }];
+  const HOVER_R = 0.8;                                  // 放水模式：指针离气泡中心不到这么多个气泡直径就算「在气泡上」
   /* 输入：判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数）
      点按排队的时间用 e.timeStamp 补回来，但最多补 TS_MAX 秒；有的手机浏览器（如一些 App 内置浏览器）的 timeStamp
      不是 performance.now 的时基，一旦对不上就整局不再用 */
@@ -79,11 +84,11 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "auto", lanesPref: "auto",
+    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal",
     codes: null, delayMs: 0, stars: 0, cat: "", query: "", binding: -1, cal: null, calMsg: "",
     gen: 0, mode: "tap", lanes: 4, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
-    playing: false, paused: false, frozen: false, waiting: null, frozenT: 0, finished: false,
+    playing: false, paused: false, frozen: false, hover: null, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
     raf: 0, pump: 0, els: new Map(), clock: null, bannerKey: "",
     preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
@@ -95,7 +100,15 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const num = (v, d) => (v !== null && v !== "" && Number.isFinite(+v) ? +v : d);
   const coarse = () => matchMedia("(pointer: coarse)").matches;
-  const diffMeta = () => DIFFS.find((d) => d.id === S.diff) || DIFFS[1];
+  const diffBase = () => DIFFS.find((d) => d.id === S.diff) || DIFFS[1];
+  /* 当前难度，win 换成当前判定模式实际用的半窗 */
+  const diffMeta = () => { const d = diffBase(); return S.judge === "normal" ? d : { ...d, win: LOOSE_WIN }; };
+  const judgeTag = () => (S.judge === "loose" ? " · 宽松判定" : S.judge === "hover" ? " · 放水模式" : "");
+  const judgeLabel = () => (JUDGE_MODES.find((m) => m.id === S.judge) || JUDGE_MODES[0]).label;
+  /* 本机纪录按 曲目:难度:判定模式 分开记；加判定模式以前的旧纪录（曲目:难度）是按轻松那档判定弹的，算进宽松 */
+  function bestOf(all, id, diff, judge) {
+    return all[`${id}:${diff}:${judge}`] || (judge === "loose" ? all[`${id}:${diff}`] : null) || null;
+  }
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
@@ -188,7 +201,10 @@
     S.learn = getRaw(K.learn, "0") === "1";
     S.demo = getRaw(K.demo, "0") === "1";
     S.inst = getRaw(K.inst, "");
-    S.input = ["auto", "tap", "keys"].includes(getRaw(K.input, "auto")) ? getRaw(K.input, "auto") : "auto";
+    const input = getRaw(K.input, "tap");
+    S.input = ["auto", "tap", "keys"].includes(input) ? input : "tap";
+    const judge = getRaw(K.judge, "normal");
+    S.judge = JUDGE_MODES.some((m) => m.id === judge) ? judge : "normal";
     const ln = getRaw(K.lanes, "auto");
     S.lanesPref = ln === "auto" ? "auto" : String(clamp(num(ln, 4), LMIN, LMAX));
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
@@ -292,6 +308,7 @@
         h("div", { class: "hjs-notes", id: "hjsNotes", "aria-hidden": "true" }),
         h("div", { class: "hjs-judge", id: "hjsJudge", "aria-live": "polite" }),
         h("div", { class: "hjs-banner", id: "hjsBanner", "aria-live": "polite" }),
+        h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "连击" })),
         h("div", { class: "hjs-caps", id: "hjsCaps", "aria-hidden": "true" }),
         h("header", { class: "hjs-hud", id: "hjsHud" },
           h("div", { class: "hjs-hud-song" }, h("b", { id: "hjsNowT" }), h("small", { id: "hjsNowS" })),
@@ -310,6 +327,8 @@
 
     const play = $id("hjsPlay");
     play.addEventListener("pointerdown", onPlayPointer);
+    play.addEventListener("pointermove", onHoverMove);
+    ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => play.addEventListener(ev, onHoverEnd));
     play.addEventListener("contextmenu", (e) => e.preventDefault());
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("keyup", onKeyUp, true);
@@ -470,7 +489,7 @@
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const mode = modeNow();
     const lanes = lanesNow();
-    const best = (storage.json(K.best) || {})[`${s.id}:${S.diff}`];
+    const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge);
     const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 轻松 / 标准 / 挑战各要弹几个音
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
@@ -486,13 +505,15 @@
         ? h("p", { class: "hjs-muted" }, h("span", { text: "现在是静音，听不到声音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
-      best && !S.learn ? h("p", { class: "hjs-best", text: `本机纪录 · ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
+      best && !S.learn ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定）· ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
         h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: S.learn ? "开始练习" : "开始演奏" })),
       h("p", { class: "hjs-ctrl-tip" },
         mode === "keys"
           ? [h("span", { text: "键盘" }), ...S.codes[lanes].map(kbd), h("span", { text: `· ${lanes} 条轨道 · Esc 暂停` })]
-          : [h("span", { text: "直接点气泡演奏 · 点在旁边一点也算" })])));
+          : S.judge === "hover"
+            ? [h("span", { text: "放水模式：不用点气泡，鼠标移到气泡上就算" })]
+            : [h("span", { text: coarse() ? "直接点气泡演奏 · 点在旁边一点也算" : "直接点气泡演奏 · 鼠标指着气泡按任意键也算" })])));
   }
 
   /* ==== 试听：用选中的音色把 MIDI 从第一个音起放 8 秒（要弹的音稍响） ==== */
@@ -720,10 +741,17 @@
     body.append(group("操作", ...opRows));
 
     /* 时机 */
+    const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
+    const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
+      S.judge === "hover"
+        ? "不用点：鼠标移到气泡上停着，到点自动算弹中（手机上手指按住滑过去也行）；判定同宽松"
+        : S.judge === "loose"
+          ? `三档难度都按轻松判定：PERFECT / GREAT / GOOD 各差 ${winText(LOOSE_WIN)} 秒以内`
+          : `按难度收紧，现在「${diffBase().label}」：PERFECT / GREAT / GOOD 各差 ${winText(diffBase().win)} 秒以内`);
     const val = h("b", { class: "hjs-num-v", text: `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` });
     const setv = (v) => { S.delayMs = clamp(Math.round(v / 5) * 5, -300, 300); setRaw(K.delay, S.delayMs); val.textContent = `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms`; };
     const step = (d, label) => h("button", { type: "button", class: "hjs-step", "aria-label": label, text: d > 0 ? "＋" : "－", onclick: () => setv(S.delayMs + d) });
-    const timing = [row("判定延迟", h("div", { class: "hjs-num" }, step(-5, "提前 5 毫秒"), val, step(5, "推后 5 毫秒"),
+    const timing = [judgeRow, row("判定延迟", h("div", { class: "hjs-num" }, step(-5, "提前 5 毫秒"), val, step(5, "推后 5 毫秒"),
       h("button", { type: "button", class: "hjs-btn hjs-cal-btn", text: S.cal ? "校准中…" : "校准", disabled: !!S.cal, onclick: startCal })),
     "总觉得自己按准了却判晚 → 加；判早 → 减")];
     if (S.cal || S.calMsg) timing.push(calPanel());
@@ -732,7 +760,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -747,11 +775,13 @@
         ["气泡出现在它那个音的高度上（越往上音越高），外圈会慢慢收缩；外圈缩到和核心重合的那一下，弹它就会发出这个音",
           "每首曲子都是一份 MIDI：气泡是你要弹的音，其余的音（和声、这一档省掉的旋律）游戏会用轻音按时补上",
           "手机、平板：直接点气泡，点在旁边一点也算",
+          "电脑选点气泡时：鼠标指着气泡，按键盘任意键也算点了它（放水模式不用按，移上去就行）",
           "电脑：屏幕按宽度分成几条轨道，气泡落在哪条轨道就按那条的键（大厅下方有键位提示，设置里能改）",
           "开头会有四下轻轻的预备拍",
           "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
           "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
+          "判定模式（设置里改）：正常 —— 难度越高判定越严；宽松 —— 三档难度都按轻松判定；放水 —— 不用点，把鼠标移到气泡上停着，到点就算弹中。本机纪录按难度和判定模式分开记",
           "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
           "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
         ].map((t) => h("li", { text: t })))));
@@ -1060,7 +1090,7 @@
     $id("hjsModal").hidden = true;
     S.notes = [];
     $id("hjsNowT").textContent = s.t;
-    $id("hjsNowS").textContent = `${diffMeta().label}${S.learn ? " · 学习" : ""}`;
+    $id("hjsNowS").textContent = `${diffMeta().label}${S.learn ? " · 学习" : judgeTag()}`;
     setPauseIcon(false);
     updateHud();
     $id("hjsProg").style.transform = "scaleX(0)";
@@ -1166,6 +1196,7 @@
       }
       if (!S.frozen) { scheduleSounds(); countIn(t); }
     }
+    if (S.judge === "hover" && S.hover) hoverCheck(t, dm);
     draw(t, dm);
     $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
@@ -1257,10 +1288,11 @@
   /* ==== 输入 ==== */
   function onPlayPointer(e) {
     if (e.target.closest && e.target.closest("button")) return;
-    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 2) return;   // 左右键都算点
     if (S.needTap) { e.preventDefault(); startSong(); return; }
     if (S.view !== "play" || !S.playing || S.paused) return;
     e.preventDefault();
+    if (S.judge === "hover" || e.pointerType === "mouse") S.hover = hoverPos(e);
     const r = S.root.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
@@ -1270,6 +1302,37 @@
       press(lane, e);
     } else {
       tapAt(x, y, e);
+    }
+  }
+  /* 记下指针在哪（鼠标一直跟着；手指按着时才算，抬起就清掉）：
+     放水模式每帧由 hoverCheck 看它停在哪个气泡上；电脑点气泡时按键盘任意键＝在鼠标处点一下（onKeyDown） */
+  function hoverPos(e) {
+    const r = S.root.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function onHoverMove(e) {
+    if (e.pointerType !== "mouse" && (S.judge !== "hover" || !e.buttons)) return;
+    S.hover = hoverPos(e);
+  }
+  function onHoverEnd(e) {
+    if (e.type === "pointerleave" || e.pointerType !== "mouse") S.hover = null;
+  }
+  /* 指针在气泡上：气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算 */
+  function hoverCheck(t, dm) {
+    const g = S.g;
+    if (!g) return;
+    const R = g.size * HOVER_R;
+    const { x, y } = S.hover;
+    if (S.frozen && S.waiting) {
+      if (Math.hypot(S.waiting.x - x, S.waiting.y - y) <= R) learnHit(S.waiting);
+      return;
+    }
+    for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
+      const n = S.notes[i];
+      const dt = n.t - t;
+      if (dt > 0) break;
+      if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
+      if (Math.hypot(n.x - x, n.y - y) <= R) { hit(n, tierOf(-dt, dm), -dt); return; }
     }
   }
   /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣一点（最多 TS_MAX 秒） */
@@ -1315,7 +1378,14 @@
     }
     if (S.view === "play") {
       if (S.needTap && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); startSong(); return; }
-      if (!S.playing || S.paused || S.mode !== "keys" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!S.playing || S.paused || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (S.mode === "tap") {
+        /* 电脑点气泡（放水模式除外）：鼠标指着气泡按任意键＝在鼠标处点一下 */
+        if (S.judge === "hover" || !S.hover || /^(F\d+|Tab|CapsLock|Control|Alt|Meta|ContextMenu)$/.test(e.key)) return;
+        e.preventDefault();
+        if (!e.repeat) tapAt(S.hover.x, S.hover.y, e);
+        return;
+      }
       const lane = S.codes[S.lanes].indexOf(e.code);
       if (lane < 0) return;
       e.preventDefault();
@@ -1432,7 +1502,7 @@
     S.counts[JUDGE[tier].id] += 1;
     if (S.learn) {
       S.learnHits += 1;
-      popJudge("对了", "is-ok");
+      popJudge("WELL", "is-ok");
     } else {
       S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120));
       popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`, off);
@@ -1456,8 +1526,7 @@
     box.append(h("div", { class: `hjs-pop ${cls}` },
       h("b", { text: label }),
       /* 不是 PERFECT 时标出早还是晚，一直「晚」就该去校准了 */
-      Math.abs(ms) >= 20 && cls !== "is-perfect" ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` }) : null,
-      S.combo >= 2 && cls !== "is-miss" && cls !== "is-wait" ? h("small", { text: `${S.combo} 连击` }) : null));
+      Math.abs(ms) >= 20 && cls !== "is-perfect" ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` }) : null));
   }
 
   /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿 */
@@ -1481,6 +1550,15 @@
     $id("hjsScoreL").textContent = S.learn ? "已弹对" : "分数";
     $id("hjsScore").textContent = S.learn ? `${S.learnHits}/${total}` : fmtNum(S.score);
     $id("hjsCombo").textContent = String(S.combo);
+    /* 判定字下方常驻的连击数：一直显示，涨了跳一下，断了变暗 */
+    const big = $id("hjsComboBig");
+    const n = $id("hjsComboN");
+    if (n.textContent !== String(S.combo)) {
+      const up = S.combo > +n.textContent;
+      n.textContent = String(S.combo);
+      big.classList.toggle("is-zero", S.combo === 0);
+      if (up) { big.classList.remove("is-bump"); void big.offsetWidth; big.classList.add("is-bump"); }
+    }
   }
 
   function banner(text, cls, key) {
@@ -1549,11 +1627,11 @@
     setPauseIcon(true);
     modal(h("div", { class: "hjs-card hjs-res" },
       h("h3", { class: "hjs-res-title", text: "已暂停" }),
-      h("p", { class: "hjs-res-sub", text: `${S.song.t} · ${diffMeta().label}${S.learn ? " · 学习" : ""}` }),
+      h("p", { class: "hjs-res-sub", text: `${S.song.t} · ${diffMeta().label}${S.learn ? " · 学习" : judgeTag()}` }),
       h("div", { class: "hjs-res-btns" },
         h("button", { type: "button", class: "hjs-btn is-main", text: "继续", onclick: resume }),
         h("button", { type: "button", class: "hjs-btn", text: "重来", onclick: () => startSong() }),
-        h("button", { type: "button", class: "hjs-btn", text: "回大厅", onclick: backToLobby }))));
+        h("button", { type: "button", class: "hjs-btn", text: "停止演奏", onclick: backToLobby }))));
   }
   function resume() {
     if (!S.paused) return;
@@ -1582,14 +1660,18 @@
     banner("", "");
     const total = S.notes.length;
     const pct = accPct();
-    const card = h("div", { class: "hjs-card hjs-res" }, h("h3", { class: "hjs-res-title", text: "演出结束" }), h("p", { class: "hjs-res-song", text: `${S.song.t} · ${diffMeta().label}` }));
+    const tag = (k, v) => h("span", { class: "hjs-res-tag" }, h("small", { text: k }), h("b", { text: v }));
+    const card = h("div", { class: "hjs-card hjs-res" }, h("h3", { class: "hjs-res-title", text: "演出结束" }), h("p", { class: "hjs-res-song", text: S.song.t }),
+      h("div", { class: "hjs-res-tags" }, tag("难度", diffMeta().label), tag("判定", judgeLabel()), S.learn ? tag("模式", "学习") : null));
     if (S.learn) {
       card.append(
         h("div", { class: "hjs-res-big", text: `${S.learnHits} / ${total}` }),
         h("p", { class: "hjs-res-sub", text: "学习模式不计分。弹熟了就切到「演出」，正式来一次" }));
     } else {
       const isNew = saveBest(pct);
+      const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
       card.append(
+        fullCombo ? h("div", { class: "hjs-res-fc", text: "FULL COMBO!" }) : null,
         h("div", { class: "hjs-res-rank" }, h("span", { text: rankOf(pct) }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo}` }),
@@ -1602,13 +1684,12 @@
       h("button", { type: "button", class: "hjs-btn", text: "回大厅", onclick: backToLobby })));
     modal(card);
   }
-  /* 结算里的手感诊断：平均早晚、点空几下；一直偏早 / 偏晚就提示去校准 */
+  /* 结算里的手感诊断：平均早晚、点空几下 */
   function timingNote() {
     const o = (S.offs || []).slice().sort((a, b) => a - b);
     const ms = o.length ? Math.round(o[Math.floor(o.length / 2)] * 1000) : 0;
     const parts = [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`];
     if (S.mode === "tap" && S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
-    const tip = Math.abs(ms) >= 35 ? "；一直这样的话，到设置 → 判定延迟 → 校准" : "";
     /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
     const dg = S.diag || {};
     const w = (dg.waits || []).slice().sort((a, b) => a - b);
@@ -1619,14 +1700,14 @@
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
-      o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") + tip }) : null,
+      o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
       h("p", { class: "hjs-res-diag", text: dev }));
   }
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
-    const key = `${S.song.id}:${S.diff}`;
-    const v = { score: S.score, acc: +pct.toFixed(1), rank: rankOf(pct), combo: S.maxCombo };
-    const old = all[key];
+    const key = `${S.song.id}:${S.diff}:${S.judge}`;
+    const v = { score: S.score, acc: +pct.toFixed(1), rank: rankOf(pct), combo: S.maxCombo, diff: S.diff, judge: S.judge };
+    const old = bestOf(all, S.song.id, S.diff, S.judge);
     if (old && v.score <= num(old.score, 0)) return false;
     all[key] = v;
     storage.set(K.best, JSON.stringify(all));
@@ -1641,7 +1722,7 @@
       return {
         view: S.view, sheet: S.sheet, mode: S.mode, lanes: S.lanes, playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
-        bg: S.bgList, score: S.score, combo: S.combo, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
+        bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };

@@ -359,8 +359,8 @@
     <p class="hint" id="pzPauseMeta"></p>
     <div class="pz-btn-col">
       <button type="button" class="pz-primary" id="pzContinueBtn">继续拼图</button>
-      <button type="button" id="pzRestartBtn">放弃本局，重新选择</button>
-      <button type="button" id="pzQuitBtn">先离开（进度已保存）</button>
+      <button type="button" id="pzRestartBtn">重新选择</button>
+      <button type="button" id="pzQuitBtn">离开花街拼图</button>
     </div>
   </div>
 
@@ -1365,7 +1365,7 @@
     const quit = $("pzQuitBtn");
     delete quit.dataset.armed;
     delete quit.dataset.label;
-    quit.textContent = PZ.resume ? "先离开（进度已保存）" : "退出本局（不保存）";
+    quit.textContent = "离开花街拼图";
     card("pzPauseCard");
     saveNow();
   }

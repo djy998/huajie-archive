@@ -1,7 +1,7 @@
 /* 舞台演奏的运行时冒烟测试：用 jsdom 直接跑 _src/bard-stage.js 本体（不是重写一份逻辑），音频时钟由测试手动推进
    覆盖：大厅 → 选曲窗口（搜索 / 分类 / 星级 / 试听）→ 设置窗口（操作方式、改键对调）→ 键盘轨道演奏（中文输入法下的按键、
    漏音不出声、补音、预备拍、声像居中）→ 点气泡演奏（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
-   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键
+   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻连击与 FULL COMBO
    用法：cd _src && npm i --no-save jsdom && node tools/stage-build/smoke.mjs   （期望最后一行：全部通过） */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -148,7 +148,7 @@ async function main() {
     check("大厅有「离开舞台」按钮", !!P.btn("离开舞台"));
     check("背景音乐被暂停", P.win.bgm.playing === false);
     check("开舞台时压入一条历史记录（返回键回上一层）", P.win.history.state && P.win.history.state.hjStage === 1);
-    check("电脑默认键盘提示", /键盘/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("默认操作方式是点气泡（电脑也是）", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
 
     P.click(P.btn("换一首"));
     check("选曲窗口单独打开", P.st().sheet === "picker" && !P.$("#hjsSheet").hidden && !!P.$(".hjs-sheet-card.is-picker"));
@@ -188,9 +188,11 @@ async function main() {
 
   /* 2. 键盘轨道：输入法、漏音、补音、预备拍、声像、暂停、结算 */
   {
-    const P = makePage({ width: 1280, prefs: { hj_stage_diff: "easy", hj_stage_song: SHORT.id } });
+    const P = makePage({ width: 1280, prefs: { hj_stage_diff: "easy", hj_stage_song: SHORT.id, hj_stage_input: "auto" } });
     await openStage(P);
+    check("操作方式选「自动」：电脑照旧用键盘", /键盘/.test(P.$(".hjs-ctrl-tip").textContent));
     P.click(P.btn("设置"));
+    check("设置里有判定模式（正常 / 宽松 / 放水）", ["正常", "宽松", "放水"].every((t) => !!P.btn(t, P.$("#hjsSheetCard"))));
     check("设置窗口单独打开", P.st().sheet === "settings" && !!P.$(".hjs-sheet-card.is-settings"));
     check("设置里不再提伴奏", !/伴奏/.test(P.$("#hjsSheetCard").textContent));
     const keyBtns = P.$$(".hjs-keybtn");
@@ -237,8 +239,10 @@ async function main() {
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
     check("补音按音频钟提前排进去（轻音、居中）", bgPlayed.length > 0 && bgPlayed.every((m) => m.pan === 0 && m.delay >= 0 && m.delay <= 0.121), `${bgPlayed.length}`);
 
+    check("漏音后连击归零、常驻连击变暗", P.$("#hjsComboN").textContent === "0" && P.$("#hjsComboBig").classList.contains("is-zero"));
     P.key("Escape", "Escape");
     check("Esc 暂停：钟停、出暂停卡", P.st().paused && !P.st().clock.run && !P.$("#hjsModal").hidden);
+    check("暂停卡：继续 / 重来 / 停止演奏", !!P.btn("停止演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
     const tPause = P.pos();
     const nPause = P.midi.length;
     P.advance(1);
@@ -263,8 +267,11 @@ async function main() {
     check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
     check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
+    check("有 MISS 就没有 FULL COMBO", !/FULL COMBO/.test(P.$("#hjsModal").textContent));
+    check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
-    check("本机纪录写入（新的 best2）", best[`${fin.song}:easy`] && best[`${fin.song}:easy`].score === fin.score);
+    check("本机纪录按难度和判定模式分开写入", best[`${fin.song}:easy:normal`] && best[`${fin.song}:easy:normal`].score === fin.score && !best[`${fin.song}:easy`]);
+    check("结算分别显示难度和判定模式", /难度轻松/.test(P.$(".hjs-res-tags").textContent) && /判定正常/.test(P.$(".hjs-res-tags").textContent), P.$(".hjs-res-tags")?.textContent);
     P.click(P.btn("回大厅"));
     check("回大厅", P.st().view === "lobby" && /本机纪录/.test(P.$(".hjs-ctrl").textContent));
   }
@@ -322,7 +329,7 @@ async function main() {
 
   /* 4. 学习模式：停在这一拍；输出延迟也算进去 */
   {
-    const P = makePage({ prefs: { hj_stage_learn: "1" }, lat: 0.08 });
+    const P = makePage({ prefs: { hj_stage_learn: "1", hj_stage_input: "keys" }, lat: 0.08 });
     await openStage(P);
     await go(P);
     const n0 = P.st().notes[0];
@@ -341,13 +348,14 @@ async function main() {
     const unlocks = P.unlocks;
     P.key(s1.codes[s1.lanes][n0.lane], "x");
     check("按对了继续走", !P.st().frozen && P.st().clock.run && P.st().judged[0] === 0);
+    check("学习模式弹中提示 WELL", /WELL/.test(P.$("#hjsJudge").textContent));
     check("继续时不会掐掉刚弹的音（不调用 unlock）", P.unlocks === unlocks);
     check("学习模式 HUD 显示已弹对", /1\//.test(P.$("#hjsScore").textContent));
   }
 
   /* 5. 示范旋律：要弹的音也先轻轻放一遍 */
   {
-    const P = makePage({ prefs: { hj_stage_demo: "1", hj_stage_song: SHORT.id, hj_stage_diff: "normal" } });
+    const P = makePage({ prefs: { hj_stage_demo: "1", hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_input: "keys" } });
     await openStage(P);
     await go(P);
     const st = P.st();
@@ -419,6 +427,91 @@ async function main() {
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("再按返回键离开舞台", P.$("#hjStage").classList.contains("is-leaving"));
+  }
+
+  /* 10. 判定模式：正常按难度收紧，宽松三档都按轻松；全弹中出 FULL COMBO，连击一直显示 */
+  for (const [judge, want] of [["normal", 1], ["loose", 0]]) {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", hj_stage_input: "keys", ...(judge === "normal" ? {} : { hj_stage_judge: judge }) } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    P.until(ns[0].t + 0.15);                    // 晚 150 ms：挑战正常判定 GREAT（0.11 < 0.15 < 0.19），宽松 PERFECT（< 0.18）
+    P.key(P.st().codes[P.st().lanes][ns[0].lane], "x");
+    check(`${judge === "normal" ? "正常判定（默认）" : "宽松判定"}：挑战难度晚 150 ms 判 ${want ? "GREAT" : "PERFECT"}`, P.st().judged[0] === want, `judged=${P.st().judged[0]}`);
+    for (let i = 1; i < ns.length; i++) {
+      P.until(ns[i].t);
+      P.key(P.st().codes[P.st().lanes][ns[i].lane], "x");
+      if (i === 5) check("连击数一直显示在判定字下方", P.$("#hjsComboN").textContent === "6" && !P.$("#hjsComboBig").classList.contains("is-zero"), P.$("#hjsComboN").textContent);
+    }
+    P.until(P.st().endT + 2);
+    check(`${judge}：全部弹中 → FULL COMBO!`, P.st().finished && /FULL COMBO!/.test(P.$("#hjsModal").textContent));
+    if (judge === "loose") check("结算显示：难度挑战、判定宽松", /难度挑战/.test(P.$(".hjs-res-tags").textContent) && /判定宽松/.test(P.$(".hjs-res-tags").textContent));
+  }
+  /* 11. 放水模式：不用点，鼠标停在气泡上，到点自动算弹中；不记最高分 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_judge: "hover" } });
+    await openStage(P);
+    await go(P);
+    const st = P.st();
+    const move = (x, y) => {
+      const ev = new P.win.MouseEvent("pointermove", { clientX: x, clientY: y, bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "pointerType", { value: "mouse" });
+      P.$("#hjsPlay").dispatchEvent(ev);
+    };
+    const n0 = st.notes[0];
+    move(n0.x, n0.y);
+    P.until(n0.t - 0.05);
+    check("放水：鼠标停在气泡上，没到点不算", P.st().judged[0] === -1);
+    P.advance(0.1);
+    check("放水：到点自动算弹中（PERFECT）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
+    const n1 = st.notes[1];
+    move(n1.x + st.g.size * 3, n1.y + st.g.size * 3);
+    P.until(n1.t + 0.1);
+    check("放水：鼠标不在气泡上不算", P.st().judged[1] === -1);
+    move(n1.x, n1.y);
+    P.advance(1 / 60);
+    check("放水：晚了 0.1 秒移上去，按晚了多少算", P.st().judged[1] >= 0 && P.st().judged[1] < 3, `judged=${P.st().judged[1]}`);
+    for (let i = 2; i < st.notes.length; i++) { move(st.notes[i].x, st.notes[i].y); P.until(st.notes[i].t + 0.02); }
+    P.until(P.st().endT + 2);
+    check("放水：弹完出结算、判定写放水", P.st().finished && /判定放水/.test(P.$(".hjs-res-tags").textContent));
+    const rec = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
+    check("放水：纪录单独记在 :normal:hover 下", !!rec[`${SHORT.id}:normal:hover`] && Object.keys(rec).length === 1, Object.keys(rec).join(","));
+  }
+
+  /* 12. 电脑点气泡（非放水）：鼠标指着气泡按任意键也算点 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal" } });
+    await openStage(P);
+    check("电脑点气泡：大厅提示可以按任意键", /按任意键也算/.test(P.$(".hjs-ctrl-tip").textContent));
+    await go(P);
+    const st = P.st();
+    const move = (x, y) => {
+      const ev = new P.win.MouseEvent("pointermove", { clientX: x, clientY: y, bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "pointerType", { value: "mouse" });
+      P.$("#hjsPlay").dispatchEvent(ev);
+    };
+    const n0 = st.notes[0];
+    move(n0.x, n0.y);
+    P.until(n0.t);
+    check("只把鼠标停在气泡上不算（不是放水模式）", P.st().judged[0] === -1);
+    P.key("KeyZ", "z");
+    check("鼠标指着气泡按任意键＝点了它", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
+    const n1 = st.notes[1];
+    move(n1.x + st.g.size * 4, Math.max(0, n1.y - st.g.size * 4));
+    P.until(n1.t);
+    P.key("Space", " ");
+    check("鼠标离气泡远时按键不算", P.st().judged[1] === -1);
+  }
+
+  /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
+  {
+    const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });
+    const A = makePage({ prefs: { hj_stage_best2: old } });
+    await openStage(A);
+    check("旧纪录不算进正常判定", !/本机纪录/.test(A.$(".hjs-ctrl").textContent));
+    const B = makePage({ prefs: { hj_stage_best2: old, hj_stage_judge: "loose" } });
+    await openStage(B);
+    check("旧纪录在宽松判定下显示", /本机纪录（标准 · 宽松判定）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
   }
 
   const failed = results.filter((r) => !r[1]);

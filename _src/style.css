@@ -6404,7 +6404,7 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-lane:first-child { border-left: 0; }
 .hjs-lane.is-lit { animation: hjsLane .3s ease-out; }
 @keyframes hjsLane { from { background-color: rgba(242, 189, 109, .16); } to { background-color: rgba(242, 189, 109, 0); } }
-.hjs-notes { position: absolute; inset: 0; pointer-events: none; --size: 80px; }
+.hjs-notes { position: absolute; inset: 0; z-index: 2; pointer-events: none; --size: 80px; }
 .hjs-note {
   --k: 0;
   --c: 241 192 122;
@@ -6478,6 +6478,20 @@ body.hjs-open .toast { z-index: 540; }
   70% { opacity: 1; transform: translateY(-4px) scale(1); }
   100% { opacity: 0; transform: translateY(-10px) scale(1); }
 }
+/* 常驻连击数：判定字正下方，一直显示，压在气泡下面（不挡音名）；中间有提示（倒数、点一下开始）时让开 */
+.hjs-combo {
+  position: absolute; left: 0; right: 0; top: calc(24% + 3.2rem); z-index: 1;
+  display: flex; align-items: baseline; justify-content: center; gap: 6px;
+  pointer-events: none;
+  opacity: .9;
+  transition: opacity .25s;
+}
+.hjs-combo b { font-size: clamp(1.15rem, 3.4vw, 1.5rem); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 10px rgba(0, 0, 0, .55); }
+.hjs-combo small { font-size: .7rem; letter-spacing: .16em; color: var(--s-soft); text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+.hjs-combo.is-zero { opacity: .45; }
+.hjs-combo.is-bump b { animation: hjsBump .22s ease-out; }
+@keyframes hjsBump { from { transform: scale(1.22); } to { transform: none; } }
+.hjs-banner:not(:empty):not(.is-hint) ~ .hjs-combo { opacity: 0; }
 .hjs-banner { position: absolute; left: 0; right: 0; top: 42%; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
 .hjs-banner:empty { display: none; }
 .hjs-banner span {
@@ -6564,6 +6578,25 @@ body.hjs-open .toast { z-index: 540; }
   white-space: nowrap;
   color: #3a1220; background: #f0b3c3;
   transform: rotate(8deg);
+}
+.hjs-res-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: -4px; }
+.hjs-res-tag {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--s-line);
+  font-size: .74rem;
+}
+.hjs-res-tag small { font-size: .66rem; letter-spacing: .1em; color: var(--s-mute); }
+.hjs-res-tag b { font-weight: 700; color: var(--s-soft); }
+.hjs-res-fc {
+  font-size: clamp(1.3rem, 5vw, 1.7rem); font-weight: 900; font-style: italic; line-height: 1.1; letter-spacing: .1em;
+  background: linear-gradient(90deg, #ffe3a3, #f0b3c3, #ddd0ff, #9fd3ff);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(242, 189, 109, .35));
+  animation: hjsCount .5s ease-out;
 }
 .hjs-res-big { font-size: 2rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hjs-res-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; margin-top: 4px; }
@@ -6788,6 +6821,7 @@ body.hjs-open .toast { z-index: 540; }
   .hjs, .hjs-sheet { transition: none; }
   .hjs-sheet-card, .hjs-res { animation: none; }
   .hjs-pop { animation-duration: .9s; animation-timing-function: linear; }
+  .hjs-combo.is-bump b, .hjs-res-fc { animation: none; }
   .hjs-note.is-wait .hjs-ring, .hjs-banner.is-wait span, .hjs-banner.is-hint span, .hjs-keybtn.is-bind, .hjs-eq i { animation: none; }
   .hjs-eq i { height: 8px; }
 }
