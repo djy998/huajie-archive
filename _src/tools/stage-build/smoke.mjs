@@ -527,6 +527,21 @@ async function main() {
     check("单独掉一帧也计入、指出最卡的 4 秒", /掉帧 (<1|[1-9]\d*)%/.test(diag) && diag.includes(`最多在 ${span}`) && /最长一帧 3\d ms/.test(diag), diag);
   }
 
+  /* 15. 画面：正常显示（默认）/ 简单显示 */
+  {
+    const P = makePage();
+    await openStage(P);
+    check("默认正常显示", !P.$("#hjStage").classList.contains("is-simple"));
+    P.click(P.btn("设置"));
+    P.click(P.btn("简单显示", P.$("#hjsSheetCard")));
+    check("切到简单显示：舞台加 is-simple、记在本机", P.$("#hjStage").classList.contains("is-simple") && P.mem.get("hj_stage_render") === "simple");
+    P.click(P.btn("恢复默认设置", P.$("#hjsSheetCard")));
+    check("恢复默认设置：回到正常显示", !P.$("#hjStage").classList.contains("is-simple") && !P.mem.has("hj_stage_render"));
+    const Q = makePage({ prefs: { hj_stage_render: "simple" } });
+    await openStage(Q);
+    check("下次打开仍是简单显示", Q.$("#hjStage").classList.contains("is-simple"));
+  }
+
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
   {
     const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });

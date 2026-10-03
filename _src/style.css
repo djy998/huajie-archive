@@ -6467,6 +6467,12 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-res-diag { margin: 2px 0 0; font-size: .68rem; color: var(--s-mute); }
 /* 省电画法：手机连续掉帧时自动打开，去掉气泡的光晕阴影 */
 .hjs.is-lite .hjs-ring, .hjs.is-lite .hjs-core { box-shadow: none; }
+/* 简单显示（设置 → 画面）：在省电画法之外再去掉音名、判定字、连击和分数的模糊阴影（描边保留，音名照样看得清），提示条不做毛玻璃 */
+.hjs.is-simple .hjs-ring, .hjs.is-simple .hjs-core, .hjs.is-simple .hjs-note.is-wait .hjs-core { box-shadow: none; }
+.hjs.is-simple .hjs-name,
+.hjs.is-simple .hjs-pop b, .hjs.is-simple .hjs-pop.is-perfect b, .hjs.is-simple .hjs-pop small, .hjs.is-simple .hjs-pop em,
+.hjs.is-simple .hjs-combo b, .hjs.is-simple .hjs-combo small, .hjs.is-simple .hjs-stat b { text-shadow: none; }
+.hjs.is-simple .hjs-banner span { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(12, 9, 26, .86); }
 .hjs-pop.is-perfect b { color: #ffe3a3; text-shadow: 0 0 18px rgba(255, 210, 120, .6), 0 2px 10px rgba(0, 0, 0, .4); }
 .hjs-pop.is-great b { color: #ddd0ff; }
 .hjs-pop.is-good b { color: #bcdcea; }

@@ -19,6 +19,7 @@ const STORE = {
   surveyDraft: "hj_survey_draft_",
   surveyDone: "hj_survey_done_",
   maint: "hj_maint",   // 名字同时写在 boot.js
+  reset: "hj_reset_done",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -3955,6 +3956,27 @@ function initA11y() {
   });
 }
 
+/* 一次性重置：RESET_ID 换一个新值，每位访客下次进站时执行一次（记在 hj_reset_done）。
+   这一次（舞台演奏加了判定模式等）：舞台演奏与吟游诗人模拟器的设置恢复默认（hj_stage_*、hj_bard_*，本机最高分 hj_stage_best2 保留），
+   并清掉离线缓存里的旧文件（当前版本的除外），之后用到时重新下载 */
+const RESET_ID = "20261004b";
+function runOneTimeReset() {
+  if (storage.get(STORE.reset) === RESET_ID) return;
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+    keys.filter((k) => k && (k.startsWith("hj_bard_") || (k.startsWith("hj_stage_") && k !== "hj_stage_best2")))
+      .forEach((k) => storage.remove(k));
+  } catch (e) {}
+  try {
+    if (window.caches) {
+      const keep = `hj-shell-${HJ.version}`;
+      caches.keys().then((names) => Promise.all(names.filter((n) => n.startsWith("hj-") && n !== keep).map((n) => caches.delete(n)))).catch(() => {});
+    }
+  } catch (e) {}
+  storage.set(STORE.reset, RESET_ID);
+}
+
 /* 离线缓存（sw.js）与常用图片预取，慢网络下不预取 */
 function initOfflineCache() {
   const sw = "serviceWorker" in navigator && window.isSecureContext ? navigator.serviceWorker : null;
@@ -3986,6 +4008,7 @@ function initOfflineCache() {
 
 function initApp() {
   const booting = document.documentElement.classList.contains("boot-pending");
+  try { runOneTimeReset(); } catch (e) { console.error(e); }
   /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
   [
     initLoadIndicators, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,

@@ -24,7 +24,7 @@
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge",
+    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render",
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
   /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 轻松那档） */
@@ -84,7 +84,7 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal",
+    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal", render: "normal",
     codes: null, delayMs: 0, stars: 0, cat: "", query: "", binding: -1, cal: null, calMsg: "",
     gen: 0, mode: "tap", lanes: 4, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
@@ -205,6 +205,8 @@
     S.input = ["auto", "tap", "keys"].includes(input) ? input : "tap";
     const judge = getRaw(K.judge, "normal");
     S.judge = JUDGE_MODES.some((m) => m.id === judge) ? judge : "normal";
+    S.render = getRaw(K.render, "normal") === "simple" ? "simple" : "normal";
+    applyRender();
     const ln = getRaw(K.lanes, "auto");
     S.lanesPref = ln === "auto" ? "auto" : String(clamp(num(ln, 4), LMIN, LMAX));
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
@@ -217,6 +219,10 @@
       const list = DEF_CODES[n].map((d, i) => (typeof got[i] === "string" && BINDABLE.test(got[i]) ? got[i] : d));
       S.codes[n] = new Set(list).size === list.length ? list : DEF_CODES[n].slice();
     }
+  }
+  /* 画面：简单显示去掉气泡光晕、音名与判定字的模糊阴影（.hjs.is-simple），密集段更省 */
+  function applyRender() {
+    if (S.root) S.root.classList.toggle("is-simple", S.render === "simple");
   }
   const instIds = () => (bard().instruments || []).map((i) => i.id);
   function instId() {
@@ -740,6 +746,12 @@
     }
     body.append(group("操作", ...opRows));
 
+    /* 画面 */
+    body.append(group("画面",
+      row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
+        (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
+      S.render === "simple" ? "去掉了气泡光晕和文字的模糊阴影，副歌等密集处更流畅" : "觉得密集处有点卡，可以换成简单显示")));
+
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
     const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
@@ -760,7 +772,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge, K.render].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -1717,6 +1729,7 @@
       dg.tsBad ? "点按时间戳不可用" : w.length ? `点按排队 ${Math.round(w[Math.floor(w.length / 2)] * 1000)} ms` : null,
       dg.frames ? frameNote(dg) : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
+      S.render === "simple" ? "简单显示" : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
       o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
@@ -1751,7 +1764,7 @@
       return {
         view: S.view, sheet: S.sheet, mode: S.mode, lanes: S.lanes, playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
-        bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
+        bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };
