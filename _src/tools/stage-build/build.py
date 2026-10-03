@@ -1,215 +1,142 @@
-"""花街舞台演奏 · 曲目生成器
-读取 songs.py 里扒好的旋律 + 和声，产出：
-  · assets/bard/stage/songs.json   曲库与谱面（音游用，时间为秒）
-  · assets/bard/stage/<id>.perf.mp3 演奏轨（主旋律）
-  · assets/bard/stage/<id>.acc.mp3  伴奏轨（自动播放的那条）
-  · assets/bard/stage/midi/<id>.mid   扒谱成果（可导入 DAW / Synthesia 对照）
+"""花街舞台演奏 · 曲库生成器（MIDI 版）
 
-用法：python3 build.py [--songs a,b] [--midi] [--bitrate 64k] [--only-json]
-  --only-json  只重写 songs.json（不渲染音频、不写 MIDI，几秒钟）
+读取 songs.py 的曲目表和 midi/<id>.mid，产出：
+  · assets/bard/stage/songs.json        曲目索引（选曲窗口用：曲名、星级、时长、速度、音域…，不含谱面）
+  · assets/bard/stage/charts/<id>.json  每首的音符与分级（点开这首时才下载）
+
+charts/<id>.json：{"v": 2, "n": [[距上一个音的毫秒, MIDI 音高, 级别], ...]}，第一个音在 0 秒。
+级别 3 = 轻松起就要弹，2 = 标准起，1 = 只有挑战，0 = 只由游戏补音（规则见 chart.py）。
+
+用法：python build.py            （全部重写，几秒钟；需要 pip install mido numpy）
+      python build.py --dry-run  （只打印统计，不写文件）
 """
 import argparse
 import json
 import os
 import sys
 
-import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import arrange
-import render
-import voices
-from theory import parse_harmony, parse_melody
-
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import chart
+from songs import DEFAULT, SONGS, TAGS
+
 REPO = os.environ.get("HJ_REPO") or os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 ASSET_DIR = os.path.join(REPO, "assets", "bard", "stage")
-MIDI_DIR = os.path.join(ASSET_DIR, "midi")
+CHART_DIR = os.path.join(ASSET_DIR, "charts")
+MIDI_DIR = os.path.join(HERE, "midi")
 
-ACC_GAINS = {"chord": 0.85, "bass": 1.05, "pad": 0.75, "p": 0.8}
-DEFAULT_ACC = {"chord": "lute", "bass": "bass", "pad": "strings"}
-
-
-def apply_instruments(ev, mapping):
-    """把抽象声部（chord/bass/pad/mel）换成具体音色名"""
-    return [(t, d, m, (mapping.get(v, v) if v != "p" else "p"), g) for (t, d, m, v, g) in ev]
-
-
-def expand(song):
-    """旋律 / 和声的重复段：repeat: n 或 repeat: [[n, 升调半音], ...]"""
-    mel, total = parse_melody(song["mel"])
-    base = list(mel)
-    reps = song.get("repeat")
-    if isinstance(reps, int):
-        reps = [[reps, 0]]
-    for item in reps or []:
-        n, transpose = item if isinstance(item, list) else (item, 0)
-        for k in range(1, n):
-            mel += [(round(t + total * k, 6), d, [p + transpose for p in ps]) for (t, d, ps) in base]
-        total = float(total * n)
-    return mel, total
+# MIDI 轨道名 / 音色号 → 模拟器乐器（「跟随曲目」用）
+TRACK_INST = {
+    "piano": "piano", "harp": "harp", "lute": "lute", "electricguitar": "lute", "guitar": "lute",
+    "violin": "violin", "viola": "viola", "cello": "cello", "contrabass": "bass", "doublebass": "bass",
+    "flute": "flute", "fife": "fife", "oboe": "oboe", "clarinet": "clarinet", "panpipes": "panpipes",
+    "trumpet": "trumpet", "trombone": "trombone", "tuba": "tuba", "horn": "horn", "sax": "sax", "saxophone": "sax",
+    "churchorgan": "clarinet", "organ": "clarinet", "fiddle": "fiddle",
+}
+STAR_CUTS = [0.12, 0.35, 0.65, 0.88]   # 按难度分排名切成 1~5 星
 
 
-def melody_events(mel, lead_beats):
-    """主旋律事件（演奏轨）：双音时高音更响"""
-    ev = []
-    for (t, d, ps) in mel:
-        top = max(ps)
-        for p in ps:
-            ev.append((t + lead_beats, d, p, "mel", 1.0 if p == top else 0.7))
-    return ev
+def guess_inst(info):
+    for name in info["tracks"]:
+        key = "".join(ch for ch in name.lower() if ch.isalpha())
+        if key in TRACK_INST:
+            return TRACK_INST[key]
+    for p in info["programs"]:
+        if p < 8:
+            return "piano"
+        if 24 <= p < 32:
+            return "lute"
+        gm = {40: "violin", 41: "viola", 42: "cello", 43: "bass", 45: "fiddle", 46: "harp", 56: "trumpet", 57: "trombone",
+              58: "tuba", 60: "horn", 65: "sax", 68: "oboe", 71: "clarinet", 72: "fife", 73: "flute", 75: "panpipes"}
+        if p in gm:
+            return gm[p]
+    return "piano"
 
 
-def accompaniment_events(song, harmony, total, lead_beats):
-    pat = arrange.PATTERNS[song["style"]]
-    ev = [(t + lead_beats, d, m, v, g) for (t, d, m, v, g) in pat(harmony, song["bpb"], total)]
-    perc = arrange.percussion(song.get("perc", "none"), harmony, song["bpb"], total, song.get("perc_flags"))
-    ev += [(t + lead_beats, 0, m, "p", g) for (t, d, m, v, g) in perc]
-    if song.get("final_chord") is not None:
-        root = song["final_chord"]
-        for m in (root, root + 7, root + 12, root + 16):
-            ev.append((total + lead_beats, 3.5, m, "chord", 0.85))
-    return ev
+def pct(vals, q):
+    vals = sorted(vals)
+    return vals[min(len(vals) - 1, max(0, int(round(q * (len(vals) - 1)))))]
 
 
-def chart_notes(tempo, mel, lead, opts):
-    """三个难度的谱面（秒）：easy 稀 / normal 旋律原样 / hard 加和弦音与长音细分"""
-    spb = lambda t: round(tempo.sec(t + lead), 3)
-    out = {}
-    for dens in ("easy", "normal", "hard"):
-        min_gap = {"easy": 1.15, "normal": 0.4, "hard": 0.16}[dens]
-        notes = []
-        for (t, d, ps) in mel:
-            pitches = [max(ps)] if dens != "hard" else sorted(set(ps), reverse=True)
-            subs = [0.0]
-            if dens == "hard" and d >= 3.0:
-                n = int(min(4, max(2, round(d / 1.5))))
-                subs = [k * (d / n) for k in range(n)]
-            elif dens == "hard" and d >= 2.0:
-                subs = [0.0, d / 2]
-            for off in subs:
-                for p in pitches:
-                    tt = t + off
-                    if notes:
-                        dt = tt - notes[-1][0]
-                        if dens == "hard":
-                            if dt < -1e-9 or (abs(dt) < 1e-9 and p == notes[-1][1]):
-                                continue
-                        elif dt < min_gap - 1e-6:
-                            continue
-                    notes.append((tt, p))
-        out[dens] = [[spb(t), m] for (t, m) in notes]
-    return out
-
-
-
-def normalize_harmony(song, bars):
-    """校验和声文本：每个 token 必须是可解析的和弦；小节数补齐/截断到旋律长度"""
-    from theory import parse_chord
-    parts = [b.strip() for b in song["har"].split("|") if b.strip()]
-    if not parts:
-        raise ValueError(f"{song['id']}: 和声为空")
-    for i, b in enumerate(parts):
-        for tok in [t.strip() for t in b.split(",")]:
-            if parse_chord(tok) is None:
-                raise ValueError(f"{song['id']}: 第 {i + 1} 小节非法和弦 {tok!r}")
-    if len(parts) < bars:
-        print(f"  · {song['id']}: 和声只有 {len(parts)} 小节（旋律 {bars}），重复末小节补齐")
-        parts += [parts[-1]] * (bars - len(parts))
-    elif len(parts) > bars:
-        print(f"  · {song['id']}: 和声 {len(parts)} 小节 > 旋律 {bars}，截断")
-        parts = parts[:bars]
-    return " | ".join(parts)
-
-
-def build_song(song, args):
-    bpb = song["bpb"]
-    mel, total = expand(song)
-    lead = float(song.get("lead", 4))          # 开场空拍：给第一个气泡留出漂移时间
-    bars = int(np.ceil(total / bpb))
-    harmony = parse_harmony(normalize_harmony(song, bars + 1), bars + 1, bpb)
-    tempo = render.Tempo(song["bpm"])
-
-    vmap = dict(DEFAULT_ACC)
-    vmap.update(song.get("acc") or {})
-    vmap["mel"] = song.get("mel_inst", "piano")
-    mel_ev = apply_instruments(melody_events(mel, lead), vmap)
-    acc_ev = apply_instruments(accompaniment_events(song, harmony, total, lead), vmap)
-    end_sec = tempo.sec(total + lead + 4.0) + 1.5
-
-    inst = song.get("mel_inst", "piano")
-    n = int(end_sec * render.SR)
-    dur = n / render.SR
-    if not args.only_json:
-        voices.CACHE.clear()
-        perf = render.render_events(mel_ev, tempo, gains={"mel": 1.0}, reverb=song.get("reverb", 0.3))
-        voices.CACHE.clear()
-        acc = render.render_events(acc_ev, tempo, gains=ACC_GAINS, reverb=song.get("acc_reverb", 0.26))
-        perf = render.normalize(render.soft_clip(perf[:n]), 0.86)
-        acc = render.normalize(render.soft_clip(acc[:n]), 0.8)
-
+def build_song(song):
+    path = os.path.join(MIDI_DIR, song["id"] + ".mid")
+    notes, info = chart.read_notes(path)
+    if not notes:
+        raise ValueError("MIDI 里没有音符")
+    lvl, extra = chart.build_chart(notes, info, song.get("gap", 1.0))
+    t0 = notes[0]["t"]
+    rows, prev = [], 0
+    for n, l in zip(notes, lvl):
+        ms = int(round((n["t"] - t0) * 1000))
+        rows.append([ms - prev, n["m"], l])
+        prev = ms
+    times = {L: [n["t"] - t0 for n, l in zip(notes, lvl) if l >= L] for L in (1, 2, 3)}
+    played = [n["m"] for n, l in zip(notes, lvl) if l > 0]
+    lo, hi = pct(played, 0.03), pct(played, 0.97)
+    while hi - lo < 7:
+        lo, hi = lo - 1, hi + 1 if (hi - lo) % 2 else hi
+    end = max(n["end"] for n in notes) - t0
+    grid = info["grid"] is not None
+    bpm = chart.main_bpm(info, t0, t0 + end) if grid else round(60 / extra["beat"])
+    avg, peak = chart.density(times[2])
     entry = {
-        "id": song["id"], "t": song["t"], "o": song.get("o", ""), "c": song.get("c", ""),
-        "note": song.get("note", ""), "bpb": bpb, "bars": bars, "dur": round(dur, 2),
-        "lead": round(tempo.sec(lead), 2),
-        "tempo": [[round(b, 3), bpm] for (b, bpm) in
-                  (song["bpm"] if isinstance(song["bpm"], list) else [(0, song["bpm"])])],
-        "acc": "%s.acc.mp3" % song["id"], "perf": "%s.perf.mp3" % song["id"],
-        "inst": inst, "style": song["style"], "diff": song.get("diff", 2), "tag": song.get("tag", ""),
+        "id": song["id"], "t": song["t"], "o": song.get("o", ""), "c": song.get("c", ""), "tag": song["tag"],
+        "note": song.get("note", ""), "diff": 3, "dur": round(end, 1), "bpm": int(bpm), "est": not grid,
+        "beat": round(extra["beat"], 3), "inst": song.get("inst") or guess_inst(info), "range": [lo, hi],
+        "cnt": [len(times[3]), len(times[2]), len(times[1])],
     }
-    allp = [p for (t, d, ps) in mel for p in ps]
-    entry["range"] = [min(allp), max(allp)]
-    entry["notes"] = chart_notes(tempo, mel, lead, {})
-    # 完整旋律（秒，双音逐个列出）：谱面里删掉的音由游戏用轻音补上，示范轨没加载上时也靠它保底
-    entry["mel"] = [[round(tempo.sec(t + lead), 3), p] for (t, d, ps) in mel for p in sorted(set(ps), reverse=True)]
-    if args.audio != "skip" and not args.only_json:
-        os.makedirs(args.out or ASSET_DIR, exist_ok=True)
-        render.write_mp3(os.path.join(args.out or ASSET_DIR, entry["acc"]), acc, bitrate=args.bitrate)
-        render.write_mp3(os.path.join(args.out or ASSET_DIR, entry["perf"]), perf, bitrate=args.perf_bitrate)
-    if args.midi and not args.only_json:
-        os.makedirs(MIDI_DIR, exist_ok=True)
-        render.write_midi(os.path.join(MIDI_DIR, song["id"] + ".mid"), mel_ev, acc_ev, tempo,
-                          program_mel={"piano": 0, "lute": 19, "harp": 46, "musicbox": 10,
-                                       "flute": 73, "organ": 19, "strings": 48}.get(inst, 0),
-                          title="%s (%s)" % (song.get("o") or song["t"], song.get("c", "")))
-    print("  %-20s %5.1fs 小节%3d 音数 %3d/%3d/%3d 音域%3d-%3d" % (
-        song["id"], dur, bars, len(entry["notes"]["easy"]), len(entry["notes"]["normal"]),
-        len(entry["notes"]["hard"]), min(allp), max(allp)))
-    return entry
+    stats = {"score": 0.6 * avg + 0.4 * peak, "avg": avg, "peak": peak, "all": len(notes), "covered": extra["covered"]}
+    return entry, {"v": 2, "n": rows}, stats
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--songs", default="")
-    ap.add_argument("--out", default="")
-    ap.add_argument("--bitrate", default="72k")
-    ap.add_argument("--perf-bitrate", default="56k")
-    ap.add_argument("--midi", action="store_true")
-    ap.add_argument("--only-json", action="store_true")
-    ap.add_argument("--audio", default="")
-    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    import songs as LIB
-    want = [s for s in args.songs.split(",") if s.strip()]
-    lib = [s for s in LIB.SONGS if not want or s["id"] in want]
-    if args.list:
-        for s in LIB.SONGS:
-            print(s["id"], "|", s["t"], "|", s.get("c", ""))
-        return
-    entries = []
-    for s in lib:
+    ids = [s["id"] for s in SONGS]
+    if len(set(ids)) != len(ids):
+        raise SystemExit("songs.py 里有重复的 id")
+    if DEFAULT not in ids:
+        raise SystemExit(f"songs.py 的 DEFAULT {DEFAULT!r} 不在曲目表里")
+    for s in SONGS:
+        if s["tag"] not in TAGS:
+            raise SystemExit(f"{s['id']}: 分类 {s['tag']!r} 不在 TAGS 里")
+
+    built = []
+    for s in SONGS:
         try:
-            entries.append(build_song(s, args))
+            built.append(build_song(s))
         except Exception as e:
-            print("!! %s 失败: %r" % (s["id"], e))
-            raise
-    if not want:
-        path = os.path.join(args.out or ASSET_DIR, "songs.json")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"v": 1, "songs": entries}, f, ensure_ascii=False, separators=(",", ":"))
-        print("songs.json ->", path)
+            raise SystemExit(f"!! {s['id']} 失败：{e!r}")
+
+    # 星级：按标准难度的音符密度（平均与最密 5 秒）在整个曲库里排名
+    order = sorted(range(len(built)), key=lambda i: built[i][2]["score"])
+    for rank, i in enumerate(order):
+        q = rank / max(1, len(order) - 1)
+        built[i][0]["diff"] = 1 + sum(1 for c in STAR_CUTS if q >= c)
+
+    for entry, _, st in built:
+        print("  %-24s %s %5.0fs %3d拍/分%s 轻松/标准/挑战 %4d/%4d/%4d（共 %4d）音域 %d-%d %s" % (
+            entry["id"], "★" * entry["diff"] + "☆" * (5 - entry["diff"]), entry["dur"], entry["bpm"],
+            "≈" if entry["est"] else " ", *entry["cnt"], st["all"], *entry["range"], entry["inst"]))
+    if args.dry_run:
+        return
+
+    os.makedirs(CHART_DIR, exist_ok=True)
+    keep = set()
+    for entry, data, _ in built:
+        name = entry["id"] + ".json"
+        keep.add(name)
+        with open(os.path.join(CHART_DIR, name), "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"))
+    for name in os.listdir(CHART_DIR):
+        if name.endswith(".json") and name not in keep:
+            os.remove(os.path.join(CHART_DIR, name))
+            print("  删除多余的谱面", name)
+    with open(os.path.join(ASSET_DIR, "songs.json"), "w", encoding="utf-8") as f:
+        json.dump({"v": 2, "first": DEFAULT, "tags": TAGS, "songs": [b[0] for b in built]}, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"{len(built)} 首 → {os.path.join(ASSET_DIR, 'songs.json')}、{CHART_DIR}")
 
 
 if __name__ == "__main__":

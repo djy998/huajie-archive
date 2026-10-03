@@ -1,55 +1,84 @@
-"""曲库体检：解析旋律/和声、检查音域、小节数、音色、时长"""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from songs import SONGS
-from theory import parse_melody, parse_harmony, parse_chord, midi_to_name
-import arrange, voices
-from build import normalize_harmony
+"""曲库体检：曲目表、MIDI 文件、生成好的 songs.json 与 charts/ 是否对得上，谱面是否合理
+
+用法：python check.py   （先跑过 build.py；最后一行「问题 0」即可上传）
+"""
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from build import ASSET_DIR, CHART_DIR, MIDI_DIR
+from songs import DEFAULT, SONGS, TAGS
 
 bad = 0
-seen = set()
+warn = 0
+
+
+def problem(msg):
+    global bad
+    bad += 1
+    print("✗", msg)
+
+
+def caution(msg):
+    global warn
+    warn += 1
+    print("·", msg)
+
+
+ids = [s["id"] for s in SONGS]
+for i in sorted({x for x in ids if ids.count(x) > 1}):
+    problem(f"重复的 id：{i}")
+if DEFAULT not in ids:
+    problem(f"DEFAULT {DEFAULT!r} 不在曲目表里")
 for s in SONGS:
-    sid = s["id"]
-    if sid in seen:
-        print("重复 id:", sid); bad += 1
-    seen.add(sid)
-    for k in ("id", "t", "o", "c", "note", "bpm", "bpb", "style", "diff", "tag", "mel_inst", "mel", "har"):
-        if k not in s:
-            print(f"{sid}: 缺字段 {k}"); bad += 1
-    if s["style"] not in arrange.PATTERNS:
-        print(f"{sid}: 未知织体 {s['style']}"); bad += 1
-    if s.get("perc", "none") not in ("none", "kick", "snare", "roll", "hat", "cymbal", "tamb"):
-        ok = s.get("perc", "none") in ("march", "waltz", "pop", "ostinato", "soft", "fanfare")
-        if not ok:
-            print(f"{sid}: 未知鼓型 {s.get('perc')}"); bad += 1
-    for v in [s.get("mel_inst")] + list((s.get("acc") or {}).values()):
-        if v and v not in voices.TUNED and v not in voices.ALIAS:
-            print(f"{sid}: 未知音色 {v}"); bad += 1
-    try:
-        mel, total = parse_melody(s["mel"])
-    except Exception as e:
-        print(f"{sid}: 旋律解析失败 {e}"); bad += 1; continue
-    if not mel:
-        print(f"{sid}: 旋律为空"); bad += 1; continue
-    pitches = [p for (_, _, ps) in mel for p in ps]
-    if any(p < 36 or p > 100 for p in pitches):
-        print(f"{sid}: 音域越界 {min(pitches)}-{max(pitches)}"); bad += 1
-    bars = int(-(-total // s["bpb"]))
-    try:
-        hb = len(normalize_harmony(s, bars + 1).split("|"))
-    except Exception as e:
-        print(f"{sid}: 和声校验失败 {e}"); bad += 1; continue
-    bpm = s["bpm"]
-    if isinstance(bpm, list):
-        for pair in bpm:
-            int(pair[0])
-            if not (40 <= pair[1] <= 240):
-                print(f"{sid}: bpm 异常 {pair}"); bad += 1
-    elif not (40 <= bpm <= 240):
-        print(f"{sid}: bpm 异常 {bpm}"); bad += 1
-    secs = total / bpm_first if (bpm_first := (bpm[0][1] if isinstance(bpm, list) else bpm)) / 60 else 0
-    n_notes = len(mel)
-    print(f"{sid:22s} {s['t']:14s} {bars:3d}小节 {n_notes:4d}音 {min(pitches):3d}-{max(pitches):3d} "
-          f"{midi_to_name(min(pitches)):4s}-{midi_to_name(max(pitches)):4s} {secs:5.0f}s "
-          f"{'/'.join(str(len(set(x[1] if isinstance(x, tuple) else x))) for x in [])}")
-print(f"\n曲目数 {len(SONGS)}，问题 {bad}")
+    for k in ("id", "t", "tag"):
+        if not s.get(k):
+            problem(f"{s.get('id')}: 缺 {k}")
+    if s.get("tag") not in TAGS:
+        problem(f"{s['id']}: 分类 {s.get('tag')!r} 不在 TAGS 里")
+    if not os.path.exists(os.path.join(MIDI_DIR, s["id"] + ".mid")):
+        problem(f"{s['id']}: 缺 midi/{s['id']}.mid")
+extra = sorted(f for f in os.listdir(MIDI_DIR) if f.endswith(".mid") and f[:-4] not in ids)
+for f in extra:
+    caution(f"midi/{f} 不在曲目表里（不会进曲库）")
+
+try:
+    with open(os.path.join(ASSET_DIR, "songs.json"), encoding="utf-8") as f:
+        index = json.load(f)
+except Exception as e:
+    problem(f"songs.json 读不了：{e!r}（先跑 build.py）")
+    index = {"songs": []}
+built = {s["id"]: s for s in index.get("songs", [])}
+if [s["id"] for s in index.get("songs", [])] != ids:
+    problem("songs.json 和曲目表不一致：改过 songs.py 之后要重新跑 build.py")
+
+for sid, entry in built.items():
+    path = os.path.join(CHART_DIR, sid + ".json")
+    if not os.path.exists(path):
+        problem(f"{sid}: 缺 charts/{sid}.json")
+        continue
+    with open(path, encoding="utf-8") as f:
+        rows = json.load(f).get("n", [])
+    cnt = [sum(1 for r in rows if r[2] >= L) for L in (3, 2, 1)]
+    if cnt != entry.get("cnt"):
+        problem(f"{sid}: 谱面音数 {cnt} 和 songs.json 的 {entry.get('cnt')} 对不上")
+    if any(r[0] < 0 for r in rows):
+        problem(f"{sid}: 谱面时间倒退")
+    if not (cnt[0] > 0 and cnt[0] <= cnt[1] <= cnt[2]):
+        problem(f"{sid}: 三档音数不对 {cnt}")
+    pitches = [r[1] for r in rows]
+    if min(pitches) < 21 or max(pitches) > 108:
+        caution(f"{sid}: 有超出钢琴音域的音 {min(pitches)}-{max(pitches)}")
+    if entry["dur"] > 330:
+        caution(f"{sid}: 有 {entry['dur'] / 60:.1f} 分钟长")
+    if cnt[0] < 40:
+        caution(f"{sid}: 轻松难度只有 {cnt[0]} 个音")
+    print(f"  {sid:24s} {'★' * entry['diff']:5s} {entry['dur']:6.1f}s 轻松/标准/挑战 {cnt[0]:4d}/{cnt[1]:4d}/{cnt[2]:4d}")
+stale = sorted(f for f in os.listdir(CHART_DIR) if f.endswith(".json") and f[:-5] not in built) if os.path.isdir(CHART_DIR) else []
+for f in stale:
+    caution(f"charts/{f} 是多余的（build.py 会自动删）")
+
+print(f"\n曲目数 {len(SONGS)}，问题 {bad}，提醒 {warn}")
+sys.exit(1 if bad else 0)
