@@ -23,6 +23,17 @@ const SHORT = SONGS.songs.reduce((a, b) => (b.dur < a.dur ? b : a));
 const results = [];
 const check = (name, cond, extra = "") => results.push([name, !!cond, extra]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/* 同时在场（时间差 < 出现提前量 + 0.35 秒）的气泡：重叠的对数、挨得近却同色的对数 */
+function crowd(st, approach) {
+  let over = 0, same = 0;
+  const ns = st.notes;
+  for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length && ns[j].t - ns[i].t < approach + 0.35; j++) {
+    const d = Math.hypot(ns[i].x - ns[j].x, ns[i].y - ns[j].y) / st.g.size;
+    if (d < 1) over++;
+    if (d < 1.8 && ns[i].c === ns[j].c) same++;
+  }
+  return { over, same };
+}
 
 /* 每个场景一个干净的页面 */
 function makePage({ coarse = false, width = 1280, height = 800, chartFails = false, running = true, lat = 0, prefs = {} } = {}) {
@@ -189,6 +200,12 @@ async function main() {
     check("轻松难度：气泡数等于谱面里级别 3 的音", st.notes.length === SHORT.cnt[0], `${st.notes.length}/${SHORT.cnt[0]}`);
     check("其余的音都是补音", st.bg.length === chartOf(SHORT.id).n.length - SHORT.cnt[0], `${st.bg.length}`);
     check("钟从负数开始（预备拍在第一个音之前）", st.startT < 0 && st.clock.run);
+    const ck = crowd(st, 1.8);
+    check("键盘：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
+    check("键盘：轨道不按音高划分，四条都用上", new Set(st.notes.map((n) => n.lane)).size === 4);
+    const lanes0 = st.notes.map((n) => n.lane).join();
+    P.win.dispatchEvent(new P.win.Event("resize"));
+    check("改窗口大小时轨道不变", P.st().notes.map((n) => n.lane).join() === lanes0);
     const notes = st.notes;
     const n0 = notes[0];
     P.until(Math.min(0, n0.t) - 0.05);
@@ -247,6 +264,8 @@ async function main() {
     check("气泡沿旋律左右铺开（前 12 个不全在一列）", new Set(xs).size >= 3, xs.join(","));
     const sameSpot = st.notes.slice(1, 30).filter((n, i) => Math.hypot(n.x - st.notes[i].x, n.y - st.notes[i].y) < st.g.size * 0.9).length;
     check("相邻两个气泡不叠在一起", sameSpot === 0, `${sameSpot}`);
+    const ck = crowd(st, 1.35);
+    check("点气泡：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
     const n0 = st.notes[0];
     P.until(n0.t - 0.02);
     P.pointer(n0.x + st.g.size * 0.8, n0.y);        // 点在气泡旁边
