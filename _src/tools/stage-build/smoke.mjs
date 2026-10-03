@@ -295,6 +295,15 @@ async function main() {
     P.until(n2.t);
     P.pointer(n2.x + st.g.size * 2, n2.y);
     check("下一个该弹的气泡：偏 2 个气泡也算", P.st().judged[2] >= 0 && P.st().judged[2] < 3, `judged=${P.st().judged[2]}`);
+    /* 先到先得：挨得近的两个音，稍晚一点点在两个中间偏后的位置，算给前一个，不往后错位 */
+    const ns = P.st().notes;
+    const k = ns.findIndex((a, i) => i > 3 && ns[i + 1] && ns[i + 1].t - a.t < 0.4 && Math.hypot(ns[i + 1].x - a.x, ns[i + 1].y - a.y) < st.g.size * 1.6);
+    if (k > 0) {
+      const a = ns[k], b = ns[k + 1];
+      P.until(a.t + 0.08);
+      P.pointer(a.x + (b.x - a.x) * 0.55, a.y + (b.y - a.y) * 0.55);
+      check("挨得近的两个音：稍晚点在中间，算给前一个（不错位）", P.st().judged[a.idx] >= 0 && P.st().judged[b.idx] === -1, `${P.st().judged[a.idx]}/${P.st().judged[b.idx]}`);
+    }
     P.click(P.btn("回到大厅"));
     check("演奏中 ✕ 回大厅", P.st().view === "lobby" && !P.st().clock.run);
   }

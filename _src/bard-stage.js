@@ -24,18 +24,20 @@
     input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay",
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
-  /* approach：气泡提前多久出现；win：Perfect / Great / Good 的判定半窗（秒）；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
+  /* 判定半窗（秒）：Perfect / Great / Good，三档难度一样宽（难度只差在音多音少、气泡出现得早晚、大小） */
+  const WIN = [0.18, 0.3, 0.45];
+  /* approach：气泡提前多久出现；win：判定半窗；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], size: 0.44, tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], size: 0.38, tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], size: 0.32, tap: 0.2 },
+    { id: "easy", label: "轻松", approach: 1.8, win: WIN, size: 0.44, tap: 0.24 },
+    { id: "normal", label: "标准", approach: 1.35, win: WIN, size: 0.38, tap: 0.21 },
+    { id: "hard", label: "挑战", approach: 1.05, win: WIN, size: 0.32, tap: 0.2 },
   ];
   /* 输入：判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数）
      点按排队的时间用 e.timeStamp 补回来，但最多补 TS_MAX 秒；有的手机浏览器（如一些 App 内置浏览器）的 timeStamp
      不是 performance.now 的时基，一旦对不上就整局不再用 */
   const INPUT_GRACE = 0.1;
   const TS_MAX = 0.05;
-  const TAP_R = 1.6;
+  const TAP_R = 1.7;
   const TAP_NEXT_R = 2.2;                               // 下一个该弹的（外圈加粗那个）再多给一圈：附近没别的气泡可算时，点偏一点也算它
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
@@ -1340,6 +1342,22 @@
 
   const tierOf = (d, dm) => (d <= dm.win[0] ? 0 : d <= dm.win[1] ? 1 : 2);
 
+  /* 一次点按算给哪个音：先到先得 —— 判定窗里最早还没弹的那个。不然气泡挨得近、点得稍晚一点时，
+     这一下会被算给下一个音，后面每一下都跟着错一个（多出 GOOD 和 MISS）。只有两种情况跳过最早那个：
+     · 点在后面某个气泡正中（0.45 个气泡以内），离最早那个却有 1.3 个气泡以上 —— 就是想点后面那个
+     · 最早那个已经晚过 GREAT 窗，后面那个时间更准、位置也不比它远 —— 前一个留给判漏
+     cands：[{ n, d }]，按时间先后，d 为离点按处多少个气泡（键盘为 0） */
+  function pickNote(cands, t, dm) {
+    if (!cands.length) return null;
+    const first = cands[0];
+    for (let i = 1; i < cands.length; i++) {
+      const c = cands[i];
+      if (c.d <= 0.45 && first.d >= 1.3 && c.d + 0.5 <= first.d) return c.n;
+      if (first.n.t - t < -dm.win[1] && Math.abs(c.n.t - t) < Math.abs(first.n.t - t) && c.d <= first.d + 0.3) return c.n;
+    }
+    return first.n;
+  }
+
   /* 键盘：这条轨道里离现在最近、还在判定窗内的音 */
   function press(lane, e) {
     if (S.frozen && S.waiting) {
@@ -1348,16 +1366,15 @@
     }
     const dm = diffMeta();
     const t = inputTime(e);
-    let best = null;
-    let bestD = Infinity;
+    const cands = [];
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
       const n = S.notes[i];
       if (n.t - t > dm.win[2]) break;
-      if (n.lane !== lane || S.judged[n.idx] >= 0) continue;
-      const d = Math.abs(n.t - t);
-      if (d <= dm.win[2] && d < bestD) { bestD = d; best = n; }
+      if (n.lane !== lane || S.judged[n.idx] >= 0 || n.t - t < -dm.win[2]) continue;
+      cands.push({ n, d: 0 });
     }
-    if (best) hit(best, tierOf(bestD, dm), t - best.t);
+    const best = pickNote(cands, t, dm);
+    if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
   }
 
   /* 点气泡：判定窗内、离点按处 TAP_R 个气泡直径以内的音，时间越准、离得越近越优先；
@@ -1373,18 +1390,16 @@
     }
     const dm = diffMeta();
     const t = inputTime(e);
-    let best = null;
-    let bestScore = Infinity;
+    const cands = [];
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
       const n = S.notes[i];
       const dt = n.t - t;
       if (dt > dm.win[2]) break;
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
       const d = Math.hypot(n.x - x, n.y - y);
-      if (d > R) continue;
-      const score = Math.abs(dt) / dm.win[2] + (d / g.size) * 0.5;   // 判定圈大，点在谁身上就优先算谁，免得算到旁边那个
-      if (score < bestScore) { bestScore = score; best = n; }
+      if (d <= R) cands.push({ n, d: d / g.size });
     }
+    let best = pickNote(cands, t, dm);
     if (!best) {
       for (let i = S.next; i < S.notes.length; i++) {
         const n = S.notes[i];
