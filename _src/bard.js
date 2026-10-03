@@ -13,7 +13,8 @@
      回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像）、音阶、音域。
      演奏中也能改，已在回响的音保持弹下时的音高
    - 「高级功能」里的「熟练了？来舞台演奏！」按需加载 bard-stage.js（全屏音游），舞台借用这里的音源：
-     HJBard.playMidi（按音高出声，可推后几十毫秒排程）、unlock（叫醒音频）、prepare（预备乐器）、instruments、instName */
+     HJBard.playMidi（按音高出声，可推后几十毫秒排程）、unlock（叫醒音频）、prepare（预备乐器）、clock（音频时钟与输出延迟）、
+     instruments、instName */
 (() => {
   const STORE_INST = "hj_bard_inst";
   const STORE_XY = "hj_bard_xy";
@@ -623,6 +624,14 @@
     return true;
   }
 
+  /* 舞台的时钟：AudioContext 的 currentTime（排程用的同一个钟）与输出延迟（秒）；音频还没起来时 running 为 false */
+  function stageClock() {
+    const ctx = A.ctx;
+    if (!ctx) return null;
+    const lat = (Number(ctx.outputLatency) || 0) + (Number(ctx.baseLatency) || 0);
+    return { t: ctx.currentTime, lat: Math.min(0.4, Math.max(0, lat)), running: ctx.state === "running" };
+  }
+
   /* 开演前把要用的乐器先备好（钢琴下载采样，拨弦类预渲染） */
   function stagePrepare(instId) {
     if (!ensureAudio() || !INST[instId]) return;
@@ -1084,6 +1093,7 @@
     playMidi: stagePlay,
     unlock: stageUnlock,
     prepare: stagePrepare,
+    clock: stageClock,
     instName: () => B.inst,
     instruments: INSTRUMENTS.map((i) => ({ id: i.id, name: i.name, group: i.group })),
   };

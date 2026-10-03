@@ -1,26 +1,28 @@
 /* 花舞之街 · 舞台演奏（音游）。吟游诗人模拟器「高级功能」里的按钮按需加载（bard.js → loadLateScript），全屏演出。
-   - 玩法：谱面上的每个音是一个气泡，出现在这个音的高度上（越往上音越高），外圈一边收缩一边等你，
-     外圈缩到和核心重合的那一下就是判定点。弹中就用模拟器的乐器发出这个音 —— 旋律由你弹，伴奏自动播放
+   - 曲子全部来自 MIDI（吟游诗人演奏用的单乐器 MIDI）：谱面挑出来的音是气泡，由你弹；MIDI 里其余的音
+     （和声、谱面省掉的旋律音）由游戏按时间用轻音补上，整首曲子始终完整。不再有伴奏 / 示范音轨
+   - 玩法：每个气泡出现在这个音的高度上（越往上音越高），外圈一边收缩一边等你，
+     外圈缩到和核心重合的那一下就是判定点。弹中就用模拟器的乐器发出这个音
    - 两种操作（设置里可改，默认按设备自动选）：
      · 点气泡（手机、平板）：直接点气泡，点在旁边一点也算（判定半径约一个气泡直径）；气泡沿着旋律左右铺开，不会叠在一起
      · 键盘轨道（电脑）：屏幕按宽度分成 2~4 条轨道（自动或手选），音越低越靠左，气泡在哪条轨道就按那条的键；
        按 e.code 认键，开着中文输入法也能弹；鼠标点轨道也行
-   - 时钟：伴奏 <audio>.currentTime 平滑后再减去判定延迟；暂停、切后台、学习模式都靠暂停伴奏，不会错拍
-   - 谱面省掉的旋律音（轻松难度约省一半）由游戏按时间用轻音补上，旋律始终完整；
-     开了「示范旋律」就改放示范轨，示范轨没加载上时整条旋律用轻音代替
+   - 时钟：模拟器 AudioContext 的 currentTime（补音也排在这个钟上），帧间用 performance.now() 补齐；
+     画面与判定 = 音频位置 − 输出延迟 − 判定延迟。暂停、切后台、学习模式都是停这个钟，不会错拍
+   - 「示范旋律」：你要弹的音也先轻轻放出来，可以照着弹
    - 开头有四拍轻声预备拍（3·2·1），第一个气泡前就知道速度
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
    - 判定四档 Perfect / Great / Good / Miss，没有血量、不会失败；漏掉的音不出声
-   - 声像固定居中（不跟着左右位置偏）；伴奏音量跟随全站音量
-   - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
+   - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
+   - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
      操作方式、轨道与键位、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
-   - 曲库、谱面与音轨在 assets/bard/stage/（_src/tools/stage-build 生成） */
+   - 曲目索引 assets/bard/stage/songs.json，每首的谱面 charts/<id>.json 点到才下载（_src/tools/stage-build 从 MIDI 生成） */
 (() => {
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
     input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay",
-    best: "hj_stage_best", stars: "hj_stage_stars",
+    best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
   /* approach：气泡提前多久出现；win：Perfect / Great / Good 的判定半窗（秒）；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
   const DIFFS = [
@@ -34,9 +36,13 @@
     { id: "good", label: "GOOD", pts: 100, vel: 0.8 },
     { id: "miss", label: "MISS", pts: 0, vel: 0 },
   ];
-  const BG_VEL = 0.4;                 // 补音（谱面省掉的旋律音）的力度
-  const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍
-  const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // metronome.mp3 的拍点（tools/stage-build/metronome.py）
+  const LEVEL = { easy: 3, normal: 2, hard: 1 };       // 谱面里 lvl ≥ 这个数的音由玩家弹（charts/<id>.json）
+  const BG_VEL = 0.4;                 // 补音（谱面以外的音）的力度
+  const DEMO_VEL = 0.5;               // 示范旋律：你要弹的音先放一遍的力度
+  const PREVIEW = { sec: 8, vel: 0.6 };                 // 试听：从第一个音起放 8 秒
+  const AHEAD = 0.12;                 // 补音提前多少秒排进 Web Audio
+  const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍、校准的「嗒」
+  const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // 校准：第一下在 1.2 秒，之后每 0.6 秒一下
   const LMIN = 2, LMAX = 4;
   const DEF_CODES = { 2: ["KeyF", "KeyJ"], 3: ["KeyF", "Space", "KeyJ"], 4: ["KeyD", "KeyF", "KeyJ", "KeyK"] };
   const BINDABLE = /^(Key[A-Z]|Digit\d|Numpad\d|Space|Arrow(Left|Right|Up|Down)|Semicolon|Quote|Comma|Period|Slash|Backslash|BracketLeft|BracketRight|Minus|Equal|Backquote|ShiftLeft|ShiftRight)$/;
@@ -44,12 +50,6 @@
     Space: "空格", ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Semicolon: ";", Quote: "'", Comma: ",",
     Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]", Minus: "-", Equal: "=", Backquote: "`",
     ShiftLeft: "左 Shift", ShiftRight: "右 Shift",
-  };
-  /* 曲目示范轨的音色 → 模拟器里最接近的乐器（音色选「跟随曲目」时用） */
-  const SONG_INST = {
-    piano: "piano", violin: "violin", flute: "flute", brass: "horn", trumpet: "trumpet", reed: "clarinet", harp: "harp",
-    pizz: "fiddle", lute: "lute", organ: "clarinet", cello: "cello", musicbox: "harp", celesta: "harp", fife: "fife",
-    sax: "sax", panpipes: "panpipes",
   };
   const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 低 → 高
   const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -66,17 +66,17 @@
   };
 
   const S = {
-    built: false, root: null, data: null, loading: null, err: "",
+    built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
     view: "lobby", sheet: "", sheetBack: null,
     song: null, diff: "normal", learn: false, demo: false, inst: "", input: "auto", lanesPref: "auto",
-    codes: null, delayMs: 0, stars: 0, query: "", binding: -1, cal: null, calMsg: "",
+    codes: null, delayMs: 0, stars: 0, cat: "", query: "", binding: -1, cal: null, calMsg: "",
     gen: 0, mode: "tap", lanes: 4, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
-    bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, anchor: 0, spb: 0.5,
-    playing: false, paused: false, frozen: false, waiting: null, frozenT: 0, finished: false, perfState: "",
+    bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
+    playing: false, paused: false, frozen: false, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
-    raf: 0, els: new Map(), ck: {}, bannerKey: "",
-    acc: null, perf: null, calAudio: null,
-    preview: { id: "", timer: 0 }, bgmWasOn: false, closeTimer: 0, hist: false, closing: false, needTap: false,
+    raf: 0, pump: 0, els: new Map(), clock: null, bannerKey: "",
+    preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
+    bgmWasOn: false, closeTimer: 0, hist: false, closing: false, needTap: false,
   };
 
   /* ==== 工具（storage、showToast、siteVolume、bgm 是 main.js 的全局） ==== */
@@ -90,16 +90,13 @@
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
   const codeLabel = (c) => CODE_LABEL[c] || (/^Key/.test(c) ? c.slice(3) : /^Digit/.test(c) ? c.slice(5) : /^Numpad/.test(c) ? `小键盘 ${c.slice(6)}` : c);
   const starText = (n) => "★".repeat(clamp(n, 1, 5)) + "☆".repeat(5 - clamp(n, 1, 5));
-  const tempoOf = (s) => {
-    const map = Array.isArray(s.tempo) && s.tempo.length ? s.tempo : [[0, 120]];
-    const a = Math.round(map[0][1] || 120);
-    const b = Math.round(map[map.length - 1][1] || a);
-    return a === b ? `${a} 拍/分` : `${a}→${b} 拍/分`;
-  };
+  /* est：MIDI 没对齐节拍网格，速度是估出来的 */
+  const tempoOf = (s) => (num(s.bpm, 0) > 0 ? `${s.est ? "约 " : ""}${Math.round(s.bpm)} 拍/分` : "");
+  const metaOf = (s) => [s.c, fmtTime(num(s.dur, 0)), tempoOf(s)].filter(Boolean).join(" · ");
   const getRaw = (k, d) => { const v = storage.get(k); return v === null ? d : v; };
   const setRaw = (k, v) => storage.set(k, v);
   const toast = (m) => { try { showToast(m); } catch (e) {} };
-  const VOL_STUB = { level: 0.8, muted: false, set() {}, attach(el) { el.volume = 0.8; } };
+  const VOL_STUB = { level: 0.8, muted: false, set() {} };
   const vol = () => (typeof siteVolume !== "undefined" ? siteVolume : VOL_STUB);
   const bard = () => window.HJBard || {};
 
@@ -122,28 +119,56 @@
   }
   const iconBtn = (icon, label, onclick, cls = "") => h("button", { type: "button", class: `hjs-ibtn ${cls}`.trim(), "aria-label": label, title: label, html: ICON[icon], onclick });
 
-  /* ==== 时钟：<audio>.currentTime 在部分浏览器更新得粗，用 performance.now() 补帧间，再慢慢校回去 ==== */
-  function audioClock(el, ck) {
+  /* ==== 时钟 ====
+     音频时间取模拟器 AudioContext 的 currentTime（bard.js 的 HJBard.clock），补音也排在它上面，所以声音和气泡不会慢慢错开；
+     模拟器太旧、没有这个接口时退回 performance.now()。
+     一首歌一个钟：位置 = base + (音频时间 − at)，停住时位置 = base；lat 为开钟时的输出延迟（声音从排上到听见的时间） */
+  function rawClock() {
+    const c = bard().clock?.();
+    return c && Number.isFinite(c.t) ? c : { t: performance.now() / 1000, lat: 0, running: true };
+  }
+  const makeClock = (base) => ({ run: false, base, at: 0, lat: 0, sm: null });
+  function clockStart(c) {
+    const r = rawClock();
+    c.at = r.t;
+    c.lat = num(r.lat, 0);
+    c.run = true;
+    c.sm = null;
+  }
+  /* 精确位置（排程用） */
+  const clockRaw = (c, r = rawClock()) => (c.run ? c.base + (r.t - c.at) : c.base);
+  function clockStop(c) {
+    if (!c || !c.run) return;
+    c.base = clockRaw(c);
+    c.run = false;
+    c.sm = null;
+  }
+  /* 画面用的位置：currentTime 在部分浏览器更新得粗，用 performance.now() 补帧间，再慢慢校回去 */
+  function clockPos(c) {
+    if (!c.run) return c.base;
+    const r = rawClock();
+    const raw = clockRaw(c, r);
     const now = performance.now();
-    const raw = el.currentTime || 0;
-    if (el.paused || !ck.on) {
-      Object.assign(ck, { on: !el.paused, t: raw, raw, now, rawAt: now });
+    const sm = c.sm;
+    if (!sm || !r.running) {
+      c.sm = { t: raw, raw, now, rawAt: now };
       return raw;
     }
-    let t = ck.t + ((now - ck.now) / 1000) * (el.playbackRate || 1);
-    if (raw !== ck.raw) {
-      ck.raw = raw;
-      ck.rawAt = now;
+    let t = sm.t + (now - sm.now) / 1000;
+    if (raw !== sm.raw) {
+      sm.raw = raw;
+      sm.rawAt = now;
       const err = raw - t;
       t = Math.abs(err) > 0.06 ? raw : t + err * 0.2;
-    } else if (now - ck.rawAt > 250) {
-      t = Math.min(t, raw + 0.05);   // 伴奏卡在缓冲里：不能跑到声音前面
+    } else if (now - sm.rawAt > 250) {
+      t = Math.min(t, raw + 0.05);      // 音频卡住了：画面不能跑到声音前面
     }
-    ck.t = t;
-    ck.now = now;
+    sm.t = t;
+    sm.now = now;
     return t;
   }
-  const songTime = () => audioClock(S.acc, S.ck) - S.delayMs / 1000;
+  /* 画面与判定的时间：听到的位置，再减去玩家自己的判定延迟 */
+  const songTime = () => clockPos(S.clock) - S.clock.lat - S.delayMs / 1000;
 
   /* ==== 偏好 ==== */
   function readPrefs() {
@@ -157,6 +182,7 @@
     S.lanesPref = ln === "auto" ? "auto" : String(clamp(num(ln, 4), LMIN, LMAX));
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(num(getRaw(K.stars, 0), 0), 0, 5);
+    S.cat = String(getRaw(K.cat, "") || "");
     const saved = storage.json(K.codes) || {};
     S.codes = {};
     for (let n = LMIN; n <= LMAX; n++) {
@@ -167,7 +193,7 @@
   }
   const instIds = () => (bard().instruments || []).map((i) => i.id);
   function instId() {
-    if (S.inst === "song") return SONG_INST[S.song && S.song.inst] || "piano";
+    if (S.inst === "song") return S.song && instIds().includes(S.song.inst) ? S.song.inst : "piano";
     if (S.inst && instIds().includes(S.inst)) return S.inst;
     return (bard().instName && bard().instName()) || "piano";
   }
@@ -178,21 +204,25 @@
   }
   const lanesNow = () => lanesFor((S.root && S.root.clientWidth) || window.innerWidth);
 
-  /* ==== 曲库 ==== */
+  /* ==== 曲库：songs.json 只有曲目信息，谱面 charts/<id>.json 点到这首才下载 ==== */
+  const ver = () => (window.HJ && window.HJ.version) || "1";
   function loadData() {
     if (S.data) return Promise.resolve(true);
     S.loading ??= (async () => {
       try {
-        const ver = (window.HJ && window.HJ.version) || "1";
-        const res = await fetch(`${BASE}songs.json?v=${ver}`, { cache: "no-cache" });
+        const res = await fetch(`${BASE}songs.json?v=${ver()}`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
         const json = await res.json();
-        const list = (Array.isArray(json.songs) ? json.songs : []).filter((s) => s && s.id && s.notes && Array.isArray(s.notes.normal) && s.notes.normal.length);
+        const list = (Array.isArray(json.songs) ? json.songs : []).filter((s) => s && s.id && s.t);
         if (!list.length) throw new Error("empty");
         S.data = list;
+        const tags = Array.isArray(json.tags) ? json.tags.map(String) : [];
+        list.forEach((s) => { if (s.tag && !tags.includes(s.tag)) tags.push(s.tag); });
+        S.tags = tags.filter((t) => list.some((s) => s.tag === t));
+        if (S.cat && !S.tags.includes(S.cat)) S.cat = "";
         S.err = "";
         const id = getRaw(K.song, "");
-        S.song = list.find((s) => s.id === id) || list[0];
+        S.song = list.find((s) => s.id === id) || list.find((s) => s.id === json.first) || list[0];
         return true;
       } catch (e) {
         S.err = "曲库没读到，检查一下网络，关掉舞台再打开试试";
@@ -203,9 +233,30 @@
     })();
     return S.loading;
   }
+  /* 谱面：[[距上一个音的毫秒, 音高, 级别], …] → [{ t 秒, m, l }]；同一首只下载一次，失败了下次再试 */
+  function loadChart(s) {
+    if (!s) return Promise.resolve(null);
+    if (S.charts.has(s.id)) return S.charts.get(s.id);
+    const p = fetch(`${BASE}charts/${encodeURIComponent(s.id)}.json?v=${ver()}`)
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then((json) => {
+        let ms = 0;
+        const notes = (Array.isArray(json.n) ? json.n : []).map((row) => {
+          ms += num(row[0], 0);
+          return { t: ms / 1000, m: num(row[1], 60), l: num(row[2], 0) };
+        });
+        if (!notes.length) throw new Error("empty");
+        return { notes };
+      })
+      .catch(() => { S.charts.delete(s.id); return null; });
+    S.charts.set(s.id, p);
+    return p;
+  }
+
   function filtered() {
     const q = S.query.trim().toLowerCase();
     return (S.data || []).filter((s) => {
+      if (S.cat && s.tag !== S.cat) return false;
       if (S.stars && clamp(num(s.diff, 3), 1, 5) !== S.stars) return false;
       if (!q) return true;
       return [s.t, s.o, s.c, s.tag].some((x) => String(x || "").toLowerCase().includes(q));
@@ -245,21 +296,6 @@
     );
     document.body.appendChild(root);
     S.root = root;
-
-    const mkAudio = () => {
-      const a = new Audio();
-      a.preload = "auto";
-      a.setAttribute("aria-hidden", "true");
-      root.appendChild(a);
-      try { vol().attach(a); } catch (e) {}
-      return a;
-    };
-    S.acc = mkAudio();
-    S.perf = mkAudio();
-    S.calAudio = mkAudio();
-    S.acc.addEventListener("ended", () => { if (S.view === "play" && S.playing && !S.finished) finish(); });
-    S.acc.addEventListener("pause", () => { if (S.preview.id) { S.preview.id = ""; paintPreview(); } });
-    S.calAudio.addEventListener("ended", () => { if (S.cal) finishCal(); });
 
     const play = $id("hjsPlay");
     play.addEventListener("pointerdown", onPlayPointer);
@@ -411,7 +447,7 @@
       s.o ? h("p", { class: "hjs-hero-o", text: s.o }) : null,
       h("p", { class: "hjs-hero-meta" },
         h("span", { class: "hjs-stars", title: `难度 ${clamp(num(s.diff, 3), 1, 5)} / 5`, text: starText(num(s.diff, 3)) }),
-        h("span", { text: `${s.c || "传统曲调"} · ${fmtTime(s.dur)} · ${tempoOf(s)}` }),
+        h("span", { text: metaOf(s) }),
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null),
       s.note ? h("p", { class: "hjs-hero-note", text: s.note }) : null,
       h("div", { class: "hjs-hero-btns" },
@@ -420,18 +456,23 @@
         h("button", { type: "button", class: "hjs-btn", onclick: () => openSheet("picker") },
           h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "换一首" })))));
 
+    loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const mode = modeNow();
     const lanes = lanesNow();
     const best = (storage.json(K.best) || {})[`${s.id}:${S.diff}`];
+    const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 轻松 / 标准 / 挑战各要弹几个音
+    const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "难度" }),
-        seg("难度", DIFFS.map((d) => ({ id: d.id, label: d.label })), S.diff, (v) => { S.diff = v; setRaw(K.diff, v); renderLobby(); })),
+        seg("难度", DIFFS.map((d, i) => ({ id: d.id, label: d.label, title: cnt[i] ? `${cnt[i]} 个音要弹` : undefined })), S.diff,
+          (v) => { S.diff = v; setRaw(K.diff, v); renderLobby(); })),
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "模式" }),
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
           (v) => { S.learn = v === "learn"; setRaw(K.learn, S.learn ? "1" : "0"); renderLobby(); })),
-      h("p", { class: "hjs-tip", text: S.learn ? "学习模式：气泡缩到判定点就停下等你弹，弹中再继续，不计分" : "演出模式：跟着节拍弹，按准确度给评级" }),
+      h("p", { class: "hjs-tip", text: (S.learn ? "学习模式：气泡缩到判定点就停下等你弹，弹中再继续，不计分" : "演出模式：跟着节拍弹，按准确度给评级")
+        + (nNow ? ` · 这一档 ${nNow} 个音` : "") }),
       vol().muted
-        ? h("p", { class: "hjs-muted" }, h("span", { text: "现在是静音，听不到伴奏" }),
+        ? h("p", { class: "hjs-muted" }, h("span", { text: "现在是静音，听不到声音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
       best && !S.learn ? h("p", { class: "hjs-best", text: `本机纪录 · ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
@@ -443,34 +484,48 @@
           : [h("span", { text: "直接点气泡演奏 · 点在旁边一点也算" })])));
   }
 
-  /* ==== 试听：从第一个音开始放 8 秒伴奏 ==== */
+  /* ==== 试听：用选中的音色把 MIDI 从第一个音起放 8 秒（要弹的音稍响） ==== */
   function togglePreview(s) {
     if (S.preview.id === s.id) { stopPreview(); return; }
     stopPreview();
     if (S.view !== "lobby" || !s) return;
-    const a = S.acc;
-    try {
-      a.src = BASE + s.acc;
-      a.currentTime = Math.max(0, num(s.lead, 0) - 0.15);
-    } catch (e) {}
-    a.volume = vol().level * 0.75;
-    S.preview.id = s.id;
+    const pv = S.preview;
+    pv.id = s.id;
     paintPreview();
-    a.play().then(() => {
-      if (S.preview.id !== s.id) return;
-      try { if (a.currentTime < num(s.lead, 0) - 0.5) a.currentTime = Math.max(0, num(s.lead, 0) - 0.15); } catch (e) {}
-      clearTimeout(S.preview.timer);
-      S.preview.timer = setTimeout(stopPreview, 8000);
-    }, () => {
-      if (S.preview.id === s.id) { S.preview.id = ""; paintPreview(); }
+    const b = bard();
+    b.unlock?.();                                       // 在这次点击里叫醒音频
+    b.prepare?.(instId());
+    loadChart(s).then((chart) => {
+      if (pv.id !== s.id) return;
+      if (!chart) { stopPreview(); toast("谱面没加载上，检查一下网络再试"); return; }
+      pv.list = chart.notes.filter((n) => n.t <= PREVIEW.sec);
+      pv.i = 0;
+      pv.clock = makeClock(-0.1);
+      clockStart(pv.clock);
+      pv.timer = setInterval(previewTick, 50);
+      previewTick();
     });
   }
+  function previewTick() {
+    const pv = S.preview;
+    if (!pv.id || !pv.clock) return;
+    const play = bard().playMidi;
+    const inst = instId();
+    const pos = clockRaw(pv.clock);
+    while (pv.i < pv.list.length && pv.list[pv.i].t <= pos + 0.25) {
+      const n = pv.list[pv.i++];
+      if (play && n.t >= pos - 0.1) play(n.m, n.l > 0 ? PREVIEW.vel : PREVIEW.vel * 0.7, inst, 0, Math.max(0, n.t - pos));
+    }
+    if (pv.i >= pv.list.length && pos > (pv.list.length ? pv.list[pv.list.length - 1].t : 0) + 1) stopPreview();
+  }
   function stopPreview() {
-    clearTimeout(S.preview.timer);
-    if (!S.preview.id) return;
-    S.preview.id = "";
-    try { S.acc.pause(); } catch (e) {}
-    try { S.acc.volume = vol().level; } catch (e) {}
+    const pv = S.preview;
+    clearInterval(pv.timer);
+    pv.timer = 0;
+    if (!pv.id) return;
+    pv.id = "";
+    pv.clock = null;
+    pv.list = null;
     paintPreview();
   }
   function paintPreview() {
@@ -546,12 +601,18 @@
 
   function renderPicker(card) {
     const input = h("input", {
-      type: "search", class: "hjs-search-in", placeholder: "搜曲名 / 作曲家 / 风格", value: S.query, "aria-label": "搜索曲目",
+      type: "search", class: "hjs-search-in", placeholder: "搜曲名 / 歌手 / 出处", value: S.query, "aria-label": "搜索曲目",
       enterkeyhint: "search", autocomplete: "off",
       oninput: () => { S.query = input.value; renderSongList(); },
     });
     card.append(
       h("div", { class: "hjs-search" }, h("span", { class: "hjs-search-ico", html: ICON.search }), input),
+      S.tags.length > 1 ? h("div", { class: "hjs-chips is-cat", role: "radiogroup", "aria-label": "按分类筛选" },
+        ["", ...S.tags].map((t) => h("button", {
+          type: "button", class: `hjs-chip${S.cat === t ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.cat === t),
+          text: t || "全部分类",
+          onclick: () => { S.cat = t; setRaw(K.cat, t); renderSheet(); },
+        }))) : null,
       h("div", { class: "hjs-chips", role: "radiogroup", "aria-label": "按难度筛选" },
         [0, 1, 2, 3, 4, 5].map((n) => h("button", {
           type: "button", class: `hjs-chip${S.stars === n ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.stars === n),
@@ -589,7 +650,7 @@
       },
         h("span", { class: "hjs-song-main" },
           h("b", { text: s.t }),
-          h("small", { text: `${s.c || "传统曲调"} · ${fmtTime(s.dur)} · ${tempoOf(s)}` })),
+          h("small", { text: metaOf(s) })),
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null,
         h("span", { class: "hjs-song-side" },
           h("span", { class: "hjs-eq", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
@@ -613,7 +674,7 @@
     });
     const sel = h("select", { class: "hjs-select", "aria-label": "弹出来的音色", onchange: () => { S.inst = sel.value; setRaw(K.inst, sel.value); } });
     sel.append(h("option", { value: "", text: `跟随模拟器（${(bard().instruments || []).find((i) => i.id === (bard().instName && bard().instName()))?.name || "钢琴"}）` }));
-    sel.append(h("option", { value: "song", text: "跟随曲目（和示范旋律同音色）" }));
+    sel.append(h("option", { value: "song", text: "跟随曲目（MIDI 原本的乐器）" }));
     const groups = new Map();
     (bard().instruments || [{ id: "piano", name: "钢琴", group: "弦乐" }]).forEach((i) => {
       if (!groups.has(i.group)) groups.set(i.group, h("optgroup", { label: i.group || "乐器" }));
@@ -624,8 +685,8 @@
     const demo = h("input", { type: "checkbox", class: "hjs-switch", checked: S.demo, "aria-label": "示范旋律", onchange: () => { S.demo = demo.checked; setRaw(K.demo, S.demo ? "1" : "0"); } });
     body.append(group("声音",
       row("音量", h("div", { class: "hjs-vol" }, range, volVal), "和全站音量是同一个"),
-      row("音色", sel, "你弹出来的音；拨弦、钢琴类起音最利落"),
-      row("示范旋律", demo, "伴奏之上再放一条完整主旋律，可以照着弹")));
+      row("音色", sel, "整首曲子都用它；拨弦、钢琴类起音最利落"),
+      row("示范旋律", demo, "你要弹的音也先轻轻放出来，可以照着弹")));
 
     /* 操作 */
     const mode = modeNow();
@@ -672,17 +733,18 @@
   function renderHelp(card) {
     card.append(h("div", { class: "hjs-sheet-body hjs-help" },
       h("ol", {},
-        ["气泡出现在它那个音的高度上（越往上音越高），外圈会慢慢收缩；外圈缩到和核心重合的那一下，弹它就会发出这个音。旋律是你弹出来的，伴奏自动播放",
+        ["气泡出现在它那个音的高度上（越往上音越高），外圈会慢慢收缩；外圈缩到和核心重合的那一下，弹它就会发出这个音",
+          "每首曲子都是一份 MIDI：气泡是你要弹的音，其余的音（和声、这一档省掉的旋律）游戏会用轻音按时补上",
           "手机、平板：直接点气泡，点在旁边一点也算",
           "电脑：屏幕按宽度分成几条轨道，气泡落在哪条轨道就按那条的键（大厅下方有键位提示，设置里能改）",
-          "开头会有四下轻轻的预备拍；漏掉的音不会响，轻松难度省掉的音游戏会用轻音替你补上",
+          "开头会有四下轻轻的预备拍；漏掉的音不会响",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
           "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
           "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
         ].map((t) => h("li", { text: t })))));
   }
 
-  /* ==== 延迟校准：放 10 下「嗒」，跟着按任意键或点圆圈，取后几下偏差的中位数 ==== */
+  /* ==== 延迟校准：在游戏同一个音频钟上排 10 下「嗒」，跟着按任意键或点圆圈，取后几下偏差的中位数 ==== */
   function calPanel() {
     const c = S.cal;
     const n = c ? c.taps.length : 0;
@@ -701,16 +763,29 @@
     stopPreview();
     S.binding = -1;
     S.calMsg = "";
-    const a = S.calAudio;
-    S.cal = { taps: [], ck: {} };
-    try { a.src = `${BASE}metronome.mp3?v=${(window.HJ && window.HJ.version) || "1"}`; a.currentTime = 0; } catch (e) {}
-    a.play().catch(() => stopCal("节拍音没放出来，检查一下网络或音量"));
+    const b = bard();
+    if (!b.playMidi) { S.calMsg = "节拍音放不出来，刷新页面再试"; renderSheet(); return; }
+    b.unlock?.();
+    const clock = makeClock(0);
+    clockStart(clock);
+    S.cal = { taps: [], clock, k: 0, timer: setInterval(calStep, 50) };
+    calStep();
     renderSheet();
+  }
+  /* 边走边排（提前 0.25 秒），取消了就不会再响 */
+  function calStep() {
+    const c = S.cal;
+    if (!c) return;
+    const pos = clockRaw(c.clock);
+    for (; c.k < CAL.count && CAL.lead + c.k * CAL.gap <= pos + 0.25; c.k++) {
+      bard().playMidi?.(TICK.midi, 0.7, TICK.inst, 0, Math.max(0, CAL.lead + c.k * CAL.gap - pos));
+    }
+    if (pos >= CAL.lead + CAL.gap * (CAL.count - 1) + 0.6) finishCal();
   }
   function calTap() {
     const c = S.cal;
     if (!c) return;
-    const t = audioClock(S.calAudio, c.ck);
+    const t = clockPos(c.clock) - c.clock.lat;          // 听到的位置
     const k = Math.round((t - CAL.lead) / CAL.gap);
     if (k < 0 || k >= CAL.count || c.taps.some((x) => x.k === k)) return;
     const d = t - (CAL.lead + k * CAL.gap);
@@ -735,17 +810,26 @@
   }
   function stopCal(msg) {
     if (!S.cal && msg === undefined) return;
+    if (S.cal) clearInterval(S.cal.timer);
     S.cal = null;
-    try { S.calAudio.pause(); } catch (e) {}
     if (msg !== undefined) S.calMsg = msg;
     if (S.sheet === "settings") renderSheet();
   }
 
   /* ==== 谱面与布局 ==== */
-  function prepare(s) {
+  function prepare(s, chart) {
     const dm = diffMeta();
-    const raw = (s.notes && s.notes[dm.id]) || s.notes.normal;
-    S.notes = raw.map(([t, m], i) => ({ t: +t, m: +m, idx: i, lane: 0, band: 0, x: 0, y: 0 }));
+    const need = LEVEL[dm.id] || 2;
+    const all = chart.notes;
+    /* 级别够的音由玩家弹，其余的（和声、这一档省掉的旋律）是补音；开了示范旋律就连要弹的音也先轻轻放一遍 */
+    S.notes = [];
+    S.bg = [];
+    all.forEach((n) => {
+      if (n.l >= need) S.notes.push({ t: n.t, m: n.m, idx: S.notes.length, lane: 0, band: 0, x: 0, y: 0 });
+      else S.bg.push({ t: n.t, m: n.m, v: BG_VEL });
+    });
+    S.bgAll = all.map((n) => ({ t: n.t, m: n.m, v: n.l >= need ? DEMO_VEL : BG_VEL }));
+    S.bgList = S.demo ? S.bgAll : S.bg;
     S.lo = num(s.range && s.range[0], 60);
     S.hi = Math.max(num(s.range && s.range[1], 72), S.lo + 1);
     S.mode = modeNow();
@@ -760,21 +844,16 @@
     S.next = 0;
     S.firstT = S.notes.length ? S.notes[0].t : 0;
     S.lastT = S.notes.length ? S.notes[S.notes.length - 1].t : 0;
+    S.endT = Math.max(S.lastT, all.length ? all[all.length - 1].t : 0);
 
-    /* 补音：完整旋律里谱面没有的音；示范轨挂了时用整条旋律 */
-    const key = (t, m) => `${(+t).toFixed(3)}|${m}`;
-    const inChart = new Set(raw.map(([t, m]) => key(t, m)));
-    const mel = (Array.isArray(s.mel) ? s.mel : []).map(([t, m]) => ({ t: +t, m: +m })).sort((a, b) => a.t - b.t);
-    S.bgAll = mel;
-    S.bg = mel.filter((n) => !inChart.has(key(n.t, n.m)));
-
-    /* 预备拍：伴奏第一拍（lead）之前四拍 */
-    const bpm = num(Array.isArray(s.tempo) && s.tempo[0] && s.tempo[0][1], 120);
-    S.spb = 60 / clamp(bpm, 30, 260);
-    while (S.spb < 0.42) S.spb *= 2;        // 太快的曲子按两拍一下数
-    S.anchor = clamp(num(s.lead, S.firstT), 0, S.firstT || 0);
-    S.ticks = [];
-    for (let k = 1; k <= 4; k++) { const t = S.anchor - k * S.spb; if (t >= 0.15) S.ticks.unshift({ t, m: TICK.midi }); }
+    /* 预备拍：曲子第一个音（0 秒）之前四拍；钟从负数开始走，第一个气泡也有完整的收缩时间 */
+    let spb = num(s.beat, 0) > 0 ? num(s.beat, 0.5) : 60 / clamp(num(s.bpm, 120), 30, 260);
+    spb = clamp(spb, 0.2, 2);
+    while (spb < 0.42) spb *= 2;            // 太快的曲子按两拍一下数
+    S.spb = spb;
+    S.ticks = [4, 3, 2, 1].map((k) => ({ t: -k * spb, m: TICK.midi }));
+    S.startT = Math.min(-4 * spb - 0.6, S.firstT - dm.approach - 0.4);
+    S.clock = makeClock(S.startT);
     return dm;
   }
 
@@ -877,7 +956,6 @@
     S.needTap = false;
     S.bgNext = 0;
     S.tickNext = 0;
-    S.ck = {};
   }
 
   function startSong() {
@@ -893,103 +971,65 @@
     S.view = "play";
     showView();
     $id("hjsModal").hidden = true;
-    prepare(s);
+    S.notes = [];
     $id("hjsNowT").textContent = s.t;
     $id("hjsNowS").textContent = `${diffMeta().label}${S.learn ? " · 学习" : ""}`;
     setPauseIcon(false);
-    layout();
     updateHud();
     $id("hjsProg").style.transform = "scaleX(0)";
     banner("准备中…", "is-wait");
     try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch (e) {}
 
+    /* 在这次点击里叫醒音频（iOS 要求），谱面下好、音频跑起来再开钟 */
     const b = bard();
     b.unlock?.();
     b.prepare?.(instId());
-
-    /* 两条音轨都在这次点击里 play()，iOS 才放行 */
-    const acc = S.acc;
-    const perf = S.perf;
-    try { acc.volume = vol().level; perf.volume = vol().level; } catch (e) {}
-    acc.src = BASE + s.acc;
-    S.perfState = "";
-    S.bgList = S.bg;
-    let pp = null;
-    if (S.demo) {
-      perf.src = BASE + s.perf;
-      S.perfState = "wait";
-      S.bgList = [];
-      pp = perf.play();
-    }
-    const pa = acc.play();
-    pa.then(() => {
-      if (gen !== S.gen) return;
-      if (S.perfState === "ok") syncPerf();
-      begin();
-    }, (err) => {
-      if (gen !== S.gen) return;
-      try { perf.pause(); } catch (e) {}
-      if (err && err.name === "NotAllowedError") {
-        S.needTap = true;
-        banner("点一下屏幕开始", "is-wait");
-      } else {
+    loadChart(s).then((chart) => {
+      if (gen !== S.gen || S.view !== "play") return;
+      if (!chart) {
         backToLobby();
-        toast("伴奏没加载上，检查一下网络再试");
+        toast("谱面没加载上，检查一下网络再试");
+        return;
       }
+      prepare(s, chart);
+      layout();
+      updateHud();
+      waitAudio(gen, performance.now());
     });
-    if (pp) {
-      pp.then(() => {
-        if (gen !== S.gen) return;
-        S.perfState = "ok";
-        if (S.playing) syncPerf();
-        else if (acc.paused) { try { perf.pause(); } catch (e) {} }
-      }, () => {
-        if (gen !== S.gen) return;
-        S.perfState = "fail";
-        useBgFallback();
-        toast("示范旋律没加载上，先用轻音代替");
-      });
+  }
+
+  /* 音频叫不醒（浏览器拦着自动出声）就请玩家点一下屏幕，点的那一下会重新开始 */
+  function waitAudio(gen, since) {
+    if (gen !== S.gen || S.view !== "play" || S.playing) return;
+    if (rawClock().running) { begin(); return; }
+    if (performance.now() - since > 1500) {
+      S.needTap = true;
+      banner("点一下屏幕开始", "is-wait");
+      return;
     }
-    setTimeout(() => {
-      if (gen === S.gen && S.view === "play" && !S.playing && !S.needTap && !S.finished && !S.paused) {
-        backToLobby();
-        toast("伴奏加载太久了，换个网络再试");
-      }
-    }, 20000);
+    setTimeout(() => waitAudio(gen, since), 50);
   }
 
   function begin() {
     S.playing = true;
-    S.ck = {};
     S.bannerKey = "";
     banner("", "");
+    clockStart(S.clock);
+    /* 排音另用一个计时器：画面掉帧（低端机卡顿、窗口被挡住时浏览器压低帧率）也不会漏掉补音 */
+    clearInterval(S.pump);
+    S.pump = setInterval(scheduleSounds, 25);
     loop();
   }
-  function syncPerf() {
-    try {
-      S.perf.currentTime = S.acc.currentTime;
-      if (S.perf.paused && !S.acc.paused) S.perf.play().catch(() => {});
-    } catch (e) {}
-  }
-  function useBgFallback() {
-    const t = S.playing ? songTime() : 0;
-    S.bgList = S.bgAll;
-    S.bgNext = S.bgList.findIndex((n) => n.t >= t - 0.02);
-    if (S.bgNext < 0) S.bgNext = S.bgList.length;
-  }
 
-  function stopAudio() {
-    try { S.acc.pause(); } catch (e) {}
-    try { S.perf.pause(); } catch (e) {}
-  }
   function stopPlay() {
     cancelAnimationFrame(S.raf);
     S.raf = 0;
+    clearInterval(S.pump);
     S.playing = false;
     S.paused = false;
     S.frozen = false;
     S.waiting = null;
-    stopAudio();
+    clockStop(S.clock);
     clearNotes();
   }
 
@@ -1036,43 +1076,44 @@
         miss(n);
         S.next += 1;
       }
-      if (!S.frozen) { scheduleSounds(t); countIn(t); }
+      if (!S.frozen) { scheduleSounds(); countIn(t); }
     }
     draw(t, dm);
-    $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.lastT + 1), 0, 1).toFixed(4)})`;
-    if (!S.finished && S.next >= S.notes.length && t > S.lastT + 1.6) { finish(); return; }
+    $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
+    if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
     S.raf = requestAnimationFrame(tick);
   }
 
-  /* 补音与预备拍：提前一点排进 Web Audio，准点出声；学习模式不越过下一个要弹的音 */
-  function scheduleSounds(t) {
+  /* 补音与预备拍：按音频钟的精确位置提前 AHEAD 秒排进 Web Audio，准点出声；学习模式不越过下一个要弹的音 */
+  function scheduleSounds() {
     const play = bard().playMidi;
-    if (!play) return;
+    if (!play || !S.clock || !S.clock.run || !S.playing) return;
+    const pos = clockRaw(S.clock);
     const inst = instId();
     const limit = S.learn ? nextDueT() : Infinity;
     const list = S.bgList;
     while (S.bgNext < list.length) {
       const n = list[S.bgNext];
-      if (n.t > t + 0.05 || n.t >= limit - 0.001) break;
+      if (n.t > pos + AHEAD || n.t >= limit - 0.001) break;
       S.bgNext += 1;
-      if (n.t < t - 0.1) continue;
-      play(n.m, BG_VEL, inst, 0, Math.max(0, n.t - t));
+      if (n.t < pos - 0.1) continue;
+      play(n.m, n.v, inst, 0, Math.max(0, n.t - pos));
     }
     while (S.tickNext < S.ticks.length) {
       const n = S.ticks[S.tickNext];
-      if (n.t > t + 0.05) break;
+      if (n.t > pos + AHEAD) break;
       S.tickNext += 1;
-      if (n.t < t - 0.1) continue;
-      play(n.m, TICK.vel, TICK.inst, 0, Math.max(0, n.t - t));
+      if (n.t < pos - 0.1) continue;
+      play(n.m, TICK.vel, TICK.inst, 0, Math.max(0, n.t - pos));
     }
   }
   function nextDueT() {
     for (let i = S.next; i < S.notes.length; i++) if (S.judged[S.notes[i].idx] < 0) return S.notes[i].t;
     return Infinity;
   }
-  /* 第一个气泡前的 3·2·1 */
+  /* 曲子第一个音（0 秒）前的 3·2·1 */
   function countIn(t) {
-    const left = S.anchor - t;
+    const left = -t;
     if (left > 0 && left <= S.spb * 3 + 0.05) {
       const n = Math.ceil(left / S.spb - 0.02);
       banner(String(clamp(n, 1, 3)), "is-count", `c${n}`);
@@ -1320,7 +1361,9 @@
     S.frozen = true;
     S.waiting = n;
     S.frozenT = n.t;
-    stopAudio();
+    /* 钟停下并退回这一拍：补音只排到这一拍之前，弹中后从这里接着走，你弹的这一下和后面的音对得上 */
+    clockStop(S.clock);
+    S.clock.base = n.t;
     const el = S.els.get(n.idx) || noteEl(n);
     el.style.setProperty("--k", "1");
     el.style.opacity = "";
@@ -1341,9 +1384,7 @@
     resumeAudio();
   }
   function resumeAudio() {
-    S.ck = {};
-    S.acc.play().catch(() => {});
-    if (S.perfState === "ok") syncPerf();
+    clockStart(S.clock);
   }
 
   /* ==== 暂停 / 结算 ==== */
@@ -1359,7 +1400,7 @@
     S.paused = true;
     cancelAnimationFrame(S.raf);
     S.raf = 0;
-    stopAudio();
+    clockStop(S.clock);
     setPauseIcon(true);
     modal(h("div", { class: "hjs-card hjs-res" },
       h("h3", { class: "hjs-res-title", text: "已暂停" }),
@@ -1374,6 +1415,7 @@
     S.paused = false;
     $id("hjsModal").hidden = true;
     setPauseIcon(false);
+    bard().unlock?.();                                  // 切后台时系统可能把音频挂起了
     if (!S.frozen) resumeAudio();
     loop();
   }
@@ -1391,6 +1433,7 @@
     S.playing = false;
     cancelAnimationFrame(S.raf);
     S.raf = 0;
+    clearInterval(S.pump);
     banner("", "");
     const total = S.notes.length;
     const pct = accPct();
@@ -1433,6 +1476,8 @@
         view: S.view, sheet: S.sheet, mode: S.mode, lanes: S.lanes, playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
         bg: S.bgList, score: S.score, combo: S.combo, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
+        cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
+        startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };
     },
   };

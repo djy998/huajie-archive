@@ -6621,6 +6621,10 @@ body.hjs-open .toast { z-index: 540; }
 }
 .hjs-chip:not(:first-child) { color: var(--s-gold); }
 .hjs-chip.is-on { background: var(--s-ink); color: #261d3a; border-color: transparent; font-weight: 800; }
+/* 分类一行在星级上面：字用常规色，选中时同星级 */
+.hjs-chips.is-cat { padding-bottom: 2px; }
+.hjs-chips.is-cat .hjs-chip { color: var(--s-soft); }
+.hjs-chips.is-cat .hjs-chip.is-on { color: #261d3a; }
 .hjs-songs { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; border-top: 1px solid var(--s-line); }
 .hjs-song {
   display: flex; align-items: center; gap: 10px;

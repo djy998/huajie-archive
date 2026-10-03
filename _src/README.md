@@ -25,7 +25,7 @@
 | `sw.js` | 离线缓存 |
 | `build.mjs` | 生成发布版 |
 | `package.json`、`package-lock.json`、`.nvmrc` | 锁定构建用的 esbuild 与 Node 版本 |
-| `tools/` | 缩略图、标题字体子集；`tools/stage-build/` 为舞台演奏的曲库、谱面、音轨生成器与冒烟测试 |
+| `tools/` | 缩略图、标题字体子集；`tools/stage-build/` 为舞台演奏的曲库（MIDI 与曲目表）、谱面生成器、体检与冒烟测试 |
 
 脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard（及 bard-stage）、games（及 games-poems）、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
@@ -64,16 +64,23 @@
 
 ## 舞台演奏（音游）
 
-- 入口：吟游诗人模拟器「高级功能」里的「熟练了？来舞台演奏！」，按需加载 `bard-stage.js`，全屏一层（`#hjStage`），自带固定配色，不跟白天 / 夜晚模式变。发声借用 `bard.js` 的音源：`HJBard.playMidi(音高, 力度, 乐器, 声像, 推后秒数)`、`unlock`、`prepare`。
-- 玩法：气泡出现在音高对应的高度上（越高音越高），外圈收缩到与核心重合时弹它就发出这个音；伴奏 `<audio>` 自动播放，也是全场时钟（`currentTime` 平滑后减判定延迟）。判定 Perfect / Great / Good / Miss，没有血量；漏掉的音不出声；声像固定居中。
+- 入口：吟游诗人模拟器「高级功能」里的「熟练了？来舞台演奏！」，按需加载 `bard-stage.js`，全屏一层（`#hjStage`），自带固定配色，不跟白天 / 夜晚模式变。发声借用 `bard.js` 的音源：`HJBard.playMidi(音高, 力度, 乐器, 声像, 推后秒数)`、`unlock`、`prepare`、`clock`（AudioContext 的 `currentTime` 与输出延迟）。
+- 曲子全部来自 MIDI（吟游诗人演奏用的单乐器 MIDI），没有伴奏 / 示范音轨：谱面挑出来的音是气泡，由玩家弹；其余的音（和声、这一档省掉的旋律）由游戏按时间用轻音补上，整首始终完整。整首都用设置里选的音色（默认跟随模拟器，也可「跟随曲目」用 MIDI 原本的乐器）。
+- 玩法：气泡出现在音高对应的高度上（越高音越高），外圈收缩到与核心重合时弹它就发出这个音。判定 Perfect / Great / Good / Miss，没有血量；漏掉的音不出声；声像固定居中。
+- 时钟：模拟器 AudioContext 的 `currentTime`，补音也排在同一个钟上（另用 25 ms 计时器提前 0.12 秒排，画面掉帧也不漏音）；画面与判定 = 音频位置 − 输出延迟 − 判定延迟。暂停、切后台、学习模式都是停这个钟。音频叫不醒时提示「点一下屏幕开始」。
 - 操作（设置里可改，默认按设备）：手机、平板点气泡（判定半径约一个气泡直径，气泡沿旋律左右铺开）；电脑键盘轨道，屏幕按宽度分 2~4 条（<760 px 两条、<1180 px 三条，也可手选），音越低越靠左，默认键位 F J / F 空格 J / D F J K，按 `e.code` 认键（中文输入法开着也能弹），改键撞车时自动对调。
-- 谱面省掉的旋律音（轻松难度约省一半）按时间用轻音补上；开「示范旋律」改放示范轨，示范轨加载失败时整条旋律用轻音代替。第一拍前有四下预备拍并显示 3·2·1。
-- 学习模式：不计分，气泡到判定点还没弹就把伴奏停在这一拍，弹中才继续。
-- 界面分层：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、星级筛选、点一下试听 8 秒）/ 设置窗口（音量即全站音量、音色、示范旋律、操作方式、轨道与键位、判定延迟与校准）/ 玩法说明。Esc 与手机返回键都是「回到上一层」（打开时 `history.pushState`）。
-- 延迟校准放 `assets/bard/stage/metronome.mp3`（`tools/stage-build/metronome.py` 生成，拍点改了要同步 `bard-stage.js` 的 `CAL`），跟着按键或点圆圈，取后几下偏差的中位数。
-- 曲库与音轨在 `assets/bard/stage/`：`songs.json`（曲目信息、三档谱面 `notes`、完整旋律 `mel`，时间单位秒）、`<id>.acc.mp3` 伴奏、`<id>.perf.mp3` 示范、`midi/` 扒谱成果、`bg.jpg` 舞台背景。改曲子：改 `tools/stage-build/songs_*.py`，`python3 build.py --only-json` 只重写 `songs.json`（几秒），去掉参数则连音频一起重出（约 8 分钟）；`python3 check.py` 体检曲库。
+- 「示范旋律」：要弹的音也先轻轻放一遍。曲子第一个音前有四下预备拍并显示 3·2·1。
+- 学习模式：不计分，气泡到判定点还没弹就把钟停在这一拍（补音只排到这一拍之前），弹中才继续。
+- 界面分层：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、点一下用 MIDI 试听 8 秒）/ 设置窗口（音量即全站音量、音色、示范旋律、操作方式、轨道与键位、判定延迟与校准）/ 玩法说明。Esc 与手机返回键都是「回到上一层」（打开时 `history.pushState`）。
+- 延迟校准：在同一个音频钟上排 10 下「嗒」，跟着按键或点圆圈，取后几下偏差的中位数（拍点在 `bard-stage.js` 的 `CAL`）。
+- 曲库在 `assets/bard/stage/`：`songs.json`（曲目索引：曲名、分类、星级、时长、速度、音域、三档音数）、`charts/<id>.json`（每首的音符与分级，点到这首才下载）、`bg.jpg` 舞台背景。
+- 改曲子（`tools/stage-build/`，要 Python 3 与 `pip install mido numpy`）：
+  - MIDI 放 `midi/<id>.mid`，在 `songs.py` 的 `SONGS` 加一行（曲名、副标题、歌手、分类；星级、时长、速度都自动算），`DEFAULT` 是第一次打开时选中的曲子。
+  - `python build.py` 重写 `songs.json` 和 `charts/`（几秒，多余的谱面自动删掉）；`python check.py` 体检，最后一行「问题 0」即可。
+  - 谱面规则在 `chart.py`：琶音式和弦算一簇取最高音当旋律，被上方长音盖住的伴奏音和乐句间单独露出的低音降级；按长度、和弦重音、拍点（MIDI 对齐网格时）打分，再按最小间隔挑音：轻松 0.5 秒、标准 0.25 秒、挑战 0.125 秒，三档逐级包含。某首嫌密或嫌稀，在 `songs.py` 给它加 `gap`（>1 更稀）。
+  - 星级按标准难度的音符密度在整个曲库里排名，约 12% / 23% / 30% / 23% / 12% 分到 1~5 星，加减曲子后会重排。
 - 冒烟测试：`npm i --no-save jsdom && node tools/stage-build/smoke.mjs`（用 jsdom 跑 `bard-stage.js` 本体，期望「全部通过」）。
-- 只用到本机：`hj_stage_*`（曲目、难度、模式、音色、示范、操作方式、轨道、键位、延迟、星级筛选、各曲各难度的最高分）。
+- 只用到本机：`hj_stage_*`（曲目、难度、模式、音色、示范、操作方式、轨道、键位、延迟、分类与星级筛选、各曲各难度的最高分 `hj_stage_best2`）。
 
 ## 小游戏助手
 
