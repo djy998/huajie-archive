@@ -26,10 +26,14 @@
   };
   /* approach：气泡提前多久出现；win：Perfect / Great / Good 的判定半窗（秒）；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: [0.15, 0.25, 0.36], size: 0.44, tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: [0.11, 0.19, 0.29], size: 0.38, tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: [0.08, 0.14, 0.22], size: 0.32, tap: 0.19 },
+    { id: "easy", label: "轻松", approach: 1.8, win: [0.16, 0.27, 0.4], size: 0.44, tap: 0.24 },
+    { id: "normal", label: "标准", approach: 1.35, win: [0.12, 0.21, 0.32], size: 0.38, tap: 0.21 },
+    { id: "hard", label: "挑战", approach: 1.05, win: [0.09, 0.16, 0.25], size: 0.32, tap: 0.2 },
   ];
+  /* 输入：按事件发生的时刻判定（e.timeStamp），手机忙的那一帧排队晚到的点按不吃亏；
+     判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数） */
+  const INPUT_GRACE = 0.1;
+  const TAP_R = 1.3;
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
     { id: "great", label: "GREAT", pts: 200, vel: 0.9 },
@@ -1008,6 +1012,8 @@
     S.maxCombo = 0;
     S.learnHits = 0;
     S.counts = { perfect: 0, great: 0, good: 0, miss: 0 };
+    S.offs = [];                                        // 每次弹中的偏差（秒，正 = 晚），结算时给个平均
+    S.ghosts = 0;                                       // 点气泡时点空的次数
     S.playing = false;
     S.paused = false;
     S.frozen = false;
@@ -1132,7 +1138,7 @@
           if (t >= n.t) { freeze(n); t = n.t; }
           break;
         }
-        if (t < n.t + dm.win[2]) break;
+        if (t < n.t + dm.win[2] + INPUT_GRACE) break;
         miss(n);
         S.next += 1;
       }
@@ -1191,7 +1197,7 @@
       const n = S.notes[i];
       const dt = n.t - t;
       if (dt > ap) break;
-      if (S.judged[n.idx] >= 0 || dt < -0.4) continue;
+      if (S.judged[n.idx] >= 0 || dt < -0.6) continue;
       const el = S.els.get(n.idx) || noteEl(n);
       el.classList.toggle("is-next", n.idx === nextIdx);    // 下一个该弹的：外圈加粗
       const k = clamp(1 - dt / ap, 0, 1);
@@ -1239,10 +1245,17 @@
     if (S.mode === "keys") {
       const lane = clamp(Math.floor(x / S.g.laneW), 0, S.lanes - 1);
       flashLane(lane);
-      press(lane);
+      press(lane, e);
     } else {
-      tapAt(x, y);
+      tapAt(x, y, e);
     }
+  }
+  /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣，最多扣 0.25 秒 */
+  function inputTime(e) {
+    const t = songTime();
+    const ts = e && Number(e.timeStamp);
+    if (!ts || ts > 1e12) return t;                    // 老浏览器的 timeStamp 是 1970 年起的毫秒，不能用
+    return t - clamp((performance.now() - ts) / 1000, 0, 0.25);
   }
 
   function onKeyDown(e) {
@@ -1282,7 +1295,7 @@
       e.preventDefault();
       if (e.repeat) return;
       flashLane(lane, true);
-      press(lane);
+      press(lane, e);
       return;
     }
     if (S.view === "lobby" && !S.sheet && e.key === "Enter") {
@@ -1307,13 +1320,13 @@
   const tierOf = (d, dm) => (d <= dm.win[0] ? 0 : d <= dm.win[1] ? 1 : 2);
 
   /* 键盘：这条轨道里离现在最近、还在判定窗内的音 */
-  function press(lane) {
+  function press(lane, e) {
     if (S.frozen && S.waiting) {
       if (S.waiting.lane === lane) learnHit(S.waiting);
       return;
     }
     const dm = diffMeta();
-    const t = songTime();
+    const t = inputTime(e);
     let best = null;
     let bestD = Infinity;
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
@@ -1323,13 +1336,13 @@
       const d = Math.abs(n.t - t);
       if (d <= dm.win[2] && d < bestD) { bestD = d; best = n; }
     }
-    if (best) hit(best, tierOf(bestD, dm));
+    if (best) hit(best, tierOf(bestD, dm), t - best.t);
   }
 
-  /* 点气泡：判定窗内、离点按处一个气泡直径以内的音，时间越准、离得越近越优先 */
-  function tapAt(x, y) {
+  /* 点气泡：判定窗内、离点按处 TAP_R 个气泡直径以内的音，时间越准、离得越近越优先 */
+  function tapAt(x, y, e) {
     const g = S.g;
-    const R = g.size * 1.05;
+    const R = g.size * TAP_R;
     if (S.frozen && S.waiting) {
       const n = S.waiting;
       if (Math.hypot(n.x - x, n.y - y) <= R * 1.5) learnHit(n);
@@ -1337,7 +1350,7 @@
       return;
     }
     const dm = diffMeta();
-    const t = songTime();
+    const t = inputTime(e);
     let best = null;
     let bestScore = Infinity;
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
@@ -1347,11 +1360,11 @@
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
       const d = Math.hypot(n.x - x, n.y - y);
       if (d > R) continue;
-      const score = Math.abs(dt) / dm.win[2] + (d / R) * 0.35;
+      const score = Math.abs(dt) / dm.win[2] + (d / R) * 0.6;   // 判定圈放大了，离得近的更优先，免得点到旁边那个
       if (score < bestScore) { bestScore = score; best = n; }
     }
-    if (best) hit(best, tierOf(Math.abs(best.t - t), dm));
-    else ghost(x, y);
+    if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
+    else { S.ghosts += 1; ghost(x, y); }
   }
   function ghost(x, y) {
     const el = h("div", { class: "hjs-ghost" });
@@ -1361,8 +1374,9 @@
   }
 
   /* ==== 判定 ==== */
-  function hit(n, tier) {
+  function hit(n, tier, off) {
     S.judged[n.idx] = tier;
+    if (Number.isFinite(off) && !S.learn) S.offs.push(off);
     bard().playMidi?.(n.m, JUDGE[tier].vel, instId(), 0, 0);
     dropEl(n, "is-hit", 300);
     S.combo += 1;
@@ -1512,6 +1526,7 @@
         h("div", { class: "hjs-res-rank" }, h("span", { text: rankOf(pct) }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo}` }),
+        timingNote(),
         h("div", { class: "hjs-res-grid" }, JUDGE.map((j) => h("div", { class: `hjs-cell is-${j.id}` }, h("b", { text: String(S.counts[j.id]) }), h("small", { text: j.label })))));
     }
     card.append(h("div", { class: "hjs-res-btns" },
@@ -1519,6 +1534,16 @@
       h("button", { type: "button", class: "hjs-btn", text: "下一首", onclick: () => { nextSong(); startSong(); } }),
       h("button", { type: "button", class: "hjs-btn", text: "回大厅", onclick: backToLobby })));
     modal(card);
+  }
+  /* 结算里的手感诊断：平均早晚、点空几下；一直偏早 / 偏晚就提示去校准 */
+  function timingNote() {
+    const o = (S.offs || []).slice().sort((a, b) => a - b);
+    if (o.length < 8) return null;
+    const ms = Math.round(o[Math.floor(o.length / 2)] * 1000);
+    const parts = [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`];
+    if (S.mode === "tap" && S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
+    const tip = Math.abs(ms) >= 35 ? "；一直这样的话，到设置 → 判定延迟 → 校准" : "";
+    return h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") + tip });
   }
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
