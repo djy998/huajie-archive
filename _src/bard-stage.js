@@ -1030,6 +1030,7 @@
        buckets：每 4 秒歌曲时间里掉了几帧，结算时指出最卡的一段；max：最长一帧 */
     S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map() };
     S.ghosts = 0;                                       // 点气泡时点空的次数
+    S.ghostWhy = { early: 0, late: 0, off: 0 };         // 点空的原因：早了（附近的气泡还没到判定窗）/ 晚了 / 时间对但点偏了
     S.playing = false;
     S.paused = false;
     S.frozen = false;
@@ -1608,7 +1609,19 @@
       }
     }
     if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
-    else { S.ghosts += 1; ghost(x, y); }
+    else { S.ghosts += 1; S.ghostWhy[ghostWhy(x, y, t, dm, R)] += 1; ghost(x, y); }
+  }
+  /* 点空是为什么：判定窗里有没弹的气泡（只是离得远）= 点偏了；否则看点按处附近最近的那个没弹的气泡是在后面（早了）还是前面（晚了） */
+  function ghostWhy(x, y, t, dm, R) {
+    let near = null;
+    for (let i = Math.max(0, S.next - 8); i < S.notes.length; i++) {
+      const n = S.notes[i];
+      if (n.t - t > 1.5) break;
+      if (S.judged[n.idx] >= 0 && n.t - t < -dm.win[2]) continue;
+      if (Math.abs(n.t - t) <= dm.win[2] && S.judged[n.idx] < 0) return "off";
+      if (Math.hypot(n.x - x, n.y - y) <= R && (!near || Math.abs(n.t - t) < Math.abs(near.t - t))) near = n;
+    }
+    return near && near.t < t ? "late" : "early";
   }
   function ghost(x, y) {
     const el = h("div", { class: "hjs-ghost" });
@@ -1869,8 +1882,12 @@
   function timingNote() {
     const o = (S.offs || []).slice().sort((a, b) => a - b);
     const ms = o.length ? Math.round(o[Math.floor(o.length / 2)] * 1000) : 0;
-    const parts = [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`];
-    if (S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
+    const parts = o.length >= 8 ? [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`] : [];
+    if (S.ghosts) {
+      const w = S.ghostWhy;
+      const why = [w.early && `早了 ${w.early}`, w.late && `晚了 ${w.late}`, w.off && `点偏 ${w.off}`].filter(Boolean).join(" · ");
+      parts.push(`点空 ${S.ghosts} 下（${why}）`);
+    }
     /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
     const dg = S.diag || {};
     const w = (dg.waits || []).slice().sort((a, b) => a - b);
@@ -1882,7 +1899,7 @@
       S.render === "simple" ? "简单显示" : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
-      o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
+      parts.length ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
       h("p", { class: "hjs-res-diag", text: dev }));
   }
   /* 掉帧：按本机刷新率算（单独掉一帧也算），再标出最卡的那 4 秒在哪、最长一帧多久 */
@@ -1916,7 +1933,7 @@
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
         mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.live.length, draws: S.fl.draws } : null,
-        resuming: S.resuming, spb: S.spb,
+        resuming: S.resuming, spb: S.spb, ghostWhy: S.ghostWhy,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };

@@ -774,6 +774,24 @@ async function main() {
     check("图片解码卡住也最多等 2.5 秒就开演", P.st().playing && P.st().clock.run);
   }
 
+  /* 25. 点空的原因：早了 / 点偏 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard" } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes, g = P.st().g;
+    const k = ns.findIndex((a, i) => i > 1 && a.t - ns[i - 1].t > 0.45);
+    ns.slice(0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
+    P.until(ns[k].t - 0.4);                            // 挑战正常判定 GOOD 只到 0.29 秒：早 0.4 秒点在气泡上
+    P.pointer(ns[k].x, ns[k].y);
+    check("点空原因：早了", P.st().ghostWhy.early === 1 && P.st().judged[ns[k].idx] === -1, JSON.stringify(P.st().ghostWhy));
+    P.until(ns[k].t);
+    P.pointer(ns[k].x > g.w / 2 ? 10 : g.w - 10, ns[k].y > g.h / 2 ? g.top : g.bottom);
+    check("点空原因：时间对但点偏了", P.st().ghostWhy.off === 1, JSON.stringify(P.st().ghostWhy));
+    P.until(P.st().endT + 2);
+    check("结算写明点空原因", /点空 \d+ 下（早了 1 · 点偏 1/.test(P.$("#hjsModal").textContent), (P.$("#hjsModal").textContent.match(/点空[^）]*）/) || [""])[0]);
+  }
+
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
   {
     const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });
