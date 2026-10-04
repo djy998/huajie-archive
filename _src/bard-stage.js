@@ -65,13 +65,14 @@
   const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍、校准的「嗒」
   const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // 校准：第一下在 1.2 秒，之后每 0.6 秒一下
   /* 飞花线：像一只小萤火虫，沿一条平滑的曲线掠过每个气泡，在这个气泡该判定的那一刻正好经过它（ahead：提前多少秒经过，0 = 正好判定时）。
-     正常显示：身后撒星星 —— 固定 pool 颗轮流用，花至少挪了 gap 个气泡直径、离上一颗至少 every 毫秒才撒一颗，每颗停留 life 毫秒；
-     简单显示：身后拖一条金色发光的线 —— segs 小段首尾相连，沿花在过去 tail 秒里走过的路排开。
-     flower / star / line：花、星星的大小和线的粗细（气泡直径的倍数） */
+     全部画在一张 canvas 上（花、光晕、星星、光线），不加 DOM 元素、不跑 CSS / Web Animations，页面不会因为它多出一堆图层。
+     正常显示：身后撒星星 —— 同时最多 stars 颗，花至少挪了 gap 个气泡直径、离上一颗至少 every 毫秒才撒，每颗停留 life 毫秒；
+     简单显示：身后拖一条金色发光的线 —— 取花在过去 tail 秒里走过的 samples 个点，连成平滑曲线描两遍（外层淡光、里层亮芯），尾巴渐隐。
+     flower / star / line：花、星星的大小和线的粗细（气泡直径的倍数）；spin：花转一圈几秒；dpr：canvas 最高按几倍像素画 */
   const FLY = {
-    ahead: 0, flower: 0.24,
-    star: 0.13, pool: 24, every: 45, gap: 0.05, life: [850, 1150], kinds: 3,
-    line: 0.09, tail: 0.45, segs: 8,
+    ahead: 0, flower: 0.24, glow: 2.8, spin: 6, dpr: 2,
+    star: 0.13, stars: 24, every: 45, gap: 0.05, life: [850, 1150], kinds: 3,
+    line: 0.09, tail: 0.45, samples: 24,
   };
   const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 按音高：低 → 高
   const PALETTE = [...BAND_COLORS, "150 226 180", "246 150 120"];   // 后两色只在挨得近、撞色时补位
@@ -99,7 +100,7 @@
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
     raf: 0, pump: 0, els: new Map(), clock: null, bannerKey: "",
     preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
-    bgmWasOn: false, closeTimer: 0, coverTimer: 0, hist: false, closing: false, needTap: false,
+    bgmWasOn: false, closeTimer: 0, coverTimer: 0, resuming: false, resumeTimer: 0, hist: false, closing: false, needTap: false,
   };
 
   /* ==== 工具（storage、showToast、siteVolume、bgm 是 main.js 的全局） ==== */
@@ -930,6 +931,7 @@
     const bottom = Math.max(top + 80, hh - size * 0.62 - 14 - inset.bottom);
     S.g = { w, h: hh, size, top, bottom };
     $id("hjsNotes").style.setProperty("--size", `${size.toFixed(1)}px`);
+    $id("hjsNotes").style.setProperty("--name-in", `${(dm.approach * 0.5).toFixed(2)}s`);   // 音名从收缩过半淡入，到点时最亮
 
     placeNotes(S.g, dm);
     S.els.forEach((el, idx) => { placeEl(el, S.notes[idx]); el.style.setProperty("--c", PALETTE[S.notes[idx].c]); });
@@ -1084,13 +1086,21 @@
     });
   }
 
-  /* 开演前先把这首要用到的音色、音高备好（bard.js 的 HJBard.warm）：要弹的音、补音、预备拍；
+  /* 开演前把要用的都备好，预备拍开始前就做完：音色与音高（bard.js 的 HJBard.warm：要弹的音、补音、预备拍），
+     开了飞花线还要把花和星星两张图下载、解码好（不然第一次画时才解码，预备拍里会顿一下）。
      超过 0.35 秒没好就出全屏转圈的莫古力（main.js 的 trackLoad），已经备过的曲子几乎不用等 */
   function warmSounds() {
     const warm = bard().warm;
-    if (!warm) return Promise.resolve();
     const midis = [...S.notes, ...S.bgList].map((n) => n.m);
-    const job = Promise.all([warm(instId(), midis), warm(TICK.inst, [TICK.midi])]).catch(() => {});
+    const imgs = S.fl ? ["fly-flower.webp", "fly-stars.webp"].map((name) => {
+      flyImage(name);
+      const img = flyImg[name];
+      /* 最多等 2.5 秒：页面在后台时浏览器会一直不解码，不能卡在这里 */
+      const wait = new Promise((r) => setTimeout(r, 2500));
+      return img.decode ? Promise.race([img.decode().catch(() => {}), wait]) : Promise.resolve();
+    }) : [];
+    const job = Promise.all([...(warm ? [warm(instId(), midis), warm(TICK.inst, [TICK.midi])] : []), ...imgs]).catch(() => {});
+    if (!warm && !imgs.length) return Promise.resolve();
     banner("准备音色…", "is-wait");
     return typeof trackLoad === "function" ? trackLoad(job, "block") : job;
   }
@@ -1119,6 +1129,7 @@
   }
 
   function stopPlay() {
+    stopResumeCount();
     cancelAnimationFrame(S.raf);
     S.raf = 0;
     clearInterval(S.pump);
@@ -1233,18 +1244,32 @@
       if (dt > ap) break;
       if (S.judged[n.idx] >= 0 || dt < -0.6) { S.els.get(n.idx)?.classList.remove("is-next"); continue; }
       const el = S.els.get(n.idx) || noteEl(n);
-      el.classList.toggle("is-next", n.idx === nextIdx && dt <= NEXT_LEAD);   // 下一个该弹的：快到点时外圈才加粗
-      const k = clamp(1 - dt / ap, 0, 1);
-      el.style.setProperty("--k", k.toFixed(3));
-      el.style.opacity = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
+      const next = n.idx === nextIdx && dt <= NEXT_LEAD;   // 下一个该弹的：快到点时外圈才加粗
+      if (next !== el._next) { el._next = next; el.classList.toggle("is-next", next); }
+      setK(el, clamp(1 - dt / ap, 0, 1));
+      const op = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
+      if (op !== el._op) { el._op = op; el.style.opacity = op; }
     }
+  }
+  /* 收缩进度 k（0 → 1）：外圈由大缩到和核心重合、渐亮，核心略放大。直接改这两层的 transform / opacity（都是单独一层，只合成不重画），
+     不用 CSS 变量（改变量会让整个气泡连同音名一起重算样式）；音名过半时加一次 is-named，交给 CSS 淡入，不再每帧重画文字 */
+  function setK(el, k) {
+    if (Math.abs(k - el._k) < 0.002) return;
+    el._k = k;
+    el._ring.style.transform = `scale(${(1 + (1 - k) * 1.3).toFixed(3)})`;
+    el._ring.style.opacity = (0.3 + k * 0.7).toFixed(3);
+    el._core.style.transform = `scale(${(0.84 + k * 0.16).toFixed(3)})`;
+    if (k >= 0.45 && !el._named) { el._named = true; el.classList.add("is-named"); }
   }
   function placeEl(el, n) {
     if (!n) return;
     el.style.transform = `translate3d(${n.x.toFixed(1)}px, ${n.y.toFixed(1)}px, 0)`;
   }
   function noteEl(n) {
-    const el = h("div", { class: "hjs-note" }, h("i", { class: "hjs-ring" }), h("i", { class: "hjs-core" }), h("i", { class: "hjs-name", text: midiName(n.m) }));
+    const ring = h("i", { class: "hjs-ring" });
+    const core = h("i", { class: "hjs-core" });
+    const el = h("div", { class: "hjs-note" }, ring, core, h("i", { class: "hjs-name", text: midiName(n.m) }));
+    Object.assign(el, { _ring: ring, _core: core, _k: -1, _named: false, _next: false, _op: null });
     el.style.setProperty("--c", PALETTE[n.c]);
     el.style.zIndex = String(S.notes.length - n.idx);   // 先到的叠在上面
     placeEl(el, n);
@@ -1269,8 +1294,19 @@
   /* ==== 飞花线：一只小萤火虫一样的花，沿平滑曲线掠过每个气泡；正常显示身后撒星星，简单显示拖一条金色发光的线（设置 → 画面，默认关）====
      路径开演前算好：各气泡（同一刻的和弦只取第一个）按时间连成 Catmull-Rom 曲线，每段的三次式系数在布局时一次算完，
      演奏时每帧只代入时间；花在气泡该判定的那一刻正好经过它，两个气泡之间按时间匀速走。
-     省着画：花、星星、线段都是固定的元素，各自常驻一层（不会一会儿建层一会儿拆层），只动 transform / opacity；
-     星星用 Web Animations 交给合成器跑，线段每帧只改 transform；花转圈是 CSS 动画。整层在气泡下面，不挡音名 */
+     省着画：全部画在一张 canvas 上（一层，在气泡下面，不挡音名）；不加 DOM 元素、不跑 CSS 动画，
+     所以不会像早先的做法那样让浏览器为「可能被盖住」的元素多建一堆图层。花停着、星星散完、线收拢时整张不重画 */
+  const flyImg = {};
+  function flyImage(name) {
+    if (!flyImg[name]) {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = `${BASE}${name}`;
+      flyImg[name] = img;
+    }
+    const img = flyImg[name];
+    return img.complete && img.naturalWidth ? img : null;
+  }
   function flyReset() {
     const box = $id("hjsFly");
     if (!box) return;
@@ -1278,36 +1314,25 @@
     box.hidden = !S.fly;
     S.fl = null;
     if (!S.fly) return;
-    const line = S.render === "simple";
-    const segs = [];
-    const pool = [];
-    if (line) {
-      for (let k = 0; k < FLY.segs; k++) {
-        const el = h("i", { class: "hjs-fly-seg" });
-        el.style.opacity = (0.95 * (1 - k / FLY.segs)).toFixed(2);   // 越往尾巴越淡
-        box.append(el);
-        segs.push(el);
-      }
-    } else {
-      for (let k = 0; k < FLY.pool; k++) {
-        const el = h("i", { class: "hjs-fly-star" });
-        box.append(el);
-        pool.push({ el, anim: null });
-      }
-    }
-    const flower = h("i", { class: "hjs-fly-flower" }, h("i"));
-    box.append(flower);
+    const cv = h("canvas", { class: "hjs-fly-cv" });
+    box.append(cv);
+    let ctx = null;
+    try { ctx = cv.getContext("2d"); } catch (e) {}
+    flyImage("fly-flower.webp");
+    flyImage("fly-stars.webp");
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    S.fl = { flower, segs, pool, pi: 0, curve: [], x: 0, y: 0, sx: 0, sy: 0, lastSpawn: 0, placed: false, movedAt: -Infinity, calm };
+    S.fl = {
+      cv, ctx, line: S.render === "simple", calm, curve: [], x: 0, y: 0, placed: false, movedAt: -Infinity,
+      stars: [], sx: 0, sy: 0, lastSpawn: 0, dirty: false, draws: 0, dpr: 1, glow: null,
+    };
   }
-  /* 气泡位置定好（或改了窗口大小重排）之后：重算大小，把整条路径每一段的系数算好 */
+  /* 气泡位置定好（或改了窗口大小重排）之后：canvas 跟屏幕一样大，把整条路径每一段的系数算好，光晕先画好一张小图 */
   function flyLayout() {
     const f = S.fl;
     if (!f || !S.g) return;
-    const box = $id("hjsFly");
-    box.style.setProperty("--fly", `${(S.g.size * FLY.flower).toFixed(1)}px`);
-    box.style.setProperty("--star", `${(S.g.size * FLY.star).toFixed(1)}px`);
-    box.style.setProperty("--line", `${(S.g.size * FLY.line).toFixed(1)}px`);
+    f.dpr = Math.min(FLY.dpr, window.devicePixelRatio || 1);
+    f.cv.width = Math.round(S.g.w * f.dpr);
+    f.cv.height = Math.round(S.g.h * f.dpr);
     const pts = [];
     for (const n of S.notes) {
       const t = n.t - FLY.ahead;
@@ -1319,8 +1344,26 @@
       const co = (a, b, c, d) => [b, 0.5 * (c - a), 0.5 * (2 * a - 5 * b + 4 * c - d), 0.5 * (3 * b - a - 3 * c + d)];
       return { t: p1.t, dt: p2 === p1 ? 0 : p2.t - p1.t, cx: co(p0.x, p1.x, p2.x, p3.x), cy: co(p0.y, p1.y, p2.y, p3.y) };
     });
+    f.glow = null;
+    if (f.ctx && typeof document.createElement("canvas").getContext === "function") {
+      const gs = Math.max(8, Math.round(S.g.size * FLY.flower * FLY.glow * f.dpr));
+      const g = document.createElement("canvas");
+      g.width = g.height = gs;
+      const gc = g.getContext("2d");
+      if (gc) {
+        const grd = gc.createRadialGradient(gs / 2, gs / 2, 0, gs / 2, gs / 2, gs / 2);
+        grd.addColorStop(0, "rgba(255, 236, 170, .55)");
+        grd.addColorStop(0.45, "rgba(255, 214, 120, .22)");
+        grd.addColorStop(1, "rgba(255, 214, 120, 0)");
+        gc.fillStyle = grd;
+        gc.fillRect(0, 0, gs, gs);
+        f.glow = g;
+      }
+    }
     f.placed = false;
     f.movedAt = -Infinity;
+    f.stars = [];
+    f.dirty = true;
   }
   /* 曲线上 t 时刻的位置：二分找到 t 落在哪一段，代入这一段的三次式 */
   function flyAt(curve, t) {
@@ -1339,66 +1382,109 @@
   function flyFrame(t) {
     const f = S.fl;
     if (!f.curve.length || !S.g) return;
+    const now = performance.now();
     const [x, y] = flyAt(f.curve, t);
     const moved = !f.placed || Math.abs(x - f.x) + Math.abs(y - f.y) >= 0.05;
     if (moved) {
       f.x = x;
       f.y = y;
       f.movedAt = t;
-      f.flower.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
       if (!f.placed) { f.placed = true; f.sx = x; f.sy = y; }
+      if (!f.line && !f.calm) flySpawn(f, now);
     }
-    if (f.segs.length) flyLine(f, t, moved);
-    else if (moved) flyStars(f);
+    if (f.stars.length && now - f.stars[0].born > f.stars[0].life) f.stars = f.stars.filter((p) => now - p.born < p.life);
+    const lineBusy = f.line && t - f.movedAt <= FLY.tail + 0.05;
+    const busy = moved || f.stars.length || lineBusy;
+    /* 闲着（花停住、星星散完、线收拢）：最后再画一次就停；花也不转 */
+    if (!busy && !f.dirty) return;
+    f.dirty = busy;
+    flyDraw(f, t, now);
   }
-  /* 正常显示：花离上一颗星够远、隔得够久才撒一颗，停着不撒 */
-  function flyStars(f) {
-    const now = performance.now();
+  /* 正常显示：花离上一颗星够远、隔得够久才撒一颗；最多 stars 颗，满了挤掉最早那颗 */
+  function flySpawn(f, now) {
     const d = Math.hypot(f.x - f.sx, f.y - f.sy);
     if (d < S.g.size * FLY.gap || now - f.lastSpawn < FLY.every) return;
-    flySpark(f, (f.x - f.sx) / d, (f.y - f.sy) / d);
+    const ux = (f.x - f.sx) / d, uy = (f.y - f.sy) / d;
+    const s = S.g.size;
+    const side = (Math.random() - 0.5) * s * 0.12;
+    const x0 = f.x - ux * s * 0.08 - uy * side;
+    const y0 = f.y - uy * s * 0.08 + ux * side;
+    f.stars.push({
+      born: now, life: FLY.life[0] + Math.random() * (FLY.life[1] - FLY.life[0]), kind: Math.floor(Math.random() * FLY.kinds),
+      x0, y0, x1: x0 - ux * s * 0.06, y1: y0 - uy * s * 0.06 + s * (0.1 + Math.random() * 0.1),
+      rot: ((Math.random() * 90 - 45) * Math.PI) / 180, sc: 0.6 + Math.random() * 0.6,
+    });
+    if (f.stars.length > FLY.stars) f.stars.shift();
     f.sx = f.x;
     f.sy = f.y;
     f.lastSpawn = now;
   }
-  /* 撒一颗星：落在花刚经过的地方，原地慢慢往下飘一点、边转边缩边淡 */
-  function flySpark(f, ux, uy) {
-    const p = f.pool[f.pi];
-    f.pi = (f.pi + 1) % f.pool.length;
-    if (f.calm || !p.el.animate) return;
-    if (p.anim) p.anim.cancel();
+  function flyDraw(f, t, now) {
+    f.draws += 1;
+    const c = f.ctx;
+    if (!c) return;
+    const r = f.dpr;
     const s = S.g.size;
-    p.el.style.backgroundPosition = `${Math.floor(Math.random() * FLY.kinds) * 50}% 0`;
-    const sc = 0.6 + Math.random() * 0.6;
-    const side = (Math.random() - 0.5) * s * 0.12;     // 垂直于飞行方向撒开一点点
-    const x0 = f.x - ux * s * 0.08 - uy * side;
-    const y0 = f.y - uy * s * 0.08 + ux * side;
-    const x1 = x0 - ux * s * 0.06;
-    const y1 = y0 - uy * s * 0.06 + s * (0.1 + Math.random() * 0.1);
-    const rot = Math.random() * 90 - 45;
-    const life = FLY.life[0] + Math.random() * (FLY.life[1] - FLY.life[0]);
-    p.anim = p.el.animate([
-      { transform: `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${rot.toFixed(0)}deg) scale(${sc.toFixed(2)})`, opacity: 0.95 },
-      { transform: `translate3d(${x1.toFixed(1)}px, ${y1.toFixed(1)}px, 0) rotate(${(rot + 50).toFixed(0)}deg) scale(${(sc * 0.3).toFixed(2)})`, opacity: 0 },
-    ], { duration: life, easing: "cubic-bezier(.3, .4, .5, 1)" });
-  }
-  /* 简单显示：把花在过去 tail 秒里走过的路分成几小段，每段一个元素，摆在两端点中间、转到这一段的方向、拉到这一段的长度；
-     花停下、线也收拢之后就不再动 */
-  function flyLine(f, t, moved) {
-    if (!moved && t - f.movedAt > FLY.tail + 0.05) return;
-    const n = f.segs.length;
-    const dt = FLY.tail / n;
-    const thick = S.g.size * FLY.line;
-    let px = f.x, py = f.y;
-    for (let k = 0; k < n; k++) {
-      const [qx, qy] = flyAt(f.curve, t - (k + 1) * dt);
-      const len = Math.hypot(qx - px, qy - py);
-      const ang = Math.atan2(qy - py, qx - px);
-      const sx = (len + thick * 0.8) / 100;           // 元素本身宽 100px；稍微拉长一点，段与段接得上
-      const sy = 1 - (0.6 * k) / n;                   // 越往尾巴越细
-      f.segs[k].style.transform = `translate3d(${((px + qx) / 2).toFixed(1)}px, ${((py + qy) / 2).toFixed(1)}px, 0) rotate(${ang.toFixed(3)}rad) scale(${sx.toFixed(3)}, ${sy.toFixed(2)})`;
-      px = qx;
-      py = qy;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, f.cv.width, f.cv.height);
+    c.setTransform(r, 0, 0, r, 0, 0);
+    if (f.line) {
+      /* 光线：沿花走过的路取点，用相邻点的中点做二次曲线连起来（没有折角），描两遍：外层淡光、里层亮芯，都从花这头往尾巴渐隐 */
+      const pts = [[f.x, f.y]];
+      for (let k = 1; k <= FLY.samples; k++) pts.push(flyAt(f.curve, t - (FLY.tail * k) / FLY.samples));
+      const tail = pts[pts.length - 1];
+      if (Math.hypot(tail[0] - f.x, tail[1] - f.y) > 1) {
+        c.beginPath();
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (let k = 1; k < pts.length - 1; k++) {
+          c.quadraticCurveTo(pts[k][0], pts[k][1], (pts[k][0] + pts[k + 1][0]) / 2, (pts[k][1] + pts[k + 1][1]) / 2);
+        }
+        c.lineTo(tail[0], tail[1]);
+        c.lineCap = "round";
+        c.lineJoin = "round";
+        const fade = (a, b) => {
+          const g = c.createLinearGradient(f.x, f.y, tail[0], tail[1]);
+          g.addColorStop(0, a);
+          g.addColorStop(1, b);
+          return g;
+        };
+        c.strokeStyle = fade("rgba(255, 210, 110, .32)", "rgba(255, 210, 110, 0)");
+        c.lineWidth = s * FLY.line * 2;
+        c.stroke();
+        c.strokeStyle = fade("rgba(255, 248, 222, .95)", "rgba(255, 226, 150, 0)");
+        c.lineWidth = s * FLY.line * 0.55;
+        c.stroke();
+      }
+    } else {
+      const img = flyImage("fly-stars.webp");
+      if (img) {
+        const cell = img.naturalHeight;
+        const sz = s * FLY.star;
+        for (const p of f.stars) {
+          const u = Math.min(1, (now - p.born) / p.life);
+          const e = 1 - (1 - u) * (1 - u);              // 先快后慢
+          c.globalAlpha = 0.95 * (1 - u);
+          const sc = p.sc * (1 - 0.7 * u);
+          c.setTransform(r * sc * Math.cos(p.rot + u * 0.9), r * sc * Math.sin(p.rot + u * 0.9), -r * sc * Math.sin(p.rot + u * 0.9), r * sc * Math.cos(p.rot + u * 0.9),
+            r * (p.x0 + (p.x1 - p.x0) * e), r * (p.y0 + (p.y1 - p.y0) * e));
+          c.drawImage(img, p.kind * cell, 0, cell, cell, -sz / 2, -sz / 2, sz, sz);
+        }
+        c.globalAlpha = 1;
+        c.setTransform(r, 0, 0, r, 0, 0);
+      }
+    }
+    /* 花：先画光晕，再画转着的花 */
+    const fs = s * FLY.flower;
+    if (f.glow) {
+      const gs = fs * FLY.glow;
+      c.drawImage(f.glow, f.x - gs / 2, f.y - gs / 2, gs, gs);
+    }
+    const flower = flyImage("fly-flower.webp");
+    if (flower) {
+      const a = f.calm ? 0 : ((now / 1000 / FLY.spin) % 1) * Math.PI * 2;
+      c.setTransform(r * Math.cos(a), r * Math.sin(a), -r * Math.sin(a), r * Math.cos(a), r * f.x, r * f.y);
+      c.drawImage(flower, -fs / 2, -fs / 2, fs, fs);
+      c.setTransform(r, 0, 0, r, 0, 0);
     }
   }
 
@@ -1409,6 +1495,7 @@
     if (S.needTap) { e.preventDefault(); startSong(); return; }
     if (S.view !== "play" || !S.playing || S.paused) return;
     e.preventDefault();
+    if (S.resuming) return;                             // 继续前的倒数：点了不算
     const p = hoverPos(e);
     if (S.judge === "hover" || e.pointerType === "mouse") S.hover = p;
     if (isAuto()) return;                               // 自动演奏：点了也不算
@@ -1479,7 +1566,7 @@
     }
     if (S.view === "play") {
       if (S.needTap && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); startSong(); return; }
-      if (!S.playing || S.paused || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!S.playing || S.paused || S.resuming || e.ctrlKey || e.metaKey || e.altKey) return;
       /* 按任意键＝在鼠标处点一下；放水范围不看位置，没动过鼠标也行。放水判定（含自动演奏）不用按 */
       if (S.judge === "hover" || /^(F\d+|Tab|CapsLock|Control|Alt|Meta|ContextMenu)$/.test(e.key)) return;
       const free = S.range === "free";
@@ -1613,7 +1700,7 @@
       const iv = now - dg.last;
       if (!dg.base) {
         dg.warm.push(iv);
-        if (dg.warm.length >= 120) { dg.warm.sort((a, b) => a - b); dg.base = dg.warm[60]; dg.warm = null; }
+        if (dg.warm.length >= 120) { dg.base = frameBase(dg.warm); dg.warm = null; }
       } else {
         dg.n += 1;
         dg.max = Math.max(dg.max, iv);
@@ -1625,6 +1712,14 @@
       }
     }
     dg.last = now;
+  }
+
+  /* 一帧本该多长：开头 120 帧里较快的那些（第 15 百分位，开头就卡也不会估成低刷新率），再贴到最近的常见刷新率 */
+  function frameBase(ivs) {
+    const v = ivs.slice().sort((a, b) => a - b)[Math.floor(ivs.length * 0.15)];
+    const hz = 1000 / v;
+    const near = [60, 75, 90, 120, 144, 165].reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a));
+    return Math.abs(near - hz) / near < 0.1 ? 1000 / near : v;
   }
 
   function updateHud() {
@@ -1673,7 +1768,8 @@
     clockStop(S.clock);
     S.clock.base = n.t;
     const el = S.els.get(n.idx) || noteEl(n);
-    el.style.setProperty("--k", "1");
+    setK(el, 1);
+    el._op = "";
     el.style.opacity = "";
     el.classList.add("is-wait");
     banner(S.range === "free" ? "点一下屏幕" : "点亮着的气泡", "is-hint");
@@ -1705,6 +1801,7 @@
   }
   function pause() {
     if (S.view !== "play" || !S.playing || S.paused || S.finished) return;
+    stopResumeCount();
     S.paused = true;
     cancelAnimationFrame(S.raf);
     S.raf = 0;
@@ -1718,14 +1815,39 @@
         h("button", { type: "button", class: "hjs-btn", text: "重来", onclick: () => startSong() }),
         h("button", { type: "button", class: "hjs-btn", text: "停止演奏", onclick: backToLobby }))));
   }
+  /* 继续：和开头一样的预备拍 —— 按曲子的拍子响四下「嗒」，后三下显示 3·2·1，再过一拍接着走。
+     这期间钟不走、点了不算；倒数时又按暂停 / 切后台，就回到暂停 */
   function resume() {
     if (!S.paused) return;
     S.paused = false;
     $id("hjsModal").hidden = true;
     setPauseIcon(false);
     bard().unlock?.();                                  // 切后台时系统可能把音频挂起了
-    if (!S.frozen) resumeAudio();
-    loop();
+    const gap = S.spb * 1000;
+    let n = 4;
+    S.resuming = true;
+    banner("", "");
+    const step = () => {
+      if (!S.resuming) return;
+      if (n === 0) {
+        S.resuming = false;
+        banner("", "");
+        if (S.diag) S.diag.last = 0;                    // 倒数这段不算掉帧
+        if (!S.frozen) resumeAudio();
+        else banner(S.range === "free" ? "点一下屏幕" : "点亮着的气泡", "is-hint");
+        loop();
+        return;
+      }
+      if (n <= 3) banner(String(n), "is-count", `r${n}`);
+      bard().playMidi?.(TICK.midi, TICK.vel, TICK.inst, 0, 0);
+      n -= 1;
+      S.resumeTimer = setTimeout(step, gap);
+    };
+    step();
+  }
+  function stopResumeCount() {
+    clearTimeout(S.resumeTimer);
+    if (S.resuming) { S.resuming = false; banner("", ""); }
   }
   function modal(card) {
     const m = $id("hjsModal");
@@ -1822,7 +1944,8 @@
         view: S.view, sheet: S.sheet, range: S.range, auto: isAuto(), playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
-        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length } : null,
+        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.stars.length, draws: S.fl.draws } : null,
+        resuming: S.resuming, spb: S.spb,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };

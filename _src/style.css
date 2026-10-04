@@ -6390,47 +6390,12 @@ body.hjs-open .toast { z-index: 540; }
 /* ==== 演奏 ==== */
 .hjs-play { position: absolute; inset: 0; z-index: 2; touch-action: none; }
 .hjs-play[hidden] { display: none; }
-/* 飞花线：萤火虫大小的花，带一圈淡淡的光（静态的径向渐变，不做模糊滤镜）；正常显示身后撒星星，简单显示拖一条金色的光线（几小段首尾相连）。
-   都是固定元素、各自常驻一层（will-change），只动 transform / opacity；在气泡下面一层，不挡音名 */
-.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --fly: 20px; --star: 11px; --line: 8px; }
+/* 飞花线：花、光晕、星星 / 光线都画在一张 canvas 上（bard-stage.js 的 flyDraw），在气泡下面一层，不挡音名 */
+.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
 .hjs-fly[hidden] { display: none; }
-.hjs-fly-flower {
-  position: absolute; left: 0; top: 0;
-  width: var(--fly); height: var(--fly);
-  margin: calc(var(--fly) / -2) 0 0 calc(var(--fly) / -2);
-  will-change: transform;
-}
-.hjs-fly-flower::before {
-  content: ""; position: absolute; inset: -90%;
-  border-radius: 50%;
-  background: radial-gradient(circle closest-side, rgba(255, 236, 170, .55) 0%, rgba(255, 214, 120, .22) 45%, rgba(255, 214, 120, 0) 100%);
-}
-.hjs-fly-flower > i {
-  position: absolute; inset: 0;
-  background: url("assets/bard/stage/fly-flower.webp") center / contain no-repeat;
-  animation: hjsFlySpin 6s linear infinite;
-}
-@keyframes hjsFlySpin { to { transform: rotate(360deg); } }
-.hjs-fly-star {
-  position: absolute; left: 0; top: 0;
-  width: var(--star); height: var(--star);
-  margin: calc(var(--star) / -2) 0 0 calc(var(--star) / -2);
-  background: url("assets/bard/stage/fly-stars.webp") 0 0 / 300% 100% no-repeat;
-  opacity: 0;
-  will-change: transform, opacity;
-}
-.hjs-fly-seg {
-  position: absolute; left: 0; top: 0;
-  width: 100px; height: var(--line);
-  margin: calc(var(--line) / -2) 0 0 -50px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 210, 110, 0) 0%, rgba(255, 210, 110, .4) 28%, rgba(255, 246, 214, .95) 50%, rgba(255, 210, 110, .4) 72%, rgba(255, 210, 110, 0) 100%);
-  transform: scale(0);
-  will-change: transform;
-}
+.hjs-fly-cv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .hjs-notes { position: absolute; inset: 0; z-index: 2; pointer-events: none; --size: 80px; }
 .hjs-note {
-  --k: 0;
   --c: 241 192 122;
   position: absolute; left: 0; top: 0;
   width: var(--size); height: var(--size);
@@ -6442,14 +6407,14 @@ body.hjs-open .toast { z-index: 540; }
   will-change: transform, opacity;   /* 每帧都在缩放：单独一层，密集时手机不掉帧 */
   border: 2px solid rgb(var(--c) / .9);
   box-shadow: 0 0 12px rgb(var(--c) / .32), inset 0 0 10px rgb(var(--c) / .18);
-  transform: scale(calc(1 + (1 - var(--k)) * 1.3));
-  opacity: calc(.3 + var(--k) * .7);
+  transform: scale(2.3);                /* 收缩进度由 bard-stage.js 的 setK 直接写 transform / opacity */
+  opacity: .3;
 }
 .hjs-core {
   will-change: transform;
   background: radial-gradient(circle closest-side, rgb(var(--c) / .55) 0%, rgb(var(--c) / .16) 52%, rgb(var(--c) / .7) 86%, rgb(var(--c) / 0) 100%);
   box-shadow: 0 0 18px rgb(var(--c) / .32);
-  transform: scale(calc(.84 + var(--k) * .16));
+  transform: scale(.84);
 }
 .hjs-name {
   display: flex; align-items: center; justify-content: center;
@@ -6459,15 +6424,17 @@ body.hjs-open .toast { z-index: 540; }
   -webkit-text-stroke: calc(var(--size) * .012) rgba(20, 14, 34, .75);
   paint-order: stroke fill;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 10px rgb(var(--c) / .55);
-  opacity: calc((var(--k) - .45) * 2);
+  opacity: 0;
+  transition: opacity var(--name-in, .6s) linear;   /* 收缩过半时淡入、到点最亮；一次性的淡入，不每帧重画文字 */
 }
+.hjs-note.is-named .hjs-name { opacity: 1; }
 .hjs-note.is-next .hjs-ring { border-width: 3px; border-color: rgb(var(--c)); }
 .hjs-note.is-wait .hjs-ring { border-color: #fff; animation: hjsPulse 1s ease-in-out infinite; }
 .hjs-note.is-wait .hjs-core { box-shadow: 0 0 28px rgb(var(--c) / .85); }
 @keyframes hjsPulse { 50% { scale: 1.16; opacity: .55; } }
 .hjs-note.is-hit .hjs-core { animation: hjsBurst .3s ease-out forwards; }
 .hjs-note.is-hit .hjs-ring { animation: hjsBurstRing .3s ease-out forwards; }
-.hjs-note.is-hit .hjs-name { opacity: 0; }
+.hjs-note.is-hit .hjs-name { opacity: 0; transition: none; }
 @keyframes hjsBurst { to { scale: 1.4; opacity: 0; } }
 @keyframes hjsBurstRing { from { transform: scale(1); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
 .hjs-note.is-miss { animation: hjsMiss .32s ease-in forwards; }
@@ -6821,7 +6788,7 @@ body.hjs-open .toast { z-index: 540; }
   .hjs-pop { animation-duration: .9s; animation-timing-function: linear; }
   .hjs-res-fc { animation: none; }
   .hjs-note.is-wait .hjs-ring, .hjs-banner.is-wait span, .hjs-banner.is-hint span, .hjs-eq i { animation: none; }
-  .hjs-fly-flower > i { animation: none; }
+
   .hjs-eq i { height: 8px; }
 }
 

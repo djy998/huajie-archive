@@ -64,6 +64,7 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
   Object.defineProperty(win, "innerHeight", { value: height, configurable: true });
   win.performance.now = () => P.now;
   win.requestAnimationFrame = (fn) => { P.frames.push(fn); return P.frames.length; };
+  win.HTMLCanvasElement.prototype.getContext = () => null;   // jsdom 没有 canvas：飞花线只算位置、不画
   win.cancelAnimationFrame = () => {};
   win.fetch = async (url) => {
     const u = String(url);
@@ -261,7 +262,9 @@ async function main() {
     P.advance(1);
     check("暂停时歌曲时间不走、也不再排音", P.pos() === tPause && P.midi.length === nPause);
     P.key("Escape", "Escape");
-    check("再按 Esc 继续", !P.st().paused && P.st().clock.run && P.$("#hjsModal").hidden);
+    check("再按 Esc 继续：先倒数", !P.st().paused && P.st().resuming && !P.st().clock.run && P.$("#hjsModal").hidden);
+    await sleep(P.st().spb * 4000 + 300);              // 和开头一样：四下预备拍，再过一拍接着走
+    check("倒数完接着走", !P.st().resuming && P.st().clock.run);
     P.advance(0.05);
     check("继续后从暂停处接着走", Math.abs(P.pos() - tPause - 0.05) < 1e-6, `${(P.pos() - tPause).toFixed(3)}`);
 
@@ -360,6 +363,8 @@ async function main() {
     P.key("Escape", "Escape");
     P.key("Escape", "Escape");
     check("停住时暂停再继续，还是停住（不闪一下）", P.st().frozen && !P.st().clock.run && !P.st().paused);
+    await sleep(P.st().spb * 4000 + 300);              // 继续前的预备拍
+    check("倒数完还是停在这一拍等你", P.st().frozen && !P.st().clock.run && !P.st().resuming);
     const unlocks = P.unlocks;
     P.pointer(n0.x, n0.y);
     check("点对了继续走", !P.st().frozen && P.st().clock.run && P.st().judged[0] === 0);
@@ -651,7 +656,7 @@ async function main() {
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
   }
 
-  /* 20. 飞花线：萤火虫大小的花沿曲线匀速掠过每个气泡，在气泡该判定的那一刻正好经过它 */
+  /* 20. 飞花线：萤火虫大小的花沿曲线匀速掠过每个气泡，在气泡该判定的那一刻正好经过它；全部画在一张 canvas 上 */
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_fly: "1" } });
     await openStage(P);
@@ -659,43 +664,36 @@ async function main() {
     check("飞花线开关记得住（打开）", P.$('[aria-label="飞花线"]').checked);
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
-    check("飞花线（正常显示）：一朵花和一池星星（24 颗），没有光线", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 24 && !P.$(".hjs-fly-seg"));
+    const box = P.$("#hjsFly");
+    check("飞花线：整层只有一张 canvas（不加别的元素）", !box.hidden && box.children.length === 1 && box.firstElementChild.tagName === "CANVAS");
     const g = P.st().g;
-    const fsz = parseFloat(P.$("#hjsFly").style.getPropertyValue("--fly"));
-    check("飞花线：花是萤火虫大小（约 1/4 个气泡）", fsz > 0 && fsz < g.size * 0.3, `${fsz} / ${g.size}`);
+    check("飞花线：canvas 跟舞台一样大", box.firstElementChild.width === Math.round(g.w) && box.firstElementChild.height === Math.round(g.h));
     const ns = P.st().notes;
-    const ap = 0;                                      // 花在气泡该判定的那一刻经过它
-    P.until(ns[0].t - ap - 0.3);
+    P.until(ns[0].t - 0.3);
     const fp0 = P.st().flyPos;
     check("飞花线：开始时花在第一个气泡的位置", fp0 && Math.hypot(fp0.x - ns[0].x, fp0.y - ns[0].y) < 1, JSON.stringify(fp0));
     const k = ns.findIndex((a, i) => i > 1 && a.t - ns[i - 1].t > 0.4 && Math.hypot(a.x - ns[i - 1].x, a.y - ns[i - 1].y) > g.size);
     if (k > 0) {
       const a = ns[k - 1], b = ns[k];
-      const half = (a.t + b.t) / 2 - ap;
-      P.until(half);
+      P.until((a.t + b.t) / 2);
       const m = P.st().flyPos;
       const dA = Math.hypot(m.x - a.x, m.y - a.y), dB = Math.hypot(m.x - b.x, m.y - b.y), dAB = Math.hypot(a.x - b.x, a.y - b.y);
       check("飞花线：两个气泡之间是在路上（不是跳过去）", dA > dAB * 0.2 && dB > dAB * 0.2, `${dA.toFixed(0)}/${dB.toFixed(0)}/${dAB.toFixed(0)}`);
-      P.until(b.t - ap);
+      check("飞花线（正常显示）：飞的时候身后撒星星（最多 24 颗）", !m.line && m.stars > 0 && m.stars <= 24, `stars=${m.stars}`);
+      P.until(b.t);
       const e = P.st().flyPos;
       check("飞花线：气泡该判定的那一刻正好经过它", Math.hypot(e.x - b.x, e.y - b.y) < g.size * 0.05, `${Math.hypot(e.x - b.x, e.y - b.y).toFixed(2)}`);
-      check("飞花线：花在气泡下面一层（不挡音名）", P.$("#hjsFly").compareDocumentPosition(P.$("#hjsNotes")) & P.win.Node.DOCUMENT_POSITION_FOLLOWING);
     }
-    const tf = P.$(".hjs-fly-flower").style.transform;
-    check("飞花线：花只用 transform 移动", /translate3d/.test(tf), tf);
-
+    check("飞花线：在气泡下面一层（不挡音名）", box.compareDocumentPosition(P.$("#hjsNotes")) & P.win.Node.DOCUMENT_POSITION_FOLLOWING);
+    P.until(P.st().endT + 2.5);
+    const d1 = P.st().flyPos.draws;
+    P.advance(0.3);
+    check("飞花线：曲子放完、星星散完后不再重画", P.st().flyPos.draws === d1 && P.st().flyPos.stars === 0, `${d1}→${P.st().flyPos.draws}`);
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1", hj_stage_render: "simple" } });
     await openStage(Q);
     await go(Q);
-    check("飞花线（简单显示）：星星换成一条 8 段的光线", Q.$$(".hjs-fly-seg").length === 8 && !Q.$(".hjs-fly-star"));
-    Q.until(Q.st().notes[2].t);
-    const segT = Q.$$(".hjs-fly-seg").map((e) => e.style.transform);
-    check("飞花线：光线每段只用 transform（位置、方向、长度）", segT.every((x) => /translate3d\(.*rotate\(.*scale\(/.test(x)), segT[0]);
-    const before = Q.$(".hjs-fly-seg").style.transform;
-    Q.until(Q.st().endT + 1);
-    const still1 = Q.$$(".hjs-fly-seg").map((e) => e.style.transform).join();
-    Q.advance(0.2);
-    check("飞花线：曲子放完花停下后，线收拢、不再每帧改", still1 === Q.$$(".hjs-fly-seg").map((e) => e.style.transform).join() && before !== still1);
+    Q.until(Q.st().notes[3].t);
+    check("飞花线（简单显示）：画光线，不撒星星", Q.st().flyPos.line && Q.st().flyPos.stars === 0);
   }
 
   /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
@@ -718,15 +716,55 @@ async function main() {
     check("大厅和结算写明倍率", /得分 ×0\.6（宽松判定 −20%、宽松范围 −20%）/.test(ll.tip) && /得分 ×0\.6/.test(ll.res) && !/得分 ×/.test(base.res), ll.tip);
   }
 
-  /* 22. 简单显示不限帧：120 Hz 下每帧都更新 */
+  /* 22. 简单显示不限帧：120 Hz 下每帧都更新；气泡只改外圈、核心的 transform，音名一次性淡入 */
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_render: "simple" } });
     await openStage(P);
     await go(P);
     P.until(P.st().notes[0].t - 0.5);
+    const ring = () => P.$(".hjs-note .hjs-ring").style.transform;
     const ks = [];
-    for (let i = 0; i < 8; i++) { P.advance(1 / 120); ks.push(P.$(".hjs-note") && P.$(".hjs-note").style.getPropertyValue("--k")); }
+    for (let i = 0; i < 8; i++) { P.advance(1 / 120); ks.push(ring()); }
     check("简单显示：不限帧，120 Hz 下每帧都更新", ks.filter((k, i) => i && k !== ks[i - 1]).length === 7, ks.join(","));
+    check("气泡不再每帧改 CSS 变量", !P.$(".hjs-note").style.getPropertyValue("--k"));
+    check("音名过半后一次性淡入（is-named）", P.$(".hjs-note").classList.contains("is-named"));
+  }
+
+  /* 23. 暂停后继续：和开头一样的预备拍（四下嗒、后三下 3·2·1），倒数时钟不走、点了不算，数完接着走 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    P.until(ns[2].t - 0.6);
+    P.key("Escape", "Escape");
+    const t0 = P.pos();
+    const ticks0 = P.midi.filter((m) => m.vel === 0.32).length;
+    P.click(P.btn("继续", P.$("#hjsModal")));
+    check("继续：第一下嗒先不出数字、钟还没走", P.st().resuming && P.$("#hjsBanner").textContent === "" && !P.st().clock.run && P.$("#hjsModal").hidden);
+    await sleep(P.st().spb * 1000 + 60);
+    check("第二下出 3", /3/.test(P.$("#hjsBanner").textContent), P.$("#hjsBanner").textContent);
+    P.pointer(ns[2].x, ns[2].y);
+    check("倒数时点了不算", P.st().judged[2] === -1);
+    await sleep(P.st().spb * 3000 + 300);
+    P.advance(0.02);
+    const ticks1 = P.midi.filter((m) => m.vel === 0.32).length;
+    check("四下嗒之后再过一拍接着走，从暂停处开始", !P.st().resuming && P.st().clock.run && ticks1 - ticks0 === 4 && Math.abs(P.pos() - t0 - 0.02) < 0.01, `ticks=${ticks1 - ticks0} dt=${(P.pos() - t0).toFixed(3)}`);
+    P.key("Escape", "Escape");
+    P.click(P.btn("继续", P.$("#hjsModal")));
+    P.key("Escape", "Escape");
+    check("倒数时再按暂停：回到暂停", P.st().paused && !P.st().resuming && !P.$("#hjsModal").hidden);
+  }
+
+  /* 24. 飞花线的图片一直解码不完（比如页面在后台）：最多等 2.5 秒就开演，不会卡在准备音色 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1" } });
+    P.win.HTMLImageElement.prototype.decode = () => new Promise(() => {});
+    await openStage(P);
+    await go(P);
+    await sleep(2700);
+    P.advance(0.05);
+    check("图片解码卡住也最多等 2.5 秒就开演", P.st().playing && P.st().clock.run);
   }
 
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
