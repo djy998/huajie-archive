@@ -140,7 +140,8 @@
     #bootOverlay.is-waiting #bootHint { opacity: 1; animation: bootPulse 1.4s ease-in-out infinite; }
     @keyframes bootPulse { 50% { opacity: .45; } }
 
-    /* 回访进站的莫古力遮罩（boot.js）：样式表、主程序与首屏图片就绪前盖住页面；莫古力 0.3 秒后才出现，网快时只闪一下底色 */
+    /* 回访进站的莫古力遮罩（boot.js）：样式表、主程序与首屏图片就绪前盖住页面；莫古力 0.3 秒后才出现，网快时只闪一下底色。
+       底色取自天空图叠上页面暗角（body::after）后各高度的平均色：白天蓝天、夜里星空，淡出时与页面接得上 */
     #bootVeil {
       display: none;
       position: fixed;
@@ -153,13 +154,13 @@
       justify-content: center;
       gap: 16px;
       visibility: visible;
-      background: radial-gradient(ellipse at 50% 45%, #2b2448 0%, #1c1830 72%);
+      background: linear-gradient(180deg, #272c3a 0%, #282d3c 25%, #252939 45%, #222536 60%, #1f1f33 75%, #1c192d 88%, #1c1830 100%);
       cursor: progress;
       user-select: none;
       -webkit-user-select: none;
     }
     html.boot-veil #bootVeil { display: flex; }
-    html.boot-veil-day #bootVeil { background: radial-gradient(ellipse at 50% 45%, #fbf4e4 0%, #ecdab4 100%); }
+    html.boot-veil-day #bootVeil { background: linear-gradient(180deg, #4c99eb 0%, #5a9ae2 18%, #5592da 32%, #4a8bd2 45%, #3e77b9 60%, #325581 75%, #283550 88%, #1c1830 100%); }
     html.veil-leaving #bootVeil { opacity: 0; transition: opacity .4s ease; pointer-events: none; }
     #bootVeilSpin, #bootVeilText { opacity: 0; animation: bootVeilIn .3s ease .3s forwards; }
     @keyframes bootVeilIn { to { opacity: 1; } }
@@ -169,7 +170,7 @@
       border-radius: 50%;
       box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
     }
-    html.boot-veil-day #bootVeilSpin { box-shadow: 0 8px 26px rgba(96, 64, 16, .28); }
+    html.boot-veil-day #bootVeilSpin { box-shadow: 0 8px 26px rgba(16, 40, 90, .32); }
     #bootVeilSpin img {
       display: block;
       width: min(40vw, 168px);
@@ -184,7 +185,7 @@
       font: 600 .95rem/1.5 "Noto Serif SC", "Songti SC", serif;
       letter-spacing: .12em;
     }
-    html.boot-veil-day #bootVeilText { color: #6b4a22; }
+    html.boot-veil-day #bootVeilText { color: #fff6e0; text-shadow: 0 1px 6px rgba(16, 40, 90, .55); }
 
     /* 全站维护 */
     #maintNotice { display: none; }
