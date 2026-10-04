@@ -6390,10 +6390,31 @@ body.hjs-open .toast { z-index: 540; }
 /* ==== 演奏 ==== */
 .hjs-play { position: absolute; inset: 0; z-index: 2; touch-action: none; }
 .hjs-play[hidden] { display: none; }
-/* 飞花线：花、光晕、星星 / 光线都画在一张 canvas 上（bard-stage.js 的 flyDraw），在气泡下面一层，不挡音名 */
-.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+/* 飞花线：萤火虫大小的花带一圈淡淡的光（静态的径向渐变），正常显示身后撒星星，简单显示拖一条细金线（SVG 路径）。
+   花和星星都是固定元素、各自常驻一层，由 bard-stage.js 每帧写 transform / opacity，不跑 CSS 动画；在气泡下面一层，不挡音名 */
+.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --fly: 20px; --star: 11px; }
 .hjs-fly[hidden] { display: none; }
-.hjs-fly-cv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.hjs-fly-flower {
+  position: absolute; left: 0; top: 0;
+  width: var(--fly); height: var(--fly);
+  margin: calc(var(--fly) / -2) 0 0 calc(var(--fly) / -2);
+  will-change: transform;
+}
+.hjs-fly-flower::before {
+  content: ""; position: absolute; inset: -90%;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(255, 236, 170, .55) 0%, rgba(255, 214, 120, .22) 45%, rgba(255, 214, 120, 0) 100%);
+}
+.hjs-fly-flower > i { position: absolute; inset: 0; background: url("assets/bard/stage/fly-flower.webp") center / contain no-repeat; }
+.hjs-fly-star {
+  position: absolute; left: 0; top: 0;
+  width: var(--star); height: var(--star);
+  margin: calc(var(--star) / -2) 0 0 calc(var(--star) / -2);
+  background: url("assets/bard/stage/fly-stars.webp") 0 0 / 300% 100% no-repeat;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hjs-fly-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
 .hjs-notes { position: absolute; inset: 0; z-index: 2; pointer-events: none; --size: 80px; }
 .hjs-note {
   --c: 241 192 122;
@@ -6425,16 +6446,15 @@ body.hjs-open .toast { z-index: 540; }
   paint-order: stroke fill;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 10px rgb(var(--c) / .55);
   opacity: 0;
-  transition: opacity var(--name-in, .6s) linear;   /* 收缩过半时淡入、到点最亮；一次性的淡入，不每帧重画文字 */
+  will-change: opacity;               /* 常驻一层：每帧只改透明度，不重画文字 */
 }
-.hjs-note.is-named .hjs-name { opacity: 1; }
 .hjs-note.is-next .hjs-ring { border-width: 3px; border-color: rgb(var(--c)); }
 .hjs-note.is-wait .hjs-ring { border-color: #fff; animation: hjsPulse 1s ease-in-out infinite; }
 .hjs-note.is-wait .hjs-core { box-shadow: 0 0 28px rgb(var(--c) / .85); }
 @keyframes hjsPulse { 50% { scale: 1.16; opacity: .55; } }
 .hjs-note.is-hit .hjs-core { animation: hjsBurst .3s ease-out forwards; }
 .hjs-note.is-hit .hjs-ring { animation: hjsBurstRing .3s ease-out forwards; }
-.hjs-note.is-hit .hjs-name { opacity: 0; transition: none; }
+.hjs-note.is-hit .hjs-name { opacity: 0 !important; }
 @keyframes hjsBurst { to { scale: 1.4; opacity: 0; } }
 @keyframes hjsBurstRing { from { transform: scale(1); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
 .hjs-note.is-miss { animation: hjsMiss .32s ease-in forwards; }

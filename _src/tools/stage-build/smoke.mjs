@@ -665,9 +665,8 @@ async function main() {
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
     const box = P.$("#hjsFly");
-    check("飞花线：整层只有一张 canvas（不加别的元素）", !box.hidden && box.children.length === 1 && box.firstElementChild.tagName === "CANVAS");
+    check("飞花线（正常显示）：一朵花和 16 颗星星元素，没有整屏 canvas", !box.hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 16 && !P.$("#hjsFly canvas") && !P.$(".hjs-fly-svg"));
     const g = P.st().g;
-    check("飞花线：canvas 跟舞台一样大", box.firstElementChild.width === Math.round(g.w) && box.firstElementChild.height === Math.round(g.h));
     const ns = P.st().notes;
     P.until(ns[0].t - 0.3);
     const fp0 = P.st().flyPos;
@@ -679,7 +678,10 @@ async function main() {
       const m = P.st().flyPos;
       const dA = Math.hypot(m.x - a.x, m.y - a.y), dB = Math.hypot(m.x - b.x, m.y - b.y), dAB = Math.hypot(a.x - b.x, a.y - b.y);
       check("飞花线：两个气泡之间是在路上（不是跳过去）", dA > dAB * 0.2 && dB > dAB * 0.2, `${dA.toFixed(0)}/${dB.toFixed(0)}/${dAB.toFixed(0)}`);
-      check("飞花线（正常显示）：飞的时候身后撒星星（最多 24 颗）", !m.line && m.stars > 0 && m.stars <= 24, `stars=${m.stars}`);
+      check("飞花线（正常显示）：飞的时候身后撒星星（最多 16 颗）", !m.line && m.stars > 0 && m.stars <= 16, `stars=${m.stars}`);
+      const lit = P.$$(".hjs-fly-star").filter((e) => +e.style.opacity > 0);
+      check("星星只用 transform / opacity", lit.length > 0 && lit.every((e) => /translate3d\(.*rotate\(.*scale\(/.test(e.style.transform)), lit[0]?.style.transform);
+      check("花的位置和转角写在同一个 transform 里（不跑 CSS 动画）", /translate3d\(.*rotate\(/.test(P.$(".hjs-fly-flower").style.transform), P.$(".hjs-fly-flower").style.transform);
       P.until(b.t);
       const e = P.st().flyPos;
       check("飞花线：气泡该判定的那一刻正好经过它", Math.hypot(e.x - b.x, e.y - b.y) < g.size * 0.05, `${Math.hypot(e.x - b.x, e.y - b.y).toFixed(2)}`);
@@ -688,12 +690,17 @@ async function main() {
     P.until(P.st().endT + 2.5);
     const d1 = P.st().flyPos.draws;
     P.advance(0.3);
-    check("飞花线：曲子放完、星星散完后不再重画", P.st().flyPos.draws === d1 && P.st().flyPos.stars === 0, `${d1}→${P.st().flyPos.draws}`);
+    check("飞花线：曲子放完、星星散完后不再改任何东西", P.st().flyPos.draws === d1 && P.st().flyPos.stars === 0 && P.$$(".hjs-fly-star").every((e) => !+e.style.opacity), `${d1}→${P.st().flyPos.draws}`);
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1", hj_stage_render: "simple" } });
     await openStage(Q);
     await go(Q);
-    Q.until(Q.st().notes[3].t);
-    check("飞花线（简单显示）：画光线，不撒星星", Q.st().flyPos.line && Q.st().flyPos.stars === 0);
+    const qs = Q.st().notes;
+    const qk = qs.findIndex((a, i) => i > 1 && a.t - qs[i - 1].t > 0.4 && Math.hypot(a.x - qs[i - 1].x, a.y - qs[i - 1].y) > Q.st().g.size);
+    Q.until((qs[qk - 1].t + qs[qk].t) / 2);
+    const dpath = Q.$(".hjs-fly-svg path").getAttribute("d") || "";
+    check("飞花线（简单显示）：一条平滑的细线（SVG 路径，二次曲线连接），没有星星", Q.st().flyPos.line && !Q.$(".hjs-fly-star") && /^M[\d.\- ]+Q/.test(dpath) && (dpath.match(/Q/g) || []).length >= 10, dpath.slice(0, 60));
+    Q.until(Q.st().endT + 1);
+    check("花停下后线清空", (Q.$(".hjs-fly-svg path").getAttribute("d") || "") === "");
   }
 
   /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
@@ -727,7 +734,7 @@ async function main() {
     for (let i = 0; i < 8; i++) { P.advance(1 / 120); ks.push(ring()); }
     check("简单显示：不限帧，120 Hz 下每帧都更新", ks.filter((k, i) => i && k !== ks[i - 1]).length === 7, ks.join(","));
     check("气泡不再每帧改 CSS 变量", !P.$(".hjs-note").style.getPropertyValue("--k"));
-    check("音名过半后一次性淡入（is-named）", P.$(".hjs-note").classList.contains("is-named"));
+    check("音名只改透明度（常驻一层），过半后渐亮", +P.$(".hjs-note .hjs-name").style.opacity > 0);
   }
 
   /* 23. 暂停后继续：和开头一样的预备拍（四下嗒、后三下 3·2·1），倒数时钟不走、点了不算，数完接着走 */
