@@ -283,7 +283,7 @@
         S.song = list.find((s) => s.id === id) || list.find((s) => s.id === json.first) || list[0];
         return true;
       } catch (e) {
-        S.err = "曲库没读到，检查一下网络，关掉舞台再打开试试";
+        S.err = "曲库加载失败，请检查网络后重新打开舞台";
         return false;
       } finally {
         S.loading = null;
@@ -367,7 +367,7 @@
       if (!document.hidden) return;
       if (S.view === "play" && S.playing && !S.paused) pause();
       stopPreview();
-      if (S.cal) stopCal("切到后台了，校准中断");
+      if (S.cal) stopCal("页面已切至后台，校准中断");
     });
     S.built = true;
   }
@@ -450,7 +450,7 @@
 
   /* Esc：一层一层往回退 */
   function goBack() {
-    if (S.cal) { stopCal("校准取消了"); return; }
+    if (S.cal) { stopCal("校准已取消"); return; }
     if (S.sheet) { closeSheet(); return; }
     if (S.view === "play") {
       if (S.finished) backToLobby();
@@ -488,7 +488,7 @@
         h("img", { class: "hjs-brand-ico", src: `${BASE}stage-icon.webp`, alt: "", width: 40, height: 40, draggable: "false", decoding: "async" }),
         h("b", { text: "舞台演奏" })),
       h("div", { class: "hjs-bar-btns" },
-        iconBtn("help", "怎么玩", () => openSheet("help")),
+        iconBtn("help", "玩法说明", () => openSheet("help")),
         iconBtn("gear", "设置", () => openSheet("settings")),
         iconBtn("close", "离开舞台", () => close()))));
 
@@ -496,15 +496,15 @@
     box.append(main);
     if (!S.data) {
       main.append(h("div", { class: "hjs-card hjs-wait" },
-        h("p", { class: S.err ? "hjs-err" : "hjs-loading", text: S.err || "正在把曲库搬上舞台…" }),
-        S.err ? h("button", { type: "button", class: "hjs-btn", text: "再试一次", onclick: () => { S.err = ""; renderLobby(); loadData().then(() => renderLobby()); } }) : null));
+        h("p", { class: S.err ? "hjs-err" : "hjs-loading", text: S.err || "曲库加载中…" }),
+        S.err ? h("button", { type: "button", class: "hjs-btn", text: "重试", onclick: () => { S.err = ""; renderLobby(); loadData().then(() => renderLobby()); } }) : null));
       return;
     }
 
     const s = S.song;
     const previewing = S.preview.id === s.id;
     main.append(h("section", { class: "hjs-card hjs-hero" },
-      h("p", { class: "hjs-eyebrow", text: "今晚演奏" }),
+      h("p", { class: "hjs-eyebrow", text: "当前曲目" }),
       h("h2", { class: "hjs-hero-t", text: s.t }),
       s.o ? h("p", { class: "hjs-hero-o", text: s.o }) : null,
       h("p", { class: "hjs-hero-meta" },
@@ -516,7 +516,7 @@
         h("button", { type: "button", class: `hjs-btn hjs-prev-btn${previewing ? " is-on" : ""}`, id: "hjsLobbyPrev", "aria-pressed": String(previewing), onclick: () => togglePreview(s) },
           h("span", { class: "hjs-btn-ico", html: previewing ? ICON.stop : ICON.play }), h("span", { text: previewing ? "停止试听" : "试听" })),
         h("button", { type: "button", class: "hjs-btn", onclick: () => openSheet("picker") },
-          h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "换一首" })))));
+          h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })))));
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge, S.range);
@@ -524,26 +524,26 @@
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "难度" }),
-        seg("难度", DIFFS.map((d, i) => ({ id: d.id, label: d.label, title: `${starsOf(s, d.id)} 星${cnt[i] ? ` · ${cnt[i]} 个音要弹` : ""}` })), S.diff,
+        seg("难度", DIFFS.map((d, i) => ({ id: d.id, label: d.label, title: `${starsOf(s, d.id)} 星${cnt[i] ? ` · ${cnt[i]} 个音` : ""}` })), S.diff,
           (v) => { S.diff = v; setRaw(K.diff, v); renderLobby(); })),
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "模式" }),
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
           (v) => { S.learn = v === "learn"; setRaw(K.learn, S.learn ? "1" : "0"); renderLobby(); })),
-      h("p", { class: "hjs-tip", text: (isAuto() ? "自动演奏：点击范围和判定模式都是放水，游戏自己弹，不计分"
-        : S.learn ? "学习模式：气泡缩到判定点就停下等你弹，弹中再继续，不计分" : "演出模式：跟着节拍弹，按准确度给评级")
-        + (nNow ? ` · 这一档 ${nNow} 个音` : "") + (scored() && multNote() ? ` · ${multNote()}` : "") }),
+      h("p", { class: "hjs-tip", text: (isAuto() ? "自动演奏：点击范围与判定模式均为放水，自动弹奏，不计分"
+        : S.learn ? "学习模式：气泡到达判定点时暂停，弹中后继续，不计分" : "演出模式：按节拍弹奏，依准确度评级")
+        + (nNow ? ` · 本难度 ${nNow} 个音` : "") + (scored() && multNote() ? ` · ${multNote()}` : "") }),
       vol().muted
-        ? h("p", { class: "hjs-muted" }, h("span", { text: "现在是静音，听不到声音" }),
+        ? h("p", { class: "hjs-muted" }, h("span", { text: "当前为静音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
       best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
         h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" })),
       h("p", { class: "hjs-ctrl-tip" }, h("span", {
-        text: isAuto() ? "坐着听就好；想自己弹，到设置里把点击范围或判定模式改回来"
-          : S.judge === "hover" ? "放水判定：不用点气泡，鼠标移到气泡上就算"
-            : S.range === "free" ? "放水范围：外圈收到点时，点屏幕任意位置或按任意键都算"
-              : coarse() ? "直接点气泡演奏 · 点在旁边一点也算" : "直接点气泡演奏 · 鼠标指着气泡按任意键也算",
+        text: isAuto() ? "如需自行弹奏，请在设置中修改点击范围或判定模式"
+          : S.judge === "hover" ? "放水判定：指针停在气泡上即算弹中"
+            : S.range === "free" ? "放水范围：外圈收至判定点时，点击任意位置或按任意键均有效"
+              : coarse() ? "点击气泡演奏，允许少许偏差" : "点击气泡演奏，或指针指向气泡时按任意键",
       }))));
   }
 
@@ -560,7 +560,7 @@
     b.prepare?.(instId());
     loadChart(s).then((chart) => {
       if (pv.id !== s.id) return;
-      if (!chart) { stopPreview(); toast("谱面没加载上，检查一下网络再试"); return; }
+      if (!chart) { stopPreview(); toast("谱面加载失败，请检查网络后重试"); return; }
       pv.list = chart.notes.filter((n) => n.t <= PREVIEW.sec);
       pv.i = 0;
       pv.clock = makeClock(-0.1);
@@ -647,7 +647,7 @@
     const scroll = keep ? keep.scrollTop : 0;
     card.textContent = "";
     card.className = `hjs-sheet-card is-${S.sheet}`;
-    const title = { picker: "选曲", settings: "设置", help: "怎么玩" }[S.sheet];
+    const title = { picker: "选曲", settings: "设置", help: "玩法说明" }[S.sheet];
     card.setAttribute("aria-label", title);
     card.append(h("header", { class: "hjs-sheet-head" },
       h("b", { text: title }),
@@ -662,7 +662,7 @@
 
   function renderPicker(card) {
     const input = h("input", {
-      type: "search", class: "hjs-search-in", placeholder: "搜曲名 / 歌手 / 出处", value: S.query, "aria-label": "搜索曲目",
+      type: "search", class: "hjs-search-in", placeholder: "搜索曲名 / 歌手 / 出处", value: S.query, "aria-label": "搜索曲目",
       enterkeyhint: "search", autocomplete: "off",
       oninput: () => { S.query = input.value; renderSongList(); },
     });
@@ -683,7 +683,7 @@
       h("div", { class: "hjs-sheet-body hjs-songs", id: "hjsSongs", role: "listbox", "aria-label": "曲目" }),
       h("footer", { class: "hjs-sheet-foot" },
         h("span", { class: "hjs-foot-now", id: "hjsPickNow" }),
-        h("button", { type: "button", class: "hjs-btn is-main", text: "就弹这首", onclick: closeSheet })));
+        h("button", { type: "button", class: "hjs-btn is-main", text: "确定", onclick: closeSheet })));
     renderSongList();
   }
   function renderSongList() {
@@ -693,7 +693,7 @@
     const list = filtered();
     $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首 · 星级按${diffMeta().label}`;
     $id("hjsPickNow").textContent = S.song ? `已选：${S.song.t}` : "";
-    if (!list.length) { box.append(h("p", { class: "hjs-empty", text: "没有找到这样的曲子，换个关键词试试" })); return; }
+    if (!list.length) { box.append(h("p", { class: "hjs-empty", text: "没有符合条件的曲目" })); return; }
     list.forEach((s) => {
       const on = S.song && S.song.id === s.id;
       box.append(h("button", {
@@ -733,7 +733,7 @@
       type: "range", class: "hjs-range", min: "0", max: "100", step: "5", value: String(Math.round(vol().level * 100)), "aria-label": "音量",
       oninput: () => { vol().set(+range.value / 100); volVal.textContent = range.value; },
     });
-    const sel = h("select", { class: "hjs-select", "aria-label": "弹出来的音色", onchange: () => { S.inst = sel.value; setRaw(K.inst, sel.value); } });
+    const sel = h("select", { class: "hjs-select", "aria-label": "音色", onchange: () => { S.inst = sel.value; setRaw(K.inst, sel.value); } });
     sel.append(h("option", { value: "", text: `跟随模拟器（${(bard().instruments || []).find((i) => i.id === (bard().instName && bard().instName()))?.name || "钢琴"}）` }));
     sel.append(h("option", { value: "song", text: "跟随曲目（MIDI 原本的乐器）" }));
     const groups = new Map();
@@ -745,9 +745,9 @@
     sel.value = S.inst === "song" || instIds().includes(S.inst) ? S.inst : "";
     const demo = h("input", { type: "checkbox", class: "hjs-switch", checked: S.demo, "aria-label": "示范旋律", onchange: () => { S.demo = demo.checked; setRaw(K.demo, S.demo ? "1" : "0"); } });
     body.append(group("声音",
-      row("音量", h("div", { class: "hjs-vol" }, range, volVal), "和全站音量是同一个"),
-      row("音色", sel, "整首曲子都用它；拨弦、钢琴类起音最利落"),
-      row("示范旋律", demo, "你要弹的音也先轻轻放出来，可以照着弹")));
+      row("音量", h("div", { class: "hjs-vol" }, range, volVal), "与全站音量同步"),
+      row("音色", sel, "整首曲目使用该音色；拨弦、钢琴类起音最清晰"),
+      row("示范旋律", demo, "轻声播放需弹奏的音，供跟弹参考")));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -755,32 +755,32 @@
       row("点击范围", seg("点击范围", Object.entries(TAP_RANGES).map(([id, v]) => ({ id, label: v.label })), S.range,
         (v) => { S.range = v; setRaw(K.range, v); renderSheet(); }),
       S.range === "free"
-        ? (S.judge === "hover" ? "判定模式也是放水：自动演奏，游戏自己弹，不计分" : "不看位置：外圈收到点的那个气泡，点屏幕任意位置或按任意键都算")
-        : `点在气泡 ${rg.r} 个直径以内算点中；附近没别的气泡时，下一个该点的（外圈加粗）偏出 ${rg.next} 个也算`),
-      multNote() && scored() ? h("p", { class: "hjs-set-note", text: `现在${multNote()}。宽松各扣 20%、放水各扣 50%，判定模式和点击范围两项相加` }) : null));
+        ? (S.judge === "hover" ? "判定模式也为放水：自动演奏，不计分" : "不限位置：外圈收至判定点的气泡，点击任意位置或按任意键均有效")
+        : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
+      multNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${multNote()}。宽松扣 20%、放水扣 50%，判定模式与点击范围分别计算后相加` }) : null));
 
     /* 画面 */
     const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
     body.append(group("画面",
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
-      S.render === "simple" ? "去掉了气泡光晕和文字的模糊阴影，飞花线的星星换成一条光，密集处更流畅" : "觉得密集处有点卡，可以换成简单显示"),
-      row("飞花线", fly, "一只萤火虫似的小花，到点时正好飞到该点的气泡；身后撒星星（简单显示时是一条金色的光）")));
+      S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
+      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
 
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
     const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
       S.judge === "hover"
-        ? (S.range === "free" ? "点击范围也是放水：自动演奏，游戏自己弹，不计分" : "不用点：鼠标移到气泡上停着，到点自动算弹中（手机上手指按住滑过去也行）；判定同宽松")
+        ? (S.range === "free" ? "点击范围也为放水：自动演奏，不计分" : "无需点击：指针停在气泡上，到判定点自动算弹中（手机可按住滑动）；判定窗口同宽松")
         : S.judge === "loose"
-          ? `三档难度都按轻松判定：PERFECT / GREAT / GOOD 各差 ${winText(LOOSE_WIN)} 秒以内`
-          : `按难度收紧，现在「${diffBase().label}」：PERFECT / GREAT / GOOD 各差 ${winText(diffBase().win)} 秒以内`);
+          ? `三档难度均按轻松判定：PERFECT / GREAT / GOOD 误差分别在 ${winText(LOOSE_WIN)} 秒以内`
+          : `随难度收紧，当前「${diffBase().label}」：PERFECT / GREAT / GOOD 误差分别在 ${winText(diffBase().win)} 秒以内`);
     const val = h("b", { class: "hjs-num-v", text: `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` });
     const setv = (v) => { S.delayMs = clamp(Math.round(v / 5) * 5, -300, 300); setRaw(K.delay, S.delayMs); val.textContent = `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms`; };
     const step = (d, label) => h("button", { type: "button", class: "hjs-step", "aria-label": label, text: d > 0 ? "＋" : "－", onclick: () => setv(S.delayMs + d) });
     const timing = [judgeRow, row("判定延迟", h("div", { class: "hjs-num" }, step(-5, "提前 5 毫秒"), val, step(5, "推后 5 毫秒"),
       h("button", { type: "button", class: "hjs-btn hjs-cal-btn", text: S.cal ? "校准中…" : "校准", disabled: !!S.cal, onclick: startCal })),
-    "总觉得自己按准了却判晚 → 加；判早 → 减")];
+    "判定持续偏晚时调大，偏早时调小")];
     if (S.cal || S.calMsg) timing.push(calPanel());
     body.append(group("时机", ...timing));
 
@@ -799,22 +799,22 @@
   function renderHelp(card) {
     card.append(h("div", { class: "hjs-sheet-body hjs-help" },
       h("ol", {},
-        ["气泡出现在它那个音的高度上（越往上音越高），外圈会慢慢收缩；外圈缩到和核心重合的那一下，弹它就会发出这个音",
-          "每首曲子都是一份 MIDI：气泡是你要弹的音，其余的音（和声、这一档省掉的旋律）游戏会用轻音按时补上",
-          "直接点气泡，点在旁边一点也算；电脑上也可以鼠标指着气泡，按键盘任意键",
-          "点击范围（设置里改）：正常 —— 点在气泡附近；宽松 —— 范围更大；放水 —— 不看位置，外圈收到点的那个，点屏幕任意位置或按任意键都算",
-          "开头会有四下轻轻的预备拍",
-          "星级：每首曲子三档各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同一档在曲库里的疏密排；大厅和选曲窗口显示的是当前所选难度的星级",
-          "JUST：比 GOOD 早一点或晚一点（多出去不到 GOOD 范围的三分之一，挑战约 0.1 秒）也会响、给一点分，但连击会断",
-          "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
-          "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
-          "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
-          "判定模式（设置里改）：正常 —— 难度越高判定越严；宽松 —— 三档难度都按轻松判定；放水 —— 不用点，把鼠标移到气泡上停着，到点就算弹中",
-          "点击范围和判定模式都选放水：自动演奏，游戏自己弹，不计分。本机纪录按难度、判定模式、点击范围分开记",
-          "得分：判定模式、点击范围各自选宽松扣 20%、选放水扣 50%，两项相加（比如都选宽松是 ×0.6）",
-          "飞花线（设置 → 画面）：一只萤火虫似的小花沿着曲线掠过每个气泡，到点时正好飞到该点的那个，身后撒星星（简单显示时是一条金色的光）",
-          "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
-          "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
+        ["气泡位于对应音高的高度（越高音越高），外圈逐渐收缩，与核心重合时弹奏即发出该音",
+          "曲目均来自 MIDI：气泡为需弹奏的音，其余音（和声及本难度省略的旋律）自动以轻音补全",
+          "点击气泡弹奏，允许少许偏差；电脑上也可将指针指向气泡后按任意键",
+          "点击范围（设置中修改）：正常 —— 气泡附近；宽松 —— 范围更大；放水 —— 不限位置，外圈收至判定点时点击任意位置或按任意键均有效",
+          "开始前有四拍预备拍",
+          "星级：每首曲目三档难度各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同难度下的音符密度在曲库中排序；大厅与选曲窗口显示当前难度的星级",
+          "JUST：早于或晚于 GOOD 范围，且超出不足其三分之一（挑战约 0.1 秒）时判定，发声并得少量分数，但中断连击",
+          "MISS 与「点空」不同：MISS 指音符到达判定点时未弹奏，该音不发声、中断连击并计入准确率；「点空」指点击时附近没有待弹奏的气泡，不扣分、不中断连击，仅在结算中记录次数。点空较多通常是点早或点偏",
+          "判定时机：外圈与气泡重合、音名最亮时点击最准；下一个待弹奏的气泡接近判定点时外圈加粗",
+          "学习模式：气泡到达判定点仍未弹奏时音乐暂停，弹中后继续，不计分",
+          "判定模式（设置中修改）：正常 —— 难度越高判定越严；宽松 —— 三档难度均按轻松判定；放水 —— 无需点击，指针停在气泡上，到判定点即算弹中",
+          "点击范围与判定模式均为放水时为自动演奏，不计分。本机纪录按难度、判定模式、点击范围分别记录",
+          "得分：判定模式、点击范围选宽松各扣 20%，选放水各扣 50%，两项相加（均为宽松时 ×0.6）",
+          "飞花线（设置 → 画面）：小花沿曲线依次经过各气泡，经过时即为判定点，身后带星光（简单显示时为金色光线）",
+          "判定持续偏早或偏晚：设置 → 判定延迟 → 校准，随「嗒」声点击数次即可",
+          "Esc（手机为返回键）：暂停 / 关闭窗口 / 返回上一层",
         ].map((t) => h("li", { text: t })))));
   }
 
@@ -824,20 +824,20 @@
     const n = c ? c.taps.length : 0;
     return h("div", { class: "hjs-cal" },
       c ? h("button", {
-        type: "button", class: "hjs-cal-pad", "aria-label": "跟着节拍点这里",
+        type: "button", class: "hjs-cal-pad", "aria-label": "随节拍点击此处",
         onpointerdown: (e) => { e.preventDefault(); calTap(); },
         onkeydown: (e) => { if (e.key === " " || e.key === "Enter") e.preventDefault(); },
-      }, h("span", { text: "跟着「嗒」声点这里" }), h("small", { text: "或按键盘任意键" })) : null,
+      }, h("span", { text: "随「嗒」声点击此处" }), h("small", { text: "或按任意键" })) : null,
       c ? h("div", { class: "hjs-cal-dots", "aria-hidden": "true" }, Array.from({ length: CAL.count }, (_, i) => h("i", { class: i < n ? "is-on" : "" }))) : null,
       S.calMsg ? h("p", { class: "hjs-cal-msg", text: S.calMsg }) : null,
-      c ? h("button", { type: "button", class: "hjs-link", text: "取消", onclick: () => stopCal("校准取消了") }) : null);
+      c ? h("button", { type: "button", class: "hjs-link", text: "取消", onclick: () => stopCal("校准已取消") }) : null);
   }
   function startCal() {
     if (S.cal) return;
     stopPreview();
     S.calMsg = "";
     const b = bard();
-    if (!b.playMidi) { S.calMsg = "节拍音放不出来，刷新页面再试"; renderSheet(); return; }
+    if (!b.playMidi) { S.calMsg = "节拍音无法播放，请刷新页面后重试"; renderSheet(); return; }
     b.unlock?.();
     const clock = makeClock(0);
     clockStart(clock);
@@ -873,13 +873,13 @@
     const c = S.cal;
     if (!c) return;
     const use = c.taps.filter((x) => x.k >= 2).map((x) => x.d).sort((a, b) => a - b);
-    if (use.length < 4) { stopCal("只测到几下，再试一次：从第三下开始跟着按"); return; }
+    if (use.length < 4) { stopCal("有效次数不足，请重试：从第三拍起跟随点击"); return; }
     const mid = use.length % 2 ? use[(use.length - 1) / 2] : (use[use.length / 2 - 1] + use[use.length / 2]) / 2;
     const ms = clamp(Math.round((mid * 1000) / 5) * 5, -300, 300);
     S.delayMs = ms;
     setRaw(K.delay, ms);
     const d = Math.round(mid * 1000);
-    stopCal(Math.abs(d) < 8 ? "很准！判定延迟设为 0 附近" : `你平均${d > 0 ? "晚" : "早"} ${Math.abs(d)} ms，判定延迟已设为 ${ms > 0 ? "+" : ""}${ms} ms`);
+    stopCal(Math.abs(d) < 8 ? "时机准确，判定延迟保持 0 附近" : `平均偏${d > 0 ? "晚" : "早"} ${Math.abs(d)} ms，判定延迟已设为 ${ms > 0 ? "+" : ""}${ms} ms`);
   }
   function stopCal(msg) {
     if (!S.cal && msg === undefined) return;
@@ -1082,7 +1082,7 @@
       if (gen !== S.gen || S.view !== "play") return;
       if (!chart) {
         backToLobby();
-        toast("谱面没加载上，检查一下网络再试");
+        toast("谱面加载失败，请检查网络后重试");
         return;
       }
       prepare(s, chart);
@@ -1119,7 +1119,7 @@
     if (rawClock().running) { begin(); return; }
     if (performance.now() - since > 1500) {
       S.needTap = true;
-      banner("点一下屏幕开始", "is-wait");
+      banner("点击屏幕开始", "is-wait");
       return;
     }
     setTimeout(() => waitAudio(gen, since), 50);
@@ -1534,7 +1534,7 @@
   function onKeyDown(e) {
     if (!S.root || S.root.hidden) return;
     if (S.cal) {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); stopCal("校准取消了"); return; }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); stopCal("校准已取消"); return; }
       if (e.repeat || e.key === "Tab") return;
       e.preventDefault();
       calTap();
@@ -1789,7 +1789,7 @@
     el._op = "";
     el.style.opacity = "";
     el.classList.add("is-wait");
-    banner(S.range === "free" ? "点一下屏幕" : "点亮着的气泡", "is-hint");
+    banner(S.range === "free" ? "点击屏幕" : "点击亮起的气泡", "is-hint");
   }
   function learnHit(n) {
     hit(n, 0);
@@ -1829,7 +1829,7 @@
     const done = doneCount();
     const stats = scored()
       ? [h("div", { class: "hjs-res-big hjs-pause-score", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · 连击 ${S.combo} · 最大连击 ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 下` : ""}` }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · 连击 ${S.combo} · 最大连击 ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
         resGrid()]
       : [h("div", { class: "hjs-res-big hjs-pause-score", text: `${S.learnHits} / ${S.notes.length}` })];
     modal(h("div", { class: "hjs-card hjs-res" },
@@ -1861,7 +1861,7 @@
         banner("", "");
         if (S.diag) S.diag.last = 0;                    // 倒数这段不算掉帧
         if (!S.frozen) resumeAudio();
-        else banner(S.range === "free" ? "点一下屏幕" : "点亮着的气泡", "is-hint");
+        else banner(S.range === "free" ? "点击屏幕" : "点击亮起的气泡", "is-hint");
         loop();
         return;
       }
@@ -1901,8 +1901,8 @@
     if (!scored()) {
       card.append(
         h("div", { class: "hjs-res-big", text: `${S.learnHits} / ${total}` }),
-        h("p", { class: "hjs-res-sub", text: S.learn ? "学习模式不计分。弹熟了就切到「演出」，正式来一次"
-          : "点击范围和判定模式都是放水：自动演奏，不计分、不记纪录。想自己弹，到设置里把其中一个改回来" }));
+        h("p", { class: "hjs-res-sub", text: S.learn ? "学习模式不计分，熟练后可切换至演出模式"
+          : "点击范围与判定模式均为放水：自动演奏，不计分、不记录。如需自行弹奏，请在设置中修改其中一项" }));
     } else {
       const isNew = saveBest(pct);
       const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
@@ -1925,11 +1925,11 @@
   function timingNote() {
     const o = (S.offs || []).slice().sort((a, b) => a - b);
     const ms = o.length ? Math.round(o[Math.floor(o.length / 2)] * 1000) : 0;
-    const parts = o.length >= 8 ? [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`] : [];
+    const parts = o.length >= 8 ? [Math.abs(ms) < 10 ? "平均时机准确" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`] : [];
     if (S.ghosts) {
       const w = S.ghostWhy;
-      const why = [w.early && `早了 ${w.early}`, w.late && `晚了 ${w.late}`, w.off && `点偏 ${w.off}`].filter(Boolean).join(" · ");
-      parts.push(`点空 ${S.ghosts} 下（${why}）`);
+      const why = [w.early && `偏早 ${w.early}`, w.late && `偏晚 ${w.late}`, w.off && `点偏 ${w.off}`].filter(Boolean).join(" · ");
+      parts.push(`点空 ${S.ghosts} 次（${why}）`);
     }
     /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
     const dg = S.diag || {};
@@ -1947,7 +1947,7 @@
   }
   /* 掉帧：按本机刷新率算（单独掉一帧也算），再标出最卡的那 4 秒在哪、最长一帧多久 */
   function frameNote(dg) {
-    const lite = dg.lite ? "（已切省电画法）" : "";
+    const lite = dg.lite ? "（已切换省电画法）" : "";
     if (!dg.base || !dg.n) return `掉帧 ${Math.round((100 * dg.slow) / dg.frames)}%${lite}`;
     const pct = (100 * dg.drop) / dg.n;
     let worst = null;

@@ -157,9 +157,9 @@ async function main() {
     check("舞台盖满后下面的网站藏起来（hjs-covered）", P.doc.body.classList.contains("hjs-covered"));
     check("背景音乐被暂停", P.win.bgm.playing === false);
     check("开舞台时压入一条历史记录（返回键回上一层）", P.win.history.state && P.win.history.state.hjStage === 1);
-    check("默认操作方式是点气泡（电脑也是）", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("默认操作方式是点气泡（电脑也是）", /点击气泡/.test(P.$(".hjs-ctrl-tip").textContent));
 
-    P.click(P.btn("换一首"));
+    P.click(P.btn("更换曲目"));
     check("选曲窗口单独打开", P.st().sheet === "picker" && !P.$("#hjsSheet").hidden && !!P.$(".hjs-sheet-card.is-picker"));
     check("选曲窗口列出全部曲目", P.$$(".hjs-song").length === SONGS.songs.length, `${P.$$(".hjs-song").length}`);
     const input = P.$(".hjs-search-in");
@@ -190,8 +190,8 @@ async function main() {
     await sleep(120);
     const pv = P.midi.filter((m) => m.vel === 0.6 || Math.abs(m.vel - 0.42) < 1e-9);
     check("试听用 MIDI 出声（要弹的音稍响）", pv.length > 0 && pv.some((m) => m.vel === 0.6), `${pv.length}`);
-    P.click(P.btn("就弹这首"));
-    check("就弹这首：关窗口、停试听、大厅换成这首", P.st().sheet === "" && P.st().preview === "" && P.$(".hjs-hero-t").textContent === target.t);
+    P.click(P.btn("确定"));
+    check("确定：关窗口、停试听、大厅换成这首", P.st().sheet === "" && P.st().preview === "" && P.$(".hjs-hero-t").textContent === target.t);
     P.key("Escape", "Escape");
     {
       const cur = SONGS.songs.find((x) => x.t === P.$(".hjs-hero-t").textContent);
@@ -281,7 +281,7 @@ async function main() {
     P.until(P.st().endT + 2);
     const fin = P.st();
     check("弹完出结算", fin.finished && /演出结束/.test(P.$("#hjsModal").textContent));
-    check("结算里有手感诊断（平均早晚）", /不早不晚|平均偏/.test(P.$("#hjsModal").textContent));
+    check("结算里有手感诊断（平均早晚）", /时机准确|平均偏/.test(P.$("#hjsModal").textContent));
     check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("帧率稳定时：掉帧 0%、认出 60 Hz", /掉帧 0%（60 Hz，最长一帧 1\d ms）/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
@@ -299,7 +299,7 @@ async function main() {
   {
     const P = makePage({ coarse: true, width: 390, height: 844, prefs: { hj_stage_range: "loose" } });   // 宽松点击范围：1.7 / 2.2 个气泡
     await openStage(P);
-    check("手机默认点气泡提示", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("手机默认点气泡提示", /点击气泡/.test(P.$(".hjs-ctrl-tip").textContent));
     await go(P);
     const st = P.st();
     check("手机点气泡、没有轨道键帽", st.playing && P.$$(".hjs-cap").length === 0);
@@ -394,10 +394,10 @@ async function main() {
     const P = makePage({ chartFails: true });
     await openStage(P);
     await go(P);
-    check("谱面没下载到：回大厅并提示", P.st().view === "lobby" && P.toasts.some((t) => /谱面没加载上/.test(t)));
+    check("谱面没下载到：回大厅并提示", P.st().view === "lobby" && P.toasts.some((t) => /谱面加载失败/.test(t)));
   }
 
-  /* 7. 音频叫不醒 → 点一下屏幕开始 */
+  /* 7. 音频叫不醒 → 点击屏幕开始 */
   {
     const P = makePage({ running: false });
     await openStage(P);
@@ -405,7 +405,7 @@ async function main() {
     check("音频没起来时先不开钟", !P.st().playing);
     P.now += 1600;
     await sleep(80);
-    check("等不到音频：提示点一下屏幕", /点一下屏幕开始/.test(P.$("#hjsBanner").textContent));
+    check("等不到音频：提示点击屏幕", /点击屏幕开始/.test(P.$("#hjsBanner").textContent));
     P.running = true;
     P.pointer(200, 300);
     await sleep(5);
@@ -441,8 +441,8 @@ async function main() {
     await openStage(P);
     P.click(P.btn("设置"));
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
-    P.click(P.btn("怎么玩"));
-    check("玩法说明讲清 MISS 和点空的区别", /MISS 和「点空」不一样/.test(P.$("#hjsSheetCard").textContent));
+    P.click(P.btn("玩法说明"));
+    check("玩法说明讲清 MISS 和点空的区别", /MISS 与「点空」不同/.test(P.$("#hjsSheetCard").textContent));
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
@@ -502,7 +502,7 @@ async function main() {
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal" } });
     await openStage(P);
-    check("电脑点气泡：大厅提示可以按任意键", /按任意键也算/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("电脑点气泡：大厅提示可以按任意键", /按任意键/.test(P.$(".hjs-ctrl-tip").textContent));
     await go(P);
     const st = P.st();
     const move = (x, y) => {
@@ -567,7 +567,7 @@ async function main() {
     const P = makePage({ coarse: true, width: 390, height: 844, prefs: { hj_stage_song: SHORT.id } });
     await openStage(P);
     P.click(P.btn("设置"));
-    check("设置里有点击范围（默认正常）", !!P.btn("宽松", P.$("#hjsSheetCard")) && /1\.4 个直径/.test(P.$("#hjsSheetCard").textContent));
+    check("设置里有点击范围（默认正常）", !!P.btn("宽松", P.$("#hjsSheetCard")) && /1\.4 倍直径/.test(P.$("#hjsSheetCard").textContent));
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
     const st = P.st();
@@ -652,7 +652,7 @@ async function main() {
     check("自动演奏：不计分", st.score === 0 && /0 分|自动演奏/.test(P.$("#hjsModal").textContent));
     const tags = P.$(".hjs-res-tags").textContent;
     check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度挑战", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
-    check("结算写明不计分、不记纪录，没有评级", /不计分、不记纪录/.test(P.$("#hjsModal").textContent) && !P.$(".hjs-res-rank"));
+    check("结算写明不计分、不记纪录，没有评级", /不计分、不记录/.test(P.$("#hjsModal").textContent) && !P.$(".hjs-res-rank"));
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
   }
 
@@ -774,7 +774,7 @@ async function main() {
     check("图片解码卡住也最多等 2.5 秒就开演", P.st().playing && P.st().clock.run);
   }
 
-  /* 25. 点空的原因：早了 / 点偏 */
+  /* 25. 点空的原因：偏早 / 点偏 */
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard" } });
     await openStage(P);
@@ -784,12 +784,12 @@ async function main() {
     ns.slice(0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
     P.until(ns[k].t - 0.4);                            // 挑战正常判定 GOOD 只到 0.29 秒：早 0.4 秒点在气泡上
     P.pointer(ns[k].x, ns[k].y);
-    check("点空原因：早了", P.st().ghostWhy.early === 1 && P.st().judged[ns[k].idx] === -1, JSON.stringify(P.st().ghostWhy));
+    check("点空原因：偏早", P.st().ghostWhy.early === 1 && P.st().judged[ns[k].idx] === -1, JSON.stringify(P.st().ghostWhy));
     P.until(ns[k].t);
     P.pointer(ns[k].x > g.w / 2 ? 10 : g.w - 10, ns[k].y > g.h / 2 ? g.top : g.bottom);
     check("点空原因：时间对但点偏了", P.st().ghostWhy.off === 1, JSON.stringify(P.st().ghostWhy));
     P.until(P.st().endT + 2);
-    check("结算写明点空原因", /点空 \d+ 下（早了 1 · 点偏 1/.test(P.$("#hjsModal").textContent), (P.$("#hjsModal").textContent.match(/点空[^）]*）/) || [""])[0]);
+    check("结算写明点空原因", /点空 \d+ 次（偏早 1 · 点偏 1/.test(P.$("#hjsModal").textContent), (P.$("#hjsModal").textContent.match(/点空[^）]*）/) || [""])[0]);
   }
 
   /* 26. JUST：比 GOOD 早 / 晚出去不到 0.1 秒算 JUST —— 给一点分、出声、断连击；再远就是点空 */

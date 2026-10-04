@@ -871,7 +871,6 @@ function renderTicketSettings(st) {
   /* ---- 只读端 ---- */
   setIdle($("ticketLogHoursInput"), String(st.viewerLogHours ?? 24));
   renderViewerSchedule(st);
-  renderViewerPw();
 }
 
 /* 只读端定时开放 / 关闭 */
@@ -886,14 +885,6 @@ function renderViewerSchedule(st) {
   note.hidden = !parts.length;
 }
 
-/* 查看密码现在用的是哪一个 */
-function renderViewerPw() {
-  const pw = ticketAdmin.viewerPw;
-  $("ticketViewerPwState").textContent = !pw ? ""
-    : pw.custom ? "当前：管理页设置的密码"
-      : pw.env ? "当前：Worker 密钥 PASSWORD_VIEW（默认）" : "当前：未设置（Worker 没有 PASSWORD_VIEW，只读端无法登录）";
-  $("ticketViewerPwResetBtn").hidden = !pw?.custom;
-}
 
 
 function renderTicketSchedule(st) {
@@ -1479,7 +1470,6 @@ async function refreshTicketAdmin() {
     return false;
   }
   ticketAdmin.status = data.status;
-  if (data.viewerPw) ticketAdmin.viewerPw = data.viewerPw;
   ticketAdmin.orders = Array.isArray(data.orders) ? data.orders : [];
   ticketAdmin.rounds = Array.isArray(data.rounds) ? data.rounds : [];
   ticketAdmin.role = data.role === "viewer" || !internalAdminPassword ? "viewer" : "admin";
@@ -1982,36 +1972,6 @@ function initTicketAdmin() {
     $("ticketViewerOpenAtInput").value = "";
     $("ticketViewerCloseAtInput").value = "";
     ticketAdminSet({ viewerOpenAt: 0, viewerCloseAt: 0 }, "已清除「购票情况」的定时开放 / 关闭");
-  });
-  /* 修改查看密码：改完旧密码立即失效，已登录的只读端下次刷新时会被退出 */
-  const VIEWER_PW_ERRORS = {
-    bad_viewer_pw: "查看密码需为 6–64 个字符，首尾不能有空格",
-    viewer_pw_taken: "不能和其他内部密码相同",
-    unknown_action: "Worker 还没有更新，暂时改不了（见更新说明）",
-  };
-  const saveViewerPw = async (body, okMsg, btn) => {
-    setMsg(viewerMsg(), "");
-    btn.disabled = true;
-    const data = await callWorker({ action: "ticket_admin_viewer_pw", password: internalAdminPassword, ...body });
-    btn.disabled = false;
-    if (!data || !data.ok) { setMsg(viewerMsg(), adminErr(data, "保存失败，请重新登录内部入口后再试", VIEWER_PW_ERRORS)); return; }
-    ticketAdmin.viewerPw = data.viewerPw;
-    renderViewerPw();
-    showToast(okMsg);
-  };
-  const submitViewerPw = () => {
-    const input = $("ticketViewerPwInput");
-    const pw = input.value;
-    if (pw.length < 6 || pw.length > 64 || pw.trim() !== pw) { setMsg(viewerMsg(), VIEWER_PW_ERRORS.bad_viewer_pw); return; }
-    if (!confirm("修改查看密码？\n\n旧的查看密码会立即失效，正在使用只读端的人需要用新密码重新登录。")) return;
-    saveViewerPw({ newPassword: pw }, "查看密码已修改", $("ticketViewerPwSaveBtn")).then(() => { if (!$("ticketViewerMsg").textContent) input.value = ""; });
-  };
-  $("ticketViewerPwSaveBtn").addEventListener("click", submitViewerPw);
-  onEnter("ticketViewerPwInput", submitViewerPw);
-  $("ticketViewerPwShow").addEventListener("change", (e) => { $("ticketViewerPwInput").type = e.currentTarget.checked ? "text" : "password"; });
-  $("ticketViewerPwResetBtn").addEventListener("click", (e) => {
-    if (!confirm("恢复为 Worker 密钥 PASSWORD_VIEW 里的查看密码？\n\n管理页设置的查看密码会立即失效。")) return;
-    saveViewerPw({ reset: true }, "查看密码已恢复为 PASSWORD_VIEW", e.currentTarget);
   });
 
   /* ---- 详细订单 ---- */
@@ -3739,15 +3699,6 @@ const ADMIN_PANELS_HTML = `
         </span>
       </div>
       <p class="ticket-sched-note" id="ticketViewerSchedNote" hidden></p>
-      <div class="ticket-admin-row ticket-viewer-pw-row">
-        <label class="ticket-admin-key" for="ticketViewerPwInput">查看密码<small id="ticketViewerPwState"></small></label>
-        <span class="ticket-limit-edit ticket-viewer-pw-edit">
-          <input type="password" id="ticketViewerPwInput" maxlength="64" placeholder="新的查看密码（6–64 字）" autocomplete="new-password" spellcheck="false">
-          <button type="button" id="ticketViewerPwSaveBtn">修改</button>
-          <button type="button" id="ticketViewerPwResetBtn" class="ticket-btn-ghost" hidden>恢复默认</button>
-        </span>
-      </div>
-      <label class="audience-opt ticket-viewer-pw-show"><input type="checkbox" id="ticketViewerPwShow"><span>显示输入的密码</span></label>
       <p class="form-msg" id="ticketViewerMsg" hidden></p>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">显示「售票统计」</span>
