@@ -92,7 +92,6 @@
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M8.5 6v12l10-6z"/></svg>',
     stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="f" x="7.5" y="7.5" width="9" height="9" rx="1.5"/></svg>',
     search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M19.5 19.5l-4-4"/></svg>',
-    note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V6.5l10-2v11"/><circle class="f" cx="6.6" cy="17.6" r="2.4"/><circle class="f" cx="16.6" cy="15.6" r="2.4"/></svg>',
     list: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h11M8 12h11M8 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg>',
   };
 
@@ -485,7 +484,9 @@
     if (!box) return;
     box.textContent = "";
     box.append(h("header", { class: "hjs-bar" },
-      h("div", { class: "hjs-brand" }, h("span", { class: "hjs-brand-ico", html: ICON.note }), h("b", { text: "舞台演奏" })),
+      h("div", { class: "hjs-brand" },
+        h("img", { class: "hjs-brand-ico", src: `${BASE}stage-icon.webp`, alt: "", width: 40, height: 40, draggable: "false", decoding: "async" }),
+        h("b", { text: "舞台演奏" })),
       h("div", { class: "hjs-bar-btns" },
         iconBtn("help", "怎么玩", () => openSheet("help")),
         iconBtn("gear", "设置", () => openSheet("settings")),

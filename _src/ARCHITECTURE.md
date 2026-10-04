@@ -70,7 +70,7 @@
   - 请求必须是 `application/json`。浏览器标为跨站（`Sec-Fetch-Site`）的请求直接拒绝。
 - **处理流程**：`handlers[action]` 分发 → `ensureSchema` → `RATE_LIMITS` 限流 → 执行处理函数。异常统一返回 `server_error`。
 - **身份**：
-  - 密码 A、B、C 和查看密码分别对应 `a`、`b`、`c`（管理员）、`v`（只读）。
+  - 密码 A、B、C 和查看密码分别对应 `a`、`b`、`c`（管理员）、`v`（只读）。查看密码在管理页改过后存在 D1（加盐哈希），以它为准。
   - 管理员密码 15 分钟内输错 3 次，封锁 15 分钟。
 - **人机验证**：`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`math`（理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
 - **IP 属地**：`requestGeo` 从 Cloudflare 的 `request.cf` 取出「国家|地区|城市」。数据库不保存 IP 本身。访客标识（`client_key`）是带密钥的 IP 哈希，只用于限流和防重复。

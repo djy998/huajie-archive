@@ -90,7 +90,7 @@ async function checkInternalPassword() {
     return;
   }
   if (data.error === "viewer_closed") {
-    setMsg(msg, "「购票情况」已关闭");
+    setMsg(msg, viewerClosedText(data.openAt));
     return;
   }
   if (!data.ok) {
@@ -121,6 +121,9 @@ async function checkInternalPassword() {
     startAdminNewWatch();
   }
 }
+
+/* 只读端关着时的提示；定时开放时带上开放时间 */
+const viewerClosedText = (openAt) => (Number(openAt) > 0 ? `「购票情况」暂未开放，将于 ${formatCnTime(Number(openAt))} 开放` : "「购票情况」已关闭");
 
 /* D1 的 datetime('now') 为 UTC 文本，Safari 无法直接解析，手动按 UTC 读取 */
 function announcementDate(value) {
@@ -867,6 +870,29 @@ function renderTicketSettings(st) {
 
   /* ---- 只读端 ---- */
   setIdle($("ticketLogHoursInput"), String(st.viewerLogHours ?? 24));
+  renderViewerSchedule(st);
+  renderViewerPw();
+}
+
+/* 只读端定时开放 / 关闭 */
+function renderViewerSchedule(st) {
+  setIdle($("ticketViewerOpenAtInput"), epochToCnLocal(st.viewerOpenAt || 0));
+  setIdle($("ticketViewerCloseAtInput"), epochToCnLocal(st.viewerCloseAt || 0));
+  const parts = [];
+  if (st.viewerOpenAt) parts.push(`将于 ${formatCnTime(st.viewerOpenAt)} 自动开放`);
+  if (st.viewerCloseAt) parts.push(`将于 ${formatCnTime(st.viewerCloseAt)} 自动关闭`);
+  const note = $("ticketViewerSchedNote");
+  note.textContent = parts.join("；");
+  note.hidden = !parts.length;
+}
+
+/* 查看密码现在用的是哪一个 */
+function renderViewerPw() {
+  const pw = ticketAdmin.viewerPw;
+  $("ticketViewerPwState").textContent = !pw ? ""
+    : pw.custom ? "当前：管理页设置的密码"
+      : pw.env ? "当前：Worker 密钥 PASSWORD_VIEW（默认）" : "当前：未设置（Worker 没有 PASSWORD_VIEW，只读端无法登录）";
+  $("ticketViewerPwResetBtn").hidden = !pw?.custom;
 }
 
 
@@ -1445,7 +1471,7 @@ async function refreshTicketAdmin() {
     $("ticketAdminStats").innerHTML = "";
     $("ticketAdminTbody").innerHTML = "";
     $("ticketStatsBody").innerHTML = "";
-    $("ticketAdminStatus").textContent = "「购票情况」已关闭";
+    $("ticketAdminStatus").textContent = viewerClosedText(data.openAt);
     return false;
   }
   if (!data || !data.ok) {
@@ -1453,6 +1479,7 @@ async function refreshTicketAdmin() {
     return false;
   }
   ticketAdmin.status = data.status;
+  if (data.viewerPw) ticketAdmin.viewerPw = data.viewerPw;
   ticketAdmin.orders = Array.isArray(data.orders) ? data.orders : [];
   ticketAdmin.rounds = Array.isArray(data.rounds) ? data.rounds : [];
   ticketAdmin.role = data.role === "viewer" || !internalAdminPassword ? "viewer" : "admin";
@@ -1931,6 +1958,61 @@ function initTicketAdmin() {
   $("ticketLogHoursSaveBtn").addEventListener("click", saveLogHours);
   onEnter("ticketLogHoursInput", saveLogHours);
   $("ticketLogBtn").addEventListener("click", (e) => withAdminBusy(e.currentTarget, loadTicketLog));
+  /* 只读端定时开放 / 关闭，可只填一项 */
+  const viewerMsg = () => $("ticketViewerMsg");
+  $("ticketViewerSchedSaveBtn").addEventListener("click", async () => {
+    setMsg(viewerMsg(), "");
+    const openAt = cnLocalToEpoch($("ticketViewerOpenAtInput").value);
+    const closeAt = cnLocalToEpoch($("ticketViewerCloseAtInput").value);
+    if ($("ticketViewerOpenAtInput").value && !openAt) { setMsg(viewerMsg(), "开放时间无效"); return; }
+    if ($("ticketViewerCloseAtInput").value && !closeAt) { setMsg(viewerMsg(), "关闭时间无效"); return; }
+    if (!openAt && !closeAt) { setMsg(viewerMsg(), "请至少填写一个时间"); return; }
+    const now = Date.now();
+    const past = [openAt && openAt <= now ? "开放" : "", closeAt && closeAt <= now ? "关闭" : ""].filter(Boolean);
+    if (past.length && !confirm(`定时${past.join("和")}时间已过，保存后立即生效，继续？`)) return;
+    const parts = [];
+    if (openAt) parts.push(`${formatCnTime(openAt)} 开放`);
+    if (closeAt) parts.push(`${formatCnTime(closeAt)} 关闭`);
+    if (!(await ticketAdminSet({ viewerOpenAt: openAt, viewerCloseAt: closeAt }, `「购票情况」已设定：${parts.join("，")}`))) {
+      setMsg(viewerMsg(), $("ticketAdminMsg").textContent || "保存失败");
+    }
+  });
+  $("ticketViewerSchedClearBtn").addEventListener("click", () => {
+    setMsg(viewerMsg(), "");
+    $("ticketViewerOpenAtInput").value = "";
+    $("ticketViewerCloseAtInput").value = "";
+    ticketAdminSet({ viewerOpenAt: 0, viewerCloseAt: 0 }, "已清除「购票情况」的定时开放 / 关闭");
+  });
+  /* 修改查看密码：改完旧密码立即失效，已登录的只读端下次刷新时会被退出 */
+  const VIEWER_PW_ERRORS = {
+    bad_viewer_pw: "查看密码需为 6–64 个字符，首尾不能有空格",
+    viewer_pw_taken: "不能和其他内部密码相同",
+    unknown_action: "Worker 还没有更新，暂时改不了（见更新说明）",
+  };
+  const saveViewerPw = async (body, okMsg, btn) => {
+    setMsg(viewerMsg(), "");
+    btn.disabled = true;
+    const data = await callWorker({ action: "ticket_admin_viewer_pw", password: internalAdminPassword, ...body });
+    btn.disabled = false;
+    if (!data || !data.ok) { setMsg(viewerMsg(), adminErr(data, "保存失败，请重新登录内部入口后再试", VIEWER_PW_ERRORS)); return; }
+    ticketAdmin.viewerPw = data.viewerPw;
+    renderViewerPw();
+    showToast(okMsg);
+  };
+  const submitViewerPw = () => {
+    const input = $("ticketViewerPwInput");
+    const pw = input.value;
+    if (pw.length < 6 || pw.length > 64 || pw.trim() !== pw) { setMsg(viewerMsg(), VIEWER_PW_ERRORS.bad_viewer_pw); return; }
+    if (!confirm("修改查看密码？\n\n旧的查看密码会立即失效，正在使用只读端的人需要用新密码重新登录。")) return;
+    saveViewerPw({ newPassword: pw }, "查看密码已修改", $("ticketViewerPwSaveBtn")).then(() => { if (!$("ticketViewerMsg").textContent) input.value = ""; });
+  };
+  $("ticketViewerPwSaveBtn").addEventListener("click", submitViewerPw);
+  onEnter("ticketViewerPwInput", submitViewerPw);
+  $("ticketViewerPwShow").addEventListener("change", (e) => { $("ticketViewerPwInput").type = e.currentTarget.checked ? "text" : "password"; });
+  $("ticketViewerPwResetBtn").addEventListener("click", (e) => {
+    if (!confirm("恢复为 Worker 密钥 PASSWORD_VIEW 里的查看密码？\n\n管理页设置的查看密码会立即失效。")) return;
+    saveViewerPw({ reset: true }, "查看密码已恢复为 PASSWORD_VIEW", e.currentTarget);
+  });
 
   /* ---- 详细订单 ---- */
   $("ticketDaySelect").addEventListener("change", (e) => {
@@ -3020,8 +3102,16 @@ const PZ_ADMIN_ERRORS = {
   bad_title: "大赛名称最多 30 字",
   bad_diff: "难度无效，请刷新页面",
   bad_image: "图片无效，请重新上传",
+  bad_max_entries: "参加次数需为 0–99 的整数（0 为不限）",
   unknown_action: "Worker 还没有更新，暂时用不了（见更新说明）",
 };
+/* 辅助加时（同 puzzle.js 的 AID_PENALTY）：仅显示边框图块 +10%（至少 1 分钟），网格提示 +25%（至少 2 分钟），依次相乘 */
+const PZ_AID_PENALTY = [{ name: "edges", rate: 0.1, min: 60000 }, { name: "grid", rate: 0.25, min: 120000 }];
+function pzAdjustedMs(ms, aids) {
+  let t = Math.max(0, Number(ms) || 0);
+  for (const p of PZ_AID_PENALTY) if ((aids || []).includes(p.name)) t += Math.max(t * p.rate, p.min);
+  return Math.round(t);
+}
 const PZ_CROP_RATIOS = { "16:9": 16 / 9, "4:3": 4 / 3, "3:2": 3 / 2, "1:1": 1, "3:4": 3 / 4 };
 const PZ_CROP_MAX = 1600;   // 裁剪输出的长边
 const puzzleAdmin = { s: null, image: "", records: [], crop: null };
@@ -3060,6 +3150,8 @@ function renderPuzzleAdmin(d) {
   $("pzAdminToolPreview").checked = tools.preview !== false;
   $("pzAdminToolEdges").checked = tools.edges !== false;
   $("pzAdminToolGrid").checked = tools.grid !== false;
+  setHuayuSeg("pzAdminPauseSeg", c.pauseRun ? "run" : "stop");
+  $("pzAdminMaxEntries").value = String(c.maxEntries || 0);
   $("pzAdminContestStatus").textContent = `当前：${pzContestStatusText(c, now)}`;
   $("pzAdminToggleBtn").textContent = c.enabled ? "关闭大赛" : "开启大赛";
   showPzAdminImage();
@@ -3095,6 +3187,8 @@ function pzContestForm() {
     diff: huayuSegValue("pzAdminDiffSeg") || "easy",
     image: puzzleAdmin.image || "",
     tools: { preview: $("pzAdminToolPreview").checked, edges: $("pzAdminToolEdges").checked, grid: $("pzAdminToolGrid").checked },
+    pauseRun: huayuSegValue("pzAdminPauseSeg") === "run",
+    maxEntries: Number($("pzAdminMaxEntries").value || 0),
   };
 }
 
@@ -3104,6 +3198,7 @@ async function savePuzzleAdmin(patch, okMsg, btn) {
   const c = patch.contest;
   if (c) {
     if (c.title.length > 30) return setMsg(msg, PZ_ADMIN_ERRORS.bad_title);
+    if (!Number.isInteger(c.maxEntries) || c.maxEntries < 0 || c.maxEntries > 99) return setMsg(msg, PZ_ADMIN_ERRORS.bad_max_entries);
     if (c.start && c.end && c.end <= c.start) return setMsg(msg, "结束时间要晚于开始时间");
     if (c.enabled && !c.image) return setMsg(msg, PZ_ADMIN_ERRORS.no_image);
     if (c.enabled && (!c.start || !c.end)) return setMsg(msg, PZ_ADMIN_ERRORS.bad_range);
@@ -3274,7 +3369,8 @@ function pzRecordsShown() {
   const rev = puzzleAdmin.s?.contest.rev ?? 0;
   const byTime = $("pzRecSort").value !== "at";
   let list = puzzleAdmin.records.filter((r) => round === "all" || r.rev === (round === "cur" ? rev : Number(round)));
-  list = list.slice().sort((a, b) => (byTime ? a.voided - b.voided || a.elapsed - b.elapsed || a.at - b.at : b.at - a.at));
+  list = list.map((r) => ({ ...r, adj: pzAdjustedMs(r.elapsed, r.aids) }))
+    .sort((a, b) => (byTime ? a.voided - b.voided || a.adj - b.adj || a.elapsed - b.elapsed || a.at - b.at : b.at - a.at));
   if ($("pzRecBest").checked) {
     const seen = new Set();
     list = list.filter((r) => {
@@ -3309,20 +3405,22 @@ function renderPuzzleRecords() {
     <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
     <td title="开局到登记 ${escapeHtml(pzFmtMs(r.serverMs))}">${escapeHtml(pzFmtMs(r.elapsed))}</td>
     <td>${escapeHtml(pzAidsText(r.aids) || "—")}</td>
+    <td class="${r.adj !== r.elapsed ? "pz-rec-adj" : ""}">${escapeHtml(pzFmtMs(r.adj))}</td>
     <td>${escapeHtml(formatCnSeconds(r.at))}</td>
     <td title="${escapeHtml(geoTitle(r.geo))}">${escapeHtml(geoText(r.geo) || "—")}</td>
     <td class="hy-visit-id">${escapeHtml(r.visitor)}</td>
     <td><button type="button" class="pz-rec-void" data-id="${r.id}" data-voided="${r.voided ? 1 : 0}">${r.voided ? "恢复" : "作废"}</button></td>
-  </tr>`).join("") || `<tr><td colspan="10" class="pz-rec-empty">暂无记录</td></tr>`;
+  </tr>`).join("") || `<tr><td colspan="11" class="pz-rec-empty">暂无记录</td></tr>`;
 }
 
 function exportPuzzleRecords() {
   const list = pzRecordsShown();
   if (!list.length) return showToast("没有可导出的记录");
   const safe = (v) => (/^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v));   // 防止表格软件把 ID 当公式
-  const head = ["名次", "登记号", "届", "玩家ID", "难度", "块数", "耗时(秒)", "耗时", "开局到登记(秒)", "辅助功能", "登记时间", "IP属地", "访客标识", "状态"];
+  const head = ["名次", "登记号", "届", "玩家ID", "难度", "块数", "耗时(秒)", "耗时", "开局到登记(秒)", "辅助功能", "计入用时(秒)", "计入用时", "登记时间", "IP属地", "访客标识", "状态"];
   const rows = list.map((r) => [r.rank || "", r.id, r.rev, safe(r.player), PZ_ADMIN_DIFFS[r.diff] || r.diff, r.pieces,
-    (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed), (r.serverMs / 1000).toFixed(1), pzAidsText(r.aids) || "未使用", formatCnSeconds(r.at),
+    (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed), (r.serverMs / 1000).toFixed(1), pzAidsText(r.aids) || "未使用",
+    (r.adj / 1000).toFixed(1), pzFmtMs(r.adj), formatCnSeconds(r.at),
     geoText(r.geo), r.visitor, r.voided ? "已作废" : "有效"]);
   const csv = [head, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const stamp = epochToCnLocal(Date.now()).replace(/[-:]/g, "").replace("T", "-");
@@ -3335,6 +3433,7 @@ function initPuzzleAdmin() {
     savePuzzleAdmin({ resume: on }, on ? "中断继续已开启" : "中断继续已关闭", e.currentTarget);
   });
   $("pzAdminDiffSeg").addEventListener("change", () => syncSegments($("pzAdminDiffSeg")));
+  $("pzAdminPauseSeg").addEventListener("change", () => syncSegments($("pzAdminPauseSeg")));
   $("pzAdminSaveBtn").addEventListener("click", (e) => savePuzzleAdmin({ contest: pzContestForm() }, "大赛设置已保存", e.currentTarget));
   $("pzAdminToggleBtn").addEventListener("click", (e) => {
     const on = !puzzleAdmin.s?.contest.enabled;
@@ -3628,6 +3727,28 @@ const ADMIN_PANELS_HTML = `
         <span class="ticket-admin-key">「购票情况」查看页</span>
         <button type="button" class="ticket-switch" id="ticketViewerBtn" aria-pressed="false">—</button>
       </div>
+      <div class="ticket-admin-row ticket-sched-row">
+        <span class="ticket-admin-key">定时开放 / 关闭</span>
+        <span class="ticket-sched-edit">
+          <label for="ticketViewerOpenAtInput">开放</label>
+          <input type="datetime-local" id="ticketViewerOpenAtInput">
+          <label for="ticketViewerCloseAtInput">关闭</label>
+          <input type="datetime-local" id="ticketViewerCloseAtInput">
+          <button type="button" id="ticketViewerSchedSaveBtn">保存</button>
+          <button type="button" id="ticketViewerSchedClearBtn" class="ticket-btn-ghost">清除</button>
+        </span>
+      </div>
+      <p class="ticket-sched-note" id="ticketViewerSchedNote" hidden></p>
+      <div class="ticket-admin-row ticket-viewer-pw-row">
+        <label class="ticket-admin-key" for="ticketViewerPwInput">查看密码<small id="ticketViewerPwState"></small></label>
+        <span class="ticket-limit-edit ticket-viewer-pw-edit">
+          <input type="password" id="ticketViewerPwInput" maxlength="64" placeholder="新的查看密码（6–64 字）" autocomplete="new-password" spellcheck="false">
+          <button type="button" id="ticketViewerPwSaveBtn">修改</button>
+          <button type="button" id="ticketViewerPwResetBtn" class="ticket-btn-ghost" hidden>恢复默认</button>
+        </span>
+      </div>
+      <label class="audience-opt ticket-viewer-pw-show"><input type="checkbox" id="ticketViewerPwShow"><span>显示输入的密码</span></label>
+      <p class="form-msg" id="ticketViewerMsg" hidden></p>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">显示「售票统计」</span>
         <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
@@ -3908,6 +4029,15 @@ const ADMIN_PANELS_HTML = `
       <label class="audience-opt"><input type="checkbox" id="pzAdminToolEdges" checked><span>仅显示边框图块</span></label>
       <label class="audience-opt"><input type="checkbox" id="pzAdminToolGrid" checked><span>网格提示</span></label>
     </div>
+    <span class="pz-admin-label">暂停 / 切到后台时</span>
+    <div class="alarm-seg pz-admin-seg" id="pzAdminPauseSeg">
+      <label class="is-active"><input type="radio" name="pzAdminPause" value="stop" checked><span>停止计时</span></label>
+      <label><input type="radio" name="pzAdminPause" value="run"><span>继续计时</span></label>
+    </div>
+    <p class="ta-group-hint pz-admin-sub">继续计时：从开局起按服务器时间算，暂停、切后台、关掉后再继续都不停表。</p>
+    <label class="pz-admin-field pz-admin-num"><span>每个浏览器最多参加几次（0 为不限）</span>
+      <input type="number" id="pzAdminMaxEntries" min="0" max="99" step="1" inputmode="numeric" value="0"></label>
+    <p class="ta-group-hint pz-admin-sub">每点一次「参加大赛」算一次（继续上次中断的那局不算），次数记在访客自己的浏览器里，换浏览器或清除网站数据后会重新计。按届分开计。</p>
     <span class="pz-admin-label">图片</span>
     <div class="pz-admin-image">
       <img id="pzAdminImagePreview" alt="大赛图片" hidden>
@@ -3949,7 +4079,7 @@ const ADMIN_PANELS_HTML = `
   </section>
   <section class="ta-group">
     <h3 class="ta-group-title">参赛记录</h3>
-    <p class="ta-group-hint">耗时为拼图计时（暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。「辅助」为本局用过的原图、边框块、网格提示。IP 属地与访客标识不含 IP 本身。</p>
+    <p class="ta-group-hint">耗时为拼图计时（设为停止计时时，暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。「辅助」为本局用过的原图、边框块、网格提示。「计入」= 耗时 + 辅助加时（仅显示边框图块 +10%、至少 1 分钟；网格提示 +25%、至少 2 分钟；两项相乘），按耗时排序时按它排名次。IP 属地与访客标识不含 IP 本身。</p>
     <div class="pz-rec-tools">
       <select id="pzRecRound" aria-label="届"><option value="cur">本届</option></select>
       <select id="pzRecSort" aria-label="排序"><option value="time">按耗时</option><option value="at">按登记时间</option></select>
@@ -3960,7 +4090,7 @@ const ADMIN_PANELS_HTML = `
     <p class="ta-group-hint" id="pzRecSummary"></p>
     <div class="ticket-table-wrap">
       <table class="ticket-table pz-rec-table">
-        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>辅助</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
         <tbody id="pzRecBody"></tbody>
       </table>
     </div>

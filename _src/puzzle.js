@@ -6,6 +6,9 @@
    - 大赛拼图（管理页设置时段、难度、图片，以及原图 / 边框块 / 网格提示是否可用）：正计时，通关后填写游戏 ID 登记成绩并生成一代通关码
    - 网格提示：中间拼图区显示虚线拼块格子，拼块放到对应格子附近会吸附过去
    - 原图 / 边框块 / 网格提示每局默认关闭；用过哪些会写进通关码和大赛记录
+   - 大赛的管理页选项：暂停 / 切后台时停止计时（默认）或继续计时；每个浏览器最多参加几次（记在本机）
+   - 本机记录：每次通关的耗时与各难度的最短用时。计入用时 = 耗时加上辅助加时：
+     仅显示边框图块 +10%（至少 +1 分钟），网格提示 +25%（至少 +2 分钟），两项都用时依次相乘
    坐标约定：每个拼块组的局部坐标即原图坐标，组只记录原图左上角在桌面上的位置 (x, y)；
    两组位置一致即拼对，合并只需把拼块搬进同一个组 */
 (() => {
@@ -13,6 +16,9 @@
   const STORE_LAST = "hj_puzzle_last";
   const STORE_PREF = "hj_puzzle_pref";
   const STORE_PLAYER = "hj_puzzle_player";
+  const STORE_REC = "hj_puzzle_records";      // 本机通关记录：{ best: { 难度或 contest:届: 最好成绩 }, list: 最近几次 }
+  const STORE_ENTRIES = "hj_puzzle_entries";  // 本机参加大赛的次数：{ 届: 次数 }
+  const REC_KEEP = 30;
   const SAVE_VERSION = 1;
   const CODE_PREFIX = "听花语：";
 
@@ -50,6 +56,11 @@
   };
   const SUBMIT_FINAL = ["token_used", "contest_over", "token_expired", "bad_token", "bad_elapsed"];   // 再试也不会成功
   const CONTEST_DEFAULT_TITLE = "花街拼图大赛";
+  /* 辅助加时：按顺序算，后一项在前一项的结果上再加（两项相乘） */
+  const AID_PENALTY = [
+    { name: "edges", rate: 0.1, min: 60000 },
+    { name: "grid", rate: 0.25, min: 120000 },
+  ];
 
   /* ==== 小工具 ==== */
   function mulberry32(seed) {
@@ -103,6 +114,24 @@
   const toolOn = (name) => !G?.contest || readTools(G.contest.tools)[name];
   const TOOL_NAMES = { preview: "显示原图", edges: "仅显示边框图块", grid: "网格提示" };
   const aidsText = (aids) => (aids && aids.length ? aids.map((a) => TOOL_NAMES[a] || a).join("、") : "未使用");
+  /* 计入用时：耗时 + 辅助加时 */
+  function adjustedMs(ms, aids) {
+    let t = Math.max(0, Number(ms) || 0);
+    for (const p of AID_PENALTY) if ((aids || []).includes(p.name)) t += Math.max(t * p.rate, p.min);
+    return Math.round(t);
+  }
+  const penaltyNote = (aids) => AID_PENALTY.filter((p) => (aids || []).includes(p.name))
+    .map((p) => `${TOOL_NAMES[p.name]} +${Math.round(p.rate * 100)}%（至少 ${p.min / 60000} 分钟）`).join("，");
+  /* 大赛暂停时继续计时：耗时直接按开局时刻算（服务器时间），暂停、切后台、关掉再继续都照算 */
+  const wallClock = () => !!(G?.contest?.pauseRun && G.contest.startAt);
+  /* 本机参加大赛的次数（按届记） */
+  const entriesUsed = (rev) => Number((storage.json(STORE_ENTRIES) || {})[rev]) || 0;
+  function addEntry(rev) {
+    const all = storage.json(STORE_ENTRIES) || {};
+    const keep = Object.keys(all).map(Number).filter((r) => r !== rev).sort((a, b) => b - a).slice(0, 4);
+    storage.set(STORE_ENTRIES, JSON.stringify({ ...Object.fromEntries(keep.map((r) => [r, all[r]])), [rev]: entriesUsed(rev) + 1 }));
+  }
+  const entriesLeft = (c) => (c && c.maxEntries > 0 ? Math.max(0, c.maxEntries - entriesUsed(Number(c.rev) || 0)) : Infinity);
   /* 本局用过的辅助功能（打开过一次就算） */
   function markUsed(name) {
     if (!G || G.done || G.used[name]) return;
@@ -113,7 +142,8 @@
   function applyState(st, fromServer) {
     PZ.resume = !!st?.resume;
     const c = st?.contest;
-    PZ.contest = c && DIFFS[c.diff] && c.image && Number(c.end) > Number(c.start) ? c : null;
+    PZ.contest = c && DIFFS[c.diff] && c.image && Number(c.end) > Number(c.start)
+      ? { ...c, pauseRun: !!c.pauseRun, maxEntries: Math.max(0, Math.floor(Number(c.maxEntries) || 0)) } : null;
     if (fromServer) PZ.loaded = true;
   }
 
@@ -343,6 +373,10 @@
     <p class="alarm-hint pz-setup-hint" id="pzSetupHint"></p>
     <div class="pz-btn-row"><button type="button" class="pz-primary" id="pzStartBtn">开始拼图</button></div>
     <div class="pz-last" id="pzLastBox" hidden></div>
+    <details class="pz-help pz-records" id="pzMyRecBox" hidden>
+      <summary>我的记录</summary>
+      <div id="pzMyRecBody"></div>
+    </details>
     <details class="pz-help">
       <summary>游玩方法</summary>
       <ul>
@@ -350,6 +384,7 @@
         <li>拖动空白处移动桌面；滚轮或双指捏合缩放</li>
         <li>右上角可以查看原图、只显示边框块、显示网格提示、适应屏幕或暂停</li>
         <li>打开网格提示后，拼块放到对应的虚线格子附近会自动吸附</li>
+        <li>通关成绩记在本机。用了辅助功能会加时：仅显示边框图块 +10%（至少 1 分钟），网格提示 +25%（至少 2 分钟），两项都用时相乘</li>
       </ul>
     </details>
   </div>
@@ -529,6 +564,7 @@
     }
     renderContest();
     renderLast();
+    renderRecords();
     syncSetup();
   }
 
@@ -552,10 +588,15 @@
     const started = now >= Number(c.start);
     $("pzContestTitle").textContent = c.title || CONTEST_DEFAULT_TITLE;
     const day = (ms) => formatCnTime(ms).slice(formatCnTime(ms).slice(0, 4) === formatCnTime(now).slice(0, 4) ? 5 : 0);   // 同一年不写年份
-    $("pzContestMeta").textContent = `${day(Number(c.start))} – ${day(Number(c.end))}\n${d.name} ${d.target}块 · 正计时`;
+    const left = entriesLeft(c);
+    const rules = [`${d.name} ${d.target}块 · 正计时`, c.pauseRun ? "暂停时不停表" : ""].filter(Boolean).join(" · ");
+    const quota = c.maxEntries > 0 ? `\n每个浏览器最多参加 ${c.maxEntries} 次 · 本机已参加 ${c.maxEntries - left} 次` : "";
+    $("pzContestMeta").textContent = `${day(Number(c.start))} – ${day(Number(c.end))}\n${rules}${quota}`;
     const btn = $("pzContestBtn");
-    btn.disabled = !started;
-    btn.textContent = started ? "参加大赛" : "尚未开始";
+    delete btn.dataset.armed;
+    delete btn.dataset.label;
+    btn.disabled = !started || !left;
+    btn.textContent = !started ? "尚未开始" : left ? "参加大赛" : "参加次数已用完";
     const wait = started ? Number(c.end) - now : Number(c.start) - now;
     if (wait > 0 && wait < 3600000) contestTimer = setTimeout(() => { if (!$("pzSetup").hidden) renderContest(); }, wait + 500);
   }
@@ -568,7 +609,7 @@
     if (last.contest) return renderLastContest(box, last);
     const d = DIFFS[last.diff] || DIFFS.easy;
     box.innerHTML = `<p class="pz-last-title">最近一次通关</p>
-      <p class="pz-last-meta">${escapeHtml(`${d.name} · ${MODES[last.mode] || ""} · 耗时 ${fmtClock(last.ms, true)} · ${formatCnTime(last.at)}`)}</p>
+      <p class="pz-last-meta">${escapeHtml(`${d.name} · ${MODES[last.mode] || ""} · 耗时 ${fmtClock(last.ms, true)}${adjNote(last)} · ${formatCnTime(last.at)}`)}</p>
       ${last.code ? `<p class="pz-code-text pz-last-code">${escapeHtml(last.code)}</p>
       <div class="pz-btn-row"><button type="button" id="pzLastCopyBtn">复制通关码</button></div>`
         : last.eligible ? `<div class="pz-btn-row"><button type="button" id="pzLastGenBtn">生成通关码</button></div><p class="pz-code-msg" id="pzLastMsg" hidden></p>` : ""}`;
@@ -589,7 +630,7 @@
   /* 最近一次是大赛：没登记的可以补登记，登记过的可以复制或补生成通关码 */
   function renderLastContest(box, last) {
     const d = DIFFS[last.diff] || DIFFS.easy;
-    const meta = `${last.contest.title || CONTEST_DEFAULT_TITLE} · ${d.name} · 耗时 ${fmtClock(last.ms, true)} · ${formatCnTime(last.at)}`;
+    const meta = `${last.contest.title || CONTEST_DEFAULT_TITLE} · ${d.name} · 耗时 ${fmtClock(last.ms, true)}${adjNote(last)} · ${formatCnTime(last.at)}`;
     let body = "";
     if (last.submitted) {
       body = `<p class="pz-last-meta">${escapeHtml(`已登记 · 登记号 No.${last.no} · ${last.player}`)}</p>`
@@ -636,6 +677,9 @@
   /* ==== 大赛 ==== */
   async function startContest() {
     const btn = $("pzContestBtn");
+    if (!entriesLeft(PZ.contest)) { renderContest(); return; }
+    if (PZ.contest?.maxEntries > 0 && PZ.resume && validSave(storage.json(STORE_SAVE))?.contest
+      && !confirmTwice(btn, "再点一次：开新的一局（会覆盖进行中的大赛，并用掉 1 次）")) return;
     btn.disabled = true;
     const data = await callWorker({ action: "puzzle_contest_start" });
     btn.disabled = false;
@@ -647,11 +691,16 @@
       refreshState();
       return;
     }
+    const maxEntries = Math.max(0, Math.floor(Number(data.maxEntries ?? PZ.contest?.maxEntries) || 0));
+    const rev = Number(data.rev) || 0;
+    if (maxEntries > 0 && entriesUsed(rev) >= maxEntries) { renderContest(); showToast("本机参加次数已用完"); return; }
+    if (maxEntries > 0) addEntry(rev);
     await setupGame({
       src: contestImageUrl(data.image), diff: data.diff, mode: "casual", seed: (Math.random() * 2 ** 31) >>> 0, elapsed: 0,
       contest: {
-        token: data.token, rev: Number(data.rev) || 0, title: data.title || CONTEST_DEFAULT_TITLE, end: Number(data.end) || 0,
+        token: data.token, rev, title: data.title || CONTEST_DEFAULT_TITLE, end: Number(data.end) || 0,
         tools: readTools(data.tools || PZ.contest?.tools),
+        pauseRun: !!(data.pauseRun ?? PZ.contest?.pauseRun), startAt: Number(data.now) || nowMs(),
       },
     });
   }
@@ -1306,6 +1355,12 @@
   function syncClock() {
     if (!G) return;
     const now = performance.now();
+    if (wallClock()) {   // 大赛设为暂停时继续计时：一直按开局时刻算
+      if (!G.done) G.elapsed = Math.max(0, nowMs() - G.contest.startAt);
+      G.tickAt = now;
+      G.running = !G.done;
+      return;
+    }
     if (G.running) G.elapsed += now - G.tickAt;
     G.tickAt = now;
     G.running = !G.done && !G.timeUp && !document.hidden && !cardOpen() && !$("puzzleOverlay").hidden;
@@ -1360,7 +1415,7 @@
     if (G.done) { card("pzResultCard"); return; }
     const d = DIFFS[G.diff];
     $("pzPauseMeta").textContent = G.contest
-      ? `${G.contest.title} · ${d.name} · ${G.pieces.length} 块 · 计时已暂停`
+      ? `${G.contest.title} · ${d.name} · ${G.pieces.length} 块 · ${wallClock() ? "本次大赛暂停时不停表，计时仍在继续" : "计时已暂停"}`
       : `${d.name} · ${modeLabel(G)} · ${G.pieces.length} 块 · 计时已暂停`;
     const quit = $("pzQuitBtn");
     delete quit.dataset.armed;
@@ -1436,6 +1491,8 @@
         ms: Math.round(G.elapsed), limitMs: G.limit, at: nowMs(), img: imgNo(G.src), aids: usedAids(),
         eligible: G.mode === "timed" && !G.overtime && CODE_DIFFS.includes(G.diff), code: "",
       };
+    rec.adj = adjustedMs(rec.ms, rec.aids);
+    Object.assign(rec, addRecord(rec));
     storage.set(STORE_LAST, JSON.stringify(rec));
     lastRecord = rec;
     setTimeout(() => showResult(rec), prefersReducedMotion() ? 200 : 1400);
@@ -1452,6 +1509,7 @@
       ["耗时", fmtClock(rec.ms, true)],
       ...(rec.mode === "timed" ? [["剩余", fmtClock(rec.limitMs - rec.ms, true)]] : []),
       ["辅助功能", aidsText(rec.aids)],
+      ...recordRows(rec),
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
@@ -1466,6 +1524,7 @@
       ["难度", `${d.name}（${d.level} · ${rec.pieces} 块）`],
       ["耗时", fmtClock(rec.ms, true)],
       ["辅助功能", aidsText(rec.aids)],
+      ...recordRows(rec),
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
@@ -1489,6 +1548,7 @@
         `难度：${d.name}（${rec.pieces}块）`,
         `耗时：${fmtClock(rec.ms, true)}`,
         `辅助功能：${aidsText(rec.aids)}`,
+        ...adjLine(rec),
         `通关时间：${formatCnSeconds(rec.at)}`,
         `登记号：No.${rec.no}`,
       ].join("\n");
@@ -1498,6 +1558,7 @@
       `难度：${d.name}（${rec.pieces}块）`,
       `耗时：${fmtClock(rec.ms, true)} / 限时 ${d.limitMin} 分钟`,
       `辅助功能：${aidsText(rec.aids)}`,
+      ...adjLine(rec),
       `通关时间：${formatCnSeconds(rec.at)}`,
       `相册图：${rec.img}`,
     ].join("\n");
@@ -1536,6 +1597,81 @@
       setMsg($("pzCodeMsg"), res.msg);
       $("pzCodeRetryBtn").hidden = false;
     }
+  }
+
+  /* ==== 本机记录 ==== */
+  const recAdj = (r) => (Number.isFinite(r?.adj) ? r.adj : adjustedMs(r?.ms, r?.aids));
+  const adjNote = (rec) => (recAdj(rec) !== rec.ms ? `（计入 ${fmtClock(recAdj(rec), true)}）` : "");
+  const adjLine = (rec) => (recAdj(rec) !== rec.ms ? [`计入用时：${fmtClock(recAdj(rec), true)}（含辅助加时）`] : []);
+  const recKey = (rec) => (rec.contest ? `contest:${Number(rec.contest.rev) || 0}` : rec.diff);
+  function readRecords() {
+    const r = storage.json(STORE_REC);
+    return {
+      best: r && r.best && typeof r.best === "object" ? r.best : {},
+      list: Array.isArray(r?.list) ? r.list.filter((x) => x && DIFFS[x.diff] && Number.isFinite(x.ms)) : [],
+    };
+  }
+
+  /* 记下一次通关：返回 { best: 是否破了纪录, prevBest: 之前的最短计入用时 } */
+  function addRecord(rec) {
+    const recs = readRecords();
+    const key = recKey(rec);
+    const prev = recs.best[key];
+    const prevAdj = prev ? recAdj(prev) : 0;
+    const best = !prev || rec.adj < prevAdj;
+    const entry = {
+      at: rec.at, diff: rec.diff, mode: rec.mode, overtime: !!rec.overtime, ms: rec.ms, adj: rec.adj, aids: rec.aids || [],
+      ...(rec.contest ? { contest: rec.contest.title, rev: Number(rec.contest.rev) || 0 } : {}),
+    };
+    if (best) recs.best[key] = entry;
+    recs.list = [entry, ...recs.list].slice(0, REC_KEEP);
+    storage.set(STORE_REC, JSON.stringify(recs));
+    return { best, prevBest: prev ? prevAdj : 0 };
+  }
+
+  /* 通关卡片：辅助加时、计入用时、最短用时 */
+  function recordRows(rec) {
+    const adj = recAdj(rec);
+    const rows = [];
+    if (adj !== rec.ms) {
+      rows.push(["辅助加时", `+${fmtClock(adj - rec.ms, true)}（${penaltyNote(rec.aids)}）`]);
+      rows.push(["计入用时", fmtClock(adj, true)]);
+    }
+    const scope = rec.contest ? "本届大赛" : DIFFS[rec.diff].name;
+    rows.push(["最短用时", rec.best
+      ? `${fmtClock(adj, true)}（${rec.prevBest ? `新纪录！比之前快 ${fmtClock(rec.prevBest - adj, true)}` : `${scope}首次通关`}）`
+      : `${fmtClock(rec.prevBest || adj, true)}（${scope}）`]);
+    return rows;
+  }
+
+  /* 首页「我的记录」：各难度最短用时 + 最近几次 */
+  function renderRecords() {
+    const box = $("pzMyRecBox");
+    const recs = readRecords();
+    box.hidden = !recs.list.length && !Object.keys(recs.best).length;
+    if (box.hidden) return;
+    const bestRows = DIFF_KEYS.map((k) => {
+      const b = recs.best[k];
+      return `<dt>${escapeHtml(DIFFS[k].name)}</dt><dd>${b ? escapeHtml(`${fmtClock(recAdj(b), true)}${recAdj(b) !== b.ms ? `（耗时 ${fmtClock(b.ms, true)} + 辅助加时）` : ""}`) : "—"}</dd>`;
+    }).join("");
+    const contestKey = PZ.contest ? `contest:${Number(PZ.contest.rev) || 0}` : "";
+    const cb = contestKey && recs.best[contestKey];
+    const recent = recs.list.slice(0, 10).map((r) => {
+      const what = r.contest ? `大赛 · ${DIFFS[r.diff].name}` : `${DIFFS[r.diff].name} · ${r.overtime ? "限时（超时）" : MODES[r.mode] || ""}`;
+      const time = recAdj(r) !== r.ms ? `${fmtClock(recAdj(r), true)}（耗时 ${fmtClock(r.ms, true)}，${aidsText(r.aids)}）` : fmtClock(r.ms, true);
+      return `<li><span>${escapeHtml(what)}</span><b>${escapeHtml(time)}</b><small>${escapeHtml(formatCnTime(r.at))}</small></li>`;
+    }).join("");
+    $("pzMyRecBody").innerHTML = `<p class="pz-rec-sub">最短用时（计入用时，含辅助加时）</p>
+      <dl class="pz-result-list pz-rec-best">${bestRows}${cb ? `<dt>本届大赛</dt><dd>${escapeHtml(fmtClock(recAdj(cb), true))}</dd>` : ""}</dl>
+      <p class="pz-rec-sub">最近通关</p><ol class="pz-rec-list">${recent}</ol>
+      <p class="pz-rec-rule">辅助加时：仅显示边框图块 +10%（至少 1 分钟），网格提示 +25%（至少 2 分钟），两项都用时相乘；显示原图不加时。记录只存在这台设备的浏览器里。</p>
+      <div class="pz-btn-row"><button type="button" id="pzMyRecClearBtn">清空我的记录</button></div>`;
+    $("pzMyRecClearBtn").addEventListener("click", (e) => {
+      if (!confirmTwice(e.currentTarget, "再点一次清空")) return;
+      storage.remove(STORE_REC);
+      renderRecords();
+      showToast("已清空本机记录");
+    });
   }
 
   /* ==== 打开 / 关闭 ==== */
