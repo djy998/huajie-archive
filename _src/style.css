@@ -6317,16 +6317,6 @@ body.hjs-open .toast { z-index: 540; }
   background: rgba(201, 182, 244, .08);
   white-space: nowrap;
 }
-.hjs-kbd {
-  min-width: 1.9em;
-  padding: 1px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--s-line-hi); border-bottom-width: 2px;
-  background: rgba(255, 255, 255, .06);
-  font: 700 .74rem/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  color: var(--s-ink);
-  text-align: center;
-}
 
 /* ==== 大厅 ==== */
 .hjs-lobby {
@@ -6400,18 +6390,28 @@ body.hjs-open .toast { z-index: 540; }
 /* ==== 演奏 ==== */
 .hjs-play { position: absolute; inset: 0; z-index: 2; touch-action: none; }
 .hjs-play[hidden] { display: none; }
-.hjs-lanes {
+/* 飞花线：花和星星都只动 transform / opacity；在气泡下面一层，不挡音名 */
+.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --fly: 50px; --star: 22px; }
+.hjs-fly[hidden] { display: none; }
+.hjs-fly-flower {
+  position: absolute; left: 0; top: 0;
+  width: var(--fly); height: var(--fly);
+  margin: calc(var(--fly) / -2) 0 0 calc(var(--fly) / -2);
+  will-change: transform;
+}
+.hjs-fly-flower > i {
   position: absolute; inset: 0;
-  display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr));
-  pointer-events: none;
+  background: url("assets/bard/stage/fly-flower.webp") center / contain no-repeat;
+  animation: hjsFlySpin 9s linear infinite;
 }
-.hjs-lane {
-  border-left: 1px solid rgba(255, 255, 255, .07);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .02) 60%, rgba(201, 182, 244, .06) 100%);
+@keyframes hjsFlySpin { to { transform: rotate(360deg); } }
+.hjs-fly-star {
+  position: absolute; left: 0; top: 0;
+  width: var(--star); height: var(--star);
+  margin: calc(var(--star) / -2) 0 0 calc(var(--star) / -2);
+  background: url("assets/bard/stage/fly-stars.webp") 0 0 / 300% 100% no-repeat;
+  opacity: 0;
 }
-.hjs-lane:first-child { border-left: 0; }
-.hjs-lane.is-lit { animation: hjsLane .3s ease-out; }
-@keyframes hjsLane { from { background-color: rgba(242, 189, 109, .16); } to { background-color: rgba(242, 189, 109, 0); } }
 .hjs-notes { position: absolute; inset: 0; z-index: 2; pointer-events: none; --size: 80px; }
 .hjs-note {
   --k: 0;
@@ -6473,6 +6473,8 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-pop em.is-early { color: #9fd3ff; }
 .hjs-pop em.is-late { color: #ffb38a; }
 .hjs-res-diag { margin: 2px 0 0; font-size: .68rem; color: var(--s-mute); }
+.hjs-res-mult { color: #ffe3b0; }
+.hjs-set-note { margin: 0; padding: 0 2px 10px; font-size: .74rem; line-height: 1.6; color: #ffe3b0; }
 /* 省电画法：手机连续掉帧时自动打开，去掉气泡的光晕阴影 */
 .hjs.is-lite .hjs-ring, .hjs.is-lite .hjs-core { box-shadow: none; }
 /* 简单显示（设置 → 画面）：在省电画法之外再去掉音名、判定字、连击和分数的模糊阴影（描边保留，音名照样看得清），提示条不做毛玻璃 */
@@ -6524,7 +6526,6 @@ body.hjs-open .toast { z-index: 540; }
   animation: hjsCount .5s ease-out;
 }
 .hjs-banner.is-hint { top: auto; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
-.hjs.is-keys .hjs-banner.is-hint { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
 .hjs-banner.is-hint span { color: #ffe3b0; border-color: rgba(242, 189, 109, .5); animation: hjsBreath 1.3s ease-in-out infinite; }
 @keyframes hjsBreath { 50% { opacity: .6; } }
 @keyframes hjsCount { from { opacity: 0; transform: scale(1.4); } to { opacity: 1; transform: scale(1); } }
@@ -6547,26 +6548,6 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, .1); }
 .hjs-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--s-lilac), var(--s-gold)); transform-origin: left center; transform: scaleX(0); }
 
-.hjs-caps {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
-  display: none;
-  grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 10px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(0deg, rgba(10, 7, 22, .72), rgba(10, 7, 22, 0));
-  pointer-events: none;
-}
-.hjs.is-keys .hjs-caps { display: grid; }
-.hjs-cap {
-  height: 44px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 12px;
-  border: 1px solid var(--s-line-hi); border-bottom-width: 3px;
-  background: rgba(24, 19, 42, .72);
-  font: 800 .95rem/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  letter-spacing: .06em;
-  transition: transform .08s, background-color .12s, border-color .12s;
-}
-.hjs-cap.is-down { transform: translateY(2px); border-bottom-width: 1px; border-color: var(--s-gold); background: rgba(242, 189, 109, .24); }
 
 /* ==== 暂停 / 结算 ==== */
 .hjs-modal {
@@ -6761,17 +6742,6 @@ body.hjs-open .toast { z-index: 540; }
 }
 .hjs-switch:checked { background: var(--s-gold); }
 .hjs-switch:checked::after { transform: translateX(20px); background: #fff; }
-.hjs-keyrow { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.hjs-keybtn {
-  min-width: 44px;
-  padding: 7px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--s-line-hi); border-bottom-width: 3px;
-  background: rgba(255, 255, 255, .06);
-  font: 800 .84rem/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
-.hjs-keybtn:hover { border-color: var(--s-gold); }
-.hjs-keybtn.is-bind { font-family: var(--serif); font-weight: 700; color: var(--s-gold); border-color: var(--s-gold); animation: hjsBreath 1s ease-in-out infinite; }
 .hjs-num { display: flex; align-items: center; gap: 6px; }
 .hjs-step { width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 1px solid var(--s-line-hi); background: rgba(255, 255, 255, .06); font-size: 1rem; line-height: 1; }
 .hjs-step:hover { border-color: var(--s-gold); }
@@ -6834,7 +6804,8 @@ body.hjs-open .toast { z-index: 540; }
   .hjs-sheet-card, .hjs-res { animation: none; }
   .hjs-pop { animation-duration: .9s; animation-timing-function: linear; }
   .hjs-res-fc { animation: none; }
-  .hjs-note.is-wait .hjs-ring, .hjs-banner.is-wait span, .hjs-banner.is-hint span, .hjs-keybtn.is-bind, .hjs-eq i { animation: none; }
+  .hjs-note.is-wait .hjs-ring, .hjs-banner.is-wait span, .hjs-banner.is-hint span, .hjs-eq i { animation: none; }
+  .hjs-fly-flower > i { animation: none; }
   .hjs-eq i { height: 8px; }
 }
 

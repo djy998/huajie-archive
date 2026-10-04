@@ -3,11 +3,9 @@
      （和声、谱面省掉的旋律音）由游戏按时间用轻音补上，整首曲子始终完整。不再有伴奏 / 示范音轨
    - 玩法：每个气泡出现在这个音的高度上（越往上音越高），外圈一边收缩一边等你，
      外圈缩到和核心重合的那一下就是判定点。弹中就用模拟器的乐器发出这个音
-   - 两种操作（设置里可改，默认点气泡；选「自动」时按设备选）：
-     · 点气泡（手机、平板）：直接点气泡，点在旁边一点也算（判定半径约一个气泡直径）；气泡沿着旋律左右铺开，不会叠在一起；
-       电脑上鼠标指着气泡按键盘任意键也算点（放水模式不用按）
-     · 键盘轨道（电脑）：屏幕按宽度分成 2~4 条轨道（自动或手选），气泡在哪条轨道就按那条的键；
-       按 e.code 认键，开着中文输入法也能弹；鼠标点轨道也行
+   - 操作：点气泡（手机、平板、电脑都一样；键盘轨道模式反直觉，已去掉）。点在旁边一点也算；气泡沿着旋律左右铺开，不会叠在一起；
+     电脑上鼠标指着气泡按键盘任意键也算点。点击范围（设置里可改）：正常 / 宽松 / 放水（不看位置：外圈收到点的那个，
+     点屏幕任意位置或按任意键都算）
    - 时钟：模拟器 AudioContext 的 currentTime（补音也排在这个钟上），帧间用 performance.now() 补齐；
      画面与判定 = 音频位置 − 输出延迟 − 判定延迟。暂停、切后台、学习模式都是停这个钟，不会错拍
    - 「示范旋律」：你要弹的音也先轻轻放出来，可以照着弹
@@ -15,25 +13,28 @@
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
    - 判定四档 Perfect / Great / Good / Miss，没有血量、不会失败；漏掉的音不出声
    - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用轻松的判定窗）/
-     放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。本机纪录按 曲目 × 难度 × 判定模式 分开记
+     放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
+   - 本机纪录按 曲目 × 难度 × 判定模式 × 点击范围 分开记
+   - 飞花线（设置 → 画面，默认关）：一朵花飞向每个刚出现的气泡，身后撒一串星星
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
    - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
-     操作方式、轨道与键位、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
+     点击范围、显示与飞花线、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
    - 曲目索引 assets/bard/stage/songs.json，每首的谱面 charts/<id>.json 点到才下载（_src/tools/stage-build 从 MIDI 生成） */
 (() => {
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    input: "hj_stage_input", lanes: "hj_stage_lanes", codes: "hj_stage_codes", delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range",
+    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly",
+    old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
   /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 轻松那档） */
   const LOOSE_WIN = [0.18, 0.3, 0.45];
-  /* approach：气泡提前多久出现；win：正常判定的半窗；size：键盘模式气泡占轨道宽的比例；tap：点气泡模式占屏幕短边的比例 */
+  /* approach：气泡提前多久出现；win：正常判定的半窗；tap：气泡直径占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], size: 0.44, tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], size: 0.38, tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], size: 0.32, tap: 0.2 },
+    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], tap: 0.24 },
+    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], tap: 0.21 },
+    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], tap: 0.2 },
   ];
   const JUDGE_MODES = [{ id: "normal", label: "正常" }, { id: "loose", label: "宽松" }, { id: "hover", label: "放水" }];
   const HOVER_R = 0.8;                                  // 放水模式：指针离气泡中心不到这么多个气泡直径就算「在气泡上」
@@ -42,8 +43,13 @@
      不是 performance.now 的时基，一旦对不上就整局不再用 */
   const INPUT_GRACE = 0.1;
   const TS_MAX = 0.05;
-  /* 点击范围（设置里选）：r 为判定半径、next 为「下一个该弹的（外圈加粗那个）附近没别的气泡可算时」的放宽半径，都是气泡直径的倍数 */
-  const TAP_RANGES = { normal: { label: "正常", r: 1.4, next: 1.7 }, loose: { label: "宽松", r: 1.7, next: 2.2 } };
+  /* 点击范围（设置里选）：r 为判定半径、next 为「下一个该弹的（外圈加粗那个）附近没别的气泡可算时」的放宽半径，都是气泡直径的倍数；
+     放水（free）不看位置：判定窗里最早那个，点哪儿、按什么键都算 */
+  const TAP_RANGES = {
+    normal: { label: "正常", r: 1.4, next: 1.7 },
+    loose: { label: "宽松", r: 1.7, next: 2.2 },
+    free: { label: "放水", r: Infinity, next: Infinity },
+  };
   const NEXT_LEAD = 0.3;                                // 下一个该弹的气泡离判定点不到这么多秒才加粗外圈（太早加粗会让人一亮就点、早一拍）
   const JUDGE = [
     { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
@@ -58,14 +64,9 @@
   const AHEAD = 0.12;                 // 补音提前多少秒排进 Web Audio
   const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍、校准的「嗒」
   const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // 校准：第一下在 1.2 秒，之后每 0.6 秒一下
-  const LMIN = 2, LMAX = 4;
-  const DEF_CODES = { 2: ["KeyF", "KeyJ"], 3: ["KeyF", "Space", "KeyJ"], 4: ["KeyD", "KeyF", "KeyJ", "KeyK"] };
-  const BINDABLE = /^(Key[A-Z]|Digit\d|Numpad\d|Space|Arrow(Left|Right|Up|Down)|Semicolon|Quote|Comma|Period|Slash|Backslash|BracketLeft|BracketRight|Minus|Equal|Backquote|ShiftLeft|ShiftRight)$/;
-  const CODE_LABEL = {
-    Space: "空格", ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Semicolon: ";", Quote: "'", Comma: ",",
-    Period: ".", Slash: "/", Backslash: "\\", BracketLeft: "[", BracketRight: "]", Minus: "-", Equal: "=", Backquote: "`",
-    ShiftLeft: "左 Shift", ShiftRight: "右 Shift",
-  };
+  /* 飞花线：花的大小、星星大小（气泡直径的倍数）；tau 花追向目标的快慢（秒）；星星池大小（简单显示用小的）；
+     每飞过 gap 个气泡直径撒一颗星，两颗至少隔 every 毫秒 */
+  const FLY = { flower: 0.62, star: 0.3, tau: 0.11, pool: 18, poolLite: 10, gap: 0.2, every: 26, kinds: 3 };
   const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 按音高：低 → 高
   const PALETTE = [...BAND_COLORS, "150 226 180", "246 150 120"];   // 后两色只在挨得近、撞色时补位
   const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -84,9 +85,9 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", input: "tap", lanesPref: "auto", judge: "normal", render: "normal", range: "normal",
-    codes: null, delayMs: 0, stars: 0, cat: "", query: "", binding: -1, cal: null, calMsg: "",
-    gen: 0, mode: "tap", lanes: 4, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
+    song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, fl: null,
+    delayMs: 0, stars: 0, cat: "", query: "", cal: null, calMsg: "",
+    gen: 0, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
     playing: false, paused: false, frozen: false, hover: null, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
@@ -105,14 +106,33 @@
   const diffMeta = () => { const d = diffBase(); return S.judge === "normal" ? d : { ...d, win: LOOSE_WIN }; };
   const judgeTag = () => (S.judge === "loose" ? " · 宽松判定" : S.judge === "hover" ? " · 放水模式" : "");
   const judgeLabel = () => (JUDGE_MODES.find((m) => m.id === S.judge) || JUDGE_MODES[0]).label;
-  /* 本机纪录按 曲目:难度:判定模式 分开记；加判定模式以前的旧纪录（曲目:难度）是按轻松那档判定弹的，算进宽松 */
-  function bestOf(all, id, diff, judge) {
-    return all[`${id}:${diff}:${judge}`] || (judge === "loose" ? all[`${id}:${diff}`] : null) || null;
+  const rangeLabel = () => (TAP_RANGES[S.range] || TAP_RANGES.normal).label;
+  /* 点击范围和判定模式都是放水：游戏自己弹（自动演奏），不计分、不记纪录 */
+  const isAuto = () => S.judge === "hover" && S.range === "free";
+  const scored = () => !S.learn && !isAuto();
+  /* 得分倍率：判定模式、点击范围各自宽松扣 20%、放水扣 50%，两项相加（宽松 + 宽松 = ×0.6，放水 + 宽松 = ×0.3） */
+  const SCORE_CUT = { normal: 0, loose: 0.2, hover: 0.5, free: 0.5 };
+  const scoreMult = () => Math.max(0, 1 - (SCORE_CUT[S.judge] || 0) - (SCORE_CUT[S.range] || 0));
+  function multNote() {
+    const m = scoreMult();
+    if (m >= 1) return "";
+    const parts = [];
+    if (SCORE_CUT[S.judge]) parts.push(`${judgeLabel()}判定 −${SCORE_CUT[S.judge] * 100}%`);
+    if (SCORE_CUT[S.range]) parts.push(`${rangeLabel()}范围 −${SCORE_CUT[S.range] * 100}%`);
+    return `得分 ×${+m.toFixed(2)}（${parts.join("、")}）`;
+  }
+  /* 大厅、暂停、演奏中标题下的一行：学习 / 自动演奏 / 判定与点击范围（默认的不写） */
+  const modeTag = () => (S.learn ? " · 学习" : isAuto() ? " · 自动演奏" : judgeTag() + (S.range === "normal" ? "" : ` · ${rangeLabel()}范围`));
+  /* 本机纪录按 曲目:难度:判定模式:点击范围 分开记。旧纪录：曲目:难度:判定模式（那时点击范围默认正常）算正常范围；
+     更早的 曲目:难度（加判定模式以前：按轻松那档判定、1.7 个气泡的范围）算宽松判定 + 宽松范围 */
+  function bestOf(all, id, diff, judge, range) {
+    return all[`${id}:${diff}:${judge}:${range}`]
+      || (range === "normal" ? all[`${id}:${diff}:${judge}`] : null)
+      || (judge === "loose" && range === "loose" ? all[`${id}:${diff}`] : null) || null;
   }
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
-  const codeLabel = (c) => CODE_LABEL[c] || (/^Key/.test(c) ? c.slice(3) : /^Digit/.test(c) ? c.slice(5) : /^Numpad/.test(c) ? `小键盘 ${c.slice(6)}` : c);
   const starText = (n) => "★".repeat(clamp(n, 1, 5)) + "☆".repeat(5 - clamp(n, 1, 5));
   /* 星级按档：songs.json 的 diffs = [轻松, 标准, 挑战]（轻松 1~3、标准 2~4、挑战 3~5 星）；旧曲库只有 diff（标准档） */
   function starsOf(s, diffId = S.diff) {
@@ -206,25 +226,17 @@
     S.learn = getRaw(K.learn, "0") === "1";
     S.demo = getRaw(K.demo, "0") === "1";
     S.inst = getRaw(K.inst, "song");                    // 默认跟随曲目（MIDI 原本的乐器）；"" 为跟随模拟器
-    const input = getRaw(K.input, "tap");
-    S.input = ["auto", "tap", "keys"].includes(input) ? input : "tap";
     const judge = getRaw(K.judge, "normal");
     S.judge = JUDGE_MODES.some((m) => m.id === judge) ? judge : "normal";
     S.render = getRaw(K.render, "normal") === "simple" ? "simple" : "normal";
-    S.range = getRaw(K.range, "normal") === "loose" ? "loose" : "normal";
+    const range = getRaw(K.range, "normal");
+    S.range = Object.prototype.hasOwnProperty.call(TAP_RANGES, range) ? range : "normal";
+    S.fly = getRaw(K.fly, "0") === "1";
     applyRender();
-    const ln = getRaw(K.lanes, "auto");
-    S.lanesPref = ln === "auto" ? "auto" : String(clamp(num(ln, 4), LMIN, LMAX));
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(num(getRaw(K.stars, 0), 0), 0, 5);
     S.cat = String(getRaw(K.cat, "") || "");
-    const saved = storage.json(K.codes) || {};
-    S.codes = {};
-    for (let n = LMIN; n <= LMAX; n++) {
-      const got = Array.isArray(saved[n]) ? saved[n] : [];
-      const list = DEF_CODES[n].map((d, i) => (typeof got[i] === "string" && BINDABLE.test(got[i]) ? got[i] : d));
-      S.codes[n] = new Set(list).size === list.length ? list : DEF_CODES[n].slice();
-    }
+    K.old.forEach((k) => storage.remove(k));
   }
   /* 画面：简单显示去掉气泡光晕、音名与判定字的模糊阴影（.hjs.is-simple），密集段更省 */
   function applyRender() {
@@ -236,12 +248,6 @@
     if (S.inst && instIds().includes(S.inst)) return S.inst;
     return (bard().instName && bard().instName()) || "piano";
   }
-  const modeNow = () => (S.input === "tap" || S.input === "keys" ? S.input : coarse() ? "tap" : "keys");
-  function lanesFor(w) {
-    if (S.lanesPref !== "auto") return clamp(+S.lanesPref, LMIN, LMAX);
-    return w < 760 ? 2 : w < 1180 ? 3 : 4;
-  }
-  const lanesNow = () => lanesFor((S.root && S.root.clientWidth) || window.innerWidth);
 
   /* ==== 曲库：songs.json 只有曲目信息，谱面 charts/<id>.json 点到这首才下载 ==== */
   const ver = () => (window.HJ && window.HJ.version) || "1";
@@ -316,12 +322,11 @@
       h("i", { class: "hjs-safe", id: "hjsSafe", "aria-hidden": "true" }),
       h("section", { class: "hjs-lobby", id: "hjsLobby", "aria-label": "大厅" }),
       h("section", { class: "hjs-play", id: "hjsPlay", hidden: true, "aria-label": "演奏中" },
-        h("div", { class: "hjs-lanes", id: "hjsLanes", "aria-hidden": "true" }),
+        h("div", { class: "hjs-fly", id: "hjsFly", hidden: true, "aria-hidden": "true" }),
         h("div", { class: "hjs-notes", id: "hjsNotes", "aria-hidden": "true" }),
         h("div", { class: "hjs-judge", id: "hjsJudge", "aria-live": "polite" }),
         h("div", { class: "hjs-banner", id: "hjsBanner", "aria-live": "polite" }),
         h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "连击" })),
-        h("div", { class: "hjs-caps", id: "hjsCaps", "aria-hidden": "true" }),
         h("header", { class: "hjs-hud", id: "hjsHud" },
           h("div", { class: "hjs-hud-song" }, h("b", { id: "hjsNowT" }), h("small", { id: "hjsNowS" })),
           h("div", { class: "hjs-hud-stats" },
@@ -343,7 +348,6 @@
     ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => play.addEventListener(ev, onHoverEnd));
     play.addEventListener("contextmenu", (e) => e.preventDefault());
     document.addEventListener("keydown", onKeyDown, true);
-    document.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("popstate", onPopState);
     document.addEventListener("visibilitychange", () => {
@@ -384,7 +388,6 @@
     S.gen += 1;
     stopCal();
     stopPreview();
-    S.binding = -1;
     stopPlay();
     hideSheet();
     const r = S.root;
@@ -421,7 +424,7 @@
   function onPopState() {
     if (!S.root || S.root.hidden || S.closing) return;
     S.hist = false;
-    if (S.binding >= 0 || S.cal || S.sheet) goBack();
+    if (S.cal || S.sheet) goBack();
     else if (S.view === "play") {
       if (S.playing && !S.paused && !S.finished) pause();
       else backToLobby();
@@ -434,7 +437,6 @@
 
   /* Esc：一层一层往回退 */
   function goBack() {
-    if (S.binding >= 0) { S.binding = -1; renderSheet(); return; }
     if (S.cal) { stopCal("校准取消了"); return; }
     if (S.sheet) { closeSheet(); return; }
     if (S.view === "play") {
@@ -463,7 +465,6 @@
         title: it.title, text: it.label, onclick: () => { if (it.id !== val) onPick(it.id); },
       })));
   }
-  const kbd = (code) => h("kbd", { class: "hjs-kbd", text: codeLabel(code) });
 
   function renderLobby() {
     const box = $id("hjsLobby");
@@ -503,9 +504,7 @@
           h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "换一首" })))));
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
-    const mode = modeNow();
-    const lanes = lanesNow();
-    const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge);
+    const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge, S.range);
     const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 轻松 / 标准 / 挑战各要弹几个音
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
@@ -515,21 +514,22 @@
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "模式" }),
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
           (v) => { S.learn = v === "learn"; setRaw(K.learn, S.learn ? "1" : "0"); renderLobby(); })),
-      h("p", { class: "hjs-tip", text: (S.learn ? "学习模式：气泡缩到判定点就停下等你弹，弹中再继续，不计分" : "演出模式：跟着节拍弹，按准确度给评级")
-        + (nNow ? ` · 这一档 ${nNow} 个音` : "") }),
+      h("p", { class: "hjs-tip", text: (isAuto() ? "自动演奏：点击范围和判定模式都是放水，游戏自己弹，不计分"
+        : S.learn ? "学习模式：气泡缩到判定点就停下等你弹，弹中再继续，不计分" : "演出模式：跟着节拍弹，按准确度给评级")
+        + (nNow ? ` · 这一档 ${nNow} 个音` : "") + (scored() && multNote() ? ` · ${multNote()}` : "") }),
       vol().muted
         ? h("p", { class: "hjs-muted" }, h("span", { text: "现在是静音，听不到声音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
-      best && !S.learn ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定）· ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
+      best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
-        h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: S.learn ? "开始练习" : "开始演奏" })),
-      h("p", { class: "hjs-ctrl-tip" },
-        mode === "keys"
-          ? [h("span", { text: "键盘" }), ...S.codes[lanes].map(kbd), h("span", { text: `· ${lanes} 条轨道 · Esc 暂停` })]
-          : S.judge === "hover"
-            ? [h("span", { text: "放水模式：不用点气泡，鼠标移到气泡上就算" })]
-            : [h("span", { text: coarse() ? "直接点气泡演奏 · 点在旁边一点也算" : "直接点气泡演奏 · 鼠标指着气泡按任意键也算" })])));
+        h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" })),
+      h("p", { class: "hjs-ctrl-tip" }, h("span", {
+        text: isAuto() ? "坐着听就好；想自己弹，到设置里把点击范围或判定模式改回来"
+          : S.judge === "hover" ? "放水判定：不用点气泡，鼠标移到气泡上就算"
+            : S.range === "free" ? "放水范围：外圈收到点时，点屏幕任意位置或按任意键都算"
+              : coarse() ? "直接点气泡演奏 · 点在旁边一点也算" : "直接点气泡演奏 · 鼠标指着气泡按任意键也算",
+      }))));
   }
 
   /* ==== 试听：用选中的音色把 MIDI 从第一个音起放 8 秒（要弹的音稍响） ==== */
@@ -591,7 +591,6 @@
   /* ==== 窗口：选曲 / 设置 / 玩法 ==== */
   function openSheet(kind) {
     if (kind === "picker" && !S.data) return;
-    S.binding = -1;
     S.sheetBack = document.activeElement;
     S.sheet = kind;
     renderSheet();
@@ -620,7 +619,6 @@
     if (!S.sheet) return;
     const kind = S.sheet;
     stopCal();
-    S.binding = -1;
     if (kind === "picker") stopPreview();
     hideSheet();
     if (S.view === "lobby") renderLobby();
@@ -736,43 +734,29 @@
       row("音色", sel, "整首曲子都用它；拨弦、钢琴类起音最利落"),
       row("示范旋律", demo, "你要弹的音也先轻轻放出来，可以照着弹")));
 
-    /* 操作 */
-    const mode = modeNow();
-    const lanes = lanesNow();
-    const opRows = [
-      row("操作方式", seg("操作方式", [
-        { id: "auto", label: "自动" }, { id: "tap", label: "点气泡" }, { id: "keys", label: "键盘" },
-      ], S.input, (v) => { S.input = v; setRaw(K.input, v); renderSheet(); }), `现在：${mode === "tap" ? "点气泡" : "键盘轨道"}`),
-    ];
-    if (mode === "tap") {
-      const rg = TAP_RANGES[S.range];
-      opRows.push(row("点击范围", seg("点击范围", Object.entries(TAP_RANGES).map(([id, v]) => ({ id, label: v.label })), S.range,
+    /* 操作：只有点气泡；点击范围 */
+    const rg = TAP_RANGES[S.range];
+    body.append(group("操作",
+      row("点击范围", seg("点击范围", Object.entries(TAP_RANGES).map(([id, v]) => ({ id, label: v.label })), S.range,
         (v) => { S.range = v; setRaw(K.range, v); renderSheet(); }),
-      `点在气泡 ${rg.r} 个直径以内算点中；附近没别的气泡时，下一个该点的（外圈加粗）偏出 ${rg.next} 个也算`));
-    }
-    if (mode === "keys") {
-      opRows.push(row("轨道数", seg("轨道数", [
-        { id: "auto", label: "自动" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" },
-      ], S.lanesPref, (v) => { S.lanesPref = v; setRaw(K.lanes, v); renderSheet(); }), S.lanesPref === "auto" ? `按屏幕宽度，现在 ${lanes} 条` : "屏幕均分，气泡落在哪条就按哪个键"));
-      opRows.push(row("键位", h("div", { class: "hjs-keyrow" }, S.codes[lanes].map((c, i) => h("button", {
-        type: "button", class: `hjs-keybtn${S.binding === i ? " is-bind" : ""}`, title: `第 ${i + 1} 条轨道`,
-        text: S.binding === i ? "按新键…" : codeLabel(c),
-        onclick: () => { S.binding = S.binding === i ? -1 : i; renderSheet(); },
-      }))), S.binding >= 0 ? "按一个键（Esc 取消）；和别的轨道重了会自动对调" : "点一下再按新键"));
-    }
-    body.append(group("操作", ...opRows));
+      S.range === "free"
+        ? (S.judge === "hover" ? "判定模式也是放水：自动演奏，游戏自己弹，不计分" : "不看位置：外圈收到点的那个气泡，点屏幕任意位置或按任意键都算")
+        : `点在气泡 ${rg.r} 个直径以内算点中；附近没别的气泡时，下一个该点的（外圈加粗）偏出 ${rg.next} 个也算`),
+      multNote() && scored() ? h("p", { class: "hjs-set-note", text: `现在${multNote()}。宽松各扣 20%、放水各扣 50%，判定模式和点击范围两项相加` }) : null));
 
     /* 画面 */
+    const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
     body.append(group("画面",
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
-      S.render === "simple" ? "去掉了气泡光晕和文字的模糊阴影，副歌等密集处更流畅" : "觉得密集处有点卡，可以换成简单显示")));
+      S.render === "simple" ? "去掉了气泡光晕和文字的模糊阴影，副歌等密集处更流畅" : "觉得密集处有点卡，可以换成简单显示"),
+      row("飞花线", fly, "一朵花带着星星尾巴，飞向每个刚出现的气泡")));
 
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
     const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
       S.judge === "hover"
-        ? "不用点：鼠标移到气泡上停着，到点自动算弹中（手机上手指按住滑过去也行）；判定同宽松"
+        ? (S.range === "free" ? "点击范围也是放水：自动演奏，游戏自己弹，不计分" : "不用点：鼠标移到气泡上停着，到点自动算弹中（手机上手指按住滑过去也行）；判定同宽松")
         : S.judge === "loose"
           ? `三档难度都按轻松判定：PERFECT / GREAT / GOOD 各差 ${winText(LOOSE_WIN)} 秒以内`
           : `按难度收紧，现在「${diffBase().label}」：PERFECT / GREAT / GOOD 各差 ${winText(diffBase().win)} 秒以内`);
@@ -788,7 +772,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.input, K.lanes, K.codes, K.delay, K.judge, K.render, K.range].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -802,15 +786,17 @@
       h("ol", {},
         ["气泡出现在它那个音的高度上（越往上音越高），外圈会慢慢收缩；外圈缩到和核心重合的那一下，弹它就会发出这个音",
           "每首曲子都是一份 MIDI：气泡是你要弹的音，其余的音（和声、这一档省掉的旋律）游戏会用轻音按时补上",
-          "手机、平板：直接点气泡，点在旁边一点也算",
-          "电脑选点气泡时：鼠标指着气泡，按键盘任意键也算点了它（放水模式不用按，移上去就行）",
-          "电脑：屏幕按宽度分成几条轨道，气泡落在哪条轨道就按那条的键（大厅下方有键位提示，设置里能改）",
+          "直接点气泡，点在旁边一点也算；电脑上也可以鼠标指着气泡，按键盘任意键",
+          "点击范围（设置里改）：正常 —— 点在气泡附近；宽松 —— 范围更大；放水 —— 不看位置，外圈收到点的那个，点屏幕任意位置或按任意键都算",
           "开头会有四下轻轻的预备拍",
           "星级：每首曲子三档各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同一档在曲库里的疏密排；大厅和选曲窗口显示的是当前所选难度的星级",
           "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
           "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
-          "判定模式（设置里改）：正常 —— 难度越高判定越严；宽松 —— 三档难度都按轻松判定；放水 —— 不用点，把鼠标移到气泡上停着，到点就算弹中。本机纪录按难度和判定模式分开记",
+          "判定模式（设置里改）：正常 —— 难度越高判定越严；宽松 —— 三档难度都按轻松判定；放水 —— 不用点，把鼠标移到气泡上停着，到点就算弹中",
+          "点击范围和判定模式都选放水：自动演奏，游戏自己弹，不计分。本机纪录按难度、判定模式、点击范围分开记",
+          "得分：判定模式、点击范围各自选宽松扣 20%、选放水扣 50%，两项相加（比如都选宽松是 ×0.6）",
+          "飞花线（设置 → 画面）：一朵花飞向每个刚出现的气泡，帮你找下一个该点的位置",
           "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
           "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
         ].map((t) => h("li", { text: t })))));
@@ -833,7 +819,6 @@
   function startCal() {
     if (S.cal) return;
     stopPreview();
-    S.binding = -1;
     S.calMsg = "";
     const b = bard();
     if (!b.playMidi) { S.calMsg = "节拍音放不出来，刷新页面再试"; renderSheet(); return; }
@@ -897,21 +882,15 @@
     S.notes = [];
     S.bg = [];
     all.forEach((n) => {
-      if (n.l >= need) S.notes.push({ t: n.t, m: n.m, idx: S.notes.length, lane: -1, band: 0, c: 0, x: 0, y: 0 });
+      if (n.l >= need) S.notes.push({ t: n.t, m: n.m, idx: S.notes.length, band: 0, c: 0, x: 0, y: 0 });
       else S.bg.push({ t: n.t, m: n.m, v: BG_VEL });
     });
     S.bgAll = all.map((n) => ({ t: n.t, m: n.m, v: n.l >= need ? DEMO_VEL : BG_VEL }));
     S.bgList = S.demo ? S.bgAll : S.bg;
     S.lo = num(s.range && s.range[0], 60);
     S.hi = Math.max(num(s.range && s.range[1], 72), S.lo + 1);
-    S.mode = modeNow();
-    S.lanes = S.mode === "keys" ? lanesNow() : 0;
     const span = S.hi - S.lo + 1;
-    S.notes.forEach((n) => {
-      const k = clamp((n.m - S.lo) / span, 0, 0.9999);
-      n.band = Math.floor(k * 4);
-      n.lane = S.lanes ? -1 : 0;                // 键盘轨道在第一次 layout 时排好，之后改窗口大小也不变
-    });
+    S.notes.forEach((n) => { n.band = Math.floor(clamp((n.m - S.lo) / span, 0, 0.9999) * 4); });
     S.judged = new Int8Array(S.notes.length).fill(-1);
     S.next = 0;
     S.firstT = S.notes.length ? S.notes[0].t : 0;
@@ -935,23 +914,20 @@
   }
 
   function layout() {
-    renderLanes();                            // 先放好轨道与键帽，下面才量得到键帽高度
     const dm = diffMeta();
     const w = S.root.clientWidth || window.innerWidth;
     const hh = S.root.clientHeight || window.innerHeight;
-    const keys = S.mode === "keys";
-    const laneW = keys ? w / S.lanes : w;
-    const size = keys ? clamp(laneW * dm.size, 52, 124) : clamp(Math.min(w, hh) * dm.tap, 66, 118);
+    const size = clamp(Math.min(w, hh) * dm.tap, 66, 118);
     const inset = safeInsets();
     const hud = $id("hjsHud").offsetHeight || 56;
-    const caps = keys ? ($id("hjsCaps").offsetHeight || 64) : 0;
     const top = hud + size * 0.62 + 10;
-    const bottom = Math.max(top + 80, hh - caps - size * 0.62 - 14 - (keys ? 0 : inset.bottom));
-    S.g = { w, h: hh, laneW, size, top, bottom };
+    const bottom = Math.max(top + 80, hh - size * 0.62 - 14 - inset.bottom);
+    S.g = { w, h: hh, size, top, bottom };
     $id("hjsNotes").style.setProperty("--size", `${size.toFixed(1)}px`);
 
     placeNotes(S.g, dm);
     S.els.forEach((el, idx) => { placeEl(el, S.notes[idx]); el.style.setProperty("--c", PALETTE[S.notes[idx].c]); });
+    flyLayout();
   }
 
   /* ==== 气泡摆放（谱面的几条规矩）====
@@ -959,12 +935,10 @@
      - 待在视线里：下一个气泡就出现在上一个旁边（间隔越久离得稍远，最远约 2.3 个气泡），整体往屏幕中间收，
        不会一会儿左边一会儿右边、一会儿顶上一会儿底下
      - 高度跟着旋律的走向：音往上走，气泡往上挪（每半音约 0.18 个气泡，一步最多 1.4 个），而不是按绝对音高铺满整屏
-     - 点气泡：尽量顺着一个方向走，不急转回头
-     - 键盘：轨道不按音高划分，换轨尽量就近；快速连打（间隔 < 0.2 秒）不连按同一个键、两只手交替
+     - 尽量顺着一个方向走，不急转回头
      - 挨得近（同时在场、中心距离不到 1.8 个气泡）的两个气泡一定不同色；先到的气泡叠在上面 */
   function placeNotes(g, dm) {
-    const keys = S.mode === "keys";
-    const { w, size, top, bottom, laneW } = g;
+    const { w, size, top, bottom } = g;
     const W = dm.approach + 0.35;                       // 两个音同时在屏幕上的最大时间差（出现 → 判定完消失）
     const DMIN = size * 1.15;
     const margin = size * 0.72 + 8;
@@ -974,10 +948,6 @@
     const cy = (top + bottom) / 2;
     const PULL = size * 2.4;                            // 离中心超过这么远，往回拉的力度明显变大
     const mid = (S.lo + S.hi) / 2;
-    const d = keys ? Math.max(0, Math.min(laneW * 0.3, (laneW - size) / 2)) : 0;
-    const xOffs = d > 2 ? [0, -d, d] : [0];
-    const L = S.lanes;
-    const hand = (l) => (L === 3 ? (l === 1 ? -1 : l > 1 ? 1 : 0) : l < L / 2 ? 0 : 1);   // 三条轨道时中间是拇指（空格）
     const ANG = Array.from({ length: 16 }, (_, k) => (k * Math.PI) / 8);
     const notes = S.notes;
     let j0 = 0;
@@ -989,17 +959,17 @@
       const dt = p ? n.t - p.t : 9;
       const step = p ? n.m - p.m : 0;
       const yWant = p ? p.y - clamp(step * 0.18, -1.4, 1.4) * size : cy - clamp((n.m - mid) * 0.12, -1.5, 1.5) * size;
-      const want = clamp(size * (1.2 + dt), size * 1.3, size * 2.3);   // 点气泡：和上一个隔多远
+      const want = clamp(size * (1.2 + dt), size * 1.3, size * 2.3);   // 和上一个隔多远
       let best = null;
       let bestCost = Infinity;
-      const tryAt = (x0, y0, lane, cost) => {
-        const x = keys ? x0 : clamp(x0, left, right);
+      const tryAt = (x0, y0, cost) => {
+        const x = clamp(x0, left, right);
         const y = clamp(y0, top, bottom);
         let c = cost + (0.35 * Math.abs(y - yWant)) / size;
-        const r = (keys ? Math.abs(y - cy) : Math.hypot(x - cx, y - cy)) / PULL;
+        const r = Math.hypot(x - cx, y - cy) / PULL;
         c += 0.9 * r * r;                               // 往中间收
         if (p && step && Math.abs(p.y - y) > size * 0.2 && Math.sign(p.y - y) !== Math.sign(step)) c += 0.8;   // 音往上走气泡别往下
-        if (p && !keys) {
+        if (p) {
           const jump = Math.hypot(x - p.x, y - p.y);
           c += (0.7 * Math.abs(jump - want)) / size;
           if (pp) {                                     // 别急转回头
@@ -1017,43 +987,20 @@
           if (c >= bestCost) return;
         }
         bestCost = c;
-        best = { x, y, lane };
+        best = { x, y };
       };
-      if (keys) {
-        const fixed = n.lane >= 0;
-        const lanes = fixed ? [n.lane] : Array.from({ length: L }, (_, l) => l);
-        const ys = [0, -0.5, 0.5, -1, 1, -1.5, 1.5, -2.2, 2.2, -3, 3].map((k) => yWant + k * size);
-        for (const l of lanes) {
-          let lc = 0;
-          if (!fixed && p) {
-            const wantL = step === 0 ? 0 : Math.sign(step) * Math.min(L - 1, Math.max(1, Math.round(Math.abs(step) / 5)));
-            lc += 0.5 * Math.abs(l - p.lane - wantL);
-            lc += 0.7 * Math.max(0, Math.abs(l - p.lane) - 1);          // 换轨尽量就近，别一下跨过半个屏幕
-            if (l === p.lane) lc += dt < 0.2 ? 4 : dt < 0.3 ? 1.5 : 0;
-            if (dt < 0.2 && hand(l) >= 0 && hand(l) === hand(p.lane)) lc += 1.2;
-            lc += 0.12 * near.filter((q) => q.lane === l).length;   // 别老挤在同一条
-          } else if (!fixed) {
-            lc += 0.5 * Math.abs(l - Math.floor(clamp((n.m - S.lo) / (S.hi - S.lo + 1), 0, 0.9999) * L));
-          }
-          for (const xo of xOffs) for (const y of ys) tryAt(laneW * (l + 0.5) + xo, y, l, lc + (xo ? 0.15 : 0));
-        }
-        /* 太密：在这些轨道的整个高度上找空位 */
-        if (bestCost > 30) {
-          for (const l of lanes) for (const xo of xOffs) for (let gy = top; gy <= bottom; gy += size * 0.5) tryAt(laneW * (l + 0.5) + xo, gy, l, 1 + (fixed ? 0 : 0.5 * Math.abs(l - (p ? p.lane : l))));
-        }
-      } else if (!p) {
-        for (const k of [0, -0.6, 0.6, -1.2, 1.2]) tryAt(cx + k * size, yWant, 0, 0);
+      if (!p) {
+        for (const k of [0, -0.6, 0.6, -1.2, 1.2]) tryAt(cx + k * size, yWant, 0);
       } else {
-        for (const a of ANG) for (const f of [0.85, 1, 1.25]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0, 0);
+        for (const a of ANG) for (const f of [0.85, 1, 1.25]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0);
         /* 附近全被占了（极密的段落）：再往外找一圈，还不行就在整个屏幕上找空位（宁可远一点也不叠） */
-        if (bestCost > 30) for (const a of ANG) for (const f of [1.6, 2.1]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0, 0.5);
+        if (bestCost > 30) for (const a of ANG) for (const f of [1.6, 2.1]) tryAt(p.x + Math.cos(a) * want * f, p.y + Math.sin(a) * want * f, 0.5);
         if (bestCost > 30) {
-          for (let gx = 0; gx <= 8; gx++) for (let gy = top; gy <= bottom; gy += size * 0.55) tryAt(left + ((right - left) * gx) / 8, gy, 0, 1);
+          for (let gx = 0; gx <= 8; gx++) for (let gy = top; gy <= bottom; gy += size * 0.55) tryAt(left + ((right - left) * gx) / 8, gy, 1);
         }
       }
       n.x = best.x;
       n.y = best.y;
-      if (keys) n.lane = best.lane;
       /* 颜色：默认按音高分四色；和挨得近的气泡撞色就换一种 */
       const taken = new Set(near.filter((q) => Math.hypot(q.x - n.x, q.y - n.y) < size * 1.8).map((q) => q.c));
       n.c = n.band;
@@ -1061,27 +1008,8 @@
     });
   }
 
-  function renderLanes() {
-    const lanesBox = $id("hjsLanes");
-    const caps = $id("hjsCaps");
-    const keys = S.mode === "keys";
-    S.root.classList.toggle("is-keys", keys);
-    lanesBox.textContent = "";
-    caps.textContent = "";
-    if (!keys) return;
-    lanesBox.style.setProperty("--n", String(S.lanes));
-    caps.style.setProperty("--n", String(S.lanes));
-    for (let i = 0; i < S.lanes; i++) {
-      lanesBox.append(h("div", { class: "hjs-lane", "data-lane": String(i) }));
-      caps.append(h("div", { class: "hjs-cap", "data-lane": String(i) }, h("span", { text: codeLabel(S.codes[S.lanes][i]) })));
-    }
-  }
-
   function onResize() {
     if (S.view === "play" && S.notes.length) layout();
-    else if (S.view === "lobby" && !S.root.hidden) {
-      if (S.sheet === "settings" && modeNow() === "keys") renderSheet();
-    }
   }
 
   /* ==== 开始 / 结束 ==== */
@@ -1121,8 +1049,9 @@
     $id("hjsModal").hidden = true;
     S.notes = [];
     $id("hjsNowT").textContent = s.t;
-    $id("hjsNowS").textContent = `${diffMeta().label}${S.learn ? " · 学习" : judgeTag()}`;
+    $id("hjsNowS").textContent = `${diffMeta().label}${modeTag()}`;
     setPauseIcon(false);
+    flyReset();
     updateHud();
     $id("hjsProg").style.transform = "scaleX(0)";
     banner("准备中…", "is-wait");
@@ -1241,8 +1170,9 @@
       }
       if (!S.frozen) { scheduleSounds(); countIn(t); }
     }
-    if (S.judge === "hover" && S.hover) hoverCheck(t, dm);
+    if (S.judge === "hover" && (S.hover || S.range === "free")) hoverCheck(t, dm);
     draw(t, dm);
+    if (S.fl) flyFrame(t, dm);
     $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
     S.raf = requestAnimationFrame(tick);
@@ -1330,6 +1260,96 @@
     S.els.clear();
   }
 
+  /* ==== 飞花线：一朵花飞向每个刚出现的气泡，身后撒一串星星（设置 → 画面，默认关）====
+     省着画：花是一个元素，每帧只改 transform，转圈交给 CSS 动画；星星是固定的一小池元素轮流用，
+     用 Web Animations 交给合成器跑（只动 transform 和 opacity，不排版、不重绘）；简单显示时池子更小。
+     花和星星在气泡下面一层，不挡音名 */
+  function flyReset() {
+    const box = $id("hjsFly");
+    if (!box) return;
+    box.textContent = "";
+    box.hidden = !S.fly;
+    S.fl = null;
+    if (!S.fly) return;
+    const flower = h("i", { class: "hjs-fly-flower" }, h("i"));
+    box.append(flower);
+    const pool = [];
+    const n = S.render === "simple" ? FLY.poolLite : FLY.pool;
+    for (let i = 0; i < n; i++) {
+      const el = h("i", { class: "hjs-fly-star" });
+      box.append(el);
+      pool.push({ el, anim: null });
+    }
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    S.fl = { flower, pool, pi: 0, x: 0, y: 0, tgt: 0, last: 0, acc: 0, lastSpawn: 0, placed: false, calm };
+  }
+  function flyLayout() {
+    const f = S.fl;
+    if (!f || !S.g) return;
+    const box = $id("hjsFly");
+    box.style.setProperty("--fly", `${(S.g.size * FLY.flower).toFixed(1)}px`);
+    box.style.setProperty("--star", `${(S.g.size * FLY.star).toFixed(1)}px`);
+    f.placed = false;                                   // 气泡挪了位置：下一帧直接放到目标上
+  }
+  function flyPlace(f) {
+    f.flower.style.transform = `translate3d(${f.x.toFixed(1)}px, ${f.y.toFixed(1)}px, 0)`;
+  }
+  function flyFrame(t, dm) {
+    const f = S.fl;
+    if (!S.notes.length || !S.g) return;
+    /* 目标：最近出现的那个气泡（出现时刻 = 判定时刻 − 提前量） */
+    let k = f.tgt;
+    while (k + 1 < S.notes.length && S.notes[k + 1].t - dm.approach <= t) k += 1;
+    f.tgt = k;
+    const n = S.notes[k];
+    const now = performance.now();
+    if (!f.placed) {
+      f.x = n.x;
+      f.y = n.y;
+      f.placed = true;
+      f.last = now;
+      flyPlace(f);
+      return;
+    }
+    const dtf = Math.min(0.1, (now - f.last) / 1000);
+    f.last = now;
+    const a = 1 - Math.exp(-dtf / FLY.tau);             // 平滑追过去：离得远飞得快，快到时慢下来
+    const dx = (n.x - f.x) * a;
+    const dy = (n.y - f.y) * a;
+    const step = Math.hypot(dx, dy);
+    if (step < 0.05) return;
+    f.x += dx;
+    f.y += dy;
+    flyPlace(f);
+    f.acc += step;
+    if (f.acc >= S.g.size * FLY.gap && now - f.lastSpawn >= FLY.every) {
+      f.acc = 0;
+      f.lastSpawn = now;
+      flySpark(f, dx / step, dy / step);
+    }
+  }
+  /* 撒一颗星：从花的后面出发，往飞行反方向飘一点、略往下落，边转边缩边淡 */
+  function flySpark(f, ux, uy) {
+    const p = f.pool[f.pi];
+    f.pi = (f.pi + 1) % f.pool.length;
+    if (f.calm || !p.el.animate) return;
+    if (p.anim) p.anim.cancel();
+    const s = S.g.size;
+    p.el.style.backgroundPosition = `${Math.floor(Math.random() * FLY.kinds) * 50}% 0`;
+    const sc = 0.55 + Math.random() * 0.6;
+    const side = (Math.random() - 0.5) * s * 0.35;     // 垂直于飞行方向撒开一点
+    const back = s * (0.25 + Math.random() * 0.3);
+    const x0 = f.x - ux * s * 0.18 - uy * side;
+    const y0 = f.y - uy * s * 0.18 + ux * side;
+    const x1 = x0 - ux * back - uy * side * 0.4;
+    const y1 = y0 - uy * back + ux * side * 0.4 + s * 0.12;
+    const rot = Math.random() * 90 - 45;
+    p.anim = p.el.animate([
+      { transform: `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${rot.toFixed(0)}deg) scale(${sc.toFixed(2)})`, opacity: 0.95 },
+      { transform: `translate3d(${x1.toFixed(1)}px, ${y1.toFixed(1)}px, 0) rotate(${(rot + 40).toFixed(0)}deg) scale(${(sc * 0.35).toFixed(2)})`, opacity: 0 },
+    ], { duration: 520 + Math.random() * 260, easing: "cubic-bezier(.2, .6, .4, 1)" });
+  }
+
   /* ==== 输入 ==== */
   function onPlayPointer(e) {
     if (e.target.closest && e.target.closest("button")) return;
@@ -1337,20 +1357,13 @@
     if (S.needTap) { e.preventDefault(); startSong(); return; }
     if (S.view !== "play" || !S.playing || S.paused) return;
     e.preventDefault();
-    if (S.judge === "hover" || e.pointerType === "mouse") S.hover = hoverPos(e);
-    const r = S.root.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    if (S.mode === "keys") {
-      const lane = clamp(Math.floor(x / S.g.laneW), 0, S.lanes - 1);
-      flashLane(lane);
-      press(lane, e);
-    } else {
-      tapAt(x, y, e);
-    }
+    const p = hoverPos(e);
+    if (S.judge === "hover" || e.pointerType === "mouse") S.hover = p;
+    if (isAuto()) return;                               // 自动演奏：点了也不算
+    tapAt(p.x, p.y, e);
   }
   /* 记下指针在哪（鼠标一直跟着；手指按着时才算，抬起就清掉）：
-     放水模式每帧由 hoverCheck 看它停在哪个气泡上；电脑点气泡时按键盘任意键＝在鼠标处点一下（onKeyDown） */
+     放水判定每帧由 hoverCheck 看它停在哪个气泡上；按键盘任意键＝在鼠标处点一下（onKeyDown） */
   function hoverPos(e) {
     const r = S.root.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -1362,14 +1375,16 @@
   function onHoverEnd(e) {
     if (e.type === "pointerleave" || e.pointerType !== "mouse") S.hover = null;
   }
-  /* 指针在气泡上：气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算 */
+  /* 放水判定：指针在气泡上，气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算。
+     点击范围也是放水（自动演奏）时不看指针，到点的都算 */
   function hoverCheck(t, dm) {
     const g = S.g;
     if (!g) return;
+    const free = S.range === "free";
     const R = g.size * HOVER_R;
-    const { x, y } = S.hover;
+    const on = (n) => free || (S.hover && Math.hypot(n.x - S.hover.x, n.y - S.hover.y) <= R);
     if (S.frozen && S.waiting) {
-      if (Math.hypot(S.waiting.x - x, S.waiting.y - y) <= R) learnHit(S.waiting);
+      if (on(S.waiting)) learnHit(S.waiting);
       return;
     }
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
@@ -1377,7 +1392,10 @@
       const dt = n.t - t;
       if (dt > 0) break;
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
-      if (Math.hypot(n.x - x, n.y - y) <= R) { hit(n, tierOf(-dt, dm), -dt); return; }
+      if (on(n)) {
+        hit(n, tierOf(-dt, dm), -dt);
+        if (!free) return;                              // 自动演奏：同一刻的和弦一起弹
+      }
     }
   }
   /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣一点（最多 TS_MAX 秒） */
@@ -1394,20 +1412,6 @@
 
   function onKeyDown(e) {
     if (!S.root || S.root.hidden) return;
-    if (S.binding >= 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Escape") { S.binding = -1; renderSheet(); return; }
-      if (!BINDABLE.test(e.code)) { toast("这个键不能用，换一个字母、数字或空格"); return; }
-      const list = S.codes[lanesNow()];
-      const other = list.indexOf(e.code);
-      if (other >= 0 && other !== S.binding) list[other] = list[S.binding];
-      list[S.binding] = e.code;
-      storage.set(K.codes, JSON.stringify(S.codes));
-      S.binding = -1;
-      renderSheet();
-      return;
-    }
     if (S.cal) {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); stopCal("校准取消了"); return; }
       if (e.repeat || e.key === "Tab") return;
@@ -1424,19 +1428,14 @@
     if (S.view === "play") {
       if (S.needTap && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); startSong(); return; }
       if (!S.playing || S.paused || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (S.mode === "tap") {
-        /* 电脑点气泡（放水模式除外）：鼠标指着气泡按任意键＝在鼠标处点一下 */
-        if (S.judge === "hover" || !S.hover || /^(F\d+|Tab|CapsLock|Control|Alt|Meta|ContextMenu)$/.test(e.key)) return;
-        e.preventDefault();
-        if (!e.repeat) tapAt(S.hover.x, S.hover.y, e);
-        return;
-      }
-      const lane = S.codes[S.lanes].indexOf(e.code);
-      if (lane < 0) return;
+      /* 按任意键＝在鼠标处点一下；放水范围不看位置，没动过鼠标也行。放水判定（含自动演奏）不用按 */
+      if (S.judge === "hover" || /^(F\d+|Tab|CapsLock|Control|Alt|Meta|ContextMenu)$/.test(e.key)) return;
+      const free = S.range === "free";
+      if (!S.hover && !free) return;
       e.preventDefault();
       if (e.repeat) return;
-      flashLane(lane, true);
-      press(lane, e);
+      const p = S.hover || { x: S.g ? S.g.w / 2 : 0, y: S.g ? (S.g.top + S.g.bottom) / 2 : 0 };
+      tapAt(p.x, p.y, e);
       return;
     }
     if (S.view === "lobby" && !S.sheet && e.key === "Enter") {
@@ -1446,17 +1445,6 @@
       startSong();
     }
   }
-  function onKeyUp(e) {
-    if (!S.root || S.root.hidden || S.view !== "play" || S.mode !== "keys") return;
-    const lane = S.codes[S.lanes].indexOf(e.code);
-    if (lane >= 0) document.querySelector(`.hjs-cap[data-lane="${lane}"]`)?.classList.remove("is-down");
-  }
-  function flashLane(lane, hold) {
-    const cap = document.querySelector(`.hjs-cap[data-lane="${lane}"]`);
-    const ln = document.querySelector(`.hjs-lane[data-lane="${lane}"]`);
-    if (cap) { cap.classList.add("is-down"); if (!hold) setTimeout(() => cap.classList.remove("is-down"), 110); }
-    if (ln) { ln.classList.remove("is-lit"); void ln.offsetWidth; ln.classList.add("is-lit"); }
-  }
 
   const tierOf = (d, dm) => (d <= dm.win[0] ? 0 : d <= dm.win[1] ? 1 : 2);
 
@@ -1464,7 +1452,7 @@
      这一下会被算给下一个音，后面每一下都跟着错一个（多出 GOOD 和 MISS）。只有两种情况跳过最早那个：
      · 点在后面某个气泡正中（0.45 个气泡以内），离最早那个却有 1.3 个气泡以上 —— 就是想点后面那个
      · 最早那个已经晚过 GREAT 窗，后面那个时间更准、位置也不比它远 —— 前一个留给判漏
-     cands：[{ n, d }]，按时间先后，d 为离点按处多少个气泡（键盘为 0） */
+     cands：[{ n, d }]，按时间先后，d 为离点按处多少个气泡（放水范围为 0） */
   function pickNote(cands, t, dm) {
     if (!cands.length) return null;
     const first = cands[0];
@@ -1476,34 +1464,16 @@
     return first.n;
   }
 
-  /* 键盘：这条轨道里离现在最近、还在判定窗内的音 */
-  function press(lane, e) {
-    if (S.frozen && S.waiting) {
-      if (S.waiting.lane === lane) learnHit(S.waiting);
-      return;
-    }
-    const dm = diffMeta();
-    const t = inputTime(e);
-    const cands = [];
-    for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
-      const n = S.notes[i];
-      if (n.t - t > dm.win[2]) break;
-      if (n.lane !== lane || S.judged[n.idx] >= 0 || n.t - t < -dm.win[2]) continue;
-      cands.push({ n, d: 0 });
-    }
-    const best = pickNote(cands, t, dm);
-    if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
-  }
-
   /* 点气泡：判定窗内、离点按处判定半径（TAP_RANGES 的 r 个气泡直径）以内的音，时间越准、离得越近越优先；
-     一个都没有时，下一个该弹的音在 next 个气泡直径以内也算 */
+     一个都没有时，下一个该弹的音在 next 个气泡直径以内也算。放水范围不看位置 */
   function tapAt(x, y, e) {
     const g = S.g;
     const rg = TAP_RANGES[S.range] || TAP_RANGES.normal;
+    const free = S.range === "free";
     const R = g.size * rg.r;
     if (S.frozen && S.waiting) {
       const n = S.waiting;
-      if (Math.hypot(n.x - x, n.y - y) <= R * 1.5) learnHit(n);
+      if (free || Math.hypot(n.x - x, n.y - y) <= R * 1.5) learnHit(n);
       else ghost(x, y);
       return;
     }
@@ -1515,11 +1485,11 @@
       const dt = n.t - t;
       if (dt > dm.win[2]) break;
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
-      const d = Math.hypot(n.x - x, n.y - y);
+      const d = free ? 0 : Math.hypot(n.x - x, n.y - y);
       if (d <= R) cands.push({ n, d: d / g.size });
     }
     let best = pickNote(cands, t, dm);
-    if (!best) {
+    if (!best && !free) {
       for (let i = S.next; i < S.notes.length; i++) {
         const n = S.notes[i];
         if (S.judged[n.idx] >= 0 || n.t - t < -dm.win[2]) continue;   // 已经过了判定窗、等着判漏的不算
@@ -1540,17 +1510,17 @@
   /* ==== 判定 ==== */
   function hit(n, tier, off) {
     S.judged[n.idx] = tier;
-    if (Number.isFinite(off) && !S.learn) S.offs.push(off);
+    if (Number.isFinite(off) && scored()) S.offs.push(off);
     bard().playMidi?.(n.m, JUDGE[tier].vel, instId(), 0, 0);
     dropEl(n, "is-hit", 300);
     S.combo += 1;
     S.maxCombo = Math.max(S.maxCombo, S.combo);
     S.counts[JUDGE[tier].id] += 1;
-    if (S.learn) {
+    if (!scored()) {                                    // 学习模式、自动演奏：不计分，只数弹了几个
       S.learnHits += 1;
-      popJudge("WELL", "is-ok");
+      popJudge(S.learn ? "WELL" : "AUTO", "is-ok");
     } else {
-      S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120));
+      S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120) * scoreMult());
       popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`, off);
     }
     while (S.next < S.notes.length && S.judged[S.notes[S.next].idx] >= 0) S.next += 1;
@@ -1607,8 +1577,8 @@
 
   function updateHud() {
     const total = S.notes.length;
-    $id("hjsScoreL").textContent = S.learn ? "已弹对" : "分数";
-    $id("hjsScore").textContent = S.learn ? `${S.learnHits}/${total}` : fmtNum(S.score);
+    $id("hjsScoreL").textContent = S.learn ? "已弹对" : isAuto() ? "自动演奏" : "分数";
+    $id("hjsScore").textContent = scored() ? fmtNum(S.score) : `${S.learnHits}/${total}`;
     $id("hjsCombo").textContent = String(S.combo);
     /* 判定字下方常驻的连击数：一直显示，涨了跳一下，断了变暗 */
     const big = $id("hjsComboBig");
@@ -1654,7 +1624,7 @@
     el.style.setProperty("--k", "1");
     el.style.opacity = "";
     el.classList.add("is-wait");
-    banner(S.mode === "keys" ? `按 ${codeLabel(S.codes[S.lanes][n.lane])}` : "点亮着的气泡", "is-hint");
+    banner(S.range === "free" ? "点一下屏幕" : "点亮着的气泡", "is-hint");
   }
   function learnHit(n) {
     hit(n, 0);
@@ -1690,7 +1660,7 @@
     setPauseIcon(true);
     modal(h("div", { class: "hjs-card hjs-res" },
       h("h3", { class: "hjs-res-title", text: "已暂停" }),
-      h("p", { class: "hjs-res-sub", text: `${S.song.t} · ${diffMeta().label}${S.learn ? " · 学习" : judgeTag()}` }),
+      h("p", { class: "hjs-res-sub", text: `${S.song.t} · ${diffMeta().label}${modeTag()}` }),
       h("div", { class: "hjs-res-btns" },
         h("button", { type: "button", class: "hjs-btn is-main", text: "继续", onclick: resume }),
         h("button", { type: "button", class: "hjs-btn", text: "重来", onclick: () => startSong() }),
@@ -1725,11 +1695,13 @@
     const pct = accPct();
     const tag = (k, v) => h("span", { class: "hjs-res-tag" }, h("small", { text: k }), h("b", { text: v }));
     const card = h("div", { class: "hjs-card hjs-res" }, h("h3", { class: "hjs-res-title", text: "演出结束" }), h("p", { class: "hjs-res-song", text: S.song.t }),
-      h("div", { class: "hjs-res-tags" }, tag("难度", diffMeta().label), tag("判定", judgeLabel()), S.learn ? tag("模式", "学习") : null));
-    if (S.learn) {
+      h("div", { class: "hjs-res-tags" }, tag("难度", diffMeta().label), tag("判定", judgeLabel()), tag("范围", rangeLabel()),
+        S.learn ? tag("模式", "学习") : isAuto() ? tag("模式", "自动演奏") : null));
+    if (!scored()) {
       card.append(
         h("div", { class: "hjs-res-big", text: `${S.learnHits} / ${total}` }),
-        h("p", { class: "hjs-res-sub", text: "学习模式不计分。弹熟了就切到「演出」，正式来一次" }));
+        h("p", { class: "hjs-res-sub", text: S.learn ? "学习模式不计分。弹熟了就切到「演出」，正式来一次"
+          : "点击范围和判定模式都是放水：自动演奏，不计分、不记纪录。想自己弹，到设置里把其中一个改回来" }));
     } else {
       const isNew = saveBest(pct);
       const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
@@ -1738,6 +1710,7 @@
         h("div", { class: "hjs-res-rank" }, h("span", { text: rankOf(pct) }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo}` }),
+        ...(multNote() ? [h("p", { class: "hjs-res-sub hjs-res-mult", text: multNote() })] : []),   // 原生 append 不能传 null
         timingNote(),
         h("div", { class: "hjs-res-grid" }, JUDGE.map((j) => h("div", { class: `hjs-cell is-${j.id}` }, h("b", { text: String(S.counts[j.id]) }), h("small", { text: j.label })))));
     }
@@ -1752,7 +1725,7 @@
     const o = (S.offs || []).slice().sort((a, b) => a - b);
     const ms = o.length ? Math.round(o[Math.floor(o.length / 2)] * 1000) : 0;
     const parts = [Math.abs(ms) < 10 ? "手感很准，平均几乎不早不晚" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`];
-    if (S.mode === "tap" && S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
+    if (S.ghosts) parts.push(`点空 ${S.ghosts} 下`);
     /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
     const dg = S.diag || {};
     const w = (dg.waits || []).slice().sort((a, b) => a - b);
@@ -1762,7 +1735,6 @@
       dg.frames ? frameNote(dg) : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
-      S.mode === "tap" && S.range === "loose" ? "宽松点击范围" : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
       o.length >= 8 ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
@@ -1780,9 +1752,9 @@
   }
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
-    const key = `${S.song.id}:${S.diff}:${S.judge}`;
-    const v = { score: S.score, acc: +pct.toFixed(1), rank: rankOf(pct), combo: S.maxCombo, diff: S.diff, judge: S.judge };
-    const old = bestOf(all, S.song.id, S.diff, S.judge);
+    const key = `${S.song.id}:${S.diff}:${S.judge}:${S.range}`;
+    const v = { score: S.score, acc: +pct.toFixed(1), rank: rankOf(pct), combo: S.maxCombo, diff: S.diff, judge: S.judge, range: S.range };
+    const old = bestOf(all, S.song.id, S.diff, S.judge, S.range);
     if (old && v.score <= num(old.score, 0)) return false;
     all[key] = v;
     storage.set(K.best, JSON.stringify(all));
@@ -1795,9 +1767,10 @@
     /* 冒烟测试用的只读快照 */
     get state() {
       return {
-        view: S.view, sheet: S.sheet, mode: S.mode, lanes: S.lanes, playing: S.playing, paused: S.paused, frozen: S.frozen,
+        view: S.view, sheet: S.sheet, range: S.range, auto: isAuto(), playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
-        bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, codes: S.codes, g: S.g,
+        bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
+        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, tgt: S.fl.tgt } : null,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };

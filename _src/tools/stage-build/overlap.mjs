@@ -1,5 +1,5 @@
-/* 气泡重叠统计（开发用）：对每首每档、键盘 4/3/2 轨与手机点气泡，跑 bard-stage.js 的布局，数同时在场的气泡里
-   中心距离 < 1 个气泡（重叠）的对数、以及挨得近（< 1.8 个气泡）却同色的对数。用法：node tools/stage-build/overlap.mjs */
+/* 气泡重叠统计（开发用）：对每首每档、电脑与手机两种屏幕，跑 bard-stage.js 的布局，数同时在场的气泡里
+   中心距离 < 1 个气泡（重叠）的对数、以及挨得近（< 1.8 个气泡）却同色的对数。用法：node tools/stage-build/overlap.mjs [曲目 id] */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -17,7 +17,7 @@ const DIFF = { easy: 1.8, normal: 1.35, hard: 1.05 };
 async function run(song, diff, mode) {
   const dom = new JSDOM("<!doctype html><body></body>", { pretendToBeVisual: true, runScripts: "dangerously", url: "https://x.test/" });
   const win = dom.window;
-  const mem = new Map([["hj_stage_song", song.id], ["hj_stage_diff", diff], ["hj_stage_input", mode.input], ["hj_stage_lanes", mode.lanes]]);
+  const mem = new Map([["hj_stage_song", song.id], ["hj_stage_diff", diff]]);
   win.storage = { get: (k) => (mem.has(k) ? mem.get(k) : null), set: (k, v) => mem.set(k, String(v)), remove: (k) => mem.delete(k), json: () => null };
   win.showToast = () => {};
   win.HJBard = { unlock() {}, prepare() {}, instName: () => "piano", instruments: [], clock: () => ({ t: 1, lat: 0, running: false }), playMidi() {} };
@@ -48,38 +48,23 @@ async function run(song, diff, mode) {
     for (let j = i + 1; j < ns.length && ns[j].t - n.t < W; j++) far = Math.max(far, Math.hypot(ns[j].x - n.x, ns[j].y - n.y) / size);
     spreads.push(far);
   });
-  let jack = 0, sameHand = 0, fast = 0;
-  const lanesUsed = [0, 0, 0, 0];
-  const L = st.lanes;
-  const hand = (l) => (L === 3 ? (l === 1 ? -1 : l > 1 ? 1 : 0) : l < L / 2 ? 0 : 1);
-  ns.forEach((n, i) => {
-    if (L) lanesUsed[n.lane] += 1;
-    const p = ns[i - 1];
-    if (!L || !p || n.t - p.t >= 0.2) return;
-    fast++;
-    if (n.lane === p.lane) jack++;
-    else if (hand(n.lane) >= 0 && hand(n.lane) === hand(p.lane)) sameHand++;
-  });
   win.close();
-  return { n: ns.length, over, close, same, worst, jack, sameHand, fast, lanesUsed, jumps, spreads };
+  return { n: ns.length, over, close, same, worst, jumps, spreads };
 }
 const MODES = [
-  { name: "键盘4", input: "keys", lanes: "4", w: 1280, h: 800 },
-  { name: "键盘3", input: "keys", lanes: "3", w: 1000, h: 720 },
-  { name: "键盘2", input: "keys", lanes: "2", w: 700, h: 700 },
-  { name: "手机", input: "tap", lanes: "auto", w: 390, h: 844 },
+  { name: "电脑", w: 1280, h: 800 },
+  { name: "手机", w: 390, h: 844 },
 ];
 const tot = {};
 for (const s of SONGS.songs.filter((s) => !only || s.id === only)) {
   for (const diff of ["easy", "normal", "hard"]) for (const m of MODES) {
     const r = await run(s, diff, m);
     const k = `${m.name}/${diff}`;
-    tot[k] ??= { notes: 0, over: 0, same: 0, worst: 9, worstSong: "", jack: 0, sameHand: 0, fast: 0, lanes: [0, 0, 0, 0], jumps: [], spreads: [] };
+    tot[k] ??= { notes: 0, over: 0, same: 0, worst: 9, worstSong: "", jumps: [], spreads: [] };
     tot[k].jumps.push(...r.jumps); tot[k].spreads.push(...r.spreads);
-    tot[k].jack += r.jack; tot[k].sameHand += r.sameHand; tot[k].fast += r.fast; r.lanesUsed.forEach((c, i) => { tot[k].lanes[i] += c; });
     tot[k].notes += r.n; tot[k].over += r.over; tot[k].same += r.same;
     if (r.worst < tot[k].worst) { tot[k].worst = r.worst; tot[k].worstSong = s.id; }
   }
 }
 const q = (a, f) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor(f * (b.length - 1))].toFixed(2) : "-"; };
-for (const [k, v] of Object.entries(tot)) console.log(`${k.padEnd(12)} 跳距 中位 ${q(v.jumps, 0.5)} / 90% ${q(v.jumps, 0.9)}  同屏最远 中位 ${q(v.spreads, 0.5)} / 90% ${q(v.spreads, 0.9)}  音 ${String(v.notes).padStart(6)}  重叠对 ${String(v.over).padStart(5)}  近而同色 ${v.same}  最近 ${v.worst.toFixed(2)} 个气泡（${v.worstSong}）${v.fast ? `  快速连打 ${v.fast}：同键 ${v.jack} 同手 ${v.sameHand}  各轨 ${v.lanes.join("/")}` : ""}`);
+for (const [k, v] of Object.entries(tot)) console.log(`${k.padEnd(10)} 跳距 中位 ${q(v.jumps, 0.5)} / 90% ${q(v.jumps, 0.9)}  同屏最远 中位 ${q(v.spreads, 0.5)} / 90% ${q(v.spreads, 0.9)}  音 ${String(v.notes).padStart(6)}  重叠对 ${String(v.over).padStart(5)}  近而同色 ${v.same}  最近 ${v.worst.toFixed(2)} 个气泡（${v.worstSong}）`);

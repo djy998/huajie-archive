@@ -1,7 +1,8 @@
 /* 舞台演奏的运行时冒烟测试：用 jsdom 直接跑 _src/bard-stage.js 本体（不是重写一份逻辑），音频时钟由测试手动推进
-   覆盖：大厅 → 选曲窗口（搜索 / 分类 / 星级 / 试听）→ 设置窗口（操作方式、改键对调）→ 键盘轨道演奏（中文输入法下的按键、
-   漏音不出声、补音、预备拍、声像居中）→ 点气泡演奏（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
+   覆盖：大厅 → 选曲窗口（搜索 / 分类 / 星级 / 试听）→ 设置窗口（点击范围、画面、判定模式）→ 电脑点气泡演奏（鼠标指着按键、
+   中文输入法、漏音不出声、补音、预备拍、声像居中）→ 手机点气泡（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
    → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻连击与 FULL COMBO
+   → 点击范围（正常 / 宽松 / 放水）→ 双放水自动演奏 → 纪录按判定模式与点击范围分开 → 飞花线
    用法：cd _src && npm i --no-save jsdom && node tools/stage-build/smoke.mjs   （期望最后一行：全部通过） */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -107,9 +108,14 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
     Object.defineProperty(ev, "timeStamp", { value: ago === "epoch" ? Date.now() : P.now - ago });   // 和 performance.now 同一时基
     doc.dispatchEvent(ev);
   };
-  P.pointer = (x, y) => {
+  P.pointer = (x, y, ago = 0) => {
     const ev = new win.MouseEvent("pointerdown", { clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0 });
-    Object.defineProperty(ev, "timeStamp", { value: P.now });
+    Object.defineProperty(ev, "timeStamp", { value: ago === "epoch" ? Date.now() : P.now - ago });
+    P.$("#hjsPlay").dispatchEvent(ev);
+  };
+  P.move = (x, y) => {
+    const ev = new win.MouseEvent("pointermove", { clientX: x, clientY: y, bubbles: true, cancelable: true });
+    Object.defineProperty(ev, "pointerType", { value: "mouse" });
     P.$("#hjsPlay").dispatchEvent(ev);
   };
   P.btn = (text, root = doc) => Array.from(root.querySelectorAll("button")).find((b) => b.textContent.trim() === text || b.getAttribute("aria-label") === text);
@@ -198,45 +204,39 @@ async function main() {
     check("关舞台时马上露出下面的网站", !P.doc.body.classList.contains("hjs-covered"));
   }
 
-  /* 2. 键盘轨道：输入法、漏音、补音、预备拍、声像、暂停、结算 */
+  /* 2. 电脑点气泡：鼠标指着按键、输入法、漏音、补音、预备拍、声像、暂停、结算 */
   {
-    const P = makePage({ width: 1280, prefs: { hj_stage_diff: "easy", hj_stage_song: SHORT.id, hj_stage_input: "auto" } });
+    const P = makePage({ width: 1280, prefs: { hj_stage_diff: "easy", hj_stage_song: SHORT.id, hj_stage_input: "keys", hj_stage_codes: "{}" } });
     await openStage(P);
-    check("操作方式选「自动」：电脑照旧用键盘", /键盘/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("键盘轨道模式去掉了：旧的操作方式、键位设置清掉", !P.mem.has("hj_stage_input") && !P.mem.has("hj_stage_codes"));
     P.click(P.btn("设置"));
-    check("设置里有判定模式（正常 / 宽松 / 放水）", ["正常", "宽松", "放水"].every((t) => !!P.btn(t, P.$("#hjsSheetCard"))));
+    const sheet = P.$("#hjsSheetCard");
+    check("设置里有判定模式（正常 / 宽松 / 放水）", P.$$('[aria-label="判定模式"] button').map((b) => b.textContent).join() === "正常,宽松,放水");
+    check("设置里有点击范围（正常 / 宽松 / 放水）", P.$$('[aria-label="点击范围"] button').map((b) => b.textContent).join() === "正常,宽松,放水");
+    check("设置里没有操作方式、轨道、键位", !/操作方式|轨道|键位/.test(sheet.textContent));
+    check("画面里有飞花线开关，默认关", P.$('[aria-label="飞花线"]') && !P.$('[aria-label="飞花线"]').checked);
     check("设置窗口单独打开", P.st().sheet === "settings" && !!P.$(".hjs-sheet-card.is-settings"));
-    check("设置里不再提伴奏", !/伴奏/.test(P.$("#hjsSheetCard").textContent));
-    const keyBtns = P.$$(".hjs-keybtn");
-    check("自动轨道数按宽度（1280 → 4 条）", keyBtns.length === 4, `${keyBtns.length}`);
-    P.click(keyBtns[0]);
-    P.key("KeyF", "f");
-    check("改键撞车时两条轨道对调", P.st().codes[4][0] === "KeyF" && P.st().codes[4][1] === "KeyD", JSON.stringify(P.st().codes[4]));
-    P.click(P.$$(".hjs-keybtn")[0]);
-    P.key("KeyD", "d");
-    check("再改回 D F J K", P.st().codes[4].join() === "KeyD,KeyF,KeyJ,KeyK");
-    P.click(P.btn("关闭", P.$("#hjsSheetCard")));
+    check("设置里不再提伴奏", !/伴奏/.test(sheet.textContent));
+    P.click(P.btn("关闭", sheet));
 
     await go(P);
     const st = P.st();
-    check("开始演奏：键盘模式、4 条轨道", st.view === "play" && st.mode === "keys" && st.lanes === 4 && st.playing);
+    check("开始演奏：点气泡，没有轨道和键帽", st.view === "play" && st.playing && !P.$(".hjs-lane") && !P.$(".hjs-cap"));
+    check("飞花线默认关：不显示", P.$("#hjsFly").hidden && !P.$(".hjs-fly-flower"));
     check("轻松难度：气泡数等于谱面里级别 3 的音", st.notes.length === SHORT.cnt[0], `${st.notes.length}/${SHORT.cnt[0]}`);
     check("其余的音都是补音", st.bg.length === chartOf(SHORT.id).n.length - SHORT.cnt[0], `${st.bg.length}`);
     check("钟从负数开始（预备拍在第一个音之前）", st.startT < 0 && st.clock.run);
     const ck = crowd(st, 1.8);
-    check("键盘：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
-    check("键盘：轨道不按音高划分，四条都用上", new Set(st.notes.map((n) => n.lane)).size === 4);
-    const lanes0 = st.notes.map((n) => n.lane).join();
-    P.win.dispatchEvent(new P.win.Event("resize"));
-    check("改窗口大小时轨道不变", P.st().notes.map((n) => n.lane).join() === lanes0);
+    check("电脑：同时在场的气泡不重叠、挨得近的不同色", ck.over === 0 && ck.same === 0, JSON.stringify(ck));
     const notes = st.notes;
     const n0 = notes[0];
     P.until(Math.min(0, n0.t) - 0.05);
     const ticks = P.midi.filter((m) => m.vel === 0.32);
     check("第一个音前有四下预备拍", ticks.length === 4, `${ticks.length}`);
     P.until(n0.t);
-    P.key(st.codes[4][n0.lane], "Process", { keyCode: 229 });     // 中文输入法开着时 key 是 Process
-    check("中文输入法下按键照样判定（按 e.code）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
+    P.move(n0.x, n0.y);
+    P.key("KeyA", "Process", { keyCode: 229 });       // 中文输入法开着时 key 是 Process
+    check("鼠标指着气泡按键（中文输入法下也行）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
     const hitSound = P.midi.find((m) => m.vel === 1);
     check("弹中发出这个音，声像居中", hitSound && hitSound.midi === n0.m && hitSound.pan === 0);
     check("弹中的音用曲目原本的乐器（默认跟随曲目）", hitSound && hitSound.inst === (["piano", "harp", "lute"].includes(SHORT.inst) ? SHORT.inst : "piano"), `${hitSound && hitSound.inst} / ${SHORT.inst}`);
@@ -267,12 +267,13 @@ async function main() {
 
     /* 主线程忙：点按晚 200 ms 才处理，按事件时间补回 50 ms → 判成晚 150 ms，仍在轻松的 PERFECT（0.16 秒）以内 */
     P.until(notes[2].t + 0.2);
-    P.key(P.st().codes[4][notes[2].lane], "x", {}, 200);
+    P.move(notes[2].x, notes[2].y);
+    P.key("KeyX", "x", {}, 200);
     check("点按排队的时间按事件时间戳补回一点（最多 50 ms）", P.st().judged[2] === 0, `judged=${P.st().judged[2]}`);
     /* 一路弹到底 */
     for (let i = 3; i < notes.length; i++) {
       P.until(notes[i].t);
-      P.key(P.st().codes[4][notes[i].lane], "x");
+      P.pointer(notes[i].x, notes[i].y);
     }
     P.until(P.st().endT + 2);
     const fin = P.st();
@@ -284,8 +285,8 @@ async function main() {
     check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
-    check("本机纪录按难度和判定模式分开写入", best[`${fin.song}:easy:normal`] && best[`${fin.song}:easy:normal`].score === fin.score && !best[`${fin.song}:easy`]);
-    check("结算分别显示难度和判定模式", /难度轻松/.test(P.$(".hjs-res-tags").textContent) && /判定正常/.test(P.$(".hjs-res-tags").textContent), P.$(".hjs-res-tags")?.textContent);
+    check("本机纪录按难度、判定模式、点击范围分开写入", best[`${fin.song}:easy:normal:normal`] && best[`${fin.song}:easy:normal:normal`].score === fin.score && Object.keys(best).length === 1, Object.keys(best).join());
+    check("结算分别显示难度、判定模式、点击范围", ["难度轻松", "判定正常", "范围正常"].every((x) => P.$(".hjs-res-tags").textContent.includes(x)), P.$(".hjs-res-tags")?.textContent);
     check("结算里是「结束演奏」，没有「回大厅」", !!P.btn("结束演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
     P.click(P.btn("结束演奏", P.$("#hjsModal")));
     check("结束演奏回到大厅", P.st().view === "lobby" && /本机纪录/.test(P.$(".hjs-ctrl").textContent));
@@ -298,7 +299,7 @@ async function main() {
     check("手机默认点气泡提示", /点气泡/.test(P.$(".hjs-ctrl-tip").textContent));
     await go(P);
     const st = P.st();
-    check("手机进入点气泡模式、没有轨道键帽", st.mode === "tap" && P.$$(".hjs-cap").length === 0);
+    check("手机点气泡、没有轨道键帽", st.playing && P.$$(".hjs-cap").length === 0);
     const xs = st.notes.slice(0, 12).map((n) => Math.round(n.x));
     check("气泡沿旋律左右铺开（前 12 个不全在一列）", new Set(xs).size >= 3, xs.join(","));
     const sameSpot = st.notes.slice(1, 30).filter((n, i) => Math.hypot(n.x - st.notes[i].x, n.y - st.notes[i].y) < st.g.size * 0.9).length;
@@ -344,7 +345,7 @@ async function main() {
 
   /* 4. 学习模式：停在这一拍；输出延迟也算进去 */
   {
-    const P = makePage({ prefs: { hj_stage_learn: "1", hj_stage_input: "keys" }, lat: 0.08 });
+    const P = makePage({ prefs: { hj_stage_learn: "1" }, lat: 0.08 });
     await openStage(P);
     await go(P);
     const n0 = P.st().notes[0];
@@ -354,15 +355,14 @@ async function main() {
     check("钟退回这一拍（之后的补音和你弹的这一下对齐）", Math.abs(P.pos() - n0.t) < 1e-9, `${Math.round((P.pos() - n0.t) * 1000)} ms`);
     const late = P.midi.filter((m) => m.vel === 0.4 && m.at + m.delay >= n0.t + 1e-6).length;
     check("停住前没排这一拍之后的补音", late === 0, `${late}`);
-    const wrong = (n0.lane + 1) % s1.lanes;
-    P.key(s1.codes[s1.lanes][wrong], "x");
-    check("按错轨道不放行", P.st().frozen);
+    P.pointer(n0.x + s1.g.size * 4, Math.max(0, n0.y - s1.g.size * 4));
+    check("点错地方不放行", P.st().frozen);
     P.key("Escape", "Escape");
     P.key("Escape", "Escape");
     check("停住时暂停再继续，还是停住（不闪一下）", P.st().frozen && !P.st().clock.run && !P.st().paused);
     const unlocks = P.unlocks;
-    P.key(s1.codes[s1.lanes][n0.lane], "x");
-    check("按对了继续走", !P.st().frozen && P.st().clock.run && P.st().judged[0] === 0);
+    P.pointer(n0.x, n0.y);
+    check("点对了继续走", !P.st().frozen && P.st().clock.run && P.st().judged[0] === 0);
     check("学习模式弹中提示 WELL", /WELL/.test(P.$("#hjsJudge").textContent));
     check("继续时不会掐掉刚弹的音（不调用 unlock）", P.unlocks === unlocks);
     check("学习模式 HUD 显示已弹对", /1\//.test(P.$("#hjsScore").textContent));
@@ -370,7 +370,7 @@ async function main() {
 
   /* 5. 示范旋律：要弹的音也先轻轻放一遍 */
   {
-    const P = makePage({ prefs: { hj_stage_demo: "1", hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_input: "keys" } });
+    const P = makePage({ prefs: { hj_stage_demo: "1", hj_stage_song: SHORT.id, hj_stage_diff: "normal" } });
     await openStage(P);
     await go(P);
     const st = P.st();
@@ -380,7 +380,7 @@ async function main() {
     /* 有的浏览器 timeStamp 是 1970 年起的毫秒（或别的时基）：认出来就不用，按处理时刻判定，不会整局判早 */
     const n0 = st.notes[0];
     P.until(n0.t);
-    P.key(st.codes[st.lanes][n0.lane], "x", {}, "epoch");
+    P.pointer(n0.x, n0.y, "epoch");
     check("时间戳时基不对时不拿来用（照样 PERFECT）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
   }
 
@@ -446,16 +446,16 @@ async function main() {
 
   /* 10. 判定模式：正常按难度收紧，宽松三档都按轻松；全弹中出 FULL COMBO，连击一直显示 */
   for (const [judge, want] of [["normal", 1], ["loose", 0]]) {
-    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", hj_stage_input: "keys", ...(judge === "normal" ? {} : { hj_stage_judge: judge }) } });
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", ...(judge === "normal" ? {} : { hj_stage_judge: judge }) } });
     await openStage(P);
     await go(P);
     const ns = P.st().notes;
     P.until(ns[0].t + 0.15);                    // 晚 150 ms：挑战正常判定 GREAT（0.11 < 0.15 < 0.19），宽松 PERFECT（< 0.18）
-    P.key(P.st().codes[P.st().lanes][ns[0].lane], "x");
+    P.pointer(ns[0].x, ns[0].y);
     check(`${judge === "normal" ? "正常判定（默认）" : "宽松判定"}：挑战难度晚 150 ms 判 ${want ? "GREAT" : "PERFECT"}`, P.st().judged[0] === want, `judged=${P.st().judged[0]}`);
     for (let i = 1; i < ns.length; i++) {
       P.until(ns[i].t);
-      P.key(P.st().codes[P.st().lanes][ns[i].lane], "x");
+      P.pointer(ns[i].x, ns[i].y);
       if (i === 5) check("连击数一直显示在判定字下方", P.$("#hjsComboN").textContent === "6" && !P.$("#hjsComboBig").classList.contains("is-zero"), P.$("#hjsComboN").textContent);
     }
     P.until(P.st().endT + 2);
@@ -490,7 +490,7 @@ async function main() {
     P.until(P.st().endT + 2);
     check("放水：弹完出结算、判定写放水", P.st().finished && /判定放水/.test(P.$(".hjs-res-tags").textContent));
     const rec = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
-    check("放水：纪录单独记在 :normal:hover 下", !!rec[`${SHORT.id}:normal:hover`] && Object.keys(rec).length === 1, Object.keys(rec).join(","));
+    check("放水判定：纪录单独记在 :normal:hover:normal 下", !!rec[`${SHORT.id}:normal:hover:normal`] && Object.keys(rec).length === 1, Object.keys(rec).join(","));
   }
 
   /* 12. 电脑点气泡（非放水）：鼠标指着气泡按任意键也算点 */
@@ -520,7 +520,7 @@ async function main() {
 
   /* 14. 掉帧诊断：单独掉一帧（60 Hz 下 33 ms）也要算，并指出最卡的那几秒 */
   {
-    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy", hj_stage_input: "keys" } });
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy" } });
     await openStage(P);
     await go(P);
     const ns = P.st().notes;
@@ -601,15 +601,124 @@ async function main() {
     check("备好后开演", P.st().playing && P.st().clock.run);
   }
 
+  /* 18. 放水点击范围：不看位置，点哪儿、按什么键都算判定窗里最早那个 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_range: "free" } });
+    await openStage(P);
+    check("放水范围：大厅提示点任意位置都算", /放水范围/.test(P.$(".hjs-ctrl-tip").textContent));
+    await go(P);
+    const ns = P.st().notes;
+    const g = P.st().g;
+    P.until(ns[0].t);
+    P.pointer(g.w - 5, g.h - 5);                       // 点在屏幕角落
+    check("放水范围：点屏幕角落也算", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
+    P.until(ns[1].t);
+    P.key("Space", " ");                               // 没动过鼠标，直接按键
+    check("放水范围：没动鼠标、直接按键也算", P.st().judged[1] === 0, `judged=${P.st().judged[1]}`);
+    const k = ns.findIndex((a, i) => i > 2 && a.t - ns[i - 1].t > 0.9);
+    if (k > 0) {
+      ns.slice(2, k).forEach((a) => { P.until(a.t); P.pointer(5, 5); });
+      P.until(ns[k].t - 0.6);
+      const ghosts = P.st().judged.filter((j) => j >= 0).length;
+      P.pointer(5, 5);
+      check("放水范围：判定窗里没有该弹的，点了算点空", P.st().judged.filter((j) => j >= 0).length === ghosts);
+    }
+  }
+
+  /* 19. 双放水（点击范围、判定模式都是放水）：自动演奏，不计分、不记纪录 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", hj_stage_range: "free", hj_stage_judge: "hover" } });
+    await openStage(P);
+    check("双放水：大厅按钮写「自动演奏」", P.$("#hjsGo").textContent.includes("自动演奏") && /自动演奏/.test(P.$(".hjs-tip").textContent));
+    P.click(P.btn("设置"));
+    check("双放水：设置里写明是自动演奏", /自动演奏/.test(P.$("#hjsSheetCard").textContent));
+    P.click(P.btn("关闭", P.$("#hjsSheetCard")));
+    await go(P);
+    check("双放水：标题下写自动演奏、分数栏写自动演奏", /自动演奏/.test(P.$("#hjsNowS").textContent) && P.$("#hjsScoreL").textContent === "自动演奏" && P.st().auto);
+    const ns = P.st().notes;
+    P.until(ns[0].t - 0.1);
+    P.pointer(5, 5);
+    check("自动演奏：点了不算（也不记点空）", P.st().judged[0] === -1);
+    P.until(P.st().endT + 2);
+    const st = P.st();
+    check("自动演奏：每个音都到点自动弹中（全 PERFECT）", st.judged.length === ns.length && st.judged.every((j) => j === 0), JSON.stringify(st.counts));
+    const hits = P.midi.filter((m) => m.vel === 1).length;
+    check("自动演奏：每个音都发声", hits === ns.length, `${hits}/${ns.length}`);
+    check("自动演奏：不计分", st.score === 0 && /0 分|自动演奏/.test(P.$("#hjsModal").textContent));
+    const tags = P.$(".hjs-res-tags").textContent;
+    check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度挑战", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
+    check("结算写明不计分、不记纪录，没有评级", /不计分、不记纪录/.test(P.$("#hjsModal").textContent) && !P.$(".hjs-res-rank"));
+    check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
+  }
+
+  /* 20. 飞花线：打开后一朵花飞向每个刚出现的气泡 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_fly: "1" } });
+    await openStage(P);
+    P.click(P.btn("设置"));
+    check("飞花线开关记得住（打开）", P.$('[aria-label="飞花线"]').checked);
+    P.click(P.btn("关闭", P.$("#hjsSheetCard")));
+    await go(P);
+    check("飞花线：显示一朵花和一池星星", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 18);
+    const ns = P.st().notes;
+    const ap = 1.35;                                   // 标准难度的提前量
+    P.until(ns[0].t - ap + 0.05);
+    const fp0 = P.st().flyPos;
+    check("飞花线：开始时花就在第一个气泡上", fp0 && Math.hypot(fp0.x - ns[0].x, fp0.y - ns[0].y) < 1, JSON.stringify(fp0));
+    const k = ns.findIndex((a, i) => i > 1 && Math.hypot(a.x - ns[i - 1].x, a.y - ns[i - 1].y) > P.st().g.size && a.t - ns[i - 1].t > 0.5);
+    if (k > 0) {
+      P.until(ns[k].t - ap + 0.02);
+      const mid = P.st().flyPos;
+      P.until(ns[k].t - ap + 0.6);
+      const end = P.st().flyPos;
+      const dEnd = Math.hypot(end.x - ns[k].x, end.y - ns[k].y);
+      check("飞花线：新气泡一出现，花就飞过去（0.6 秒内到位）", end.tgt === k && dEnd < 2 && Math.hypot(mid.x - ns[k].x, mid.y - ns[k].y) > dEnd, `tgt=${end.tgt}/${k} d=${dEnd.toFixed(1)}`);
+      check("飞花线：花在气泡下面一层（不挡音名）", P.$("#hjsFly").compareDocumentPosition(P.$("#hjsNotes")) & P.win.Node.DOCUMENT_POSITION_FOLLOWING);
+    }
+    const tf = P.$(".hjs-fly-flower").style.transform;
+    check("飞花线：花只用 transform 移动", /translate3d/.test(tf), tf);
+    const Q = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1", hj_stage_render: "simple" } });
+    await openStage(Q);
+    await go(Q);
+    check("简单显示时星星池更小", Q.$$(".hjs-fly-star").length === 10);
+  }
+
+  /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
+  {
+    const runAll = async (prefs) => {
+      const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy", ...prefs } });
+      await openStage(P);
+      const tip = P.$(".hjs-tip").textContent;
+      await go(P);
+      const ns = P.st().notes;
+      for (const n of ns) { P.until(n.t); P.pointer(n.x, n.y); }
+      P.until(P.st().endT + 2);
+      return { score: P.st().score, mult: P.st().mult, tip, res: P.$("#hjsModal").textContent, perfect: P.st().counts.perfect === ns.length };
+    };
+    const base = await runAll({});
+    const ll = await runAll({ hj_stage_judge: "loose", hj_stage_range: "loose" });
+    const hl = await runAll({ hj_stage_judge: "hover", hj_stage_range: "loose" });
+    check("得分倍率：正常 ×1、宽松+宽松 ×0.6、放水判定+宽松范围 ×0.3", base.mult === 1 && Math.abs(ll.mult - 0.6) < 1e-9 && Math.abs(hl.mult - 0.3) < 1e-9, `${base.mult}/${ll.mult}/${hl.mult}`);
+    check("同样全 PERFECT，分数按倍率缩（逐个四舍五入，误差 < 0.5%）", base.perfect && ll.perfect && Math.abs(ll.score / base.score - 0.6) < 0.005, `${base.score} → ${ll.score}`);
+    check("大厅和结算写明倍率", /得分 ×0\.6（宽松判定 −20%、宽松范围 −20%）/.test(ll.tip) && /得分 ×0\.6/.test(ll.res) && !/得分 ×/.test(base.res), ll.tip);
+  }
+
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
   {
     const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });
     const A = makePage({ prefs: { hj_stage_best2: old } });
     await openStage(A);
     check("旧纪录不算进正常判定", !/本机纪录/.test(A.$(".hjs-ctrl").textContent));
-    const B = makePage({ prefs: { hj_stage_best2: old, hj_stage_judge: "loose" } });
+    const B = makePage({ prefs: { hj_stage_best2: old, hj_stage_judge: "loose", hj_stage_range: "loose" } });
     await openStage(B);
-    check("旧纪录在宽松判定下显示", /本机纪录（标准 · 宽松判定）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
+    check("最早的旧纪录（曲目:难度）算宽松判定 + 宽松范围", /本机纪录（标准 · 宽松判定 · 宽松范围）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
+    const mid = JSON.stringify({ [`${firstSong.id}:normal:normal`]: { score: 2222, acc: 90, rank: "A", combo: 10 } });
+    const C = makePage({ prefs: { hj_stage_best2: mid } });
+    await openStage(C);
+    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围", /本机纪录（标准 · 正常判定 · 正常范围）· 2,222 分/.test(C.$(".hjs-ctrl").textContent), C.$(".hjs-best")?.textContent);
+    const D = makePage({ prefs: { hj_stage_best2: mid, hj_stage_range: "loose" } });
+    await openStage(D);
+    check("换了点击范围就不显示别的范围的纪录", !/本机纪录/.test(D.$(".hjs-ctrl").textContent));
   }
 
   const failed = results.filter((r) => !r[1]);
