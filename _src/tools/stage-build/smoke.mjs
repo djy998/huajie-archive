@@ -659,7 +659,7 @@ async function main() {
     check("飞花线开关记得住（打开）", P.$('[aria-label="飞花线"]').checked);
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
-    check("飞花线：显示一朵花和一池星星（24 颗）", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 24);
+    check("飞花线（正常显示）：一朵花和一池星星（24 颗），没有光线", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 24 && !P.$(".hjs-fly-seg"));
     const g = P.st().g;
     const fsz = parseFloat(P.$("#hjsFly").style.getPropertyValue("--fly"));
     check("飞花线：花是萤火虫大小（约 1/4 个气泡）", fsz > 0 && fsz < g.size * 0.3, `${fsz} / ${g.size}`);
@@ -683,10 +683,19 @@ async function main() {
     }
     const tf = P.$(".hjs-fly-flower").style.transform;
     check("飞花线：花只用 transform 移动", /translate3d/.test(tf), tf);
+
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1", hj_stage_render: "simple" } });
     await openStage(Q);
     await go(Q);
-    check("简单显示时星星池更小", Q.$$(".hjs-fly-star").length === 12);
+    check("飞花线（简单显示）：星星换成一条 8 段的光线", Q.$$(".hjs-fly-seg").length === 8 && !Q.$(".hjs-fly-star"));
+    Q.until(Q.st().notes[2].t);
+    const segT = Q.$$(".hjs-fly-seg").map((e) => e.style.transform);
+    check("飞花线：光线每段只用 transform（位置、方向、长度）", segT.every((x) => /translate3d\(.*rotate\(.*scale\(/.test(x)), segT[0]);
+    const before = Q.$(".hjs-fly-seg").style.transform;
+    Q.until(Q.st().endT + 1);
+    const still1 = Q.$$(".hjs-fly-seg").map((e) => e.style.transform).join();
+    Q.advance(0.2);
+    check("飞花线：曲子放完花停下后，线收拢、不再每帧改", still1 === Q.$$(".hjs-fly-seg").map((e) => e.style.transform).join() && before !== still1);
   }
 
   /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
@@ -707,6 +716,17 @@ async function main() {
     check("得分倍率：正常 ×1、宽松+宽松 ×0.6、放水判定+宽松范围 ×0.3", base.mult === 1 && Math.abs(ll.mult - 0.6) < 1e-9 && Math.abs(hl.mult - 0.3) < 1e-9, `${base.mult}/${ll.mult}/${hl.mult}`);
     check("同样全 PERFECT，分数按倍率缩（逐个四舍五入，误差 < 0.5%）", base.perfect && ll.perfect && Math.abs(ll.score / base.score - 0.6) < 0.005, `${base.score} → ${ll.score}`);
     check("大厅和结算写明倍率", /得分 ×0\.6（宽松判定 −20%、宽松范围 −20%）/.test(ll.tip) && /得分 ×0\.6/.test(ll.res) && !/得分 ×/.test(base.res), ll.tip);
+  }
+
+  /* 22. 简单显示不限帧：120 Hz 下每帧都更新 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_render: "simple" } });
+    await openStage(P);
+    await go(P);
+    P.until(P.st().notes[0].t - 0.5);
+    const ks = [];
+    for (let i = 0; i < 8; i++) { P.advance(1 / 120); ks.push(P.$(".hjs-note") && P.$(".hjs-note").style.getPropertyValue("--k")); }
+    check("简单显示：不限帧，120 Hz 下每帧都更新", ks.filter((k, i) => i && k !== ks[i - 1]).length === 7, ks.join(","));
   }
 
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
