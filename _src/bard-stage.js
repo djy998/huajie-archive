@@ -56,7 +56,15 @@
     { id: "great", label: "GREAT", pts: 200, vel: 0.9 },
     { id: "good", label: "GOOD", pts: 100, vel: 0.8 },
     { id: "miss", label: "MISS", pts: 0, vel: 0 },
+    /* JUST：比 GOOD 早或晚出去一小段（GOOD 半窗的 JUST_RATIO）。给一点分、出声，但断连击 */
+    { id: "just", label: "JUST", pts: 50, vel: 0.65 },
   ];
+  const JUST = 4;                                       // JUDGE 里的下标（MISS 仍是 3）
+  const JUST_RATIO = 1 / 3;                             // 挑战正常判定约 0.1 秒、标准 0.12、轻松 / 宽松 0.15
+  const justWin = (dm) => dm.win[2] * JUST_RATIO;
+  /* 判 MISS 前多等多久：至少 INPUT_GRACE，晚一点的 JUST 也要等得到 */
+  const missGrace = (dm) => Math.max(INPUT_GRACE, justWin(dm));
+  const GRID = ["perfect", "great", "good", "just", "miss"];   // 结算 / 暂停时各档的排列顺序
   const LEVEL = { easy: 3, normal: 2, hard: 1 };       // 谱面里 lvl ≥ 这个数的音由玩家弹（charts/<id>.json）
   const BG_VEL = 0.4;                 // 补音（谱面以外的音）的力度
   const DEMO_VEL = 0.5;               // 示范旋律：你要弹的音先放一遍的力度
@@ -796,6 +804,7 @@
           "点击范围（设置里改）：正常 —— 点在气泡附近；宽松 —— 范围更大；放水 —— 不看位置，外圈收到点的那个，点屏幕任意位置或按任意键都算",
           "开头会有四下轻轻的预备拍",
           "星级：每首曲子三档各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同一档在曲库里的疏密排；大厅和选曲窗口显示的是当前所选难度的星级",
+          "JUST：比 GOOD 早一点或晚一点（多出去不到 GOOD 范围的三分之一，挑战约 0.1 秒）也会响、给一点分，但连击会断",
           "MISS 和「点空」不一样：MISS 是某个音到点了你没弹到 —— 这个音不响、连击断、算进准确率；「点空」是你点了，但附近没有正好该弹的气泡 —— 不扣分、不断连击，只在结算里记个次数。点空多，通常是点早了一拍或点偏了",
           "看外圈：外圈缩到和气泡重合、气泡里的音名最亮的那一下点最准；下一个该弹的气泡快到点时外圈会加粗",
           "学习模式：气泡到点还没弹，音乐就停下来等你，弹中再继续，不计分",
@@ -1024,7 +1033,7 @@
     S.combo = 0;
     S.maxCombo = 0;
     S.learnHits = 0;
-    S.counts = { perfect: 0, great: 0, good: 0, miss: 0 };
+    S.counts = { perfect: 0, great: 0, good: 0, just: 0, miss: 0 };
     S.offs = [];                                        // 每次弹中的偏差（秒，正 = 晚），结算时给个平均
     /* 手感诊断：掉帧、点按排队时间。base：本机一帧多长（开头 120 帧的中位数，按屏幕刷新率）；drop：比 base 长一半以上的帧；
        buckets：每 4 秒歌曲时间里掉了几帧，结算时指出最卡的一段；max：最长一帧 */
@@ -1179,7 +1188,7 @@
           if (t >= n.t) { freeze(n); t = n.t; }
           break;
         }
-        if (t < n.t + dm.win[2] + INPUT_GRACE) break;
+        if (t < n.t + dm.win[2] + missGrace(dm)) break;
         miss(n);
         S.next += 1;
       }
@@ -1608,8 +1617,23 @@
         break;
       }
     }
-    if (best) hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t);
-    else { S.ghosts += 1; S.ghostWhy[ghostWhy(x, y, t, dm, R)] += 1; ghost(x, y); }
+    if (best) { hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t); return; }
+    /* 正常规则都没算到：比 GOOD 早或晚出去不到 justWin 秒（GOOD 半窗的三分之一）、点在范围里的那个（时间最近的）算 JUST。
+       只在这一下本来要算点空时才看，不会抢走判定窗里的音，防多米诺的规则不受影响 */
+    const J = dm.win[2] + justWin(dm);
+    let jn = null;
+    for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
+      const n = S.notes[i];
+      const dt = n.t - t;
+      if (dt > J) break;
+      if (S.judged[n.idx] >= 0 || dt < -J || Math.abs(dt) <= dm.win[2]) continue;
+      if (!free && Math.hypot(n.x - x, n.y - y) > R) continue;
+      if (!jn || Math.abs(dt) < Math.abs(jn.t - t)) jn = n;
+    }
+    if (jn) { hit(jn, JUST, t - jn.t); return; }
+    S.ghosts += 1;
+    S.ghostWhy[ghostWhy(x, y, t, dm, R)] += 1;
+    ghost(x, y);
   }
   /* 点空是为什么：判定窗里有没弹的气泡（只是离得远）= 点偏了；否则看点按处附近最近的那个没弹的气泡是在后面（早了）还是前面（晚了） */
   function ghostWhy(x, y, t, dm, R) {
@@ -1636,14 +1660,15 @@
     if (Number.isFinite(off) && scored()) S.offs.push(off);
     bard().playMidi?.(n.m, JUDGE[tier].vel, instId(), 0, 0);
     dropEl(n, "is-hit", 300);
-    S.combo += 1;
+    if (tier === JUST) S.combo = 0;                     // JUST：出声、给一点分，但断连击
+    else S.combo += 1;
     S.maxCombo = Math.max(S.maxCombo, S.combo);
     S.counts[JUDGE[tier].id] += 1;
     if (!scored()) {                                    // 学习模式、自动演奏：不计分，只数弹了几个
       S.learnHits += 1;
       popJudge(S.learn ? "WELL" : "AUTO", "is-ok");
     } else {
-      S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120) * scoreMult());
+      S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120) * scoreMult());   // JUST 时连击已归零，没有连击加成
       popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`, off);
     }
     while (S.next < S.notes.length && S.judged[S.notes[S.next].idx] >= 0) S.next += 1;
@@ -1735,12 +1760,19 @@
     if (text) b.append(h("span", { text }));
   }
 
+  /* 准确率：PERFECT 3、GREAT 2、GOOD 1、JUST 0.5、MISS 0，除以满分 */
+  const doneCount = () => { const c = S.counts || {}; return (c.perfect + c.great + c.good + c.just + c.miss) || 0; };
   function accPct() {
     const c = S.counts || {};
-    const done = c.perfect + c.great + c.good + c.miss;
+    const done = doneCount();
     if (!done) return 100;
-    return ((3 * c.perfect + 2 * c.great + c.good) / (3 * done)) * 100;
+    return ((3 * c.perfect + 2 * c.great + c.good + 0.5 * c.just) / (3 * done)) * 100;
   }
+  /* 各档计数的格子（结算、暂停共用） */
+  const resGrid = () => h("div", { class: "hjs-res-grid" }, GRID.map((id) => {
+    const j = JUDGE.find((x) => x.id === id);
+    return h("div", { class: `hjs-cell is-${id}` }, h("b", { text: String(S.counts[id]) }), h("small", { text: j.label }));
+  }));
   const rankOf = (p) => (p >= 98 ? "SS" : p >= 93 ? "S" : p >= 85 ? "A" : p >= 72 ? "B" : p >= 55 ? "C" : "D");
 
   /* ==== 学习模式：停在这一拍等玩家 ==== */
@@ -1791,9 +1823,19 @@
     S.raf = 0;
     clockStop(S.clock);
     setPauseIcon(true);
+    /* 到目前为止的成绩：进度、分数、准确率、连击、各档计数、点空 */
+    const pos = Math.max(0, clockRaw(S.clock));
+    const done = doneCount();
+    const stats = scored()
+      ? [h("div", { class: "hjs-res-big hjs-pause-score", text: fmtNum(S.score) }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · 连击 ${S.combo} · 最大连击 ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 下` : ""}` }),
+        resGrid()]
+      : [h("div", { class: "hjs-res-big hjs-pause-score", text: `${S.learnHits} / ${S.notes.length}` })];
     modal(h("div", { class: "hjs-card hjs-res" },
       h("h3", { class: "hjs-res-title", text: "已暂停" }),
       h("p", { class: "hjs-res-sub", text: `${S.song.t} · ${diffMeta().label}${modeTag()}` }),
+      h("p", { class: "hjs-res-sub hjs-pause-pos", text: `进度 ${fmtTime(pos)} / ${fmtTime(S.endT)}` }),
+      ...stats,
       h("div", { class: "hjs-res-btns" },
         h("button", { type: "button", class: "hjs-btn is-main", text: "继续", onclick: resume }),
         h("button", { type: "button", class: "hjs-btn", text: "重来", onclick: () => startSong() }),
@@ -1870,7 +1912,7 @@
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo}` }),
         ...(multNote() ? [h("p", { class: "hjs-res-sub hjs-res-mult", text: multNote() })] : []),   // 原生 append 不能传 null
         timingNote(),
-        h("div", { class: "hjs-res-grid" }, JUDGE.map((j) => h("div", { class: `hjs-cell is-${j.id}` }, h("b", { text: String(S.counts[j.id]) }), h("small", { text: j.label })))));
+        resGrid());
     }
     card.append(h("div", { class: "hjs-res-btns" },
       h("button", { type: "button", class: "hjs-btn is-main", text: "再来一次", onclick: () => startSong() }),

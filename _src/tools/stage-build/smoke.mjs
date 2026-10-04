@@ -247,7 +247,7 @@ async function main() {
     const n1 = notes[1];
     P.until(n1.t + 0.4);
     check("判定窗过了还多等一下（排队中的点按还算数）", P.st().judged[1] === -1);
-    P.until(n1.t + 0.57);                         // 轻松难度 0.45 秒判定窗 + 0.1 秒余量之后才算漏
+    P.until(n1.t + 0.62);                         // 轻松难度 0.45 秒判定窗 + 0.15 秒（JUST 的那段）之后才算漏
     const hitsAfter = P.midi.slice(before).filter((m) => m.vel >= 0.8);
     check("漏掉的音不出声", P.st().judged[1] === 3 && hitsAfter.length === 0, `judged=${P.st().judged[1]} sounds=${hitsAfter.length}`);
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
@@ -790,6 +790,83 @@ async function main() {
     check("点空原因：时间对但点偏了", P.st().ghostWhy.off === 1, JSON.stringify(P.st().ghostWhy));
     P.until(P.st().endT + 2);
     check("结算写明点空原因", /点空 \d+ 下（早了 1 · 点偏 1/.test(P.$("#hjsModal").textContent), (P.$("#hjsModal").textContent.match(/点空[^）]*）/) || [""])[0]);
+  }
+
+  /* 26. JUST：比 GOOD 早 / 晚出去不到 0.1 秒算 JUST —— 给一点分、出声、断连击；再远就是点空 */
+  {
+    /* 挑一首挑战难度里有几个前后都空出 0.8 秒的音的曲子（短的优先） */
+    const hardTimes = (id) => { let ms = 0; return chartOf(id).n.map((r) => { ms += r[0]; return [ms / 1000, r[2]]; }).filter((x) => x[1] >= 1).map((x) => x[0]); };
+    const lone = (ts) => ts.map((_, i) => i).filter((i) => i > 0 && i + 1 < ts.length && ts[i] - ts[i - 1] > 0.8 && ts[i + 1] - ts[i] > 0.8);
+    const song = SONGS.songs.slice().sort((x, y) => x.dur - y.dur).find((x) => lone(hardTimes(x.id)).length >= 3);
+    const P = makePage({ prefs: { hj_stage_song: song.id, hj_stage_diff: "hard" } });   // 挑战正常判定：GOOD 到 0.29 秒
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    const gaps = (i) => i > 0 && ns[i + 1] && ns[i].t - ns[i - 1].t > 0.8 && ns[i + 1].t - ns[i].t > 0.8;
+    const ks = ns.map((_, i) => i).filter(gaps).slice(0, 3);
+    check("JUST 测试找得到合适的曲子", ks.length === 3, song && song.id);
+    if (ks.length === 3) {
+      let i0 = 0;
+      const playTo = (k) => { ns.slice(i0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); }); i0 = k + 1; };
+      playTo(ks[0]);
+      const a = ns[ks[0]];
+      const combo0 = P.st().combo, score0 = P.st().score, sounds0 = P.midi.filter((m) => m.vel === 0.65).length;
+      P.until(a.t + 0.34);                              // 晚 0.34 秒：过了 GOOD（0.29），还在 JUST 里（0.29 × 4/3 ≈ 0.39），还没判 MISS
+      P.pointer(a.x, a.y);
+      check("晚出 GOOD 不到 0.1 秒：JUST", P.st().judged[a.idx] === 4 && /JUST/.test(P.$("#hjsJudge").textContent), `judged=${P.st().judged[a.idx]}`);
+      check("JUST 断连击、给一点分、出声", combo0 > 0 && P.st().combo === 0 && P.st().score - score0 === 50 && P.midi.filter((m) => m.vel === 0.65).length === sounds0 + 1, `combo ${combo0}→${P.st().combo} +${P.st().score - score0}`);
+      playTo(ks[1]);
+      const b = ns[ks[1]];
+      P.until(b.t - 0.35);                              // 早 0.35 秒
+      P.pointer(b.x, b.y);
+      check("早出 GOOD 不到 0.1 秒：JUST", P.st().judged[b.idx] === 4, `judged=${P.st().judged[b.idx]}`);
+      playTo(ks[2]);
+      const c = ns[ks[2]];
+      const g0 = P.st().ghostWhy.early;
+      P.until(c.t - 0.45);                              // 早 0.45 秒：超出 JUST
+      P.pointer(c.x, c.y);
+      check("再早就是点空", P.st().judged[c.idx] === -1 && P.st().ghostWhy.early === g0 + 1);
+      P.until(P.st().endT + 2);
+      check("结算有 JUST 一格（PERFECT / GREAT / GOOD / JUST / MISS）", P.$$(".hjs-res-grid .hjs-cell small").map((e) => e.textContent).join() === "PERFECT,GREAT,GOOD,JUST,MISS" && P.st().counts.just === 2);
+      check("有 JUST 就没有 FULL COMBO", !/FULL COMBO/.test(P.$("#hjsModal").textContent));
+    }
+  }
+
+  /* 27. 暂停时显示到目前为止的成绩 */
+  {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    ns.slice(0, 5).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
+    P.key("Escape", "Escape");
+    const card = P.$("#hjsModal").textContent;
+    check("暂停卡：进度、分数、准确率、连击、各档计数", /进度 \d+:\d\d \/ \d+:\d\d/.test(card) && card.includes(P.$("#hjsScore").textContent) && /准确率 100\.0% · 连击 5 · 最大连击 5/.test(card) && P.$$("#hjsModal .hjs-cell").length === 5 && P.$("#hjsModal .hjs-cell.is-perfect b").textContent === "5", card.slice(0, 80));
+    P.click(P.btn("停止演奏", P.$("#hjsModal")));
+    const Q = makePage({ prefs: { hj_stage_song: SHORT.id } });
+    await openStage(Q);
+    await go(Q);
+    Q.until(Q.st().notes[0].t - 0.5);
+    Q.key("Escape", "Escape");
+    check("还没弹时暂停：准确率显示 —", /准确率 — · 连击 0/.test(Q.$("#hjsModal").textContent));
+  }
+
+  /* 28. JUST 的宽度按 GOOD 的三分之一：轻松（GOOD 0.45）晚 0.58 秒还是 JUST，挑战（0.29）晚 0.4 秒就判 MISS */
+  {
+    const easyTimes = (id) => { let ms = 0; return chartOf(id).n.map((r) => { ms += r[0]; return [ms / 1000, r[2]]; }).filter((x) => x[1] >= 3).map((x) => x[0]); };
+    const ok = (ts) => ts.some((t, i) => i > 0 && i + 1 < ts.length && t - ts[i - 1] > 1 && ts[i + 1] - t > 1);
+    const song = SONGS.songs.slice().sort((x, y) => x.dur - y.dur).find((x) => ok(easyTimes(x.id)));
+    const P = makePage({ prefs: { hj_stage_song: song.id, hj_stage_diff: "easy" } });
+    await openStage(P);
+    await go(P);
+    const ns = P.st().notes;
+    const k = ns.findIndex((a, i) => i > 0 && ns[i + 1] && a.t - ns[i - 1].t > 1 && ns[i + 1].t - a.t > 1);
+    check("轻松 JUST 测试找得到合适的曲子", k > 0, song && song.id);
+    if (k > 0) {
+      ns.slice(0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
+      P.until(ns[k].t + 0.58);
+      check("轻松：晚 0.58 秒（GOOD 0.45 + 0.15 以内）还算 JUST", P.st().judged[ns[k].idx] === -1 && (P.pointer(ns[k].x, ns[k].y), P.st().judged[ns[k].idx] === 4), `judged=${P.st().judged[ns[k].idx]}`);
+    }
   }
 
   /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */

@@ -6490,6 +6490,7 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-pop.is-great b { color: #ddd0ff; }
 .hjs-pop.is-good b { color: #bcdcea; }
 .hjs-pop.is-miss b { color: #eca9bb; }
+.hjs-pop.is-just b { color: #f3c49a; }
 .hjs-pop.is-ok b { color: #c4ecc4; }
 @keyframes hjsPop {
   0% { opacity: 0; transform: translateY(8px) scale(.86); }
@@ -6595,7 +6596,7 @@ body.hjs-open .toast { z-index: 540; }
   animation: hjsCount .5s ease-out;
 }
 .hjs-res-big { font-size: 2rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.hjs-res-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; margin-top: 4px; }
+.hjs-res-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; width: 100%; margin-top: 4px; }
 .hjs-cell { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid var(--s-line); }
 .hjs-cell b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .hjs-cell small { font-size: .56rem; letter-spacing: .08em; color: var(--s-mute); }
@@ -6603,6 +6604,9 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-cell.is-great b { color: #ddd0ff; }
 .hjs-cell.is-good b { color: #bcdcea; }
 .hjs-cell.is-miss b { color: #eca9bb; }
+.hjs-cell.is-just b { color: #f3c49a; }
+.hjs-pause-score { font-size: 1.6rem; }
+.hjs-pause-pos { margin-top: -4px; font-size: .74rem; color: var(--s-mute); }
 .hjs-res-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
 
 /* ==== 窗口：选曲 / 设置 / 玩法 ==== */
