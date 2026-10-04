@@ -8,7 +8,7 @@
       <div class="bard-adv" id="bardAdv">
         <div class="bard-adv-inner">
           <div class="bard-opts">${U.map(n=>`<label class="bard-opt" title="${n.title}"><input type="checkbox" data-opt="${n.key}"><span>${n.label}</span></label>`).join("")}</div>
-          <button class="bard-stage-btn" id="bardStageBtn" type="button" title="全屏舞台：随气泡收缩点击弹奏旋律"><span class="bss-ico" aria-hidden="true">♪</span><span>进入舞台演奏</span></button>
+          <button class="bard-stage-btn" id="bardStageBtn" type="button" title="全屏舞台：随气泡收缩点击弹奏旋律"><span class="bss-ico" aria-hidden="true">♪</span><span>熟练了？上舞台演奏！</span></button>
           ${F.map(n=>`<div class="bard-seg-row" role="radiogroup" aria-label="${n.label}">
             <span class="bard-seg-label" aria-hidden="true">${n.label}</span>
             <div class="bard-seg">${n.list.map(d=>`<label class="bard-seg-opt"${d.title?` title="${d.title}"`:""}><input type="radio" name="bard-${n.key}" value="${d.id}" data-choice="${n.key}"><span>${d.label}${n.key==="scale"?` <small data-count="${d.id}"></small>`:""}</span></label>`).join("")}</div>

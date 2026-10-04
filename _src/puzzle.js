@@ -122,6 +122,17 @@
   }
   const penaltyNote = (aids) => AID_PENALTY.filter((p) => (aids || []).includes(p.name))
     .map((p) => `${TOOL_NAMES[p.name]} +${Math.round(p.rate * 100)}%（至少 ${p.min / 60000} 分钟）`).join("，");
+  /* 工具按钮下的加时标注：按当前用时取较大的一项（保底分钟数或百分比），前一项用过就在它的结果上算 */
+  function aidCostLabels(ms, used) {
+    let t = Math.max(0, Number(ms) || 0);
+    const out = {};
+    for (const p of AID_PENALTY) {
+      const add = Math.max(t * p.rate, p.min);
+      out[p.name] = t * p.rate > p.min ? `+${Math.round(p.rate * 100)}%` : `+${p.min / 60000}min`;
+      if (used?.[p.name]) t += add;
+    }
+    return out;
+  }
   /* 大赛暂停时继续计时：耗时直接按开局时刻算（服务器时间），暂停、切后台、关掉再继续都照算 */
   const wallClock = () => !!(G?.contest?.pauseRun && G.contest.startAt);
   /* 本机参加大赛的次数（按届记） */
@@ -338,9 +349,9 @@
     <span class="pz-chip pz-prog" id="pzProg">0%</span>
   </div>
   <div class="pz-tools">
-    <button type="button" class="pz-tool" id="pzPreviewBtn" aria-pressed="false" aria-label="查看原图" title="查看原图">${icon("eye")}</button>
-    <button type="button" class="pz-tool" id="pzEdgeBtn" aria-pressed="false" aria-label="只看边框块" title="只看边框块">${icon("edge")}</button>
-    <button type="button" class="pz-tool" id="pzGridBtn" aria-pressed="false" aria-label="网格提示" title="网格提示">${icon("grid")}</button>
+    <button type="button" class="pz-tool pz-aid" id="pzPreviewBtn" aria-pressed="false" aria-label="查看原图（辅助功能，不加时）" title="查看原图（辅助功能，不加时）">${icon("eye")}</button>
+    <button type="button" class="pz-tool pz-aid" id="pzEdgeBtn" aria-pressed="false" aria-label="只看边框块" title="只看边框块">${icon("edge")}</button>
+    <button type="button" class="pz-tool pz-aid" id="pzGridBtn" aria-pressed="false" aria-label="网格提示" title="网格提示">${icon("grid")}</button>
     <button type="button" class="pz-tool pz-zoom" id="pzZoomOut" aria-label="缩小" title="缩小">${icon("minus")}</button>
     <button type="button" class="pz-tool pz-zoom" id="pzZoomIn" aria-label="放大" title="放大">${icon("plus")}</button>
     <button type="button" class="pz-tool" id="pzFitBtn" aria-label="适应屏幕" title="适应屏幕">${icon("fit")}</button>
@@ -1399,6 +1410,19 @@
       t.classList.remove("is-urgent");
     }
     t.title = G.mode === "timed" && !G.overtime ? "剩余时间" : "已用时间";
+    syncAidCost();
+  }
+
+  const AID_BTNS = { edges: ["pzEdgeBtn", "只看边框块"], grid: ["pzGridBtn", "网格提示"] };
+  function syncAidCost() {
+    const labels = aidCostLabels(G.elapsed, G.used);
+    for (const [name, [id, label]] of Object.entries(AID_BTNS)) {
+      const btn = $(id);
+      if (btn.dataset.cost === labels[name]) continue;
+      btn.dataset.cost = labels[name];
+      btn.title = `${label}（辅助功能，通关用时 ${labels[name]}）`;
+      btn.setAttribute("aria-label", btn.title);
+    }
   }
 
   function syncHud() {

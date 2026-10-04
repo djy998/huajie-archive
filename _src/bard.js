@@ -12,7 +12,7 @@
    - 「高级功能」（开始演奏左边，点开向上展开，存本机）：辅助线（默认关，鼠标附近显示几档音高的横线和小五线谱）、
      回响循环（默认开，关掉后不再复读）、音色位置（默认开，关掉后左右不再影响声像）、音阶、音域。
      演奏中也能改，已在回响的音保持弹下时的音高
-   - 「高级功能」里的「进入舞台演奏」按需加载 bard-stage.js（全屏音游），舞台借用这里的音源：
+   - 「高级功能」里的「熟练了？上舞台演奏！」按需加载 bard-stage.js（全屏音游），舞台借用这里的音源：
      HJBard.playMidi（按音高出声，可推后几十毫秒排程）、unlock（叫醒音频）、prepare（预备乐器）、clock（音频时钟与输出延迟）、
      instruments、instName */
 (() => {
@@ -1030,7 +1030,7 @@
       <div class="bard-adv" id="bardAdv">
         <div class="bard-adv-inner">
           <div class="bard-opts">${OPTIONS.map((o) => `<label class="bard-opt" title="${o.title}"><input type="checkbox" data-opt="${o.key}"><span>${o.label}</span></label>`).join("")}</div>
-          <button class="bard-stage-btn" id="bardStageBtn" type="button" title="全屏舞台：随气泡收缩点击弹奏旋律"><span class="bss-ico" aria-hidden="true">♪</span><span>进入舞台演奏</span></button>
+          <button class="bard-stage-btn" id="bardStageBtn" type="button" title="全屏舞台：随气泡收缩点击弹奏旋律"><span class="bss-ico" aria-hidden="true">♪</span><span>熟练了？上舞台演奏！</span></button>
           ${CHOICES.map((c) => `<div class="bard-seg-row" role="radiogroup" aria-label="${c.label}">
             <span class="bard-seg-label" aria-hidden="true">${c.label}</span>
             <div class="bard-seg">${c.list.map((it) => `<label class="bard-seg-opt"${it.title ? ` title="${it.title}"` : ""}><input type="radio" name="bard-${c.key}" value="${it.id}" data-choice="${c.key}"><span>${it.label}${c.key === "scale" ? ` <small data-count="${it.id}"></small>` : ""}</span></label>`).join("")}</div>

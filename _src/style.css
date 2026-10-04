@@ -1166,7 +1166,12 @@ body.day-mode .tile-hint { color: var(--day-title); }
   position: absolute;
   inset: 0;
   z-index: 0;
+  border-radius: inherit;
   background: center / cover no-repeat;
+  /* 卡片的内描边画在底图层，会被这层盖住；这里带一份，渐变过程中立体边框不消失 */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16);
   opacity: 0;
   transition: opacity .6s ease;
   pointer-events: none;
@@ -5019,7 +5024,7 @@ html.pz-open .toast { z-index: 460; }
 }
 .pz-hud > * { pointer-events: auto; }
 .pz-stats, .pz-tools { display: flex; align-items: center; gap: 6px; }
-.pz-tools { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.pz-tools { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; row-gap: 20px; }
 .pz-chip {
   padding: 5px 13px;
   border-radius: 999px;
@@ -5049,6 +5054,29 @@ html.pz-open .toast { z-index: 460; }
 .pz-tool:hover, .pz-close:hover { border-color: var(--accent); color: var(--accent-soft); }
 .pz-tool:active, .pz-close:active { transform: scale(.93); }
 .pz-tool.is-on { color: var(--accent-ink); background: var(--accent); border-color: rgba(255,255,255,.4); }
+/* 辅助功能（原图 / 边框块 / 网格提示）：暖色描边区分，会加时的两项在下方标出当前加时 */
+.pz-tool.pz-aid {
+  position: relative;
+  border-color: rgba(255,204,128,.62);
+  box-shadow: 0 2px 8px rgba(0,0,0,.22), 0 0 0 2px rgba(255,190,100,.16), 0 0 10px rgba(255,190,100,.28);
+}
+.pz-tool.pz-aid:hover { border-color: var(--accent); }
+.pz-tool.pz-aid.is-on { border-color: rgba(255,224,170,.9); }
+.pz-tool.pz-aid[data-cost]::after {
+  content: attr(data-cost);
+  position: absolute; left: 50%; top: calc(100% + 3px);
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: .62rem; font-weight: 600; line-height: 1.45;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #ffd79a;
+  background: rgba(22,17,40,.78);
+  border: 1px solid rgba(255,204,128,.4);
+  pointer-events: none;
+}
 .pz-tool .ico {
   width: 19px; height: 19px;
   fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
