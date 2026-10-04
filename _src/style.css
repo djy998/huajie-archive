@@ -6390,8 +6390,8 @@ body.hjs-open .toast { z-index: 540; }
 /* ==== 演奏 ==== */
 .hjs-play { position: absolute; inset: 0; z-index: 2; touch-action: none; }
 .hjs-play[hidden] { display: none; }
-/* 飞花线：花和星星都只动 transform / opacity；在气泡下面一层，不挡音名 */
-.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --fly: 50px; --star: 22px; }
+/* 飞花线：萤火虫大小的花，带一圈淡淡的光（静态的径向渐变，不做模糊滤镜）；花和星星都只动 transform / opacity；在气泡下面一层，不挡音名 */
+.hjs-fly { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; --fly: 20px; --star: 11px; }
 .hjs-fly[hidden] { display: none; }
 .hjs-fly-flower {
   position: absolute; left: 0; top: 0;
@@ -6399,10 +6399,15 @@ body.hjs-open .toast { z-index: 540; }
   margin: calc(var(--fly) / -2) 0 0 calc(var(--fly) / -2);
   will-change: transform;
 }
+.hjs-fly-flower::before {
+  content: ""; position: absolute; inset: -90%;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(255, 236, 170, .55) 0%, rgba(255, 214, 120, .22) 45%, rgba(255, 214, 120, 0) 100%);
+}
 .hjs-fly-flower > i {
   position: absolute; inset: 0;
   background: url("assets/bard/stage/fly-flower.webp") center / contain no-repeat;
-  animation: hjsFlySpin 9s linear infinite;
+  animation: hjsFlySpin 6s linear infinite;
 }
 @keyframes hjsFlySpin { to { transform: rotate(360deg); } }
 .hjs-fly-star {

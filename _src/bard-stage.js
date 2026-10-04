@@ -15,7 +15,7 @@
    - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用轻松的判定窗）/
      放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
    - 本机纪录按 曲目 × 难度 × 判定模式 × 点击范围 分开记
-   - 飞花线（设置 → 画面，默认关）：一朵花飞向每个刚出现的气泡，身后撒一串星星
+   - 飞花线（设置 → 画面，默认关）：一只萤火虫似的小花沿曲线掠过每个气泡，到点时正好经过该点的那个，身后留一串星星
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
    - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
      点击范围、显示与飞花线、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
@@ -64,9 +64,10 @@
   const AHEAD = 0.12;                 // 补音提前多少秒排进 Web Audio
   const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍、校准的「嗒」
   const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // 校准：第一下在 1.2 秒，之后每 0.6 秒一下
-  /* 飞花线：花的大小、星星大小（气泡直径的倍数）；tau 花追向目标的快慢（秒）；星星池大小（简单显示用小的）；
-     每飞过 gap 个气泡直径撒一颗星，两颗至少隔 every 毫秒 */
-  const FLY = { flower: 0.62, star: 0.3, tau: 0.11, pool: 18, poolLite: 10, gap: 0.2, every: 26, kinds: 3 };
+  /* 飞花线：像一只小萤火虫，沿一条平滑的曲线掠过每个气泡，在这个气泡该判定的那一刻正好经过它（ahead：提前多少秒经过，0 = 正好判定时）。
+     flower / star：花和星星的大小（气泡直径的倍数）；pool：星星池（简单显示用 poolLite），同时最多这么多颗；
+     every：两颗星至少隔多少毫秒（简单显示 everyLite），而且花至少挪了 gap 个气泡直径才撒；life：星星停留多久（毫秒） */
+  const FLY = { ahead: 0, flower: 0.24, star: 0.13, pool: 24, poolLite: 12, every: 45, everyLite: 80, gap: 0.05, life: [850, 1150], kinds: 3 };
   const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 按音高：低 → 高
   const PALETTE = [...BAND_COLORS, "150 226 180", "246 150 120"];   // 后两色只在挨得近、撞色时补位
   const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -750,7 +751,7 @@
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
       S.render === "simple" ? "去掉了气泡光晕和文字的模糊阴影，副歌等密集处更流畅" : "觉得密集处有点卡，可以换成简单显示"),
-      row("飞花线", fly, "一朵花带着星星尾巴，飞向每个刚出现的气泡")));
+      row("飞花线", fly, "一只萤火虫似的小花带着星星尾巴，到点时正好飞到该点的气泡")));
 
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
@@ -796,7 +797,7 @@
           "判定模式（设置里改）：正常 —— 难度越高判定越严；宽松 —— 三档难度都按轻松判定；放水 —— 不用点，把鼠标移到气泡上停着，到点就算弹中",
           "点击范围和判定模式都选放水：自动演奏，游戏自己弹，不计分。本机纪录按难度、判定模式、点击范围分开记",
           "得分：判定模式、点击范围各自选宽松扣 20%、选放水扣 50%，两项相加（比如都选宽松是 ×0.6）",
-          "飞花线（设置 → 画面）：一朵花飞向每个刚出现的气泡，帮你找下一个该点的位置",
+          "飞花线（设置 → 画面）：一只萤火虫似的小花沿着曲线掠过每个气泡，到点时正好飞到该点的那个，身后留一串星星",
           "总觉得判定偏早或偏晚：设置 → 判定延迟 → 校准，跟着「嗒」声按几下就好",
           "Esc（手机上是返回键）：暂停 / 关窗口 / 回到上一层",
         ].map((t) => h("li", { text: t })))));
@@ -1172,7 +1173,7 @@
     }
     if (S.judge === "hover" && (S.hover || S.range === "free")) hoverCheck(t, dm);
     draw(t, dm);
-    if (S.fl) flyFrame(t, dm);
+    if (S.fl) flyFrame(t);
     $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
     S.raf = requestAnimationFrame(tick);
@@ -1260,10 +1261,10 @@
     S.els.clear();
   }
 
-  /* ==== 飞花线：一朵花飞向每个刚出现的气泡，身后撒一串星星（设置 → 画面，默认关）====
-     省着画：花是一个元素，每帧只改 transform，转圈交给 CSS 动画；星星是固定的一小池元素轮流用，
-     用 Web Animations 交给合成器跑（只动 transform 和 opacity，不排版、不重绘）；简单显示时池子更小。
-     花和星星在气泡下面一层，不挡音名 */
+  /* ==== 飞花线：一只小萤火虫一样的花，沿平滑曲线匀匀地掠过每个气泡，身后留下一串星星（设置 → 画面，默认关）====
+     路径：按时间把各个气泡（同一刻的和弦只取第一个）连成 Catmull-Rom 曲线，花在气泡该判定的那一刻正好经过它，两个气泡之间按时间匀速走；
+     省着画：花是一个元素，每帧只改 transform，转圈和光晕是 CSS；星星是固定的一小池元素轮流用，用 Web Animations 交给合成器跑
+     （只动 transform 和 opacity，不排版、不重绘），池子满了就复用最早那颗；简单显示时星星更少更稀。整层在气泡下面，不挡音名 */
   function flyReset() {
     const box = $id("hjsFly");
     if (!box) return;
@@ -1273,62 +1274,73 @@
     if (!S.fly) return;
     const flower = h("i", { class: "hjs-fly-flower" }, h("i"));
     box.append(flower);
+    const lite = S.render === "simple";
     const pool = [];
-    const n = S.render === "simple" ? FLY.poolLite : FLY.pool;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < (lite ? FLY.poolLite : FLY.pool); i++) {
       const el = h("i", { class: "hjs-fly-star" });
       box.append(el);
       pool.push({ el, anim: null });
     }
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    S.fl = { flower, pool, pi: 0, x: 0, y: 0, tgt: 0, last: 0, acc: 0, lastSpawn: 0, placed: false, calm };
+    S.fl = { flower, pool, pi: 0, pts: [], seg: 0, x: 0, y: 0, sx: 0, sy: 0, lastSpawn: 0, placed: false, calm, every: lite ? FLY.everyLite : FLY.every };
   }
+  /* 气泡位置定好（或改了窗口大小重排）之后：重算大小和路径点 */
   function flyLayout() {
     const f = S.fl;
     if (!f || !S.g) return;
     const box = $id("hjsFly");
     box.style.setProperty("--fly", `${(S.g.size * FLY.flower).toFixed(1)}px`);
     box.style.setProperty("--star", `${(S.g.size * FLY.star).toFixed(1)}px`);
-    f.placed = false;                                   // 气泡挪了位置：下一帧直接放到目标上
+    const ap = FLY.ahead;
+    f.pts = [];
+    for (const n of S.notes) {
+      const t = n.t - ap;
+      if (f.pts.length && t - f.pts[f.pts.length - 1].t < 0.03) continue;
+      f.pts.push({ t, n });
+    }
+    f.seg = 0;
+    f.placed = false;
   }
-  function flyPlace(f) {
-    f.flower.style.transform = `translate3d(${f.x.toFixed(1)}px, ${f.y.toFixed(1)}px, 0)`;
+  /* 曲线上 t 时刻的位置：找到 t 落在哪两个路径点之间，按时间比例在 Catmull-Rom 曲线上取点 */
+  function flyAt(f, t) {
+    const pts = f.pts;
+    if (t <= pts[0].t) return pts[0].n;
+    while (f.seg + 1 < pts.length && pts[f.seg + 1].t <= t) f.seg += 1;
+    while (f.seg > 0 && pts[f.seg].t > t) f.seg -= 1;
+    if (f.seg + 1 >= pts.length) return pts[pts.length - 1].n;
+    const k = f.seg;
+    const p0 = (pts[k - 1] || pts[k]).n, p1 = pts[k].n, p2 = pts[k + 1].n, p3 = (pts[k + 2] || pts[k + 1]).n;
+    const u = (t - pts[k].t) / (pts[k + 1].t - pts[k].t);
+    const u2 = u * u, u3 = u2 * u;
+    const cr = (a, b, c, d) => 0.5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (3 * b - a - 3 * c + d) * u3);
+    return { x: cr(p0.x, p1.x, p2.x, p3.x), y: cr(p0.y, p1.y, p2.y, p3.y) };
   }
-  function flyFrame(t, dm) {
+  function flyFrame(t) {
     const f = S.fl;
-    if (!S.notes.length || !S.g) return;
-    /* 目标：最近出现的那个气泡（出现时刻 = 判定时刻 − 提前量） */
-    let k = f.tgt;
-    while (k + 1 < S.notes.length && S.notes[k + 1].t - dm.approach <= t) k += 1;
-    f.tgt = k;
-    const n = S.notes[k];
-    const now = performance.now();
+    if (!f.pts.length || !S.g) return;
+    const p = flyAt(f, t);
+    const dx = p.x - f.x, dy = p.y - f.y;
+    if (f.placed && Math.abs(dx) + Math.abs(dy) < 0.05) return;
+    f.x = p.x;
+    f.y = p.y;
+    f.flower.style.transform = `translate3d(${f.x.toFixed(1)}px, ${f.y.toFixed(1)}px, 0)`;
     if (!f.placed) {
-      f.x = n.x;
-      f.y = n.y;
       f.placed = true;
-      f.last = now;
-      flyPlace(f);
+      f.sx = f.x;
+      f.sy = f.y;
       return;
     }
-    const dtf = Math.min(0.1, (now - f.last) / 1000);
-    f.last = now;
-    const a = 1 - Math.exp(-dtf / FLY.tau);             // 平滑追过去：离得远飞得快，快到时慢下来
-    const dx = (n.x - f.x) * a;
-    const dy = (n.y - f.y) * a;
-    const step = Math.hypot(dx, dy);
-    if (step < 0.05) return;
-    f.x += dx;
-    f.y += dy;
-    flyPlace(f);
-    f.acc += step;
-    if (f.acc >= S.g.size * FLY.gap && now - f.lastSpawn >= FLY.every) {
-      f.acc = 0;
+    /* 撒星：离上一颗够远、隔得够久才撒，停着不撒 */
+    const now = performance.now();
+    const moved = Math.hypot(f.x - f.sx, f.y - f.sy);
+    if (moved >= S.g.size * FLY.gap && now - f.lastSpawn >= f.every) {
+      flySpark(f, (f.x - f.sx) / moved, (f.y - f.sy) / moved);
+      f.sx = f.x;
+      f.sy = f.y;
       f.lastSpawn = now;
-      flySpark(f, dx / step, dy / step);
     }
   }
-  /* 撒一颗星：从花的后面出发，往飞行反方向飘一点、略往下落，边转边缩边淡 */
+  /* 撒一颗星：落在花刚经过的地方，原地慢慢往下飘一点、边转边缩边淡 */
   function flySpark(f, ux, uy) {
     const p = f.pool[f.pi];
     f.pi = (f.pi + 1) % f.pool.length;
@@ -1336,18 +1348,18 @@
     if (p.anim) p.anim.cancel();
     const s = S.g.size;
     p.el.style.backgroundPosition = `${Math.floor(Math.random() * FLY.kinds) * 50}% 0`;
-    const sc = 0.55 + Math.random() * 0.6;
-    const side = (Math.random() - 0.5) * s * 0.35;     // 垂直于飞行方向撒开一点
-    const back = s * (0.25 + Math.random() * 0.3);
-    const x0 = f.x - ux * s * 0.18 - uy * side;
-    const y0 = f.y - uy * s * 0.18 + ux * side;
-    const x1 = x0 - ux * back - uy * side * 0.4;
-    const y1 = y0 - uy * back + ux * side * 0.4 + s * 0.12;
+    const sc = 0.6 + Math.random() * 0.6;
+    const side = (Math.random() - 0.5) * s * 0.12;     // 垂直于飞行方向撒开一点点
+    const x0 = f.x - ux * s * 0.08 - uy * side;
+    const y0 = f.y - uy * s * 0.08 + ux * side;
+    const x1 = x0 - ux * s * 0.06;
+    const y1 = y0 - uy * s * 0.06 + s * (0.1 + Math.random() * 0.1);
     const rot = Math.random() * 90 - 45;
+    const life = FLY.life[0] + Math.random() * (FLY.life[1] - FLY.life[0]);
     p.anim = p.el.animate([
       { transform: `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${rot.toFixed(0)}deg) scale(${sc.toFixed(2)})`, opacity: 0.95 },
-      { transform: `translate3d(${x1.toFixed(1)}px, ${y1.toFixed(1)}px, 0) rotate(${(rot + 40).toFixed(0)}deg) scale(${(sc * 0.35).toFixed(2)})`, opacity: 0 },
-    ], { duration: 520 + Math.random() * 260, easing: "cubic-bezier(.2, .6, .4, 1)" });
+      { transform: `translate3d(${x1.toFixed(1)}px, ${y1.toFixed(1)}px, 0) rotate(${(rot + 50).toFixed(0)}deg) scale(${(sc * 0.3).toFixed(2)})`, opacity: 0 },
+    ], { duration: life, easing: "cubic-bezier(.3, .4, .5, 1)" });
   }
 
   /* ==== 输入 ==== */
@@ -1770,7 +1782,7 @@
         view: S.view, sheet: S.sheet, range: S.range, auto: isAuto(), playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
-        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, tgt: S.fl.tgt } : null,
+        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, seg: S.fl.seg, pts: S.fl.pts.length } : null,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };

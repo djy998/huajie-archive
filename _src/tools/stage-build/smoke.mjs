@@ -651,7 +651,7 @@ async function main() {
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
   }
 
-  /* 20. 飞花线：打开后一朵花飞向每个刚出现的气泡 */
+  /* 20. 飞花线：萤火虫大小的花沿曲线匀速掠过每个气泡，在气泡该判定的那一刻正好经过它 */
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_fly: "1" } });
     await openStage(P);
@@ -659,20 +659,26 @@ async function main() {
     check("飞花线开关记得住（打开）", P.$('[aria-label="飞花线"]').checked);
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
-    check("飞花线：显示一朵花和一池星星", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 18);
+    check("飞花线：显示一朵花和一池星星（24 颗）", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower") && P.$$(".hjs-fly-star").length === 24);
+    const g = P.st().g;
+    const fsz = parseFloat(P.$("#hjsFly").style.getPropertyValue("--fly"));
+    check("飞花线：花是萤火虫大小（约 1/4 个气泡）", fsz > 0 && fsz < g.size * 0.3, `${fsz} / ${g.size}`);
     const ns = P.st().notes;
-    const ap = 1.35;                                   // 标准难度的提前量
-    P.until(ns[0].t - ap + 0.05);
+    const ap = 0;                                      // 花在气泡该判定的那一刻经过它
+    P.until(ns[0].t - ap - 0.3);
     const fp0 = P.st().flyPos;
-    check("飞花线：开始时花就在第一个气泡上", fp0 && Math.hypot(fp0.x - ns[0].x, fp0.y - ns[0].y) < 1, JSON.stringify(fp0));
-    const k = ns.findIndex((a, i) => i > 1 && Math.hypot(a.x - ns[i - 1].x, a.y - ns[i - 1].y) > P.st().g.size && a.t - ns[i - 1].t > 0.5);
+    check("飞花线：开始时花在第一个气泡的位置", fp0 && Math.hypot(fp0.x - ns[0].x, fp0.y - ns[0].y) < 1, JSON.stringify(fp0));
+    const k = ns.findIndex((a, i) => i > 1 && a.t - ns[i - 1].t > 0.4 && Math.hypot(a.x - ns[i - 1].x, a.y - ns[i - 1].y) > g.size);
     if (k > 0) {
-      P.until(ns[k].t - ap + 0.02);
-      const mid = P.st().flyPos;
-      P.until(ns[k].t - ap + 0.6);
-      const end = P.st().flyPos;
-      const dEnd = Math.hypot(end.x - ns[k].x, end.y - ns[k].y);
-      check("飞花线：新气泡一出现，花就飞过去（0.6 秒内到位）", end.tgt === k && dEnd < 2 && Math.hypot(mid.x - ns[k].x, mid.y - ns[k].y) > dEnd, `tgt=${end.tgt}/${k} d=${dEnd.toFixed(1)}`);
+      const a = ns[k - 1], b = ns[k];
+      const half = (a.t + b.t) / 2 - ap;
+      P.until(half);
+      const m = P.st().flyPos;
+      const dA = Math.hypot(m.x - a.x, m.y - a.y), dB = Math.hypot(m.x - b.x, m.y - b.y), dAB = Math.hypot(a.x - b.x, a.y - b.y);
+      check("飞花线：两个气泡之间是在路上（不是跳过去）", dA > dAB * 0.2 && dB > dAB * 0.2, `${dA.toFixed(0)}/${dB.toFixed(0)}/${dAB.toFixed(0)}`);
+      P.until(b.t - ap);
+      const e = P.st().flyPos;
+      check("飞花线：气泡该判定的那一刻正好经过它", Math.hypot(e.x - b.x, e.y - b.y) < g.size * 0.05, `${Math.hypot(e.x - b.x, e.y - b.y).toFixed(2)}`);
       check("飞花线：花在气泡下面一层（不挡音名）", P.$("#hjsFly").compareDocumentPosition(P.$("#hjsNotes")) & P.win.Node.DOCUMENT_POSITION_FOLLOWING);
     }
     const tf = P.$(".hjs-fly-flower").style.transform;
@@ -680,7 +686,7 @@ async function main() {
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_fly: "1", hj_stage_render: "simple" } });
     await openStage(Q);
     await go(Q);
-    check("简单显示时星星池更小", Q.$$(".hjs-fly-star").length === 10);
+    check("简单显示时星星池更小", Q.$$(".hjs-fly-star").length === 12);
   }
 
   /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
