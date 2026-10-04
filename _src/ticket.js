@@ -206,14 +206,20 @@ function renderTicketStock(info) {
   t.stockMode = info?.remainingMode || "full";
   t.stockLevel = info?.remainingLevel || "";
   t.soldOut = typeof info?.soldOut === "boolean" ? info.soldOut : t.remaining === 0;
-  const html = ticketStockHtml(t.stockMode, t.remaining, t.stockLevel);
+  paintTicketStock();
+}
+
+/* 购票关闭（或状态没读到）时不显示余票，只留刷新 / 开启时间的小字 */
+function paintTicketStock() {
+  const t = ticketState;
+  const html = t.open ? ticketStockHtml(t.stockMode, t.remaining, t.stockLevel) : "";
   const text = $("ticketStockText");
   text.innerHTML = html;
   text.hidden = !html;
   const lines = ticketTimeLines();
   setMsg($("ticketResetHint"), lines.join("\n"));
   $("ticketStock").hidden = !html && !lines.length;
-  $("ticketStock").classList.toggle("is-empty", t.soldOut);
+  $("ticketStock").classList.toggle("is-empty", t.open && t.soldOut);
   updateTicketQtyWarn();
 }
 
@@ -434,6 +440,8 @@ async function submitTicket(e) {
     renderTicketStock(data);
     showTicketResult(form.payload, data);
   } else if (data.error === "closed") {
+    ticketState.open = false;
+    paintTicketStock();
     setTicketMode("blocked", TICKET_MSG_CLOSED);
     openTicketNotice(TICKET_MSG_CLOSED);
   } else if (data.error === "cooldown") {

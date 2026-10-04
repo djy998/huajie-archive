@@ -5,7 +5,7 @@
   · assets/bard/stage/charts/<id>.json  每首的音符与分级（点开这首时才下载）
 
 charts/<id>.json：{"v": 2, "n": [[距上一个音的毫秒, MIDI 音高, 级别], ...]}，第一个音在 0 秒。
-级别 3 = 轻松起就要弹，2 = 标准起，1 = 只有挑战，0 = 只由游戏补音（规则见 chart.py）。
+级别 3 = 仙人刺起就要弹，2 = 魔界花起，1 = 只有泰坦，0 = 只由游戏补音（规则见 chart.py）。
 
 用法：python build.py            （全部重写，几秒钟；需要 pip install mido numpy）
       python build.py --dry-run  （只打印统计，不写文件）
@@ -33,8 +33,8 @@ TRACK_INST = {
     "trumpet": "trumpet", "trombone": "trombone", "tuba": "tuba", "horn": "horn", "sax": "sax", "saxophone": "sax",
     "churchorgan": "clarinet", "organ": "clarinet", "fiddle": "fiddle",
 }
-STAR_CUTS = [0.3, 0.75]                # 每档里按难度分排名切成三段：轻松 1~3 星、标准 2~4 星、挑战 3~5 星
-LEVELS = (3, 2, 1)                     # 轻松 / 标准 / 挑战 在谱面里的级别（lvl ≥ 这个数的音要弹）
+STAR_CUTS = [0.3, 0.75]                # 每档里按难度分排名切成三段：仙人刺 1~3 星、魔界花 2~4 星、泰坦 3~5 星
+LEVELS = (3, 2, 1)                     # 仙人刺 / 魔界花 / 泰坦 在谱面里的级别（lvl ≥ 这个数的音要弹）
 
 
 def guess_inst(info):
@@ -115,10 +115,10 @@ def main():
         except Exception as e:
             raise SystemExit(f"!! {s['id']} 失败：{e!r}")
 
-    # 星级：轻松 / 标准 / 挑战每档各一个。每档在整个曲库里按这一档的难度分排名，切成三段，
-    # 轻松占 1~3 星、标准 2~4 星、挑战 3~5 星（谱面按最小间隔挑音，同一档的疏密本来就接近，
-    # 所有档混在一起排的话，标准档几乎全是 3 星）。轻松简单而挑战很难的曲子，两档会差到 3 星。
-    # 同一首越难的档星级不低于前一档；diff 仍写标准档的星级，给旧版网页用
+    # 星级：仙人刺 / 魔界花 / 泰坦每档各一个。每档在整个曲库里按这一档的难度分排名，切成三段，
+    # 仙人刺占 1~3 星、魔界花 2~4 星、泰坦 3~5 星（谱面按最小间隔挑音，同一档的疏密本来就接近，
+    # 所有档混在一起排的话，魔界花档几乎全是 3 星）。仙人刺简单而泰坦很难的曲子，两档会差到 3 星。
+    # 同一首越难的档星级不低于前一档；diff 仍写魔界花档的星级，给旧版网页用
     for k in range(len(LEVELS)):
         order = sorted(range(len(built)), key=lambda i: built[i][2]["scores"][k])
         for rank, i in enumerate(order):
@@ -131,7 +131,7 @@ def main():
         entry["diff"] = d[1]
 
     for entry, _, st in built:
-        print("  %-24s %s %5.0fs %3d拍/分%s 轻松/标准/挑战 %4d/%4d/%4d（共 %4d）音域 %d-%d %s" % (
+        print("  %-24s %s %5.0fs %3d拍/分%s 仙人刺/魔界花/泰坦 %4d/%4d/%4d（共 %4d）音域 %d-%d %s" % (
             entry["id"], "/".join(str(d) for d in entry["diffs"]) + "星", entry["dur"], entry["bpm"],
             "≈" if entry["est"] else " ", *entry["cnt"], st["all"], *entry["range"], entry["inst"]))
     if args.dry_run:

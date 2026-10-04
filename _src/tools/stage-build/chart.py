@@ -7,9 +7,9 @@ MIDI 里的每个音都会在游戏里出声：谱面挑出来的音由玩家弹
   2. 分簇：起音挨得很近（相邻 ≤ 35 ms、整簇 ≤ 150 ms，琶音式的和弦）的音算一簇，每簇取最高音当旋律候选
   3. 打分：后面空得越久（长音）、和弦重音、落在拍点上（MIDI 对齐网格时才看）、旋律转折、大跳越重要；
      起音时上方还有更高的音在响（被旋律盖住的伴奏音）大幅降分
-  4. 按分数从高到低挑，和已挑的音至少隔开 gap 秒：先挑轻松，标准在轻松的基础上加，挑战再加（easy ⊂ normal ⊂ hard）
+  4. 按分数从高到低挑，和已挑的音至少隔开 gap 秒：先挑仙人刺，魔界花在仙人刺的基础上加，泰坦再加（easy ⊂ normal ⊂ hard）
 
-产出每个音的 lvl：3 = 三个难度都要弹，2 = 标准与挑战，1 = 只有挑战，0 = 只由游戏补音。
+产出每个音的 lvl：3 = 三个难度都要弹，2 = 魔界花与泰坦，1 = 只有泰坦，0 = 只由游戏补音。
 """
 import bisect
 import math
@@ -19,7 +19,7 @@ import numpy as np
 
 GAPS = {"easy": 0.5, "normal": 0.25, "hard": 0.125}   # 同一难度里两个音最少隔开的秒数
 LEVEL = {"easy": 3, "normal": 2, "hard": 1}
-COVERED_GAP = 0.8                                   # 标准难度里，伴奏音前后至少空这么久才选
+COVERED_GAP = 0.8                                   # 魔界花难度里，伴奏音前后至少空这么久才选
 CLUSTER_STEP = 0.035
 CLUSTER_SPAN = 0.15
 
@@ -235,7 +235,7 @@ def build_chart(notes, info, gap_scale=1.0):
         for i in order:
             if i in picked:
                 continue
-            if clusters[i]["covered"]:                 # 伴奏音：轻松不选；标准只在前后都空着的地方选
+            if clusters[i]["covered"]:                 # 伴奏音：仙人刺不选；魔界花只在前后都空着的地方选
                 if dens == "easy" or (dens == "normal" and not free(times[i], COVERED_GAP)):
                     continue
             if free(times[i], gap):

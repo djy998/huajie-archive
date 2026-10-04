@@ -12,12 +12,12 @@
    - 开头有四拍轻声预备拍（3·2·1），第一个气泡前就知道速度
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
    - 判定四档 Perfect / Great / Good / Miss，没有血量、不会失败；漏掉的音不出声
-   - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用轻松的判定窗）/
+   - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用仙人刺的判定窗）/
      放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
    - 本机纪录按 曲目 × 难度 × 判定模式 × 点击范围 分开记
    - 飞花线（设置 → 画面，默认关）：一只萤火虫似的小花沿曲线掠过每个气泡，到点时正好经过该点的那个，身后撒星星（简单显示时拖一条金色的光）
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
-   - 界面：大厅（当前曲目、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
+   - 界面：大厅（今晚演奏、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
      点击范围、显示与飞花线、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
    - 曲目索引 assets/bard/stage/songs.json，每首的谱面 charts/<id>.json 点到才下载（_src/tools/stage-build 从 MIDI 生成） */
 (() => {
@@ -28,13 +28,13 @@
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
   };
-  /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 轻松那档） */
+  /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 仙人刺那档） */
   const LOOSE_WIN = [0.18, 0.3, 0.45];
   /* approach：气泡提前多久出现；win：正常判定的半窗；tap：气泡直径占屏幕短边的比例 */
   const DIFFS = [
-    { id: "easy", label: "轻松", approach: 1.8, win: [0.18, 0.3, 0.45], tap: 0.24 },
-    { id: "normal", label: "标准", approach: 1.35, win: [0.14, 0.24, 0.36], tap: 0.21 },
-    { id: "hard", label: "挑战", approach: 1.05, win: [0.11, 0.19, 0.29], tap: 0.2 },
+    { id: "easy", label: "仙人刺", approach: 1.8, win: [0.18, 0.3, 0.45], tap: 0.24 },
+    { id: "normal", label: "魔界花", approach: 1.35, win: [0.14, 0.24, 0.36], tap: 0.21 },
+    { id: "hard", label: "泰坦", approach: 1.05, win: [0.11, 0.19, 0.29], tap: 0.2 },
   ];
   const JUDGE_MODES = [{ id: "normal", label: "正常" }, { id: "loose", label: "宽松" }, { id: "hover", label: "放水" }];
   const HOVER_R = 0.8;                                  // 放水模式：指针离气泡中心不到这么多个气泡直径就算「在气泡上」
@@ -60,7 +60,7 @@
     { id: "just", label: "JUST", pts: 50, vel: 0.65 },
   ];
   const JUST = 4;                                       // JUDGE 里的下标（MISS 仍是 3）
-  const JUST_RATIO = 1 / 3;                             // 挑战正常判定约 0.1 秒、标准 0.12、轻松 / 宽松 0.15
+  const JUST_RATIO = 1 / 3;                             // 泰坦正常判定约 0.1 秒、魔界花 0.12、仙人刺 / 宽松 0.15
   const justWin = (dm) => dm.win[2] * JUST_RATIO;
   /* 判 MISS 前多等多久：至少 INPUT_GRACE，晚一点的 JUST 也要等得到 */
   const missGrace = (dm) => Math.max(INPUT_GRACE, justWin(dm));
@@ -137,7 +137,7 @@
   /* 大厅、暂停、演奏中标题下的一行：学习 / 自动演奏 / 判定与点击范围（默认的不写） */
   const modeTag = () => (S.learn ? " · 学习" : isAuto() ? " · 自动演奏" : judgeTag() + (S.range === "normal" ? "" : ` · ${rangeLabel()}范围`));
   /* 本机纪录按 曲目:难度:判定模式:点击范围 分开记。旧纪录：曲目:难度:判定模式（那时点击范围默认正常）算正常范围；
-     更早的 曲目:难度（加判定模式以前：按轻松那档判定、1.7 个气泡的范围）算宽松判定 + 宽松范围 */
+     更早的 曲目:难度（加判定模式以前：按仙人刺那档判定、1.7 个气泡的范围）算宽松判定 + 宽松范围 */
   function bestOf(all, id, diff, judge, range) {
     return all[`${id}:${diff}:${judge}:${range}`]
       || (range === "normal" ? all[`${id}:${diff}:${judge}`] : null)
@@ -147,7 +147,7 @@
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
   const starText = (n) => "★".repeat(clamp(n, 1, 5)) + "☆".repeat(5 - clamp(n, 1, 5));
-  /* 星级按档：songs.json 的 diffs = [轻松, 标准, 挑战]（轻松 1~3、标准 2~4、挑战 3~5 星）；旧曲库只有 diff（标准档） */
+  /* 星级按档：songs.json 的 diffs = [仙人刺, 魔界花, 泰坦]（仙人刺 1~3、魔界花 2~4、泰坦 3~5 星）；旧曲库只有 diff（魔界花档） */
   function starsOf(s, diffId = S.diff) {
     const k = Math.max(0, DIFFS.findIndex((d) => d.id === diffId));
     return clamp(num(Array.isArray(s.diffs) ? s.diffs[k] : s.diff, 3), 1, 5);
@@ -504,7 +504,7 @@
     const s = S.song;
     const previewing = S.preview.id === s.id;
     main.append(h("section", { class: "hjs-card hjs-hero" },
-      h("p", { class: "hjs-eyebrow", text: "当前曲目" }),
+      h("p", { class: "hjs-eyebrow", text: "今晚演奏" }),
       h("h2", { class: "hjs-hero-t", text: s.t }),
       s.o ? h("p", { class: "hjs-hero-o", text: s.o }) : null,
       h("p", { class: "hjs-hero-meta" },
@@ -520,7 +520,7 @@
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge, S.range);
-    const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 轻松 / 标准 / 挑战各要弹几个音
+    const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 仙人刺 / 魔界花 / 泰坦各要弹几个音
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "难度" }),
@@ -773,7 +773,7 @@
       S.judge === "hover"
         ? (S.range === "free" ? "点击范围也为放水：自动演奏，不计分" : "无需点击：指针停在气泡上，到判定点自动算弹中（手机可按住滑动）；判定窗口同宽松")
         : S.judge === "loose"
-          ? `三档难度均按轻松判定：PERFECT / GREAT / GOOD 误差分别在 ${winText(LOOSE_WIN)} 秒以内`
+          ? `三档难度均按仙人刺判定：PERFECT / GREAT / GOOD 误差分别在 ${winText(LOOSE_WIN)} 秒以内`
           : `随难度收紧，当前「${diffBase().label}」：PERFECT / GREAT / GOOD 误差分别在 ${winText(diffBase().win)} 秒以内`);
     const val = h("b", { class: "hjs-num-v", text: `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` });
     const setv = (v) => { S.delayMs = clamp(Math.round(v / 5) * 5, -300, 300); setRaw(K.delay, S.delayMs); val.textContent = `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms`; };
@@ -802,16 +802,16 @@
         ["气泡位于对应音高的高度（越高音越高），外圈逐渐收缩，与核心重合时弹奏即发出该音",
           "曲目均来自 MIDI：气泡为需弹奏的音，其余音（和声及本难度省略的旋律）自动以轻音补全",
           "点击气泡弹奏，允许少许偏差；电脑上也可将指针指向气泡后按任意键",
-          "点击范围（设置中修改）：正常 —— 气泡附近；宽松 —— 范围更大；放水 —— 不限位置，外圈收至判定点时点击任意位置或按任意键均有效",
           "开始前有四拍预备拍",
-          "星级：每首曲目三档难度各有星级（轻松 1~3、标准 2~4、挑战 3~5 星），按同难度下的音符密度在曲库中排序；大厅与选曲窗口显示当前难度的星级",
-          "JUST：早于或晚于 GOOD 范围，且超出不足其三分之一（挑战约 0.1 秒）时判定，发声并得少量分数，但中断连击",
+          "星级：每首曲目三档难度各有星级（仙人刺 1~3、魔界花 2~4、泰坦 3~5 星），按同难度下的音符密度在曲库中排序；大厅与选曲窗口显示当前难度的星级",
+          "JUST：早于或晚于 GOOD 范围，且超出不足其三分之一（泰坦约 0.1 秒）时判定，发声并得少量分数，但中断连击",
           "MISS 与「点空」不同：MISS 指音符到达判定点时未弹奏，该音不发声、中断连击并计入准确率；「点空」指点击时附近没有待弹奏的气泡，不扣分、不中断连击，仅在结算中记录次数。点空较多通常是点早或点偏",
           "判定时机：外圈与气泡重合、音名最亮时点击最准；下一个待弹奏的气泡接近判定点时外圈加粗",
           "学习模式：气泡到达判定点仍未弹奏时音乐暂停，弹中后继续，不计分",
-          "判定模式（设置中修改）：正常 —— 难度越高判定越严；宽松 —— 三档难度均按轻松判定；放水 —— 无需点击，指针停在气泡上，到判定点即算弹中",
+          "判定模式与点击范围（均在设置中修改）：判定模式 —— 正常（难度越高判定越严）、宽松（三档难度均按仙人刺判定）、放水（无需点击，指针停在气泡上，到判定点即算弹中）；"
+            + "点击范围 —— 正常（气泡附近）、宽松（范围更大）、放水（不限位置，外圈收至判定点时点击任意位置或按任意键均有效）。"
+            + "两项选宽松各扣 20% 得分、选放水各扣 50%，扣分相加（均为宽松时 ×0.6）",
           "点击范围与判定模式均为放水时为自动演奏，不计分。本机纪录按难度、判定模式、点击范围分别记录",
-          "得分：判定模式、点击范围选宽松各扣 20%，选放水各扣 50%，两项相加（均为宽松时 ×0.6）",
           "飞花线（设置 → 画面）：小花沿曲线依次经过各气泡，经过时即为判定点，身后带星光（简单显示时为金色光线）",
           "判定持续偏早或偏晚：设置 → 判定延迟 → 校准，随「嗒」声点击数次即可",
           "Esc（手机为返回键）：暂停 / 关闭窗口 / 返回上一层",

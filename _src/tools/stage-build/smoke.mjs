@@ -142,7 +142,7 @@ async function main() {
     const c = [3, 2, 1].map((L) => n.filter((r) => r[2] >= L).length);
     return !(n.length > 0 && c[0] > 0 && c[0] <= c[1] && c[1] <= c[2] && c.join() === s.cnt.join());
   });
-  check("每首都有谱面、级别嵌套（轻松 ⊂ 标准 ⊂ 挑战）、音数和索引一致", bad.length === 0, bad.map((s) => s.id).join(","));
+  check("每首都有谱面、级别嵌套（仙人刺 ⊂ 魔界花 ⊂ 泰坦）、音数和索引一致", bad.length === 0, bad.map((s) => s.id).join(","));
 
   /* 1. 大厅与选曲 */
   {
@@ -150,6 +150,8 @@ async function main() {
     await openStage(P);
     check("打开后在大厅", P.st().view === "lobby" && !P.$("#hjStage").hidden);
     check("大厅显示当前曲目", P.$(".hjs-hero-t")?.textContent === firstSong.t);
+    check("大厅曲目上方写「今晚演奏」", P.$(".hjs-eyebrow")?.textContent === "今晚演奏", P.$(".hjs-eyebrow")?.textContent);
+    check("难度三档叫仙人刺 / 魔界花 / 泰坦", ["仙人刺", "魔界花", "泰坦"].every((t) => P.btn(t)));
     check("大厅先把当前曲目的谱面下好", P.fetched.some((u) => u.includes(`charts/${firstSong.id}.json`)));
     check("大厅不再提伴奏音轨", !/伴奏/.test(P.$("#hjsLobby").textContent));
     check("大厅有「离开舞台」按钮", !!P.btn("离开舞台"));
@@ -176,10 +178,10 @@ async function main() {
     P.click(P.$$(".hjs-chips.is-cat .hjs-chip")[0]);
     check("分类回到全部", P.$$(".hjs-song").length === SONGS.songs.length);
 
-    check("曲库每首都有三档星级（轻松 1~3、标准 2~4、挑战 3~5，越难不越低）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.every((d, k) => d >= k + 1 && d <= k + 3) && s.diffs[0] <= s.diffs[1] && s.diffs[1] <= s.diffs[2]));
+    check("曲库每首都有三档星级（仙人刺 1~3、魔界花 2~4、泰坦 3~5，越难不越低）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.every((d, k) => d >= k + 1 && d <= k + 3) && s.diffs[0] <= s.diffs[1] && s.diffs[1] <= s.diffs[2]));
     P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[4]);
     const four = SONGS.songs.filter((s) => s.diffs[1] === 4).length;
-    check("四星筛选（按当前难度「标准」）", four > 0 && P.$$(".hjs-song").length === four && /星级按标准/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
+    check("四星筛选（按当前难度「魔界花」）", four > 0 && P.$$(".hjs-song").length === four && /星级按魔界花/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
     const row = P.$$(".hjs-song")[0];
     P.click(row);
     await sleep(5);
@@ -197,9 +199,9 @@ async function main() {
       const cur = SONGS.songs.find((x) => x.t === P.$(".hjs-hero-t").textContent);
       const heroStars = () => (P.$(".hjs-hero .hjs-stars").textContent.match(/★/g) || []).length;
       const before = heroStars();
-      P.click(P.btn("挑战"));
-      check("大厅星级跟着难度变（标准 → 挑战）", before === cur.diffs[1] && heroStars() === cur.diffs[2], `${before}→${heroStars()} ${cur.diffs}`);
-      P.click(P.btn("标准"));
+      P.click(P.btn("泰坦"));
+      check("大厅星级跟着难度变（魔界花 → 泰坦）", before === cur.diffs[1] && heroStars() === cur.diffs[2], `${before}→${heroStars()} ${cur.diffs}`);
+      P.click(P.btn("魔界花"));
     }
     check("大厅里 Esc 关掉舞台", P.$("#hjStage").classList.contains("is-leaving"));
     check("关舞台时马上露出下面的网站", !P.doc.body.classList.contains("hjs-covered"));
@@ -224,7 +226,7 @@ async function main() {
     const st = P.st();
     check("开始演奏：点气泡，没有轨道和键帽", st.view === "play" && st.playing && !P.$(".hjs-lane") && !P.$(".hjs-cap"));
     check("飞花线默认关：不显示", P.$("#hjsFly").hidden && !P.$(".hjs-fly-flower"));
-    check("轻松难度：气泡数等于谱面里级别 3 的音", st.notes.length === SHORT.cnt[0], `${st.notes.length}/${SHORT.cnt[0]}`);
+    check("仙人刺难度：气泡数等于谱面里级别 3 的音", st.notes.length === SHORT.cnt[0], `${st.notes.length}/${SHORT.cnt[0]}`);
     check("其余的音都是补音", st.bg.length === chartOf(SHORT.id).n.length - SHORT.cnt[0], `${st.bg.length}`);
     check("钟从负数开始（预备拍在第一个音之前）", st.startT < 0 && st.clock.run);
     const ck = crowd(st, 1.8);
@@ -247,7 +249,7 @@ async function main() {
     const n1 = notes[1];
     P.until(n1.t + 0.4);
     check("判定窗过了还多等一下（排队中的点按还算数）", P.st().judged[1] === -1);
-    P.until(n1.t + 0.62);                         // 轻松难度 0.45 秒判定窗 + 0.15 秒（JUST 的那段）之后才算漏
+    P.until(n1.t + 0.62);                         // 仙人刺难度 0.45 秒判定窗 + 0.15 秒（JUST 的那段）之后才算漏
     const hitsAfter = P.midi.slice(before).filter((m) => m.vel >= 0.8);
     check("漏掉的音不出声", P.st().judged[1] === 3 && hitsAfter.length === 0, `judged=${P.st().judged[1]} sounds=${hitsAfter.length}`);
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
@@ -268,7 +270,7 @@ async function main() {
     P.advance(0.05);
     check("继续后从暂停处接着走", Math.abs(P.pos() - tPause - 0.05) < 1e-6, `${(P.pos() - tPause).toFixed(3)}`);
 
-    /* 主线程忙：点按晚 200 ms 才处理，按事件时间补回 50 ms → 判成晚 150 ms，仍在轻松的 PERFECT（0.16 秒）以内 */
+    /* 主线程忙：点按晚 200 ms 才处理，按事件时间补回 50 ms → 判成晚 150 ms，仍在仙人刺的 PERFECT（0.16 秒）以内 */
     P.until(notes[2].t + 0.2);
     P.move(notes[2].x, notes[2].y);
     P.key("KeyX", "x", {}, 200);
@@ -289,7 +291,7 @@ async function main() {
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
     check("本机纪录按难度、判定模式、点击范围分开写入", best[`${fin.song}:easy:normal:normal`] && best[`${fin.song}:easy:normal:normal`].score === fin.score && Object.keys(best).length === 1, Object.keys(best).join());
-    check("结算分别显示难度、判定模式、点击范围", ["难度轻松", "判定正常", "范围正常"].every((x) => P.$(".hjs-res-tags").textContent.includes(x)), P.$(".hjs-res-tags")?.textContent);
+    check("结算分别显示难度、判定模式、点击范围", ["难度仙人刺", "判定正常", "范围正常"].every((x) => P.$(".hjs-res-tags").textContent.includes(x)), P.$(".hjs-res-tags")?.textContent);
     check("结算里是「结束演奏」，没有「回大厅」", !!P.btn("结束演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
     P.click(P.btn("结束演奏", P.$("#hjsModal")));
     check("结束演奏回到大厅", P.st().view === "lobby" && /本机纪录/.test(P.$(".hjs-ctrl").textContent));
@@ -443,21 +445,27 @@ async function main() {
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     P.click(P.btn("玩法说明"));
     check("玩法说明讲清 MISS 和点空的区别", /MISS 与「点空」不同/.test(P.$("#hjsSheetCard").textContent));
+    {
+      const items = P.$$("#hjsSheetCard li").map((li) => li.textContent);
+      const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /扣 20%/.test(t));
+      check("玩法说明：判定模式、点击范围、得分扣减合成一条（共 14 条）", items.length === 14 && merged.length === 1
+        && !items.some((t) => /^点击范围（设置中修改）|^得分：/.test(t)), `${items.length} 条`);
+    }
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("再按返回键离开舞台", P.$("#hjStage").classList.contains("is-leaving"));
   }
 
-  /* 10. 判定模式：正常按难度收紧，宽松三档都按轻松；全弹中出 FULL COMBO，连击一直显示 */
+  /* 10. 判定模式：正常按难度收紧，宽松三档都按仙人刺；全弹中出 FULL COMBO，连击一直显示 */
   for (const [judge, want] of [["normal", 1], ["loose", 0]]) {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", ...(judge === "normal" ? {} : { hj_stage_judge: judge }) } });
     await openStage(P);
     await go(P);
     const ns = P.st().notes;
-    P.until(ns[0].t + 0.15);                    // 晚 150 ms：挑战正常判定 GREAT（0.11 < 0.15 < 0.19），宽松 PERFECT（< 0.18）
+    P.until(ns[0].t + 0.15);                    // 晚 150 ms：泰坦正常判定 GREAT（0.11 < 0.15 < 0.19），宽松 PERFECT（< 0.18）
     P.pointer(ns[0].x, ns[0].y);
-    check(`${judge === "normal" ? "正常判定（默认）" : "宽松判定"}：挑战难度晚 150 ms 判 ${want ? "GREAT" : "PERFECT"}`, P.st().judged[0] === want, `judged=${P.st().judged[0]}`);
+    check(`${judge === "normal" ? "正常判定（默认）" : "宽松判定"}：泰坦难度晚 150 ms 判 ${want ? "GREAT" : "PERFECT"}`, P.st().judged[0] === want, `judged=${P.st().judged[0]}`);
     for (let i = 1; i < ns.length; i++) {
       P.until(ns[i].t);
       P.pointer(ns[i].x, ns[i].y);
@@ -465,7 +473,7 @@ async function main() {
     }
     P.until(P.st().endT + 2);
     check(`${judge}：全部弹中 → FULL COMBO!`, P.st().finished && /FULL COMBO!/.test(P.$("#hjsModal").textContent) && !/null|undefined/.test(P.$("#hjsModal").textContent));
-    if (judge === "loose") check("结算显示：难度挑战、判定宽松", /难度挑战/.test(P.$(".hjs-res-tags").textContent) && /判定宽松/.test(P.$(".hjs-res-tags").textContent));
+    if (judge === "loose") check("结算显示：难度泰坦、判定宽松", /难度泰坦/.test(P.$(".hjs-res-tags").textContent) && /判定宽松/.test(P.$(".hjs-res-tags").textContent));
   }
   /* 11. 放水模式：不用点，鼠标停在气泡上，到点自动算弹中；不记最高分 */
   {
@@ -651,7 +659,7 @@ async function main() {
     check("自动演奏：每个音都发声", hits === ns.length, `${hits}/${ns.length}`);
     check("自动演奏：不计分", st.score === 0 && /0 分|自动演奏/.test(P.$("#hjsModal").textContent));
     const tags = P.$(".hjs-res-tags").textContent;
-    check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度挑战", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
+    check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度泰坦", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
     check("结算写明不计分、不记纪录，没有评级", /不计分、不记录/.test(P.$("#hjsModal").textContent) && !P.$(".hjs-res-rank"));
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
   }
@@ -782,7 +790,7 @@ async function main() {
     const ns = P.st().notes, g = P.st().g;
     const k = ns.findIndex((a, i) => i > 1 && a.t - ns[i - 1].t > 0.45);
     ns.slice(0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
-    P.until(ns[k].t - 0.4);                            // 挑战正常判定 GOOD 只到 0.29 秒：早 0.4 秒点在气泡上
+    P.until(ns[k].t - 0.4);                            // 泰坦正常判定 GOOD 只到 0.29 秒：早 0.4 秒点在气泡上
     P.pointer(ns[k].x, ns[k].y);
     check("点空原因：偏早", P.st().ghostWhy.early === 1 && P.st().judged[ns[k].idx] === -1, JSON.stringify(P.st().ghostWhy));
     P.until(ns[k].t);
@@ -794,11 +802,11 @@ async function main() {
 
   /* 26. JUST：比 GOOD 早 / 晚出去不到 0.1 秒算 JUST —— 给一点分、出声、断连击；再远就是点空 */
   {
-    /* 挑一首挑战难度里有几个前后都空出 0.8 秒的音的曲子（短的优先） */
+    /* 挑一首泰坦难度里有几个前后都空出 0.8 秒的音的曲子（短的优先） */
     const hardTimes = (id) => { let ms = 0; return chartOf(id).n.map((r) => { ms += r[0]; return [ms / 1000, r[2]]; }).filter((x) => x[1] >= 1).map((x) => x[0]); };
     const lone = (ts) => ts.map((_, i) => i).filter((i) => i > 0 && i + 1 < ts.length && ts[i] - ts[i - 1] > 0.8 && ts[i + 1] - ts[i] > 0.8);
     const song = SONGS.songs.slice().sort((x, y) => x.dur - y.dur).find((x) => lone(hardTimes(x.id)).length >= 3);
-    const P = makePage({ prefs: { hj_stage_song: song.id, hj_stage_diff: "hard" } });   // 挑战正常判定：GOOD 到 0.29 秒
+    const P = makePage({ prefs: { hj_stage_song: song.id, hj_stage_diff: "hard" } });   // 泰坦正常判定：GOOD 到 0.29 秒
     await openStage(P);
     await go(P);
     const ns = P.st().notes;
@@ -851,7 +859,7 @@ async function main() {
     check("还没弹时暂停：准确率显示 —", /准确率 — · 连击 0/.test(Q.$("#hjsModal").textContent));
   }
 
-  /* 28. JUST 的宽度按 GOOD 的三分之一：轻松（GOOD 0.45）晚 0.58 秒还是 JUST，挑战（0.29）晚 0.4 秒就判 MISS */
+  /* 28. JUST 的宽度按 GOOD 的三分之一：仙人刺（GOOD 0.45）晚 0.58 秒还是 JUST，泰坦（0.29）晚 0.4 秒就判 MISS */
   {
     const easyTimes = (id) => { let ms = 0; return chartOf(id).n.map((r) => { ms += r[0]; return [ms / 1000, r[2]]; }).filter((x) => x[1] >= 3).map((x) => x[0]); };
     const ok = (ts) => ts.some((t, i) => i > 0 && i + 1 < ts.length && t - ts[i - 1] > 1 && ts[i + 1] - t > 1);
@@ -861,11 +869,11 @@ async function main() {
     await go(P);
     const ns = P.st().notes;
     const k = ns.findIndex((a, i) => i > 0 && ns[i + 1] && a.t - ns[i - 1].t > 1 && ns[i + 1].t - a.t > 1);
-    check("轻松 JUST 测试找得到合适的曲子", k > 0, song && song.id);
+    check("仙人刺 JUST 测试找得到合适的曲子", k > 0, song && song.id);
     if (k > 0) {
       ns.slice(0, k).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
       P.until(ns[k].t + 0.58);
-      check("轻松：晚 0.58 秒（GOOD 0.45 + 0.15 以内）还算 JUST", P.st().judged[ns[k].idx] === -1 && (P.pointer(ns[k].x, ns[k].y), P.st().judged[ns[k].idx] === 4), `judged=${P.st().judged[ns[k].idx]}`);
+      check("仙人刺：晚 0.58 秒（GOOD 0.45 + 0.15 以内）还算 JUST", P.st().judged[ns[k].idx] === -1 && (P.pointer(ns[k].x, ns[k].y), P.st().judged[ns[k].idx] === 4), `judged=${P.st().judged[ns[k].idx]}`);
     }
   }
 
@@ -877,11 +885,11 @@ async function main() {
     check("旧纪录不算进正常判定", !/本机纪录/.test(A.$(".hjs-ctrl").textContent));
     const B = makePage({ prefs: { hj_stage_best2: old, hj_stage_judge: "loose", hj_stage_range: "loose" } });
     await openStage(B);
-    check("最早的旧纪录（曲目:难度）算宽松判定 + 宽松范围", /本机纪录（标准 · 宽松判定 · 宽松范围）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
+    check("最早的旧纪录（曲目:难度）算宽松判定 + 宽松范围", /本机纪录（魔界花 · 宽松判定 · 宽松范围）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
     const mid = JSON.stringify({ [`${firstSong.id}:normal:normal`]: { score: 2222, acc: 90, rank: "A", combo: 10 } });
     const C = makePage({ prefs: { hj_stage_best2: mid } });
     await openStage(C);
-    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围", /本机纪录（标准 · 正常判定 · 正常范围）· 2,222 分/.test(C.$(".hjs-ctrl").textContent), C.$(".hjs-best")?.textContent);
+    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围", /本机纪录（魔界花 · 正常判定 · 正常范围）· 2,222 分/.test(C.$(".hjs-ctrl").textContent), C.$(".hjs-best")?.textContent);
     const D = makePage({ prefs: { hj_stage_best2: mid, hj_stage_range: "loose" } });
     await openStage(D);
     check("换了点击范围就不显示别的范围的纪录", !/本机纪录/.test(D.$(".hjs-ctrl").textContent));

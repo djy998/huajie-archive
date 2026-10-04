@@ -22,7 +22,7 @@
 
 | 顺序 | 文件 | 职责 |
 | --- | --- | --- |
-| 1 | `boot.js` | 最先执行，兼容旧浏览器（es2015）。插入样式表、决定动画档位、开屏，建立 `window.HJ` |
+| 1 | `boot.js` | 最先执行，兼容旧浏览器（es2015）。插入样式表、决定动画档位、开屏与回访遮罩，建立 `window.HJ` |
 | 2 | `verify.js` | 人机验证组件，提供 `window.HJVerify` |
 | 3 | `config.js` | 只放内容和常量，不写逻辑 |
 | 4 | `main.js` | 路由、视图、弹窗、时间条、特效、通用工具（`$`、`callWorker`、`escapeHtml`、`createFormGate`…） |
@@ -41,7 +41,8 @@
 - `callWorker(payload, { load })` 默认 `auto`：访客刚点过 / 按过回车（1.5 秒内）发出的请求，或已有全屏提示在等时接着发出的请求，算 `block`，其余算 `none`。定时器里的刷新包在 `runQuietly(fn)` 里。
 - `loadLateScript(file, ready, { load })` 默认 `block`，后台预取传 `corner` 或 `none`。
 - 小号转圈的事访客后来真要用到时，对同一个 promise 再 `trackLoad(p, "block")` 升级成全屏。例如站点设置：首次进站时开屏会等它（最多到开屏的等待上限），之后右下角转圈；还没读完就点了要人机验证或花语的功能，`siteStateReady()` 让这次操作全屏等它读完，免得按默认设置走错。
-- 全屏出现时右下角的小号转圈先藏起来；开屏还在时两种都不出现，由开屏的莫古力代劳。
+- 全屏出现时右下角的小号转圈先藏起来；开屏或回访遮罩还在时两种都不出现，由它们的莫古力代劳。
+- 回访遮罩（不放开屏的进站，含每次更新后第一次打开）：`boot.js` 给 `<html>` 加 `boot-veil`（白天再加 `boot-veil-day`），`index.html` 里的 `#bootVeil`（样式内联，样式表没到也能显示）盖住页面；等样式表、`main.js` 的 `initApp`（白天 / 夜晚、首页卡片）、天空与首页卡片底图、标题字都好了再淡出（主程序就绪后图片与字体最多再等 2.5 秒，整体最长 12 秒；`main.js` 没加载成功时 DOMContentLoaded 后照常撤掉）。莫古力 0.3 秒后才出现，网快时只闪一下底色。入场动画、弹窗公告用 `HJ.boot.afterVeil(fn)` 留到撤掉时；`HJ.boot.veiled()` 查是否还盖着。
 
 ### 约定
 
@@ -50,6 +51,7 @@
 - 页面上的文字统一用 `textContent` 写入。必须拼 HTML 时，所有变量都要经过 `escapeHtml`。
 - 路由用 hash（`#latest`、`#previous`、`#ti` …），对照表是 `main.js` 的 `ROUTES`。`/activity/`、`/previous/` 是 `build.mjs` 生成的独立入口：`<html data-page>` 决定显示哪个视图，`<base href="../">` 让相对路径仍然指向站点根目录。
 - 弹窗统一登记在 `main.js` 的 `MODALS`，Esc、返回键和 `closeAllModals` 都靠这张表。
+- 动画档位挂在 `body` 上：`fx-hover-enabled`（完整）、`fx-lite`（轻量）、`fx-off`（关闭）。纯 CSS 的弹出、晃动动画要在 `body.fx-off` 下关掉。
 - 小按钮、选项一律用「凸起玻璃」：`style.css` 设计变量里的 `--glass-up`（平常）、`--glass-on`（选中 / 主按钮）、`--glass-sheen`（叠在任意底色上的高光），配 `--glass-up-edge`、`--glass-up-shadow` 等，白天整套自动换。悬停浮起、按下压进去写在「18. 按下反馈」里，新按钮把类名加进那组选择器即可。不要再做没有阴影的扁平按钮。
 
 ### 安全

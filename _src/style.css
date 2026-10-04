@@ -520,6 +520,10 @@ body.day-mode .vol-track { background: rgba(90,60,20,.18); }
 .more-panel.is-open .more-item:nth-child(4) { animation-delay: .23s; }
 .more-panel.is-open .more-item:nth-child(5) { animation-delay: .3s; }
 .more-panel.is-open .more-item:nth-child(6) { animation-delay: .37s; }
+/* 选了某个功能后直接收起（main.js），关闭动画时开合都不做过渡 */
+.more-panel.is-instant,
+body.fx-off .more-panel { transition: none; }
+body.fx-off .more-panel.is-open .more-item { animation: none; }
 @keyframes hjMoreDrop {
   from { opacity: 0; transform: translateY(-10px) scale(.85); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -5640,6 +5644,19 @@ body.day-mode .bard-tip { color: var(--day-ink); background: rgba(255,249,235,.7
 @media (max-width: 640px) {
   .bard-widget { top: 96px; right: 8px; width: min(236px, calc(100vw - 16px)); }
 }
+/* 手机：弹出只淡入（毛玻璃上做缩放，每帧都要重新模糊背后的页面），模糊半径减小；小组件内部变化不牵动整页排版 */
+@media (pointer: coarse), (max-width: 760px) {
+  .bard-widget {
+    animation: bardFade .18s ease-out;
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    backdrop-filter: blur(10px) saturate(1.2);
+    contain: layout style;
+  }
+}
+@keyframes bardFade { from { opacity: 0; } }
+/* 关闭动画：不弹出、不晃动 */
+body.fx-off .bard-widget,
+body.fx-off .bard-widget.is-nudge { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .bard-widget, .bard-widget.is-nudge, .bard-stage, .bard-play.is-on { animation: none; }
   .bard-guide-card { transition: none; }

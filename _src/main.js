@@ -282,8 +282,8 @@ function showLoad(how) {
   const root = document.documentElement;
   m.showTimer = 0;
   if (maintenanceActive()) return;
-  /* 开屏还在时由开屏的莫古力代劳，进站后若还没好再出现 */
-  if (root.classList.contains("boot-pending")) { m.showTimer = setTimeout(() => showLoad(how), 250); return; }
+  /* 开屏或回访遮罩还在时由它们的莫古力代劳，进站后若还没好再出现 */
+  if (root.classList.contains("boot-pending") || HJ.boot.veiled?.()) { m.showTimer = setTimeout(() => showLoad(how), 250); return; }
   if (!m.el) {
     m.el = document.createElement("div");
     m.el.className = m.cls;
@@ -1334,6 +1334,7 @@ let sitePopup = null;
 const todayKey = () => ymdKey(new Date());
 
 function maybeShowSitePopup() {
+  if (HJ.boot.veiled?.()) { HJ.boot.afterVeil(maybeShowSitePopup); return; }
   const p = sitePopup;
   if (!p || maintenanceActive() || $("view-home").hidden || document.documentElement.classList.contains("boot-pending") || anyModalOpen()) return;
   const rev = String(p.rev);
@@ -1896,6 +1897,7 @@ function syncFxToggle() {
   btn.title = label;
   document.body.classList.toggle("fx-hover-enabled", fxLevel === "full");
   document.body.classList.toggle("fx-lite", fxLevel === "lite");
+  document.body.classList.toggle("fx-off", fxLevel === "off");
   applyFx();
   if (fxEnabled) return;
   document.querySelectorAll(".fx-page-enter, .fx-fade-only").forEach((el) => {
@@ -1916,8 +1918,8 @@ function initFxToggle() {
   fxLevel = FX_LEVELS.includes(HJ.fx) ? HJ.fx : "lite";
   fxEnabled = fxLevel !== "off";
   syncFxToggle();
-  /* 开屏时入场动画留到进站 */
-  if (!document.documentElement.classList.contains("boot-pending")) playPageEnterStagger();
+  /* 开屏时入场动画留到进站，回访时留到遮罩撤掉 */
+  if (!document.documentElement.classList.contains("boot-pending")) HJ.boot.afterVeil(playPageEnterStagger);
   $("fxToggle").addEventListener("click", () => {
     const next = FX_LEVELS[(FX_LEVELS.indexOf(fxLevel) + 1) % FX_LEVELS.length];
     setFxLevel(next);
@@ -2200,10 +2202,19 @@ function initHeaderPanels() {
     openMorePanel(!$("morePanel").classList.contains("is-open"));
     openVolPanel(false);
   });
+  /* 按下吟游诗人时就开始下载 bard.js，点击（抬手）时多半已经好了 */
+  $("morePanel").addEventListener("pointerdown", (e) => {
+    if (e.target.closest('[data-more-id="bard"]')) loadLateScript("bard.js", () => !!window.HJBard, { load: "none" }).catch(() => {});
+  });
   $("morePanel").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-more-id]");
     if (!btn) return;
+    /* 选了功能后菜单直接收起，不和接着打开的弹窗 / 小组件同时做动画（6 个毛玻璃按钮淡出在手机上很吃力） */
+    const panel = $("morePanel");
+    panel.classList.add("is-instant");
     openMorePanel(false);
+    void panel.offsetWidth;   // 在没有过渡的状态下先把收起算完
+    panel.classList.remove("is-instant");
     const item = MORE_ITEMS.find((f) => f.id === btn.dataset.moreId);
     if (item.dev) showToast("功能正在开发中~");
     else item.open();
@@ -4021,13 +4032,14 @@ function initApp() {
   });
   HJ.late(initOfflineCache);
 
-  /* 进站后弹出花街介绍（直接进入购票页时除外） */
+  /* 进站后弹出花街介绍（直接进入购票页时除外）。回访时没有开屏，boot.js 的遮罩等天空与首页卡片底图解码好（有上限）再撤 */
   HJ.boot.appReady(() => {
     playPageEnterStagger();
     if (!$("view-ticket").hidden || maintenanceActive()) return;
     firstBootInfoOpen = true;
     openInfoModal();
-  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true), siteStateLoading] : []);
+  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true), siteStateLoading]
+    : [HJ.boot.warm(skyUrl(isDayMode()), true), $("view-home").hidden ? null : homeImagesReady]);
 }
 
 document.addEventListener("DOMContentLoaded", initApp);

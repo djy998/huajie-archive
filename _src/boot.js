@@ -1,4 +1,4 @@
-/* 花舞之街 · 启动：样式表、动画档位、开屏。window.HJ = { version, fx, day, late, boot } */
+/* 花舞之街 · 启动：样式表、动画档位、开屏、回访遮罩。window.HJ = { version, fx, day, late, boot } */
 (() => {
   const root = document.documentElement;
   const version = new URL(document.currentScript.src).searchParams.get("v") || "";
@@ -34,6 +34,61 @@
     root.classList.add("css-ready");
     document.dispatchEvent(new Event("hj:cssready"));
   }
+  /* 回访（不放开屏）时先用莫古力遮罩（index.html 的 #bootVeil）盖住，等样式表、主程序（白天 / 夜晚、首页卡片）、
+     天空与卡片底图、标题字都好了再淡出。免得更新后先露出没上色、没图片的夜间页面，过一会儿又突然变成白天。
+     网快时只是一闪而过的底色，莫古力 0.3 秒后才出现（index.html 里的动画延迟） */
+  const VEIL_WAIT_MAX = 2500;   // 主程序就绪后，图片与标题字最多再等这么久
+  const VEIL_MAX = 12000;       // 无论如何到这时撤掉
+  let veilOn = !fresh;
+  let veilApp = false;
+  let veilAssets = false;
+  let afterVeil = veilOn ? [] : null;
+
+  function liftVeil() {
+    if (!veilOn) return;
+    veilOn = false;
+    const finish = () => root.classList.remove("boot-veil", "boot-veil-day", "veil-leaving");
+    if (reduce) finish();
+    else {
+      root.classList.add("veil-leaving");
+      setTimeout(finish, 420);
+    }
+    const list = afterVeil;
+    afterVeil = null;
+    list.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+  }
+  function tryLiftVeil() {
+    if (veilOn && veilApp && veilAssets && root.classList.contains("css-ready")) liftVeil();
+  }
+  /* 标题字：样式表到了才有 @font-face，之后再按名字加载 */
+  const brushReady = new Promise((resolve) => {
+    const go = () => {
+      if (!document.fonts || !document.fonts.load) return resolve();
+      document.fonts.load('1em "HJ Brush"', "花舞之街").then(resolve, resolve);
+    };
+    if (root.classList.contains("css-ready")) go();
+    else document.addEventListener("hj:cssready", go, { once: true });
+  });
+  function veilAppReady(waitFor) {
+    if (veilApp || !veilOn) return;
+    veilApp = true;
+    const settle = () => {
+      veilAssets = true;
+      tryLiftVeil();
+    };
+    Promise.all((waitFor || []).concat([brushReady]).map((p) => Promise.resolve(p).catch(() => {}))).then(settle);
+    setTimeout(settle, VEIL_WAIT_MAX);
+    tryLiftVeil();
+  }
+  if (veilOn) {
+    root.classList.add("boot-veil");
+    if (day) root.classList.add("boot-veil-day");
+    document.addEventListener("hj:cssready", tryLiftVeil);
+    /* main.js 没加载成功（不会调用 appReady）时也照常撤掉；成功时它在同一次 DOMContentLoaded 里先调用了 */
+    document.addEventListener("DOMContentLoaded", () => setTimeout(() => veilAppReady([]), 0));
+    setTimeout(liftVeil, VEIL_MAX);
+  }
+
   const css = addLink("stylesheet", `style.css?v=${version}`);
   css.onload = css.onerror = cssReady;
   setTimeout(cssReady, 8000);
@@ -132,7 +187,10 @@
     appReady(fn, waitFor) {
       onEnter = fn;
       appAt = performance.now();
-      if (!fresh) return;
+      if (!fresh) {
+        veilAppReady(waitFor);
+        return;
+      }
       Promise.all((waitFor || []).concat([skyReady, warmFont("assets/site/brush.woff2")])).then(() => {
         assetsReady = true;
         runAfterAssets();
@@ -144,6 +202,12 @@
       if (!fresh || !afterAssets) fn();
       else afterAssets.push(fn);
     },
+    /* 回访遮罩撤掉时执行（入场动画、弹窗公告等），没有遮罩时立即执行 */
+    afterVeil(fn) {
+      if (!afterVeil) fn();
+      else afterVeil.push(fn);
+    },
+    veiled: () => veilOn,
   };
   if (!fresh) return;
 

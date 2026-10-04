@@ -852,7 +852,10 @@ function renderTicketSettings(st) {
   const mode = st.remainingMode || "full";
   setIdle($("ticketRemainModeSelect"), mode);
   const stockHtml = ticketStockHtml(mode, st.remaining, st.stockLevel, st.roundWord || "今日");
-  $("ticketRemainPreview").textContent = `访客现在看到：${stockHtml ? stockHtml.replace(/<[^>]+>/g, "") : "（不显示余票）"}`
+  const stockText = stockHtml ? stockHtml.replace(/<[^>]+>/g, "") : "";
+  $("ticketRemainPreview").textContent = (!st.open
+    ? `购票关闭中，访客看不到余票${stockText ? `（开放后显示：${stockText}）` : ""}`
+    : `访客现在看到：${stockText || "（不显示余票）"}`)
     + (mode === "range" ? " · ≤10 张为「余票10张以内」，≤ 票额一半为「余票不多」" : "");
   $("ticketRemainPreview").hidden = false;
   setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示（点击隐藏）", "不显示（点击显示）");

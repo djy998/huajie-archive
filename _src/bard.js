@@ -1109,8 +1109,11 @@
       return;
     }
     w.hidden = false;
-    prefetchSamples(INST[B.inst]);
-    $("bardPlay").focus({ preventScroll: true });
+    /* 钢琴采样（16 个文件）等小组件弹出来、浏览器空闲时再下载，不和打开抢主线程；先点了开始演奏的话由 prerender 接手 */
+    const idle = window.requestIdleCallback ? (fn) => requestIdleCallback(fn, { timeout: 1500 }) : (fn) => setTimeout(fn, 200);
+    setTimeout(() => idle(() => { if (!w.hidden) prefetchSamples(INST[B.inst]); }), 400);
+    /* 手机上不抢焦点（没有键盘，聚焦只会多画一圈焦点框） */
+    if (!touchFirst()) $("bardPlay").focus({ preventScroll: true });
   }
 
   function close() {
