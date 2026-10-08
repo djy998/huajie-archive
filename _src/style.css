@@ -1283,7 +1283,7 @@ body.day-mode .back-btn:hover {
     inset 0 -4px 8px rgba(60,45,5,.18);
 }
 
-.section-title { font-family: var(--brush); font-size: 2rem; color: var(--cream); margin-bottom: 20px; }
+.section-title { font-family: var(--brush); font-size: 2rem; color: var(--lantern-soft); margin-bottom: 20px; }
 body.day-mode .section-title { color: var(--day-title); }
 
 .empty-note {
@@ -1477,7 +1477,7 @@ body.day-mode .review-photo {
   border-radius: var(--radius);
   text-align: center;
 }
-.gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--cream); margin-bottom: 10px; }
+.gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--lantern-soft); margin-bottom: 10px; }
 .gate-card .hint { color: var(--text-mute); font-size: .85rem; margin-bottom: 22px; }
 .admin-card { margin-bottom: 30px; }
 .admin-card h2 { font-size: 1.3rem; }
@@ -1928,7 +1928,7 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
     inset 0 0 0 1px rgba(255,255,255,.09),
     inset 0 1px 0 rgba(255,255,255,.18);
 }
-.info-title { font-family: var(--brush); font-size: 2.2rem; color: var(--cream); margin-bottom: 20px; }
+.info-title { font-family: var(--brush); font-size: 2.2rem; color: var(--lantern-soft); margin-bottom: 20px; }
 .info-tabs { margin-bottom: 22px; }
 .info-text p { margin-bottom: 16px; font-size: 1.02rem; line-height: 2; color: var(--text-soft); }
 .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
@@ -3497,7 +3497,7 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 }
 .about-list dt { font-weight: 600; font-size: .92rem; line-height: 1.8; color: var(--lantern-soft); white-space: nowrap; }
 .about-list dd { margin: 0; font-size: .92rem; line-height: 1.8; color: var(--text-soft); }
-.about-text .about-thanks { margin: 20px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--cream); }
+.about-text .about-thanks { margin: 20px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
 .about-inline-link {
   display: inline;
   padding: 0 2px;
@@ -3574,7 +3574,7 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 .about-submit-row .share-site-btn:disabled { opacity: .6; cursor: default; transform: none; }
 .about-form .form-msg { margin-top: 12px; text-align: center; }
 .about-done { padding: 26px 0 10px; text-align: center; }
-.about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--cream); }
+.about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--lantern-soft); }
 .about-done .share-site-btn { margin-top: 18px; }
 
 .about-share-text {
@@ -3850,7 +3850,7 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 
 .guide-qa dd p + p { margin-top: 6px; }
 .guide-qa u, .guide-way u { text-decoration-color: var(--lantern-soft); text-underline-offset: 3px; color: var(--cream); }
 .guide-end { margin: 26px 0 4px; font-size: .92rem; line-height: 1.8; text-align: center; color: var(--text-soft); }
-.guide-sign { margin: 10px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--cream); }
+.guide-sign { margin: 10px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
 .guide-actions {
   flex: 0 0 auto;
   display: flex; justify-content: center; flex-wrap: wrap;
@@ -4431,7 +4431,7 @@ body.day-mode .popup-admin-count { color: var(--day-lilac); }
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: .03em;
-  color: var(--cream);
+  color: var(--lantern-soft);
 }
 .tab-sec-title:first-child { margin-top: 4px; }
 .tab-sec-title::after {
@@ -5295,7 +5295,7 @@ html.pz-open .toast { z-index: 460; }
   background: linear-gradient(160deg, rgba(240,181,98,.16), rgba(185,164,224,.1));
   border: 1px solid rgba(240,181,98,.45);
 }
-.pz-contest-title { font-family: var(--brush); font-size: 1.35rem; color: var(--cream); }
+.pz-contest-title { font-family: var(--brush); font-size: 1.35rem; color: var(--lantern-soft); }
 .pz-contest-meta { margin-top: 4px; font-size: .8rem; color: var(--text-soft); white-space: pre-line; }
 .pz-contest .pz-btn-row { margin-top: 10px; }
 .pz-submit-hint { margin-top: 4px; font-size: .8rem; color: var(--text-mute); }

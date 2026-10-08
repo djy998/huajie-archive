@@ -1,12 +1,12 @@
 diff --git a/_src/ARCHITECTURE.md b/_src/ARCHITECTURE.md
-index d38b8f5..a30b367 100644
+index d38b8f5..9d44f5c 100644
 --- a/_src/ARCHITECTURE.md
 +++ b/_src/ARCHITECTURE.md
 @@ -52,6 +52,8 @@
  - 路由用 hash（`#latest`、`#previous`、`#ti` …），对照表是 `main.js` 的 `ROUTES`。`/activity/`、`/previous/` 是 `build.mjs` 生成的独立入口：`<html data-page>` 决定显示哪个视图，`<base href="../">` 让相对路径仍然指向站点根目录。
  - 弹窗统一登记在 `main.js` 的 `MODALS`，Esc、返回键和 `closeAllModals` 都靠这张表。
  - 动画档位挂在 `body` 上：`fx-hover-enabled`（完整）、`fx-lite`（轻量）、`fx-off`（关闭）。纯 CSS 的弹出、晃动动画要在 `body.fx-off` 下关掉。
-+- 配色：毛笔标题字跟小标题同色 —— 夜间 `--cream`，白天卡片 / 弹窗里 `--day-cream`，直接写在页面背景上的（`.section-title`、卡片外的 `.tab-sec-title`）白天仍用 `--day-title`；首页大标题 `.site-header .brand` 与舞台演奏单独配色。`--day-gold` 为白天卡片里的强调字（深暖紫）。
++- 配色：毛笔标题字夜间用 `--lantern-soft`；白天卡片 / 弹窗里的用 `--day-cream`（土黑色），直接写在页面背景上的（`.section-title`、卡片外的 `.tab-sec-title`）用 `--day-title`。`--day-gold` 为白天卡片里的加粗强调字（深暖紫）。
 +- 手机（`pointer: coarse` 或宽度 ≤ 760）首页减负：花叶 8 片（电脑 17 片），明暗用透明度起伏而不是 filter 动画；页头毛玻璃模糊 8px（电脑 17px）。花叶、星光在毛玻璃后面动，模糊半径越大、filter 动画越多，手机上越卡；新增首页毛玻璃或背景动画时留意。
  - 小按钮、选项一律用「凸起玻璃」：`style.css` 设计变量里的 `--glass-up`（平常）、`--glass-on`（选中 / 主按钮）、`--glass-sheen`（叠在任意底色上的高光），配 `--glass-up-edge`、`--glass-up-shadow` 等，白天整套自动换。悬停浮起、按下压进去写在「18. 按下反馈」里，新按钮把类名加进那组选择器即可。不要再做没有阴影的扁平按钮。
  
@@ -215,7 +215,7 @@ index 4ca6e98..57a25ca 100644
      warm: stageWarm,
      clock: stageClock,
 diff --git a/_src/index.html b/_src/index.html
-index 5a238d8..dd7d058 100644
+index 5a238d8..f8d5c73 100644
 --- a/_src/index.html
 +++ b/_src/index.html
 @@ -20,8 +20,8 @@
@@ -224,8 +224,8 @@ index 5a238d8..dd7d058 100644
    <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
 -  <link rel="preload" as="script" href="boot.js?v=20261008k">
 -  <link rel="preload" as="style" href="style.css?v=20261008k">
-+  <link rel="preload" as="script" href="boot.js?v=20261009b">
-+  <link rel="preload" as="style" href="style.css?v=20261009b">
++  <link rel="preload" as="script" href="boot.js?v=20261009c">
++  <link rel="preload" as="style" href="style.css?v=20261009c">
  
    <!-- 开屏与样式表加载前的状态 -->
    <style>
@@ -234,7 +234,7 @@ index 5a238d8..dd7d058 100644
  <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
  
 -<script src="boot.js?v=20261008k"></script>
-+<script src="boot.js?v=20261009b"></script>
++<script src="boot.js?v=20261009c"></script>
  
  <div id="skyBase"></div>
  <div id="skyFade"></div>
@@ -248,12 +248,12 @@ index 5a238d8..dd7d058 100644
 -<script src="ticket.js?v=20261008k"></script>
 -<script src="venue.js?v=20261008k"></script>
 -<script src="survey.js?v=20261008k"></script>
-+<script src="verify.js?v=20261009b"></script>
-+<script src="config.js?v=20261009b"></script>
-+<script src="main.js?v=20261009b"></script>
-+<script src="ticket.js?v=20261009b"></script>
-+<script src="venue.js?v=20261009b"></script>
-+<script src="survey.js?v=20261009b"></script>
++<script src="verify.js?v=20261009c"></script>
++<script src="config.js?v=20261009c"></script>
++<script src="main.js?v=20261009c"></script>
++<script src="ticket.js?v=20261009c"></script>
++<script src="venue.js?v=20261009c"></script>
++<script src="survey.js?v=20261009c"></script>
  </body>
  </html>
 diff --git a/_src/main.js b/_src/main.js
@@ -270,7 +270,7 @@ index d92d64e..c2622e8 100644
    const sign = () => (Math.random() > 0.5 ? 1 : -1);
    const sec = (v) => v.toFixed(2) + "s";
 diff --git a/_src/style.css b/_src/style.css
-index 63fa23f..4c45211 100644
+index 63fa23f..5789331 100644
 --- a/_src/style.css
 +++ b/_src/style.css
 @@ -125,7 +125,7 @@
@@ -317,21 +317,7 @@ index 63fa23f..4c45211 100644
  /* ==== 7. 首页卡片 ==== */
  main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
  
-@@ -1262,7 +1283,7 @@ body.day-mode .back-btn:hover {
-     inset 0 -4px 8px rgba(60,45,5,.18);
- }
- 
--.section-title { font-family: var(--brush); font-size: 2rem; color: var(--lantern-soft); margin-bottom: 20px; }
-+.section-title { font-family: var(--brush); font-size: 2rem; color: var(--cream); margin-bottom: 20px; }
- body.day-mode .section-title { color: var(--day-title); }
- 
- .empty-note {
-@@ -1456,11 +1477,11 @@ body.day-mode .review-photo {
-   border-radius: var(--radius);
-   text-align: center;
- }
--.gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--lantern-soft); margin-bottom: 10px; }
-+.gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--cream); margin-bottom: 10px; }
+@@ -1460,7 +1481,7 @@ body.day-mode .review-photo {
  .gate-card .hint { color: var(--text-mute); font-size: .85rem; margin-bottom: 22px; }
  .admin-card { margin-bottom: 30px; }
  .admin-card h2 { font-size: 1.3rem; }
@@ -340,14 +326,7 @@ index 63fa23f..4c45211 100644
  body.day-mode .gate-card .hint { color: var(--day-lilac); }
  
  .gate-card input:not([type="checkbox"]) {
-@@ -1907,13 +1928,13 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active,
-     inset 0 0 0 1px rgba(255,255,255,.09),
-     inset 0 1px 0 rgba(255,255,255,.18);
- }
--.info-title { font-family: var(--brush); font-size: 2.2rem; color: var(--lantern-soft); margin-bottom: 20px; }
-+.info-title { font-family: var(--brush); font-size: 2.2rem; color: var(--cream); margin-bottom: 20px; }
- .info-tabs { margin-bottom: 22px; }
- .info-text p { margin-bottom: 16px; font-size: 1.02rem; line-height: 2; color: var(--text-soft); }
+@@ -1913,7 +1934,7 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active,
  .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
  .gallery-credit { margin: 2px 0 16px; font-size: .86rem; line-height: 2; text-align: center; color: var(--text-mute); }
  
@@ -356,24 +335,6 @@ index 63fa23f..4c45211 100644
  body.day-mode .info-date,
  body.day-mode .gallery-credit { color: var(--day-lilac); }
  body.day-mode .info-text p { color: var(--day-lilac); }
-@@ -3476,7 +3497,7 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
- }
- .about-list dt { font-weight: 600; font-size: .92rem; line-height: 1.8; color: var(--lantern-soft); white-space: nowrap; }
- .about-list dd { margin: 0; font-size: .92rem; line-height: 1.8; color: var(--text-soft); }
--.about-text .about-thanks { margin: 20px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
-+.about-text .about-thanks { margin: 20px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--cream); }
- .about-inline-link {
-   display: inline;
-   padding: 0 2px;
-@@ -3553,7 +3574,7 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
- .about-submit-row .share-site-btn:disabled { opacity: .6; cursor: default; transform: none; }
- .about-form .form-msg { margin-top: 12px; text-align: center; }
- .about-done { padding: 26px 0 10px; text-align: center; }
--.about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--lantern-soft); }
-+.about-done-title { margin-bottom: 6px; font-family: var(--brush); font-size: 1.5rem; color: var(--cream); }
- .about-done .share-site-btn { margin-top: 18px; }
- 
- .about-share-text {
 @@ -3579,7 +3600,7 @@ body.day-mode .about-hint,
  body.day-mode .about-count { color: var(--day-lilac); }
  body.day-mode .about-list dt,
@@ -383,15 +344,6 @@ index 63fa23f..4c45211 100644
  body.day-mode .about-label { color: var(--day-cream); }
  body.day-mode .about-label.is-required::before { color: #b0261b; }
  body.day-mode .about-list,
-@@ -3829,7 +3850,7 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob
- .guide-qa dd p + p { margin-top: 6px; }
- .guide-qa u, .guide-way u { text-decoration-color: var(--lantern-soft); text-underline-offset: 3px; color: var(--cream); }
- .guide-end { margin: 26px 0 4px; font-size: .92rem; line-height: 1.8; text-align: center; color: var(--text-soft); }
--.guide-sign { margin: 10px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--lantern-soft); }
-+.guide-sign { margin: 10px 0 0; text-align: right; font-family: var(--brush); font-size: 1.2rem; color: var(--cream); }
- .guide-actions {
-   flex: 0 0 auto;
-   display: flex; justify-content: center; flex-wrap: wrap;
 @@ -3852,7 +3873,7 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob
  body.day-mode .guide-eyebrow { color: var(--day-lilac); }
  body.day-mode .guide-price-label { color: var(--day-lilac); }
@@ -401,15 +353,6 @@ index 63fa23f..4c45211 100644
  body.day-mode .guide-price,
  body.day-mode .guide-way { background: rgba(255,252,240,.5); border-color: #c98f3a; }
  body.day-mode .guide-price:first-child { border-color: #8a5a1c; background: rgba(255,244,214,.7); }
-@@ -4410,7 +4431,7 @@ body.day-mode .popup-admin-count { color: var(--day-lilac); }
-   font-size: 1.6rem;
-   font-weight: 700;
-   letter-spacing: .03em;
--  color: var(--lantern-soft);
-+  color: var(--cream);
- }
- .tab-sec-title:first-child { margin-top: 4px; }
- .tab-sec-title::after {
 @@ -4421,7 +4442,7 @@ body.day-mode .tab-sec-title { color: var(--day-title); }
  body.custom-bg.day-mode .section-title,
  body.custom-bg.day-mode .tab-sec-title { text-shadow: 0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34); }
@@ -419,14 +362,7 @@ index 63fa23f..4c45211 100644
  
  .tab-video.video-block {
    aspect-ratio: var(--review-ratio);
-@@ -5274,13 +5295,13 @@ html.pz-open .toast { z-index: 460; }
-   background: linear-gradient(160deg, rgba(240,181,98,.16), rgba(185,164,224,.1));
-   border: 1px solid rgba(240,181,98,.45);
- }
--.pz-contest-title { font-family: var(--brush); font-size: 1.35rem; color: var(--lantern-soft); }
-+.pz-contest-title { font-family: var(--brush); font-size: 1.35rem; color: var(--cream); }
- .pz-contest-meta { margin-top: 4px; font-size: .8rem; color: var(--text-soft); white-space: pre-line; }
- .pz-contest .pz-btn-row { margin-top: 10px; }
+@@ -5280,7 +5301,7 @@ html.pz-open .toast { z-index: 460; }
  .pz-submit-hint { margin-top: 4px; font-size: .8rem; color: var(--text-mute); }
  .gate-card input.pz-player { margin: 10px 0 0; }
  body.day-mode .pz-contest { background: rgba(255,250,236,.4); border-color: #c98f3a; }
