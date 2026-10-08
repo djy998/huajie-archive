@@ -620,6 +620,7 @@
     }
     holdPlayback(true);
     wake(ctx);
+    kick(ctx);
     A.master.gain.cancelScheduledValues(ctx.currentTime);
     A.master.gain.setTargetAtTime(siteVolume.level, ctx.currentTime, 0.02);
     return true;
@@ -650,6 +651,15 @@
   /* AudioContext 不在 running 就叫醒：除了 suspended，iOS 上来电、切 App 后还会是 interrupted */
   function wake(ctx) {
     if (ctx.state !== "running") ctx.resume().catch(() => {});
+  }
+  /* 在点按里真的放出一个声音（1 个采样的静音）：部分安卓内置浏览器 / WebView 只调 resume() 不出声，要在用户操作里开过一个音源才开始输出 */
+  function kick(ctx) {
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch (e) {}
   }
 
   /* 舞台的时钟：AudioContext 的 currentTime（排程用的同一个钟）与输出延迟（秒）；音频还没起来时 running 为 false */

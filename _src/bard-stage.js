@@ -472,6 +472,9 @@
     play.addEventListener("pointermove", onHoverMove);
     ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => play.addEventListener(ev, onHoverEnd));
     play.addEventListener("contextmenu", (e) => e.preventDefault());
+    /* 安卓上只有手指抬起（pointerup / touchend / click）才算用户操作，按下（pointerdown）不算：音频没在运行时，在抬起时再叫一次 */
+    const wakeOnUp = () => { if (bard().audioState?.() !== "running") bard().unlock?.(); };
+    ["pointerup", "touchend", "click"].forEach((ev) => root.addEventListener(ev, wakeOnUp, { capture: true, passive: true }));
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("popstate", onPopState);
