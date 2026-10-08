@@ -36,7 +36,7 @@ const ticketState = {
   testMode: true,
   cooldownMin: 30,       // 成功登记后隔多少分钟才能再交（0 = 不限）
   cooldownUntil: 0,      // 本机估算的冷却结束时刻，真正的判断在 Worker
-  resetMin: 0,           // 每日刷新时间：国服 0 点之后的分钟数
+  resetMin: 0,           // 每日刷新时间：本地时间 0 点之后的分钟数
   stockMode: "full",     // full 具体张数 / range 大致范围 / hidden 不显示
   stockLevel: "",        // range 时的档位：none / few / low / plenty
   soldOut: false,
@@ -348,7 +348,7 @@ async function openTicketView() {
   applyTicketPerPerson(st.perPerson, !!st.allowPending);
   renderTicketStock(st);
   const blocked = !st.open
-    ? (st.openAt && ticketState.showSchedule ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 国服时间开启）` : TICKET_MSG_CLOSED)
+    ? (st.openAt && ticketState.showSchedule ? `${TICKET_MSG_CLOSED}（预计 ${formatCnTime(st.openAt)} 本地时间开启）` : TICKET_MSG_CLOSED)
     : ticketState.soldOut ? ticketSoldOutText() : "";
   if (blocked) {
     setTicketMode("blocked", blocked);

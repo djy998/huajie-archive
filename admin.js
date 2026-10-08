@@ -181,12 +181,12 @@ function adminErr(t,e,n={}){return t?n[t.error]?n[t.error]:t.error==="auth"||!t.
 <p class="hint" id="starlightStatus">当前状态：加载中…</p>
 <div class="starlight-fields">
 <label class="starlight-field">
-<span>从（国服时间）</span>
+<span>从（本地时间）</span>
 <input type="datetime-local" id="starlightStart">
 </label>
 <span class="starlight-sep" aria-hidden="true">—</span>
 <label class="starlight-field">
-<span>到（国服时间）</span>
+<span>到（本地时间）</span>
 <input type="datetime-local" id="starlightEnd">
 </label>
 </div>
@@ -668,12 +668,12 @@ data-toast-on="只读端可以勾选取票了（操作会记日志）" data-toas
 <label class="pz-admin-field"><span>大赛名称</span><input type="text" id="pzAdminTitle" maxlength="30" placeholder="如：中秋花街拼图大赛"></label>
 <div class="starlight-fields">
 <label class="starlight-field">
-<span>开始（国服时间）</span>
+<span>开始（本地时间）</span>
 <input type="datetime-local" id="pzAdminStart">
 </label>
 <span class="starlight-sep" aria-hidden="true">—</span>
 <label class="starlight-field">
-<span>结束（国服时间）</span>
+<span>结束（本地时间）</span>
 <input type="datetime-local" id="pzAdminEnd">
 </label>
 </div>

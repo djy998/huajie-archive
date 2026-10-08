@@ -776,13 +776,15 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); box-shadow:
 
 /* ==== 6. 特效 ==== */
 
+/* --fx-end-opacity：进场动画结束时的不透明度，弹出卡片设为 --popup-opacity；不继承，免得卡片里的元素跟着变淡 */
+@property --fx-end-opacity { syntax: "<number>"; inherits: false; initial-value: 1; }
 @keyframes fxPageEnter {
   from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: var(--fx-end-opacity, 1); transform: translateY(0); }
 }
 .fx-page-enter { animation: fxPageEnter .7s ease both; }
 
-@keyframes fxFadeOnly { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fxFadeOnly { from { opacity: 0; } to { opacity: var(--fx-end-opacity, 1); } }
 .fx-fade-only { animation: fxFadeOnly .5s ease both; }
 
 #fxClickLayer { position: fixed; inset: 0; z-index: 500; pointer-events: none; overflow: hidden; }
@@ -1802,6 +1804,14 @@ body.day-mode .announcement-delete-btn:hover { border-color: #a33c2f; }
 body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { color: var(--day-cream); background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
+
+/* 弹出卡片（白天 / 夜晚）整体约 6% 透明，改 --popup-opacity 调整，1 为不透明 */
+:root { --popup-opacity: .94; }
+.info-overlay > :is(.info-box, .gate-card, .admin-modal),
+.pz-card {
+  opacity: var(--popup-opacity);
+  --fx-end-opacity: var(--popup-opacity);
+}
 
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {
   --pill-edge: #d18a2c;

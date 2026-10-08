@@ -54,7 +54,7 @@ function linkify(html) {
   });
 }
 
-/* 站内时间一律按国服时间（UTC+8） */
+/* 站内时间一律按本地时间（UTC+8） */
 const CN_TZ_OFFSET_MS = 8 * 3600 * 1000;
 /* "2026-09-20T12:00" → epoch 毫秒，格式不对为 0 */
 function cnLocalToEpoch(value) {
@@ -69,7 +69,7 @@ function formatCnLabel(ms) {
   return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 const formatCnClock = (ms) => new Date(ms + CN_TZ_OFFSET_MS).toISOString().slice(11, 19);
-/* 国服日期 + N 天 → "YYYY-MM-DD" */
+/* 本地日期 + N 天 → "YYYY-MM-DD" */
 const cnDate = (days = 0) => new Date(Date.now() + CN_TZ_OFFSET_MS + days * 86400000).toISOString().slice(0, 10);
 const ymdKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 /* 时长：hh:mm:ss，不足 1 小时为 mm:ss */
@@ -908,7 +908,7 @@ function initNav() {
   $("latestTile").addEventListener("click", openLatestEvent);
   $("archiveTile").addEventListener("click", openArchiveList);
   $("miniTile").addEventListener("click", openMiniReview);
-  $("infoTile").addEventListener("click", () => requestCaptcha("info"));
+  $("infoTile").addEventListener("click", openInfoModal);
   $("bookingTile").addEventListener("click", async () => {
     if (await blockedByStaticMode()) return;
     if (typeof window.openVenueView !== "function") return showToast("登记页没加载出来，刷新一下页面再试");
@@ -2687,7 +2687,7 @@ const alarms = {
 
 const alarmById = (id) => alarms.items.find((it) => it.id === id);
 const isRinging = (it) => alarms.ringing.has(it.id);
-const alarmZoneName = (it) => (it.zone === "cn" ? "国服" : "艾欧泽亚");
+const alarmZoneName = (it) => (it.zone === "cn" ? "本地" : "艾欧泽亚");
 
 function humanDuration(h, m, s) {
   if (h > 0) return `${h}小时${m > 0 ? `${m}分` : ""}${s > 0 ? `${s}秒` : ""}`;
@@ -2782,7 +2782,7 @@ function alarmNormalize(raw) {
     y: coord(raw.y),
     hh: clamp(Math.floor(Number(raw.hh) || 0), 0, 23),
     mm: clamp(Math.floor(Number(raw.mm) || 0), 0, 59),
-    repeat: !!raw.repeat,        // 国服每小时 / 艾欧泽亚每日
+    repeat: !!raw.repeat,        // 本地时间每小时 / 艾欧泽亚每日
     durMs: positive(raw.durMs),
     durLabel: String(raw.durLabel || ""),
     loop: !!raw.loop,
@@ -3033,7 +3033,7 @@ function alarmPaintWidget(it) {
       : it.done ? "时间到"
       : it.paused ? "已暂停"
       : it.zone === "et" ? `≈ 艾欧泽亚剩 ${Math.max(1, Math.ceil((remain / 1000) * EORZEA_RATE / 60))} 分钟`
-      : `至 国服 ${formatCnClock(it.endAt)}`;
+      : `至 本地时间 ${formatCnClock(it.endAt)}`;
   }
   w.big.textContent = big;
   w.status.textContent = status;
@@ -3068,7 +3068,7 @@ function syncAlarmForm() {
   const tv = $("almTime").value || "--:--";
   $("almRepeatText").textContent = zone === "cn" ? "每小时重复" : "每日重复";
   $("almRepeatHint").textContent = zone === "cn"
-    ? (rep ? `每小时第 ${tv.slice(3)} 分响铃` : `下一个国服 ${tv} 响铃`)
+    ? (rep ? `每小时第 ${tv.slice(3)} 分响铃` : `下一个本地时间 ${tv} 响铃`)
     : (rep ? `每个艾欧泽亚日 ${tv} 响铃` : `下一个艾欧泽亚 ${tv} 响铃`);
 }
 
@@ -3096,7 +3096,7 @@ function syncSegments(seg) {
 function alarmPaintNowHints() {
   if ($("alarmOverlay").hidden) return;
   const t = readClocks();
-  $("almNowHint").textContent = $("cdNowHint").textContent = `现在：国服 ${t.cn} · 艾欧泽亚 ${t.et} ${t.etNight ? "☾" : "☀"}`;
+  $("almNowHint").textContent = $("cdNowHint").textContent = `现在：本地 ${t.cn} · 艾欧泽亚 ${t.et} ${t.etNight ? "☾" : "☀"}`;
 }
 
 /* 试听，再点一次停止 */
@@ -3128,7 +3128,7 @@ function submitAlarm() {
   const hh = Number(m[1]);
   const mm = Number(m[2]);
   const dup = zone === "cn" && alarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === hh && x.mm === mm);
-  if (dup) { alarmMsg(`国服时间 ${pad2(hh)}:${pad2(mm)} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`); return; }
+  if (dup) { alarmMsg(`本地时间 ${pad2(hh)}:${pad2(mm)} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`); return; }
   const raw = {
     kind: "alarm", zone, hh, mm,
     repeat: $("almRepeat").checked,
@@ -3148,7 +3148,7 @@ function submitCountdown() {
   if (zone === "cn") {
     const [h, m, s] = cnCountdownParts();
     const total = h * 3600 + m * 60 + s;
-    if (total < ALARM_CN_MIN_SEC) { alarmMsg(`国服倒计时最短 ${ALARM_CN_MIN_SEC} 秒`); return; }
+    if (total < ALARM_CN_MIN_SEC) { alarmMsg(`本地时间倒计时最短 ${ALARM_CN_MIN_SEC} 秒`); return; }
     durMs = total * 1000;
     durLabel = humanDuration(h, m, s);
   } else {
@@ -3267,7 +3267,7 @@ let huayuDetectTimer = 0;
 
 const HUAYU_ERRORS = {
   empty: "先写点什么吧",
-  not_huayu: "没找到花语：一代花语以「听花语：」开头，二代花语是一段花的句子，要整段完整粘贴",
+  not_huayu: "没找到花语：花语以「听花语：」开头，或是一整段花的句子，要整段完整粘贴",
   broken: "这段花语不完整，可能复制时漏了几个字",
   version: "这段花语来自更新的版本，刷新页面再试",
   unsupported: "这个浏览器太旧，解不开这段花语，换个浏览器试试",
@@ -3319,7 +3319,7 @@ function detectHuayuInput() {
   const info = H && text ? H.detect(text) : null;
   const looks = !!(info && info.ok);
   const n = H ? H.countChars(text) : text.length;
-  $("huayuCount").textContent = !text ? "" : looks ? `${H.ALGO_NAMES[info.algo]}花语` : `${n} 字`;
+  $("huayuCount").textContent = !text ? "" : looks ? "花语" : `${n} 字`;
   $("huayuCount").classList.toggle("is-over", !looks && n > HUAYU_VISITOR_MAX);
   $("huayuKeyRow").hidden = !(looks && info.kind === 1);
   $("huayuCard").classList.toggle("is-writing", !looks && !!text);

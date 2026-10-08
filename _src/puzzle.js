@@ -21,6 +21,7 @@
   const REC_KEEP = 30;
   const SAVE_VERSION = 1;
   const CODE_PREFIX = "听花语：";
+  const CODE_KEY = "huajiepintu";   // 通关码的自定义密钥，解读时要填；与 Worker 的 PUZZLE_CODE_KEY 一致（Worker 固定用它，不看这里传的值）
 
   /* target：块数（Worker 的 PUZZLE_PIECES 与此一致）；limitMin：限时模式的倒计时（分钟） */
   const DIFFS = {
@@ -1588,7 +1589,7 @@
     ].join("\n");
   }
 
-  /* 一代花语加密（站点密钥，由 Worker 完成）；purpose: "puzzle" 让 Worker 固定使用一代 */
+  /* 一代花语加密（自定义密钥 CODE_KEY，由 Worker 完成）；purpose: "puzzle" 让 Worker 固定使用一代 */
   async function sealCode(rec) {
     try {
       await loadLateScript("huayu.js", () => !!window.HJHuayu);
@@ -1597,6 +1598,7 @@
     }
     const res = await window.HJHuayu.encrypt(codePlainText(rec), {
       algo: 1,
+      key: CODE_KEY,
       post: (payload) => callWorker({ ...payload, purpose: "puzzle" }),
     });
     if (!res.ok || res.algo !== 1) return { ok: false, msg: CODE_ERRORS[res.error] || "通关码生成失败，稍后点「重新生成」" };
