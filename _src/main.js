@@ -1658,7 +1658,7 @@ const isSlowNetwork = () => {
 /* 空闲时预取弹窗底图；电脑上同时预取另一套昼夜底图 */
 function preloadDayNightImages(isDay) {
   const eager = window.innerWidth > 760 && !useSkyPortrait() && !isSlowNetwork();
-  const urls = [INFO_BG_IMAGE, ...(eager ? dayNightUrls(!isDay) : [])];
+  const urls = [INFO_BG_IMAGE, INFO_BG_SOFT, ...(eager ? dayNightUrls(!isDay) : [])];
   HJ.late(() => urls.forEach((url) => { new Image().src = url; }));
 }
 
@@ -1742,6 +1742,7 @@ function initDayNight() {
     homeImagesReady = whenImagesReady(Object.values(tileBgs(isDayMode())), 15000);
   });
   document.documentElement.style.setProperty("--info-photo", `url('${INFO_BG_IMAGE}')`);
+  document.documentElement.style.setProperty("--info-photo-soft", `url('${INFO_BG_SOFT}')`);
   preloadDayNightImages(isDay);
   skyPortraitMq.addEventListener("change", () => {
     if (!document.body.classList.contains("custom-bg")) setSky(isDayMode());
@@ -4038,7 +4039,7 @@ function initApp() {
     if (!$("view-ticket").hidden || maintenanceActive()) return;
     firstBootInfoOpen = true;
     openInfoModal();
-  }, booting ? [HJ.boot.warm(INFO_BG_IMAGE, true), siteStateLoading]
+  }, booting ? [HJ.boot.warm(INFO_BG_SOFT, true), siteStateLoading]
     : [HJ.boot.warm(skyUrl(isDayMode()), true), $("view-home").hidden ? null : homeImagesReady]);
 }
 

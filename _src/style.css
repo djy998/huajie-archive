@@ -124,8 +124,8 @@
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
   /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫 */
-  --day-cream: #1e2810;
-  --day-gold: #3d3934;
+  --day-cream: #3d3934;
+  --day-gold: #1e2810;
   --day-lilac: #5b3610;
   --pill-ink: var(--cream);
 
@@ -776,15 +776,13 @@ body.day-mode .cal-chip { text-shadow: 0 1px 1px rgba(90,50,10,.35); box-shadow:
 
 /* ==== 6. 特效 ==== */
 
-/* --fx-end-opacity：进场动画结束时的不透明度，弹出卡片设为 --popup-opacity；不继承，免得卡片里的元素跟着变淡 */
-@property --fx-end-opacity { syntax: "<number>"; inherits: false; initial-value: 1; }
 @keyframes fxPageEnter {
   from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: var(--fx-end-opacity, 1); transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .fx-page-enter { animation: fxPageEnter .7s ease both; }
 
-@keyframes fxFadeOnly { from { opacity: 0; } to { opacity: var(--fx-end-opacity, 1); } }
+@keyframes fxFadeOnly { from { opacity: 0; } to { opacity: 1; } }
 .fx-fade-only { animation: fxFadeOnly .5s ease both; }
 
 #fxClickLayer { position: fixed; inset: 0; z-index: 500; pointer-events: none; overflow: hidden; }
@@ -1802,12 +1800,22 @@ body.day-mode .info-box,
 body.day-mode .gate-card,
 body.day-mode .admin-modal { color: var(--day-cream); background-color: #e8b563; --info-tint: rgba(232,181,99,.93); }
 
-/* 弹出卡片（白天 / 夜晚）整体约 6% 透明，改 --popup-opacity 调整，1 为不透明 */
-:root { --popup-opacity: .94; }
+/* 弹出卡片的底（底色 + 底图）约 6% 透明，文字、图片、按钮保持不透明。
+   原来的底 = 93% 底色盖在照片上；整体乘 0.94 后 = 87.4% 底色 + 6.6% 照片 + 6% 透出后面。
+   CSS 不能单独调背景图的透明度，所以照片用 info-bg-soft.webp（info-bg.webp 加了 52% 不透明度，
+   main.js 设为 --info-photo-soft），底色不透明度 = 0.93 × 0.94。改透明度要同时重新生成这张图 */
 .info-overlay > :is(.info-box, .gate-card, .admin-modal),
 .pz-card {
-  opacity: var(--popup-opacity);
-  --fx-end-opacity: var(--popup-opacity);
+  --info-tint: rgba(18,14,30,.874);
+  background-color: transparent;
+  background-image:
+    linear-gradient(var(--info-tint), var(--info-tint)),
+    var(--info-photo-soft, none);
+}
+body.day-mode .info-overlay > :is(.info-box, .gate-card, .admin-modal),
+body.day-mode .pz-card {
+  --info-tint: rgba(232,181,99,.874);
+  background-color: transparent;
 }
 
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {

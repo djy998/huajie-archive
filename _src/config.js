@@ -37,6 +37,7 @@ const SKY_IMAGES = { day: "assets/site/sky-day.webp", night: "assets/site/sky-ni
 const SKY_IMAGES_PORTRAIT = { day: "assets/site/sky-day-p.webp", night: "assets/site/sky-night-p.webp" };
 /* 弹窗与表单卡片底图；替换同名图片时 ?v= 加一 */
 const INFO_BG_IMAGE = "assets/site/info-bg.webp?v=2";
+const INFO_BG_SOFT = "assets/site/info-bg-soft.webp?v=1";   // 弹出卡片用：同一张图加 52% 不透明度（卡片底约 6% 透明）
 
 /* 花街介绍 · 建成记录视频：heading 为小标题，cover 为封面（可省略） */
 const INFO_RECORD_VIDEOS = [
