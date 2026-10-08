@@ -2933,6 +2933,72 @@ body.day-mode .admin-modal {
     inset 0 1px 0 rgba(255,255,255,.28);
 }
 body.day-mode .admin-modal .gate-card { background: none; box-shadow: none; }
+
+/* ==== 液态玻璃边缘：窗口卡片与首页磁贴 ====
+   只在边缘画迎光高光、背光反光和厚度（内阴影 + 磁贴上一圈渐变描边），
+   不用 filter / backdrop-filter，卡片里的图片与文字不会变糊。--lg-* 白天在 body.day-mode 里换掉 */
+:root {
+  --lg-hi: rgba(255,255,255,.5);       /* 迎光边（左上） */
+  --lg-lo: rgba(255,255,255,.2);       /* 背光边（右下）的反光 */
+  --lg-mid: rgba(255,255,255,.07);     /* 一圈细描边 */
+  --lg-glow: rgba(255,255,255,.12);    /* 边缘向内透进来的柔光 */
+  --lg-sheen: rgba(255,255,255,.16);   /* 顶部一条窄高光带 */
+  --lg-depth: rgba(6,4,16,.42);        /* 右下的玻璃厚度 */
+  --lg-lift: 0 1px 2px rgba(6,4,16,.3), 0 8px 18px rgba(6,4,16,.26), 0 28px 64px rgba(0,0,0,.38);
+  --lg-lift-hover: 0 2px 4px rgba(6,4,16,.3), 0 14px 28px rgba(6,4,16,.3), 0 40px 84px rgba(0,0,0,.44);
+}
+body.day-mode {
+  --lg-hi: rgba(255,255,255,.88);
+  --lg-lo: rgba(255,244,214,.55);
+  --lg-mid: rgba(255,255,255,.18);
+  --lg-glow: rgba(255,250,232,.26);
+  --lg-sheen: rgba(255,255,255,.3);
+  --lg-depth: rgba(120,74,12,.3);
+  --lg-lift: 0 1px 2px rgba(96,64,16,.16), 0 8px 18px rgba(96,64,16,.16), 0 26px 58px rgba(96,64,16,.24);
+  --lg-lift-hover: 0 2px 4px rgba(96,64,16,.18), 0 14px 28px rgba(96,64,16,.2), 0 38px 78px rgba(96,64,16,.3);
+}
+
+/* 窗口卡片：会滚动，不用伪元素，内阴影直接画在卡片上（不随内容滚动）；
+   管理页弹窗里套的 .gate-card 仍由 .admin-modal .gate-card 去掉阴影 */
+:is(.info-box, .gate-card, .admin-modal),
+body.day-mode :is(.info-box, .gate-card, .admin-modal) {
+  box-shadow:
+    var(--lg-lift),
+    inset 1.5px 1.5px 0 -.5px var(--lg-hi),
+    inset -1.5px -1.5px 0 -.5px var(--lg-lo),
+    inset 0 0 0 1px var(--lg-mid),
+    inset 0 20px 26px -24px var(--lg-sheen),
+    inset 6px 8px 18px -12px var(--lg-glow),
+    inset -8px -10px 22px -14px var(--lg-depth);
+}
+
+/* 磁贴：底图之上加两层只画边缘的伪元素（::before 厚度与柔光，::after 渐变描边），不挡点击 */
+.tile { box-shadow: var(--lg-lift); }
+.tile-sm:hover,
+.tile-hero:hover { box-shadow: var(--lg-lift-hover); }
+.tile::before,
+.tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.tile::before {
+  box-shadow:
+    inset 0 22px 30px -26px var(--lg-sheen),
+    inset 7px 9px 20px -12px var(--lg-glow),
+    inset -9px -12px 24px -14px var(--lg-depth);
+}
+.tile::after {
+  padding: 1.5px;
+  background: linear-gradient(135deg, var(--lg-hi) 0%, var(--lg-mid) 28%, var(--lg-mid) 62%, var(--lg-lo) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
 .ticket-card select optgroup { font-style: normal; font-weight: 600; color: var(--text-mute); background: var(--ink-2); }
