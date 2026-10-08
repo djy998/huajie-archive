@@ -24,6 +24,7 @@ SONGS = [
     dict(id="clair-de-lune", t="月光", o="Clair de lune（《贝加莫组曲》）", c="德彪西", tag="古典", show=True),
     dict(id="nocturne-op9-2", t="夜曲 Op.9 No.2", o="Nocturne in E♭ major", c="肖邦", tag="古典", show=True),
     dict(id="beethoven-virus", t="贝多芬病毒", o="Beethoven Virus（改编自《悲怆》奏鸣曲）", c="BanYa", tag="古典"),
+    dict(id="auld-lang-syne-harp-solo-solo-mevari-navalo", t="Auld Lang Syne", o="(Harp Solo)", c="Mevari Navalo", tag="古典", show=True),
 
     # ==== 游戏 ====
     dict(id="baka-mitai", t="像个笨蛋", o="ばかみたい（《如龙》系列）", c="", tag="游戏"),
@@ -39,6 +40,7 @@ SONGS = [
     dict(id="your-reality", t="Your Reality", o="《心跳文学部》", c="Dan Salvato", tag="游戏"),
     dict(id="haru-urara", t="致春乌拉拉", o="Tribute to Haru Urara（《赛马娘》）", c="", tag="游戏"),
     dict(id="masayoshi-soken-bee-my-honey-solo-debra-vanhouten", t="Bee My Honey", o="Solo-Debra Vanhouten", c="Masayoshi Soken", tag="游戏", note="蜂蜂小甜心，甜到你心中！"),
+    dict(id="deemo-reflection-mirror-night-mid", t="Reflection(Mirror Night)", o="Deemo", c="V.K", tag="游戏"),
 
     # ==== 动画 ====
     dict(id="ichirin-no-hana", t="一轮之花", o="一輪の花（《死神》OP）", c="HIGH and MIGHTY COLOR", tag="动画"),
