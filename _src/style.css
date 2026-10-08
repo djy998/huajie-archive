@@ -2935,15 +2935,15 @@ body.day-mode .admin-modal {
 body.day-mode .admin-modal .gate-card { background: none; box-shadow: none; }
 
 /* ==== 液态玻璃边缘：窗口卡片与首页磁贴 ====
-   卡片和磁贴用同一套、四边对称的透光：1px 淡淡的反光边（上下两条稍亮）、沿四周一圈向内的柔光、
-   上下两条一样的窄高光带、贴边一点点厚度。不用 filter / backdrop-filter，图片与文字不会变糊。
-   --lg-* 白天在 body.day-mode 里换掉；--lg-edge 是卡片和磁贴共用的那组内阴影 */
+   边框保持网站原来的样子（1px 淡描边 + 顶部 1px 亮线）；在它里面叠一层卡片和磁贴共用、四边对称的透光：
+   沿四周一圈向内的柔光、上下两条一样的窄高光带、贴边一点点厚度。不用 filter / backdrop-filter，图片与文字不会变糊。
+   --lg-* 白天在 body.day-mode 里换掉；--lg-edge 是共用的透光内阴影 */
 :root {
   --lg-glow: rgba(255,255,255,.1);      /* 四周向内的透光 */
   --lg-sheen: rgba(255,255,255,.13);    /* 上下窄高光带 */
   --lg-depth: rgba(6,4,16,.22);         /* 贴边厚度 */
-  --lg-rim: rgba(255,255,255,.09);      /* 1px 反光边 */
-  --lg-rim-hi: rgba(255,255,255,.17);   /* 反光边上下两条稍亮 */
+  --lg-rim: rgba(255,255,255,.08);      /* 原来的 1px 描边 */
+  --lg-rim-hi: rgba(255,255,255,.16);   /* 原来的顶部 1px 亮线 */
   --lg-lift: 0 1px 2px rgba(6,4,16,.3), 0 8px 18px rgba(6,4,16,.26), 0 28px 64px rgba(0,0,0,.38);
   --lg-lift-hover: 0 2px 4px rgba(6,4,16,.3), 0 14px 28px rgba(6,4,16,.3), 0 40px 84px rgba(0,0,0,.44);
 }
@@ -2951,17 +2951,14 @@ body.day-mode {
   --lg-glow: rgba(255,250,236,.22);
   --lg-sheen: rgba(255,255,255,.24);
   --lg-depth: rgba(120,74,12,.14);
-  --lg-rim: rgba(255,255,255,.15);
-  --lg-rim-hi: rgba(255,255,255,.3);
+  --lg-rim: rgba(255,255,255,.14);
+  --lg-rim-hi: rgba(255,255,255,.28);
   --lg-lift: 0 1px 2px rgba(96,64,16,.16), 0 8px 18px rgba(96,64,16,.16), 0 26px 58px rgba(96,64,16,.24);
   --lg-lift-hover: 0 2px 4px rgba(96,64,16,.18), 0 14px 28px rgba(96,64,16,.2), 0 38px 78px rgba(96,64,16,.3);
 }
 :root,
 body.day-mode {
   --lg-edge:
-    inset 0 0 0 1px var(--lg-rim),
-    inset 0 1px 0 var(--lg-rim-hi),
-    inset 0 -1px 0 var(--lg-rim-hi),
     inset 0 0 3px var(--lg-depth),
     inset 0 0 24px -6px var(--lg-glow),
     inset 0 22px 26px -24px var(--lg-sheen),
@@ -2972,10 +2969,14 @@ body.day-mode {
    管理页弹窗里套的 .gate-card 仍由 .admin-modal .gate-card 去掉阴影 */
 :is(.info-box, .gate-card, .admin-modal),
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {
-  box-shadow: var(--lg-lift), var(--lg-edge);
+  box-shadow:
+    var(--lg-lift),
+    inset 0 0 0 1px var(--lg-rim),
+    inset 0 1px 0 var(--lg-rim-hi),
+    var(--lg-edge);
 }
 
-/* 磁贴：底图之上加一层只画边缘的伪元素，效果与卡片相同，不挡点击 */
+/* 磁贴：底图之上加一层只画边缘的伪元素，不挡点击；描边用磁贴原来的值（白天夜晚一样），透光与卡片相同 */
 .tile { box-shadow: var(--lg-lift); }
 .tile-sm:hover,
 .tile-hero:hover { box-shadow: var(--lg-lift-hover); }
@@ -2986,7 +2987,10 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) {
   z-index: 4;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: var(--lg-edge);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.16),
+    var(--lg-edge);
 }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
