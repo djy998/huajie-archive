@@ -57,6 +57,7 @@
 - 玩法参考 [blossom](https://github.com/alexbainter/blossom)（MIT）：开始演奏后点页面任意位置，高度决定音高（默认 C 大调五声音阶），左右决定声像。每个音隔 7~12 秒回响一次、逐渐变弱，最多循环最近 15 个音。再点按钮或按 Esc 结束。
 - 乐器表在 `bard.js` 开头的 `INSTRUMENTS`：弦乐 8 种、管乐 10 种，默认钢琴。`low` 为最低音的 MIDI 编号，`oct` 为八度数：钢琴、竖琴用 blossom 的宽音域（C2–C7），鲁特琴 C2–C6，其余三个八度、参考游戏内乐器演奏。`gain` 已按实测响度校准，新增或改动音色后要重新比对音量。
 - 钢琴用 blossom 同款真实采样（VSCO 2 社区版，CC0），在 `assets/bard/piano-<MIDI 编号>.mp3`（C♯2–C♯7，每隔大三度一个，保留 8~12 秒混响尾巴和原有的音区响度），播放时取最近的变调；打开小组件且选着钢琴时才下载（约 830 KB，等小组件弹出来、浏览器空闲时再开始），没下载好时用合成钢琴。采样自带混响，钢琴不再送进站内混响。其余音色用 Web Audio 合成，不下载文件。
+- 音频会话（`bard.js` 的 `holdPlayback`）：iPhone 上网页音频默认跟着侧边静音键走。开始演奏、打开舞台时，支持 `navigator.audioSession` 的设为 `playback`；不支持的 iOS（较旧系统、部分 App 内置浏览器）在点按里循环播放无声的 `assets/bard/silence.wav`，把会话切到「播放」类别；结束 / 离开舞台时恢复。安卓不放（会多出媒体通知）。`AudioContext` 不在 running（含 iOS 的 interrupted）就 resume。
 - 打开小组件要轻：手机上（`pointer: coarse` 或宽度 ≤ 760）只淡入、毛玻璃模糊半径减小（毛玻璃上做缩放每帧都要重新模糊），并加 `contain: layout style`；动画关闭（`body.fx-off`）时不弹出、不晃动；「更多」里按下竖琴就开始下载 `bard.js`，选了功能后菜单直接收起（`.more-panel.is-instant`），不和小组件同时做动画；手机上不把焦点移到「开始演奏」。
 - 输出末级有限幅（`ensureAudio` 里的 limiter），音叠得再多也不会削波出「滋滋」声；改音量相关参数后用离线渲染确认峰值仍低于 0 dBFS。
 - 「高级功能」按钮在「开始演奏」左边，点开向上展开（不记忆展开状态），里面的设置都存本机 `hj_bard_opts`：

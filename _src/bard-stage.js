@@ -117,7 +117,6 @@
   const $id = (x) => document.getElementById(x);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const num = (v, d) => (v !== null && v !== "" && Number.isFinite(+v) ? +v : d);
-  const coarse = () => matchMedia("(pointer: coarse)").matches;
   const diffBase = () => DIFFS.find((d) => d.id === S.diff) || DIFFS[1];
   /* 当前难度，win 换成当前判定模式实际用的半窗 */
   const diffMeta = () => { const d = diffBase(); return S.judge === "normal" ? d : { ...d, win: LOOSE_WIN }; };
@@ -499,8 +498,7 @@
     /* 舞台淡入盖满后，把下面的网站藏起来、停掉它的动画：被挡住的东西不再参与绘制 */
     S.coverTimer = setTimeout(() => document.body.classList.add("hjs-covered"), 260);
     if (typeof bgm !== "undefined" && bgm.playing) { S.bgmWasOn = true; bgm.pause(); }
-    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
-    bard().unlock?.();
+    bard().unlock?.();                                  // 顺带把音频会话切到「播放」（iPhone 侧边静音键开着也有声音）
     pushHist();
     S.view = "lobby";
     showView();
@@ -527,7 +525,7 @@
       r.hidden = true;
       document.body.classList.remove("hjs-open");
     }, 240);
-    try { if (navigator.audioSession) navigator.audioSession.type = "auto"; } catch (e) {}
+    bard().release?.();
     if (S.bgmWasOn) {
       S.bgmWasOn = false;
       try { if (!vol().muted) bgm.play(); } catch (e) {}
@@ -642,22 +640,16 @@
       h("div", { class: "hjs-line" }, h("span", { class: "hjs-line-l", text: "模式" }),
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
           (v) => { S.learn = v === "learn"; setRaw(K.learn, S.learn ? "1" : "0"); renderLobby(); })),
-      h("p", { class: "hjs-tip", text: (isAuto() ? "自动演奏：点击范围与判定模式均为放水，自动弹奏，不计分"
-        : S.learn ? "学习模式：气泡到达判定点时暂停，弹中后继续，不计分" : "演出模式：按节拍弹奏，满分 100 万，依得分评级")
-        + (nNow ? ` · 本难度 ${nNow} 个音` : "") + (scored() && capNote() ? ` · ${capNote()}` : "") }),
+      h("p", { class: "hjs-tip", text: isAuto() ? "自动演奏：点击范围与判定模式均为放水，自动弹奏，不计分" + (nNow ? ` · 本难度 ${nNow} 个音` : "")
+        : S.learn ? "学习模式：气泡到达判定点时暂停，弹中后继续，不计分" + (nNow ? ` · 本难度 ${nNow} 个音` : "")
+          : `按节拍演奏${nNow ? `，本难度 ${nNow} 个音` : ""}` }),
       vol().muted
         ? h("p", { class: "hjs-muted" }, h("span", { text: "当前为静音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
       best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank}` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
-        h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" })),
-      h("p", { class: "hjs-ctrl-tip" }, h("span", {
-        text: isAuto() ? "如需自行弹奏，请在设置中修改点击范围或判定模式"
-          : S.judge === "hover" ? "放水判定：指针停在气泡上即算弹中"
-            : S.range === "free" ? "放水范围：外圈收至判定点时，点击任意位置或按任意键均有效"
-              : coarse() ? "点击气泡演奏，允许少许偏差" : "点击气泡演奏，或指针指向气泡时按任意键",
-      }))));
+        h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" }))));
   }
 
   /* ==== 试听：用选中的音色把 MIDI 从第一个音起放 8 秒（要弹的音稍响） ==== */
@@ -817,7 +809,7 @@
     if (!box) return;
     box.textContent = "";
     const list = filtered();
-    $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首 · 星级按${diffMeta().label}`;
+    $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首`;
     $id("hjsPickNow").textContent = S.song ? `已选：${S.song.t}` : "";
     if (!list.length) { box.append(h("p", { class: "hjs-empty", text: "没有符合条件的曲目" })); return; }
     list.forEach((s) => {
@@ -925,25 +917,13 @@
   function renderHelp(card) {
     card.append(h("div", { class: "hjs-sheet-body hjs-help" },
       h("ol", {},
-        ["气泡位于对应音高的高度（越高音越高），外圈逐渐收缩，与核心重合时弹奏即发出该音",
-          "曲目均来自 MIDI：气泡为需弹奏的音，其余音（和声及本难度省略的旋律）自动以轻音补全",
-          "点击气泡弹奏，允许少许偏差；电脑上也可将指针指向气泡后按任意键",
-          "开始前有四拍预备拍",
-          "星级：每首曲目三档难度各有星级（仙人刺 1~3、魔界花 2~4、泰坦 3~5 星），按同难度下的音符密度在曲库中排序；大厅与选曲窗口显示当前难度的星级",
-          "JUST：早于或晚于 GOOD 范围，且超出不足其三分之一（泰坦约 0.1 秒）时判定，发声并得少量分数，但中断连击",
-          "MISS 与「点空」不同：MISS 指音符到达判定点时未弹奏，该音不发声、中断连击并计入准确率；「点空」指点击时附近没有待弹奏的气泡，不扣分、不中断连击，仅在结算中记录次数。点空较多通常是点早或点偏",
-          "判定时机：外圈与气泡重合、音名最亮时点击最准；下一个待弹奏的气泡接近判定点时外圈加粗",
-          "学习模式：气泡到达判定点仍未弹奏时音乐暂停，弹中后继续，不计分",
-          "判定模式与点击范围（均在设置中修改）：判定模式 —— 正常（难度越高判定越严）、宽松（三档难度均按仙人刺判定）、放水（无需点击，指针停在气泡上，到判定点即算弹中）；"
-            + "点击范围 —— 正常（气泡附近）、宽松（范围更大）、放水（不限位置，外圈收至判定点时点击任意位置或按任意键均有效）。"
-            + "选了宽松或放水时得分有上限：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万（上限的九成以内照常计分，超出部分压缩进最后一成）",
-          "得分与评级：满分 1,000,000，与曲目长短无关。判定分 70 万，按 PERFECT 3、GREAT 2、GOOD 1、JUST 0.5 累计，越往上越难涨；"
-            + "连击分 30 万，按最大连击占全曲音数的比例分档（超过 30% 得 15 万，超过 50% 得 21 万，超过 80% 得 24 万，超过 90% 得 27 万，全连 30 万）。"
-            + "评级按得分：D、D+（40 万）、C（50 万）、C+（60 万）、B（70 万）、B+（80 万）、A（85 万）、A+（90 万）、S（95 万）、SS（98 万）、SSS（99 万）、完美（100 万）；学习模式、自动演奏与 0 分为「完成」",
-          "点击范围与判定模式均为放水时为自动演奏，不计分。本机纪录（最高分与评级）按难度、判定模式、点击范围分别记录",
-          "飞花线（设置 → 画面）：小花沿曲线依次经过各气泡，经过时即为判定点，身后带星光（简单显示时为金色光线）",
-          "判定持续偏早或偏晚：设置 → 判定延迟 → 校准，随「嗒」声点击数次即可",
-          "Esc（手机为返回键）：暂停 / 关闭窗口 / 返回上一层",
+        ["点击气泡即可弹奏，允许少许偏差。使用电脑时，也可将指针移至气泡上后按任意键",
+          "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，连击中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断连击，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
+          "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万",
+          "得分由判定分（70%）和连击分（30%）两部分组成，判定分根据每个音的判定评价记分，连击分按最大连击数评价，因此追求高分请尽可能不要断连击。",
+          "点击范围与判定模式均设为放水时为自动演奏，不计分。本机纪录按难度、判定模式与点击范围分别保存最高分与评级",
+          "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准，随提示音点击数次即可",
+          "按 Esc 键或手机返回键，可暂停演奏、关闭窗口或返回上一层",
         ].map((t) => h("li", { text: t })))));
   }
 
@@ -2075,6 +2055,8 @@
       dg.frames ? frameNote(dg) : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
+      S.root && S.root.classList.contains("is-lite") ? "已自动省电" : null,
+      bard().audioState && bard().audioState() !== "running" ? `音频 ${bard().audioState()}` : null,
     ].filter(Boolean).join(" · ");
     return h("div", {},
       parts.length ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,

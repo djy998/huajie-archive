@@ -125,7 +125,7 @@
   --day-text: #4a3018;
   /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫 */
   --day-cream: #3d3934;
-  --day-gold: #1e2810;
+  --day-gold: #4b2341;   /* 深暖紫 */
   --day-lilac: #5b3610;
   --pill-ink: var(--cream);
 
@@ -6614,7 +6614,6 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-go:hover { filter: brightness(1.06); translate: 0 -1px; }
 .hjs-go:active { translate: 0 .5px; scale: .98; box-shadow: 0 3px 10px rgba(234, 169, 79, .2), inset 0 3px 8px rgba(120, 70, 10, .32); }
 .hjs-go-ico { width: 20px; height: 20px; }
-.hjs-ctrl-tip { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 6px; margin: 0; font-size: .74rem; color: var(--s-mute); }
 
 /* ==== 演奏 ==== */
 .hjs-play { position: absolute; inset: 0; z-index: 2; touch-action: none; }

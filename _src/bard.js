@@ -594,7 +594,7 @@
   function stagePlay(midi, vel, instId, pan, delay) {
     const ctx = ensureAudio();
     if (!ctx) return false;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    wake(ctx);
     const inst = INST[instId] || INST[B.inst] || INST[DEFAULT_INST];
     const now = ctx.currentTime;
     const t = now + 0.006 + Math.max(0, Number(delay) || 0);
@@ -618,10 +618,38 @@
       A.voices.forEach((v) => v.stop(ctx.currentTime));
       A.voices.clear();
     }
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    holdPlayback(true);
+    wake(ctx);
     A.master.gain.cancelScheduledValues(ctx.currentTime);
     A.master.gain.setTargetAtTime(siteVolume.level, ctx.currentTime, 0.02);
     return true;
+  }
+
+  /* 音频会话：iPhone 上网页音频默认跟着侧边静音键走，静音时听不到。支持 navigator.audioSession（iOS 16.4+ Safari）的设为 playback；
+     不支持的（较旧的 iOS、部分 App 内置浏览器）在点按里放一段循环的无声音频（assets/bard/silence.wav），把音频会话切到「播放」类别。
+     只在 iOS 上放无声音频（安卓上会多出一个媒体通知）。on 为 false 时恢复 */
+  const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let silentEl = null;
+  function holdPlayback(on) {
+    try { if (navigator.audioSession) { navigator.audioSession.type = on ? "playback" : "auto"; return; } } catch (e) {}
+    if (!isIOS()) return;
+    try {
+      if (on) {
+        if (!silentEl) {
+          silentEl = new Audio("assets/bard/silence.wav");
+          silentEl.loop = true;
+          silentEl.setAttribute("playsinline", "");
+          silentEl.preload = "auto";
+        }
+        if (silentEl.paused) { const p = silentEl.play(); if (p && p.catch) p.catch(() => {}); }
+      } else if (silentEl) {
+        silentEl.pause();
+      }
+    } catch (e) {}
+  }
+  /* AudioContext 不在 running 就叫醒：除了 suspended，iOS 上来电、切 App 后还会是 interrupted */
+  function wake(ctx) {
+    if (ctx.state !== "running") ctx.resume().catch(() => {});
   }
 
   /* 舞台的时钟：AudioContext 的 currentTime（排程用的同一个钟）与输出延迟（秒）；音频还没起来时 running 为 false */
@@ -879,7 +907,7 @@
       showToast("这个浏览器放不出网页音频，换一个试试");
       return;
     }
-    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    holdPlayback(true);
     A.ctx.resume().catch(() => {});
     clearTimeout(B.stopTimer);
     A.voices.forEach((v) => v.stop(A.ctx.currentTime));
@@ -945,7 +973,7 @@
       setTimeout(() => stage.remove(), 400);
     }
     document.documentElement.classList.remove("bard-on");
-    try { if (navigator.audioSession) navigator.audioSession.type = "auto"; } catch (e) {}
+    holdPlayback(false);
     if (B.bgmWasOn && !siteVolume.muted) bgm.play();
     B.bgmWasOn = false;
     syncButton();
@@ -1126,6 +1154,8 @@
     open, close, stop, openStage,
     playMidi: stagePlay,
     unlock: stageUnlock,
+    release: () => holdPlayback(false),
+    audioState: () => (A.ctx ? A.ctx.state : "none"),
     prepare: stagePrepare,
     warm: stageWarm,
     clock: stageClock,

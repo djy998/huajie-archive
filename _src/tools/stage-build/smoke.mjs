@@ -177,7 +177,8 @@ async function main() {
     check("舞台盖满后下面的网站藏起来（hjs-covered）", P.doc.body.classList.contains("hjs-covered"));
     check("背景音乐被暂停", P.win.bgm.playing === false);
     check("开舞台时压入一条历史记录（返回键回上一层）", P.win.history.state && P.win.history.state.hjStage === 1);
-    check("默认操作方式是点气泡（电脑也是）", /点击气泡/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("开始按钮下方不再有操作提示", !P.$(".hjs-ctrl-tip"));
+    check("演出模式提示简化为「按节拍演奏，本难度 N 个音」", /^按节拍演奏，本难度 \d+ 个音$/.test(P.$(".hjs-tip").textContent), P.$(".hjs-tip").textContent);
 
     P.click(P.btn("更换曲目"));
     check("选曲窗口单独打开", P.st().sheet === "picker" && !P.$("#hjsSheet").hidden && !!P.$(".hjs-sheet-card.is-picker"));
@@ -199,7 +200,7 @@ async function main() {
     check("曲库每首都有三档星级（仙人刺 1~3、魔界花 2~4、泰坦 3~5，越难不越低）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.every((d, k) => d >= k + 1 && d <= k + 3) && s.diffs[0] <= s.diffs[1] && s.diffs[1] <= s.diffs[2]));
     P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[4]);
     const four = SONGS.songs.filter((s) => s.diffs[1] === 4).length;
-    check("四星筛选（按当前难度「魔界花」）", four > 0 && P.$$(".hjs-song").length === four && /星级按魔界花/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
+    check("四星筛选（按当前难度「魔界花」）", four > 0 && P.$$(".hjs-song").length === four && !/星级按/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
     const row = P.$$(".hjs-song")[0];
     P.click(row);
     await sleep(5);
@@ -326,7 +327,7 @@ async function main() {
   {
     const P = makePage({ coarse: true, width: 390, height: 844, prefs: { hj_stage_range: "loose" } });   // 宽松点击范围：1.7 / 2.2 个气泡
     await openStage(P);
-    check("手机默认点气泡提示", /点击气泡/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("手机上开始按钮下方也没有操作提示", !P.$(".hjs-ctrl-tip"));
     await go(P);
     const st = P.st();
     check("手机点气泡、没有轨道键帽", st.playing && P.$$(".hjs-cap").length === 0);
@@ -469,13 +470,13 @@ async function main() {
     P.click(P.btn("设置"));
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     P.click(P.btn("玩法说明"));
-    check("玩法说明讲清 MISS 和点空的区别", /MISS 与「点空」不同/.test(P.$("#hjsSheetCard").textContent));
+    check("玩法说明讲清 MISS 和点空的区别", /MISS 与点空含义不同/.test(P.$("#hjsSheetCard").textContent));
     {
       const items = P.$$("#hjsSheetCard li").map((li) => li.textContent);
-      const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /得分有上限/.test(t));
-      check("玩法说明：判定模式、点击范围、得分上限合成一条，得分与评级一条（共 15 条）", items.length === 15 && merged.length === 1
-        && items.filter((t) => /^得分与评级：/.test(t) && /完美（100 万）/.test(t) && /全连 30 万/.test(t)).length === 1
-        && !items.some((t) => /^点击范围（设置中修改）|扣 20%/.test(t)), `${items.length} 条`);
+      const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /得分设有上限/.test(t));
+      check("玩法说明：共 7 条，判定模式与得分上限一条、得分组成一条，不带括号说明", items.length === 7 && merged.length === 1
+        && items.filter((t) => /^得分由判定分（70%）和连击分（30%）两部分组成/.test(t)).length === 1
+        && !items.some((t) => /星级|飞花线|预备拍|JUST/.test(t)), `${items.length} 条`);
     }
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
@@ -536,7 +537,7 @@ async function main() {
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal" } });
     await openStage(P);
-    check("电脑点气泡：大厅提示可以按任意键", /按任意键/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("电脑上开始按钮下方没有操作提示", !P.$(".hjs-ctrl-tip"));
     await go(P);
     const st = P.st();
     const move = (x, y) => {
@@ -644,7 +645,7 @@ async function main() {
   {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_range: "free" } });
     await openStage(P);
-    check("放水范围：大厅提示点任意位置都算", /放水范围/.test(P.$(".hjs-ctrl-tip").textContent));
+    check("放水范围：开始按钮下方没有操作提示", !P.$(".hjs-ctrl-tip"));
     await go(P);
     const ns = P.st().notes;
     const g = P.st().g;
@@ -767,7 +768,7 @@ async function main() {
     for (const [prefs, cap, why] of cases) {
       const r = await runAll(prefs);
       check(`得分上限 ${cap / 10000} 万（${why}）：打满正好等于上限`, r.cap === cap && r.perfect && r.score === cap, `${r.cap} ${r.score}`);
-      check(`大厅与结算写明「得分上限 ${cap / 10000} 万（${why}）」`, r.tip.includes(`得分上限 ${cap / 10000} 万（${why}）`) && r.res.includes(`得分上限 ${cap / 10000} 万`), r.tip);
+      check(`结算写明「得分上限 ${cap / 10000} 万」，大厅提示保持简短`, !r.tip.includes("得分上限") && r.res.includes(`得分上限 ${cap / 10000} 万`), r.tip);
     }
     /* 上限的九成以内照算，往上压进最后一成；每多一分原始分都还有分 */
     const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
