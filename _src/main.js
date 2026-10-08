@@ -1792,7 +1792,7 @@ const clearFx = () => { $("fxLayer").innerHTML = ""; };
 function renderDayFx() {
   clearFx();
   const reduce = prefersReducedMotion();
-  const count = window.innerWidth < 760 ? 11 : 17;
+  const count = window.innerWidth < 760 ? 8 : 17;   // 手机上每片是 5 层嵌套的 3D 动画，少几片
   const rand = (lo, hi) => lo + Math.random() * (hi - lo);
   const sign = () => (Math.random() > 0.5 ? 1 : -1);
   const sec = (v) => v.toFixed(2) + "s";
