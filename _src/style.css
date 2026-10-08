@@ -123,8 +123,8 @@
   --day-brown: #5b3610;
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
-  /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫 */
-  --day-cream: #3d3934;
+  /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫；--day-gold 为加粗小标题与强调字 */
+  --day-cream: #1e2810;   /* 深绿近黑：白天卡片里的正文深色字与毛笔标题 */
   --day-gold: #4b2341;   /* 深暖紫 */
   --day-lilac: #5b3610;
   --pill-ink: var(--cream);
@@ -3598,7 +3598,7 @@ body.day-mode .about-share-text { color: var(--day-lilac); }
 body.day-mode .about-text .about-sub { color: var(--day-lilac); }
 body.day-mode .about-hint,
 body.day-mode .about-count { color: var(--day-lilac); }
-body.day-mode .about-list dt,
+body.day-mode .about-list dt { color: var(--day-gold); }
 body.day-mode .about-text .about-thanks,
 body.day-mode .about-done-title { color: var(--day-cream); }
 body.day-mode .about-label { color: var(--day-cream); }

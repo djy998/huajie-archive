@@ -52,7 +52,7 @@
 - 路由用 hash（`#latest`、`#previous`、`#ti` …），对照表是 `main.js` 的 `ROUTES`。`/activity/`、`/previous/` 是 `build.mjs` 生成的独立入口：`<html data-page>` 决定显示哪个视图，`<base href="../">` 让相对路径仍然指向站点根目录。
 - 弹窗统一登记在 `main.js` 的 `MODALS`，Esc、返回键和 `closeAllModals` 都靠这张表。
 - 动画档位挂在 `body` 上：`fx-hover-enabled`（完整）、`fx-lite`（轻量）、`fx-off`（关闭）。纯 CSS 的弹出、晃动动画要在 `body.fx-off` 下关掉。
-- 配色：毛笔标题字夜间用 `--lantern-soft`；白天卡片 / 弹窗里的用 `--day-cream`（土黑色），直接写在页面背景上的（`.section-title`、卡片外的 `.tab-sec-title`）用 `--day-title`。`--day-gold` 为白天卡片里的加粗强调字（深暖紫）。
+- 配色：毛笔标题字夜间用 `--lantern-soft`；白天卡片 / 弹窗里的用 `--day-cream`（深绿近黑 #1e2810，也是白天卡片里的深色正文字），直接写在页面背景上的（`.section-title`、卡片外的 `.tab-sec-title`）用 `--day-title`。`--day-gold` 为白天卡片里的加粗小标题与强调字（深暖紫 #4b2341，如网站说明里「点赞」「图片」这一列）。
 - 手机（`pointer: coarse` 或宽度 ≤ 760）首页减负：花叶 8 片（电脑 17 片），明暗用透明度起伏而不是 filter 动画；页头毛玻璃模糊 8px（电脑 17px）。花叶、星光在毛玻璃后面动，模糊半径越大、filter 动画越多，手机上越卡；新增首页毛玻璃或背景动画时留意。
 - 小按钮、选项一律用「凸起玻璃」：`style.css` 设计变量里的 `--glass-up`（平常）、`--glass-on`（选中 / 主按钮）、`--glass-sheen`（叠在任意底色上的高光），配 `--glass-up-edge`、`--glass-up-shadow` 等，白天整套自动换。悬停浮起、按下压进去写在「18. 按下反馈」里，新按钮把类名加进那组选择器即可。不要再做没有阴影的扁平按钮。
 
