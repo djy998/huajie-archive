@@ -2935,69 +2935,51 @@ body.day-mode .admin-modal {
 body.day-mode .admin-modal .gate-card { background: none; box-shadow: none; }
 
 /* ==== 液态玻璃边缘：窗口卡片与首页磁贴 ====
-   边缘只留一道极细的迎光线（左上，向两头渐隐），主要靠内侧透光：左上透进来的亮光、
-   右下折射出的彩色柔光、顶部窄高光带，再加一点右下厚度。不画整圈白边，
-   不用 filter / backdrop-filter，卡片里的图片与文字不会变糊。--lg-* 白天在 body.day-mode 里换掉 */
+   卡片和磁贴用同一套、四边对称的透光：沿四周一圈向内的柔光、上下两条一样的窄高光带、
+   贴边一点点厚度。没有白色描边，不用 filter / backdrop-filter，图片与文字不会变糊。
+   --lg-* 白天在 body.day-mode 里换掉；--lg-edge 是卡片和磁贴共用的那组内阴影 */
 :root {
-  --lg-hi: rgba(255,255,255,.42);       /* 迎光细线（左上） */
-  --lg-glow: rgba(255,255,255,.2);      /* 左上透进来的光 */
-  --lg-caustic: rgba(214,196,255,.2);   /* 右下折射出的柔光 */
-  --lg-sheen: rgba(255,255,255,.2);     /* 顶部窄高光带 */
-  --lg-depth: rgba(6,4,16,.3);          /* 右下贴边的厚度 */
+  --lg-glow: rgba(255,255,255,.1);      /* 四周向内的透光 */
+  --lg-sheen: rgba(255,255,255,.13);    /* 上下窄高光带 */
+  --lg-depth: rgba(6,4,16,.22);         /* 贴边厚度 */
   --lg-lift: 0 1px 2px rgba(6,4,16,.3), 0 8px 18px rgba(6,4,16,.26), 0 28px 64px rgba(0,0,0,.38);
   --lg-lift-hover: 0 2px 4px rgba(6,4,16,.3), 0 14px 28px rgba(6,4,16,.3), 0 40px 84px rgba(0,0,0,.44);
 }
 body.day-mode {
-  --lg-hi: rgba(255,255,255,.75);
-  --lg-glow: rgba(255,252,240,.38);
-  --lg-caustic: rgba(255,232,180,.36);
-  --lg-sheen: rgba(255,255,255,.34);
-  --lg-depth: rgba(120,74,12,.2);
+  --lg-glow: rgba(255,250,236,.22);
+  --lg-sheen: rgba(255,255,255,.24);
+  --lg-depth: rgba(120,74,12,.14);
   --lg-lift: 0 1px 2px rgba(96,64,16,.16), 0 8px 18px rgba(96,64,16,.16), 0 26px 58px rgba(96,64,16,.24);
   --lg-lift-hover: 0 2px 4px rgba(96,64,16,.18), 0 14px 28px rgba(96,64,16,.2), 0 38px 78px rgba(96,64,16,.3);
+}
+:root,
+body.day-mode {
+  --lg-edge:
+    inset 0 0 3px var(--lg-depth),
+    inset 0 0 24px -6px var(--lg-glow),
+    inset 0 22px 26px -24px var(--lg-sheen),
+    inset 0 -22px 26px -24px var(--lg-sheen);
 }
 
 /* 窗口卡片：会滚动，不用伪元素，内阴影直接画在卡片上（不随内容滚动）；
    管理页弹窗里套的 .gate-card 仍由 .admin-modal .gate-card 去掉阴影 */
 :is(.info-box, .gate-card, .admin-modal),
 body.day-mode :is(.info-box, .gate-card, .admin-modal) {
-  box-shadow:
-    var(--lg-lift),
-    inset 1px 1px 0 -.5px var(--lg-hi),
-    inset 0 26px 34px -28px var(--lg-sheen),
-    inset 12px 16px 34px -18px var(--lg-glow),
-    inset -14px -18px 38px -20px var(--lg-caustic),
-    inset -2px -3px 8px -5px var(--lg-depth);
+  box-shadow: var(--lg-lift), var(--lg-edge);
 }
 
-/* 磁贴：底图之上加两层只画边缘的伪元素（::before 透光，::after 左上细线），不挡点击 */
+/* 磁贴：底图之上加一层只画边缘的伪元素，效果与卡片相同，不挡点击 */
 .tile { box-shadow: var(--lg-lift); }
 .tile-sm:hover,
 .tile-hero:hover { box-shadow: var(--lg-lift-hover); }
-.tile::before,
-.tile::after {
+.tile::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 4;
   border-radius: inherit;
   pointer-events: none;
-}
-.tile::before {
-  box-shadow:
-    inset 0 26px 34px -28px var(--lg-sheen),
-    inset 12px 16px 34px -18px var(--lg-glow),
-    inset -14px -18px 38px -20px var(--lg-caustic),
-    inset -2px -3px 8px -5px var(--lg-depth);
-}
-/* 迎光细线：只在左上亮，往右、往下渐隐，不成一整圈 */
-.tile::after {
-  padding: 1px;
-  background: linear-gradient(135deg, var(--lg-hi) 0%, transparent 32%, transparent 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
+  box-shadow: var(--lg-edge);
 }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
