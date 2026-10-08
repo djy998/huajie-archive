@@ -1,5 +1,6 @@
 /* 花舞之街 · 离线缓存
    页面：网络优先，超时用缓存；带 ?v= 的脚本与样式：缓存优先；图片与字体：缓存优先，定期后台更新。
+   闹铃的系统通知也经这里弹，点通知回到已经打开的网站页面（没有就新开首页）。
    停用：换成只含 install 时 skipWaiting、activate 时清空缓存并 unregister 的版本 */
 const VERSION = new URL(self.location.href).searchParams.get("v") || "0";
 const SHELL_CACHE = "hj-shell-" + VERSION;
@@ -102,3 +103,13 @@ async function trim(cache) {
     trimming = false;
   }
 }
+
+/* 点闹铃通知：回到开着的网站页面 */
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    const page = list.find((c) => new URL(c.url).origin === self.location.origin);
+    if (page && "focus" in page) return page.focus();
+    return self.clients.openWindow ? self.clients.openWindow("./") : null;
+  }));
+});

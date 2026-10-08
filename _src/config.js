@@ -391,5 +391,6 @@ const HJ_CAL_ITEMS = [
   { start: "2026-01-01", end: "2026-01-02", label: "2026 莫古力跨年盛典", tone: "gold" },
   { date: "2026-09-26", label: "2026 莫古力中秋月轮祭", tone: "orange" },
   { start: "2026-09-24", end: "2026-10-13", label: "FFXV 联动", tone: "blue" },
+  { start: "2026-10-07", end: "2026-10-27", label: "糖豆人联动", tone: "rose" },
   { start: "2026-08-04", end: "2026-10-05", label: "妖怪手表联动", tone: "teal" },
 ];

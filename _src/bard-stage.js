@@ -11,11 +11,12 @@
    - 「示范旋律」：你要弹的音也先轻轻放出来，可以照着弹
    - 开头有四拍轻声预备拍（3·2·1），第一个气泡前就知道速度
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
-   - 判定四档 Perfect / Great / Good / Miss，没有血量、不会失败；漏掉的音不出声
+   - 判定 Perfect / Great / Good / Just / Miss，没有血量、不会失败；漏掉的音不出声
+   - 得分：满分 1,000,000（判定分 70 万 + 连击分 30 万），与曲子长短无关；评级按得分（见「得分」一节）
    - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用仙人刺的判定窗）/
      放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
-   - 本机纪录按 曲目 × 难度 × 判定模式 × 点击范围 分开记
-   - 飞花线（设置 → 画面，默认关）：一只萤火虫似的小花沿曲线掠过每个气泡，到点时正好经过该点的那个，身后撒星星（简单显示时拖一条金色的光）
+   - 本机纪录（最高分与评级）按 曲目 × 难度 × 判定模式 × 点击范围 分开记
+   - 飞花线（设置 → 画面，默认开）：一只萤火虫似的小花沿曲线掠过每个气泡，到点时正好经过该点的那个，身后撒星星（简单显示时拖一条金色的光）
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
    - 界面：大厅（今晚演奏、难度、模式、开始）/ 选曲窗口（搜索、分类与星级筛选、试听）/ 设置窗口（音量、音色、示范旋律、
      点击范围、显示与飞花线、判定模式、判定延迟与校准）/ 玩法说明。Esc、手机返回键都是「回到上一层」
@@ -26,7 +27,9 @@
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
     delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly",
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
-    best: "hj_stage_best2", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best2：换成 MIDI 曲库后重新记
+    best: "hj_stage_best3", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best3：百万分制的最高分与评级
+    oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大连击换算后显示
+    unlock: "hj_stage_unlock",                          // 曲库密码换来的凭证（全部曲目）
   };
   /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 仙人刺那档） */
   const LOOSE_WIN = [0.18, 0.3, 0.45];
@@ -51,13 +54,14 @@
     free: { label: "放水", r: Infinity, next: Infinity },
   };
   const NEXT_LEAD = 0.3;                                // 下一个该弹的气泡离判定点不到这么多秒才加粗外圈（太早加粗会让人一亮就点、早一拍）
+  /* w：判定权重（判定分与准确率都按它算） */
   const JUDGE = [
-    { id: "perfect", label: "PERFECT", pts: 300, vel: 1 },
-    { id: "great", label: "GREAT", pts: 200, vel: 0.9 },
-    { id: "good", label: "GOOD", pts: 100, vel: 0.8 },
-    { id: "miss", label: "MISS", pts: 0, vel: 0 },
+    { id: "perfect", label: "PERFECT", w: 3, vel: 1 },
+    { id: "great", label: "GREAT", w: 2, vel: 0.9 },
+    { id: "good", label: "GOOD", w: 1, vel: 0.8 },
+    { id: "miss", label: "MISS", w: 0, vel: 0 },
     /* JUST：比 GOOD 早或晚出去一小段（GOOD 半窗的 JUST_RATIO）。给一点分、出声，但断连击 */
-    { id: "just", label: "JUST", pts: 50, vel: 0.65 },
+    { id: "just", label: "JUST", w: 0.5, vel: 0.65 },
   ];
   const JUST = 4;                                       // JUDGE 里的下标（MISS 仍是 3）
   const JUST_RATIO = 1 / 3;                             // 泰坦正常判定约 0.1 秒、魔界花 0.12、仙人刺 / 宽松 0.15
@@ -96,7 +100,7 @@
   };
 
   const S = {
-    built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(),
+    built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(), unlocked: false,
     view: "lobby", sheet: "", sheetBack: null,
     song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, fl: null,
     delayMs: 0, stars: 0, cat: "", query: "", cal: null, calMsg: "",
@@ -121,27 +125,105 @@
   const judgeLabel = () => (JUDGE_MODES.find((m) => m.id === S.judge) || JUDGE_MODES[0]).label;
   const rangeLabel = () => (TAP_RANGES[S.range] || TAP_RANGES.normal).label;
   /* 点击范围和判定模式都是放水：游戏自己弹（自动演奏），不计分、不记纪录 */
-  const isAuto = () => S.judge === "hover" && S.range === "free";
+  const isAuto = (judge = S.judge, range = S.range) => judge === "hover" && range === "free";
   const scored = () => !S.learn && !isAuto();
-  /* 得分倍率：判定模式、点击范围各自宽松扣 20%、放水扣 50%，两项相加（宽松 + 宽松 = ×0.6，放水 + 宽松 = ×0.3） */
-  const SCORE_CUT = { normal: 0, loose: 0.2, hover: 0.5, free: 0.5 };
-  const scoreMult = () => Math.max(0, 1 - (SCORE_CUT[S.judge] || 0) - (SCORE_CUT[S.range] || 0));
-  function multNote() {
-    const m = scoreMult();
-    if (m >= 1) return "";
+  /* ==== 得分 ====
+     满分 1,000,000 = 判定分 700,000 + 连击分 300,000，与曲子长短无关（N = 这一档要弹的音数）。
+     判定分：每个音的基础分 500000 / N × 判定权重，累加成原始分（全 PERFECT 为 150 万），再按 SCORE.curve 折算：
+       原始分 35 万以内照算，35 万~56 万按 42%（−58%），56 万以上按 27.85%（−72.15%；照 −72% 算满分会是 701,400，
+       差的 1,400 分从这一段里扣），全 PERFECT 正好 700,000。
+     连击分：最大连击 / N 分档（SCORE.combo），全连 300,000。
+     上限：判定模式、点击范围选了宽松 / 放水时总分有上限（capOf）。上限的九成以内照算，往上把剩下的分按比例
+       压进最后一成 —— 每个音都还有分，但到不了上限以上 */
+  const SCORE = {
+    max: 1000000, judge: 700000, base: 500000,
+    curve: [[350000, 0.42], [560000, 261800 / 940000]],   // [原始分到这里起, 之后每分按多少计]
+    combo: [[0.95, 285000], [0.9, 270000], [0.85, 255000], [0.8, 240000], [0.7, 230000], [0.6, 220000],
+      [0.5, 210000], [0.4, 180000], [0.3, 150000]],       // [最大连击占比超过, 连击分]；全连 300000
+    full: 300000, knee: 0.9,
+  };
+  /* 上限按两项的宽松程度：0 正常、1 宽松、2 放水（两项都放水是自动演奏，不计分） */
+  const LOOSENESS = { normal: 0, loose: 1, hover: 2, free: 2 };
+  const CAPS = { "0,0": 1000000, "0,1": 800000, "1,1": 700000, "0,2": 650000, "1,2": 600000 };
+  function capOf(judge = S.judge, range = S.range) {
+    const k = [LOOSENESS[judge] || 0, LOOSENESS[range] || 0].sort().join();
+    return CAPS[k] || SCORE.max;
+  }
+  function judgeScore(sumW, n) {
+    if (!n) return 0;
+    const raw = (SCORE.base * sumW) / n;
+    let out = 0, from = 0, rate = 1;
+    for (const [at, r] of SCORE.curve) {
+      if (raw <= at) break;
+      out += (at - from) * rate;
+      from = at;
+      rate = r;
+    }
+    return Math.min(SCORE.judge, Math.round(out + (raw - from) * rate));
+  }
+  function comboScore(maxCombo, n) {
+    if (!n) return 0;
+    if (maxCombo >= n) return SCORE.full;
+    const r = maxCombo / n;
+    const step = SCORE.combo.find(([at]) => r > at);
+    return step ? step[1] : 0;
+  }
+  function capScore(total, cap) {
+    if (cap >= SCORE.max) return total;
+    const knee = cap * SCORE.knee;
+    return total <= knee ? total : knee + ((total - knee) * (cap - knee)) / (SCORE.max - knee);
+  }
+  /* 准确率（0~1）、最大连击、音数 → 判定分、连击分、总分 */
+  function scoreOf(acc, maxCombo, n, judge, range) {
+    const j = judgeScore(acc * 3 * n, n);
+    const c = comboScore(maxCombo, n);
+    return { judge: j, combo: c, cap: capOf(judge, range), score: Math.round(capScore(j + c, capOf(judge, range))) };
+  }
+  const sumW = () => { const c = S.counts || {}; return 3 * (c.perfect || 0) + 2 * (c.great || 0) + (c.good || 0) + 0.5 * (c.just || 0); };
+  function liveScore() {
+    const n = S.notes.length;
+    const j = judgeScore(sumW(), n);
+    const c = comboScore(S.maxCombo, n);
+    return { judge: j, combo: c, score: Math.round(capScore(j + c, capOf())) };
+  }
+  /* 评级按得分；0 分、学习、自动演奏为「完成」 */
+  const RANKS = [[1000000, "完美"], [990000, "SSS"], [980000, "SS"], [950000, "S"], [900000, "A+"], [850000, "A"],
+    [800000, "B+"], [700000, "B"], [600000, "C+"], [500000, "C"], [400000, "D+"], [1, "D"]];
+  const rankOf = (score) => (RANKS.find(([at]) => score >= at) || [0, "完成"])[1];
+  const RANK_ORDER = ["完成", ...RANKS.map((r) => r[1]).reverse()];
+  const fmtWan = (n) => `${+(n / 10000).toFixed(1)} 万`;
+  /* 有上限时的一行说明：「得分上限 80 万（宽松判定）」 */
+  function capNote() {
+    const cap = capOf();
+    if (cap >= SCORE.max) return "";
     const parts = [];
-    if (SCORE_CUT[S.judge]) parts.push(`${judgeLabel()}判定 −${SCORE_CUT[S.judge] * 100}%`);
-    if (SCORE_CUT[S.range]) parts.push(`${rangeLabel()}范围 −${SCORE_CUT[S.range] * 100}%`);
-    return `得分 ×${+m.toFixed(2)}（${parts.join("、")}）`;
+    if (LOOSENESS[S.judge]) parts.push(`${judgeLabel()}判定`);
+    if (LOOSENESS[S.range]) parts.push(`${rangeLabel()}范围`);
+    return `得分上限 ${fmtWan(cap)}（${parts.join("、")}）`;
   }
   /* 大厅、暂停、演奏中标题下的一行：学习 / 自动演奏 / 判定与点击范围（默认的不写） */
   const modeTag = () => (S.learn ? " · 学习" : isAuto() ? " · 自动演奏" : judgeTag() + (S.range === "normal" ? "" : ` · ${rangeLabel()}范围`));
-  /* 本机纪录按 曲目:难度:判定模式:点击范围 分开记。旧纪录：曲目:难度:判定模式（那时点击范围默认正常）算正常范围；
-     更早的 曲目:难度（加判定模式以前：按仙人刺那档判定、1.7 个气泡的范围）算宽松判定 + 宽松范围 */
-  function bestOf(all, id, diff, judge, range) {
-    return all[`${id}:${diff}:${judge}:${range}`]
+  /* 本机纪录（最高分与评级）按 曲目:难度:判定模式:点击范围 分开记在 hj_stage_best3。
+     百万分制以前的纪录（hj_stage_best2）记着准确率和最大连击，按新公式换算后一起比（准确率只记到 0.1%，换算有几百分的误差）：
+     旧键 曲目:难度:判定模式（那时点击范围默认正常）算正常范围；更早的 曲目:难度（加判定模式以前）算宽松判定 + 宽松范围 */
+  function oldBestOf(song, diff, judge, range) {
+    const all = storage.json(K.oldBest) || {};
+    const id = song.id;
+    const o = all[`${id}:${diff}:${judge}:${range}`]
       || (range === "normal" ? all[`${id}:${diff}:${judge}`] : null)
-      || (judge === "loose" && range === "loose" ? all[`${id}:${diff}`] : null) || null;
+      || (judge === "loose" && range === "loose" ? all[`${id}:${diff}`] : null);
+    const n = Array.isArray(song.cnt) ? num(song.cnt[DIFFS.findIndex((d) => d.id === diff)], 0) : 0;
+    const acc = o ? num(o.acc, NaN) : NaN;
+    if (!o || !n || !Number.isFinite(acc) || isAuto(judge, range)) return null;
+    const { score } = scoreOf(clamp(acc / 100, 0, 1), clamp(num(o.combo, 0), 0, n), n, judge, range);
+    return { score, rank: rankOf(score), old: true };
+  }
+  function bestOf(song, diff = S.diff, judge = S.judge, range = S.range) {
+    if (!song) return null;
+    const cur = (storage.json(K.best) || {})[`${song.id}:${diff}:${judge}:${range}`] || null;
+    const old = oldBestOf(song, diff, judge, range);
+    if (!cur) return old;
+    return old && old.score > num(cur.score, 0) ? old : cur;
   }
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
@@ -244,7 +326,7 @@
     S.render = getRaw(K.render, "normal") === "simple" ? "simple" : "normal";
     const range = getRaw(K.range, "normal");
     S.range = Object.prototype.hasOwnProperty.call(TAP_RANGES, range) ? range : "normal";
-    S.fly = getRaw(K.fly, "0") === "1";
+    S.fly = getRaw(K.fly, "1") === "1";                // 飞花线默认开
     applyRender();
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(num(getRaw(K.stars, 0), 0), 0, 5);
@@ -262,8 +344,41 @@
     return (bard().instName && bard().instName()) || "piano";
   }
 
-  /* ==== 曲库：songs.json 只有曲目信息，谱面 charts/<id>.json 点到这首才下载 ==== */
+  /* ==== 曲库：songs.json 只有曲目信息，谱面 charts/<id>.json 点到这首才下载 ====
+     songs.json 只列公开的曲目；在选曲窗口的搜索框输入曲库密码按回车，Worker（stage_unlock）核对后发回全部曲目和一张凭证，
+     凭证记在本机，之后打开舞台自动换成全部曲目（凭证 30 天有效、每次用都续期；Worker 换了曲库密码就失效） */
   const ver = () => (window.HJ && window.HJ.version) || "1";
+  const UNLOCK_WAIT_MS = 4000;                          // 打开舞台时凭证换曲目最多等这么久，超时先用公开曲目
+  function setLibrary(json) {
+    const list = (Array.isArray(json.songs) ? json.songs : []).filter((s) => s && s.id && s.t);
+    if (!list.length) return false;
+    S.data = list;
+    const tags = Array.isArray(json.tags) ? json.tags.map(String) : [];
+    list.forEach((s) => { if (s.tag && !tags.includes(s.tag)) tags.push(s.tag); });
+    S.tags = tags.filter((t) => list.some((s) => s.tag === t));
+    if (S.cat && !S.tags.includes(S.cat)) S.cat = "";
+    const id = getRaw(K.song, "");
+    const keep = S.song && list.find((s) => s.id === S.song.id);
+    S.song = list.find((s) => s.id === id) || keep || list.find((s) => s.id === json.first) || list[0];
+    return true;
+  }
+  /* 用密码或本机凭证换全部曲目；成功返回 true。失败不提示（搜索框照常搜索） */
+  async function unlock(payload) {
+    if (typeof callWorker !== "function") return false;
+    const res = await callWorker({ action: "stage_unlock", ...payload }, { load: "none" }).catch(() => null);
+    if (!res || !res.ok) {
+      if (payload.token && res && res.error === "auth") storage.remove(K.unlock);   // 过期或换了密码
+      return false;
+    }
+    if (res.token) setRaw(K.unlock, res.token);
+    if (S.view === "play" && S.song) {                  // 演奏中：只换列表，不换正在弹的曲子
+      const now = S.song;
+      if (!setLibrary(res)) return false;
+      S.song = now;
+    } else if (!setLibrary(res)) return false;
+    S.unlocked = true;
+    return true;
+  }
   function loadData() {
     if (S.data) return Promise.resolve(true);
     S.loading ??= (async () => {
@@ -271,16 +386,14 @@
         const res = await fetch(`${BASE}songs.json?v=${ver()}`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
         const json = await res.json();
-        const list = (Array.isArray(json.songs) ? json.songs : []).filter((s) => s && s.id && s.t);
-        if (!list.length) throw new Error("empty");
-        S.data = list;
-        const tags = Array.isArray(json.tags) ? json.tags.map(String) : [];
-        list.forEach((s) => { if (s.tag && !tags.includes(s.tag)) tags.push(s.tag); });
-        S.tags = tags.filter((t) => list.some((s) => s.tag === t));
-        if (S.cat && !S.tags.includes(S.cat)) S.cat = "";
+        if (!setLibrary(json)) throw new Error("empty");
         S.err = "";
-        const id = getRaw(K.song, "");
-        S.song = list.find((s) => s.id === id) || list.find((s) => s.id === json.first) || list[0];
+        const token = getRaw(K.unlock, "");
+        if (token && !S.unlocked) {
+          const p = unlock({ token });
+          const done = await Promise.race([p, new Promise((r) => setTimeout(() => r(null), UNLOCK_WAIT_MS))]);
+          if (done === null) p.then((ok) => { if (ok && S.view === "lobby") { S.sheet === "picker" ? renderSheet() : renderLobby(); } });
+        }
         return true;
       } catch (e) {
         S.err = "曲库加载失败，请检查网络后重新打开舞台";
@@ -519,7 +632,7 @@
           h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })))));
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
-    const best = bestOf(storage.json(K.best) || {}, s.id, S.diff, S.judge, S.range);
+    const best = bestOf(s);
     const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 仙人刺 / 魔界花 / 泰坦各要弹几个音
     const nNow = cnt[DIFFS.findIndex((d) => d.id === S.diff)];
     main.append(h("section", { class: "hjs-card hjs-ctrl" },
@@ -530,13 +643,13 @@
         seg("模式", [{ id: "show", label: "演出" }, { id: "learn", label: "学习" }], S.learn ? "learn" : "show",
           (v) => { S.learn = v === "learn"; setRaw(K.learn, S.learn ? "1" : "0"); renderLobby(); })),
       h("p", { class: "hjs-tip", text: (isAuto() ? "自动演奏：点击范围与判定模式均为放水，自动弹奏，不计分"
-        : S.learn ? "学习模式：气泡到达判定点时暂停，弹中后继续，不计分" : "演出模式：按节拍弹奏，依准确度评级")
-        + (nNow ? ` · 本难度 ${nNow} 个音` : "") + (scored() && multNote() ? ` · ${multNote()}` : "") }),
+        : S.learn ? "学习模式：气泡到达判定点时暂停，弹中后继续，不计分" : "演出模式：按节拍弹奏，满分 100 万，依得分评级")
+        + (nNow ? ` · 本难度 ${nNow} 个音` : "") + (scored() && capNote() ? ` · ${capNote()}` : "") }),
       vol().muted
         ? h("p", { class: "hjs-muted" }, h("span", { text: "当前为静音" }),
           h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
-      best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank} · ${best.acc}%` }) : null,
+      best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank}` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
         h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" })),
       h("p", { class: "hjs-ctrl-tip" }, h("span", {
@@ -665,15 +778,28 @@
       type: "search", class: "hjs-search-in", placeholder: "搜索曲名 / 歌手 / 出处", value: S.query, "aria-label": "搜索曲目",
       enterkeyhint: "search", autocomplete: "off",
       oninput: () => { S.query = input.value; renderSongList(); },
+      /* 回车：可能是曲库密码（对了就换成全部曲目，不对什么也不说，照常搜索） */
+      onkeydown: (e) => {
+        if (e.key !== "Enter" || e.isComposing || e.keyCode === 229 || S.unlocked) return;
+        const text = input.value.trim();
+        if (!text || text.length > 64) return;
+        e.preventDefault();
+        unlock({ password: text }).then((ok) => {
+          if (!ok || S.sheet !== "picker") return;
+          S.query = "";
+          renderSheet();
+          toast(`已显示全部曲目（${S.data.length} 首）`);
+        });
+      },
     });
     card.append(
       h("div", { class: "hjs-search" }, h("span", { class: "hjs-search-ico", html: ICON.search }), input),
-      S.tags.length > 1 ? h("div", { class: "hjs-chips is-cat", role: "radiogroup", "aria-label": "按分类筛选" },
+      ...(S.tags.length > 1 ? [h("div", { class: "hjs-chips is-cat", role: "radiogroup", "aria-label": "按分类筛选" },   // 原生 append 不能传 null
         ["", ...S.tags].map((t) => h("button", {
           type: "button", class: `hjs-chip${S.cat === t ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.cat === t),
           text: t || "全部分类",
           onclick: () => { S.cat = t; setRaw(K.cat, t); renderSheet(); },
-        }))) : null,
+        })))] : []),
       h("div", { class: "hjs-chips", role: "radiogroup", "aria-label": "按难度筛选" },
         [0, 1, 2, 3, 4, 5].map((n) => h("button", {
           type: "button", class: `hjs-chip${S.stars === n ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.stars === n),
@@ -757,7 +883,7 @@
       S.range === "free"
         ? (S.judge === "hover" ? "判定模式也为放水：自动演奏，不计分" : "不限位置：外圈收至判定点的气泡，点击任意位置或按任意键均有效")
         : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
-      multNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${multNote()}。宽松扣 20%、放水扣 50%，判定模式与点击范围分别计算后相加` }) : null));
+      capNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${capNote()}。按判定模式与点击范围组合：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万；上限的九成以内照常计分，超出部分压缩进最后一成` }) : null));
 
     /* 画面 */
     const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
@@ -810,8 +936,11 @@
           "学习模式：气泡到达判定点仍未弹奏时音乐暂停，弹中后继续，不计分",
           "判定模式与点击范围（均在设置中修改）：判定模式 —— 正常（难度越高判定越严）、宽松（三档难度均按仙人刺判定）、放水（无需点击，指针停在气泡上，到判定点即算弹中）；"
             + "点击范围 —— 正常（气泡附近）、宽松（范围更大）、放水（不限位置，外圈收至判定点时点击任意位置或按任意键均有效）。"
-            + "两项选宽松各扣 20% 得分、选放水各扣 50%，扣分相加（均为宽松时 ×0.6）",
-          "点击范围与判定模式均为放水时为自动演奏，不计分。本机纪录按难度、判定模式、点击范围分别记录",
+            + "选了宽松或放水时得分有上限：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万（上限的九成以内照常计分，超出部分压缩进最后一成）",
+          "得分与评级：满分 1,000,000，与曲目长短无关。判定分 70 万，按 PERFECT 3、GREAT 2、GOOD 1、JUST 0.5 累计，越往上越难涨；"
+            + "连击分 30 万，按最大连击占全曲音数的比例分档（超过 30% 得 15 万，超过 50% 得 21 万，超过 80% 得 24 万，超过 90% 得 27 万，全连 30 万）。"
+            + "评级按得分：D、D+（40 万）、C（50 万）、C+（60 万）、B（70 万）、B+（80 万）、A（85 万）、A+（90 万）、S（95 万）、SS（98 万）、SSS（99 万）、完美（100 万）；学习模式、自动演奏与 0 分为「完成」",
+          "点击范围与判定模式均为放水时为自动演奏，不计分。本机纪录（最高分与评级）按难度、判定模式、点击范围分别记录",
           "飞花线（设置 → 画面）：小花沿曲线依次经过各气泡，经过时即为判定点，身后带星光（简单显示时为金色光线）",
           "判定持续偏早或偏晚：设置 → 判定延迟 → 校准，随「嗒」声点击数次即可",
           "Esc（手机为返回键）：暂停 / 关闭窗口 / 返回上一层",
@@ -1669,7 +1798,7 @@
       S.learnHits += 1;
       popJudge(S.learn ? "WELL" : "AUTO", "is-ok");
     } else {
-      S.score += Math.round(JUDGE[tier].pts * (1 + Math.min(S.combo, 60) / 120) * scoreMult());   // JUST 时连击已归零，没有连击加成
+      S.score = liveScore().score;
       popJudge(JUDGE[tier].label, `is-${JUDGE[tier].id}`, off);
     }
     while (S.next < S.notes.length && S.judged[S.notes[S.next].idx] >= 0) S.next += 1;
@@ -1761,20 +1890,22 @@
     if (text) b.append(h("span", { text }));
   }
 
-  /* 准确率：PERFECT 3、GREAT 2、GOOD 1、JUST 0.5、MISS 0，除以满分 */
+  /* 准确率：PERFECT 3、GREAT 2、GOOD 1、JUST 0.5、MISS 0，除以满分（已判定的音） */
   const doneCount = () => { const c = S.counts || {}; return (c.perfect + c.great + c.good + c.just + c.miss) || 0; };
   function accPct() {
-    const c = S.counts || {};
     const done = doneCount();
-    if (!done) return 100;
-    return ((3 * c.perfect + 2 * c.great + c.good + 0.5 * c.just) / (3 * done)) * 100;
+    return done ? (sumW() / (3 * done)) * 100 : 100;
+  }
+  /* 分数的组成：「判定分 63.2 万 + 连击分 27 万」，有上限时再写上限 */
+  function scoreParts() {
+    const p = liveScore();
+    return `判定分 ${fmtNum(p.judge)} + 连击分 ${fmtNum(p.combo)}${capNote() ? ` · ${capNote()}` : ""}`;
   }
   /* 各档计数的格子（结算、暂停共用） */
   const resGrid = () => h("div", { class: "hjs-res-grid" }, GRID.map((id) => {
     const j = JUDGE.find((x) => x.id === id);
     return h("div", { class: `hjs-cell is-${id}` }, h("b", { text: String(S.counts[id]) }), h("small", { text: j.label }));
   }));
-  const rankOf = (p) => (p >= 98 ? "SS" : p >= 93 ? "S" : p >= 85 ? "A" : p >= 72 ? "B" : p >= 55 ? "C" : "D");
 
   /* ==== 学习模式：停在这一拍等玩家 ==== */
   function freeze(n) {
@@ -1830,6 +1961,7 @@
     const stats = scored()
       ? [h("div", { class: "hjs-res-big hjs-pause-score", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · 连击 ${S.combo} · 最大连击 ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
+        h("p", { class: "hjs-res-sub hjs-res-parts", text: scoreParts() }),
         resGrid()]
       : [h("div", { class: "hjs-res-big hjs-pause-score", text: `${S.learnHits} / ${S.notes.length}` })];
     modal(h("div", { class: "hjs-card hjs-res" },
@@ -1900,18 +2032,21 @@
         S.learn ? tag("模式", "学习") : isAuto() ? tag("模式", "自动演奏") : null));
     if (!scored()) {
       card.append(
+        h("div", { class: "hjs-res-rank is-done" }, h("span", { text: rankOf(0) })),
         h("div", { class: "hjs-res-big", text: `${S.learnHits} / ${total}` }),
         h("p", { class: "hjs-res-sub", text: S.learn ? "学习模式不计分，熟练后可切换至演出模式"
           : "点击范围与判定模式均为放水：自动演奏，不计分、不记录。如需自行弹奏，请在设置中修改其中一项" }));
     } else {
+      S.score = liveScore().score;
+      const rank = rankOf(S.score);
       const isNew = saveBest(pct);
       const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
       card.append(
         ...(fullCombo ? [h("div", { class: "hjs-res-fc", text: "FULL COMBO!" })] : []),   // 原生 append 会把 null 写成文字，不能传 null
-        h("div", { class: "hjs-res-rank" }, h("span", { text: rankOf(pct) }), isNew ? h("em", { text: "新纪录" }) : null),
+        h("div", { class: `hjs-res-rank${rank === "完美" ? " is-max" : ""}` }, h("span", { text: rank }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo}` }),
-        ...(multNote() ? [h("p", { class: "hjs-res-sub hjs-res-mult", text: multNote() })] : []),   // 原生 append 不能传 null
+        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo} / ${total}` }),
+        h("p", { class: `hjs-res-sub hjs-res-parts${capNote() ? " hjs-res-mult" : ""}`, text: scoreParts() }),
         timingNote(),
         resGrid());
     }
@@ -1955,13 +2090,14 @@
     const where = worst && worst.c >= 3 ? `，最多在 ${fmtTime(worst.k * 4)}~${fmtTime(worst.k * 4 + 4)}（${worst.c} 帧）` : "";
     return `掉帧 ${pct < 1 && dg.drop ? "<1" : Math.round(pct)}%（${Math.round(1000 / dg.base)} Hz${where}，最长一帧 ${Math.round(dg.max)} ms）${lite}`;
   }
+  /* 最高分与最高评级（评级随得分，分高评级就不会低）；准确率、最大连击一起记着备查 */
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
     const key = `${S.song.id}:${S.diff}:${S.judge}:${S.range}`;
-    const v = { score: S.score, acc: +pct.toFixed(1), rank: rankOf(pct), combo: S.maxCombo, diff: S.diff, judge: S.judge, range: S.range };
-    const old = bestOf(all, S.song.id, S.diff, S.judge, S.range);
-    if (old && v.score <= num(old.score, 0)) return false;
-    all[key] = v;
+    const old = bestOf(S.song);
+    if (old && S.score <= num(old.score, 0)) return false;
+    const rank = RANK_ORDER.indexOf(rankOf(S.score)) >= RANK_ORDER.indexOf(old ? old.rank : "完成") ? rankOf(S.score) : old.rank;
+    all[key] = { score: S.score, rank, acc: +pct.toFixed(1), combo: S.maxCombo, at: Date.now() };
     storage.set(K.best, JSON.stringify(all));
     return true;
   }
@@ -1975,7 +2111,7 @@
         view: S.view, sheet: S.sheet, range: S.range, auto: isAuto(), playing: S.playing, paused: S.paused, frozen: S.frozen,
         finished: S.finished, song: S.song && S.song.id, notes: S.notes, judged: S.judged ? Array.from(S.judged) : [],
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
-        mult: scoreMult(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.live.length, draws: S.fl.draws } : null,
+        cap: capOf(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.live.length, draws: S.fl.draws } : null,
         resuming: S.resuming, spb: S.spb, ghostWhy: S.ghostWhy,
         cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,

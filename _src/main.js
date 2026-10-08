@@ -11,6 +11,7 @@ const STORE = {
   calZoom: "hj_cal_zoom",
   calXy: "hj_cal_xy",
   alarms: "hj_alarm_items",
+  alarmNotify: "hj_alarm_notify",   // 问过系统通知权限
   popupMute: "hj_popup_mute",
   popupNever: "hj_popup_never",
   popupSeen: "hj_popup_seen",
@@ -1215,7 +1216,7 @@ const FEEDBACK_HINTS = {
   other: "想说什么都可以",
 };
 const FEEDBACK_ERRORS = {
-  bad_category: "请先选择问卷类别",
+  bad_category: "请先选择反馈类别",
   bad_content: "内容过短",
   too_long: "最多 1000 字",
   bad_contact: "请填写联系方式",
@@ -2756,6 +2757,57 @@ function alarmRing(it) {
     alarmRefresh(it);
   }));
   alarmRefresh(it);
+  alarmNotify.show(it);
+}
+
+/* 系统通知：页面在后台（切到别的标签页、最小化）时闹铃响起，另弹一条系统通知，点它回到网站。
+   权限只在添加闹铃 / 倒计时时问一次（记在 hj_alarm_notify）。有离线缓存（sw.js）时经它弹（手机浏览器只认这种），
+   点通知由 sw.js 的 notificationclick 回到这个页面。页面关掉后网页没法再响，浏览器不提供定时唤醒，所以关页面前提醒（alarmLeaveGuard） */
+const alarmNotify = {
+  supported: () => "Notification" in window && window.isSecureContext,
+  ask() {
+    if (!this.supported() || Notification.permission !== "default" || storage.get(STORE.alarmNotify)) return;
+    storage.set(STORE.alarmNotify, "1");
+    try {
+      const p = Notification.requestPermission();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+  },
+  async show(it) {
+    if (!this.supported() || Notification.permission !== "granted" || !document.hidden) return;
+    const title = `${it.kind === "countdown" ? "倒计时到了" : "闹铃"}：${it.name}`;
+    const opts = {
+      body: "点这里回到花舞之街，在页面上可以停止铃声",
+      tag: `hj-alarm-${it.id}`, renotify: true, requireInteraction: true,
+      icon: new URL("boot-moguri-v2.webp", document.baseURI).href,
+    };
+    try {
+      const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+      if (reg && reg.showNotification) { await reg.showNotification(title, opts); return; }
+    } catch (e) {}
+    try {
+      const n = new Notification(title, opts);
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch (e) {}
+  },
+};
+
+/* 关页面前提醒：还有没响的闹铃、正在走的倒计时时，离开网站浏览器会问一下（页面关掉就不会响了）。
+   只在有这样的闹铃时才挂 beforeunload（挂着会让浏览器的前进后退缓存失效）；点本站链接跳转不问 */
+const alarmLeave = { on: false, linkAt: 0 };
+const alarmPending = (now) => alarms.items.some((it) => it.enabled && !it.done
+  && (it.kind === "alarm" ? it.nextFireAt > now : !it.paused && it.endAt > now));
+function alarmBeforeUnload(e) {
+  if (Date.now() - alarmLeave.linkAt < 1500) return;
+  e.preventDefault();
+  e.returnValue = "";
+}
+function alarmLeaveGuard(now = hjNow()) {
+  const want = alarmPending(now);
+  if (want === alarmLeave.on) return;
+  alarmLeave.on = want;
+  if (want) window.addEventListener("beforeunload", alarmBeforeUnload);
+  else window.removeEventListener("beforeunload", alarmBeforeUnload);
 }
 
 const alarmStopRing = (it) => alarms.ringing.get(it.id)?.stop();
@@ -2830,6 +2882,7 @@ function alarmTick() {
   alarms.items.forEach(alarmPaintWidget);
   alarmPaintListLive();
   alarmPaintNowHints();
+  alarmLeaveGuard(now);
 }
 
 /* 操作 --------------------------------------------------------------------------------- */
@@ -3119,6 +3172,7 @@ function addAlarmItem(raw, nameStem, toast) {
   alarmCommit();
   alarmMsg("");
   showToast(toast(it.name));
+  alarmNotify.ask();
   return it;
 }
 
@@ -3253,6 +3307,10 @@ function initAlarm() {
   alarmTick();
   setInterval(alarmTick, 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) alarmTick(); });
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (a && a.origin === location.origin && (!a.target || a.target === "_self")) alarmLeave.linkAt = Date.now();
+  }, true);
 }
 
 
@@ -3790,13 +3848,20 @@ function onPickClick(e) {
   }
 }
 
+/* 会叫出浏览器自带面板的按键。下拉框：空格、回车、F4、Alt+↑↓，苹果电脑上光按 ↑↓ 也会；
+   日期 / 时间：空格、F4、Alt+↑↓（↑↓ 只改当前那一格的数字，不弹面板）。这些键一律改成打开 / 留在站内弹层 */
+const PICK_MAC = /Mac|iPhone|iPad/.test(navigator.platform || "") || navigator.userAgentData?.platform === "macOS";
+const pickArrow = (e) => e.key === "ArrowDown" || e.key === "ArrowUp";
+const pickNativeKey = (e, kind) => e.key === " " || e.key === "F4" || (e.altKey && pickArrow(e))
+  || (kind === "select" && (e.key === "Enter" || (PICK_MAC && pickArrow(e) && !e.metaKey && !e.ctrlKey)));
+
 /* 返回 true 表示已处理，不再向外传递 */
 function onPickKey(e) {
   if (e.key === "Escape") { closePickToAnchor(); return true; }
   if (e.key === "Tab") { closePick(); return false; }
   if (pick.kind !== "select") {
     if (e.key === "Enter" && pickHasTime()) { closePickToAnchor(); return true; }
-    return false;
+    return pickNativeKey(e, pick.kind);               // 弹层开着时别让浏览器再叠一个自带的面板
   }
   const last = pick.items.length - 1;
   const moves = {
@@ -3844,21 +3909,20 @@ function initPickers() {
     const r = t.getBoundingClientRect();
     if (e.clientX > r.right - parseFloat(getComputedStyle(t).paddingRight) - 28) closePick();
   }, true);
+  /* 处理过的键连同一层的其它监听一起拦下（舞台演奏也在 document 上听 Esc：关下拉时不能顺带把设置窗口也关了） */
+  const handled = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
   document.addEventListener("keydown", (e) => {
     if (pick.anchor) {
-      if (onPickKey(e)) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      if (onPickKey(e)) handled(e);
       return;
     }
     const t = e.target;
-    const openKey = e.key === "F4" || (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp"));
-    if (pickableSelect(t) && (openKey || e.key === " ")) {
-      e.preventDefault();
+    if (e.isComposing) return;
+    if (pickableSelect(t) && pickNativeKey(e, "select")) {
+      handled(e);
       openPick(t, "select");
-    } else if (pickableDate(t) && openKey) {
-      e.preventDefault();
+    } else if (pickableDate(t) && pickNativeKey(e, t.type)) {
+      handled(e);
       openPick(t, t.type);
     }
   }, true);
@@ -3969,7 +4033,7 @@ function initA11y() {
 }
 
 /* 一次性重置：RESET_ID 换一个新值，每位访客下次进站时执行一次（记在 hj_reset_done）。
-   这一次（舞台演奏加了判定模式等）：舞台演奏与吟游诗人模拟器的设置恢复默认（hj_stage_*、hj_bard_*，本机最高分 hj_stage_best2 保留），
+   这一次（舞台演奏加了判定模式等）：舞台演奏与吟游诗人模拟器的设置恢复默认（hj_stage_*、hj_bard_*；本机纪录 hj_stage_best2 / best3 与曲库凭证 hj_stage_unlock 保留），
    并清掉离线缓存里的旧文件（当前版本的除外），之后用到时重新下载 */
 const RESET_ID = "20261004b";
 function runOneTimeReset() {
@@ -3977,7 +4041,8 @@ function runOneTimeReset() {
   try {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
-    keys.filter((k) => k && (k.startsWith("hj_bard_") || (k.startsWith("hj_stage_") && k !== "hj_stage_best2")))
+    const keepStage = ["hj_stage_best2", "hj_stage_best3", "hj_stage_unlock"];
+    keys.filter((k) => k && (k.startsWith("hj_bard_") || (k.startsWith("hj_stage_") && !keepStage.includes(k))))
       .forEach((k) => storage.remove(k));
   } catch (e) {}
   try {

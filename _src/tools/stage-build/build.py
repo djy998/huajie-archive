@@ -1,7 +1,8 @@
 """花街舞台演奏 · 曲库生成器（MIDI 版）
 
 读取 songs.py 的曲目表和 midi/<id>.mid，产出：
-  · assets/bard/stage/songs.json        曲目索引（选曲窗口用：曲名、星级、时长、速度、音域…，不含谱面）
+  · assets/bard/stage/songs.json        公开曲目（songs.py 里 show=True 的）的索引（选曲窗口用：曲名、星级、时长、速度、音域…，不含谱面）
+  · assets/bard/stage/songs-all.json    全部曲目的索引：网页不直接读它，访客在选曲搜索框输对曲库密码后由 Worker 转发
   · assets/bard/stage/charts/<id>.json  每首的音符与分级（点开这首时才下载）
 
 charts/<id>.json：{"v": 2, "n": [[距上一个音的毫秒, MIDI 音高, 级别], ...]}，第一个音在 0 秒。
@@ -107,6 +108,8 @@ def main():
     for s in SONGS:
         if s["tag"] not in TAGS:
             raise SystemExit(f"{s['id']}: 分类 {s['tag']!r} 不在 TAGS 里")
+    if not any(s.get("show") for s in SONGS):
+        raise SystemExit("songs.py 里至少要有一首公开（show=True）的曲子，不然访客打开舞台没有曲子可选")
 
     built = []
     for s in SONGS:
@@ -148,9 +151,23 @@ def main():
         if name.endswith(".json") and name not in keep:
             os.remove(os.path.join(CHART_DIR, name))
             print("  删除多余的谱面", name)
-    with open(os.path.join(ASSET_DIR, "songs.json"), "w", encoding="utf-8") as f:
-        json.dump({"v": 2, "first": DEFAULT, "tags": TAGS, "songs": [b[0] for b in built]}, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"{len(built)} 首 → {os.path.join(ASSET_DIR, 'songs.json')}、{CHART_DIR}")
+    entries = [b[0] for b in built]
+    public = [e for e, s in zip(entries, SONGS) if s.get("show")]
+    write_index("songs-all.json", DEFAULT, TAGS, entries)
+    write_index("songs.json", public_first(public), [t for t in TAGS if any(e["tag"] == t for e in public)], public)
+    print(f"{len(built)} 首（公开 {len(public)} 首）→ {os.path.join(ASSET_DIR, 'songs.json')}、songs-all.json、{CHART_DIR}")
+
+
+def public_first(public):
+    """公开曲库第一次打开时选中的：DEFAULT 是公开的就用它，否则挑魔界花档星级最低、最短的一首"""
+    if any(e["id"] == DEFAULT for e in public):
+        return DEFAULT
+    return min(public, key=lambda e: (e["diffs"][1], e["dur"]))["id"]
+
+
+def write_index(name, first, tags, songs):
+    with open(os.path.join(ASSET_DIR, name), "w", encoding="utf-8") as f:
+        json.dump({"v": 2, "first": first, "tags": tags, "songs": songs}, f, ensure_ascii=False, separators=(",", ":"))
 
 
 if __name__ == "__main__":

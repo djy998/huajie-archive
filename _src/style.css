@@ -189,6 +189,40 @@ button { font-family: inherit; cursor: var(--cursor-img), pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 ::selection { background: var(--wisteria); color: var(--ink); }
 
+/* 卡片、弹窗里的滚动条：细细一条玻璃，夜间紫藤色、白天琥珀色（舞台固定夜间配色）；页面本身的滚动条不改。
+   Chrome / Edge / Safari 用 ::-webkit-scrollbar 画（可以有渐变、圆头、离圆角远一点），Firefox 只认 scrollbar-color，给它同色的两色版 */
+:root {
+  --sb-track: rgba(255,255,255,.05);
+  --sb-thumb: linear-gradient(180deg, rgba(232,222,250,.6), rgba(185,164,224,.5));
+  --sb-thumb-hi: linear-gradient(180deg, rgba(244,238,255,.85), rgba(201,182,244,.75));
+  --sb-edge: rgba(255,255,255,.35);
+  --sb-ff: rgba(201,182,244,.55) rgba(255,255,255,.05);
+}
+body.day-mode {
+  --sb-track: rgba(91,54,16,.12);
+  --sb-thumb: linear-gradient(180deg, rgba(150,96,34,.78), rgba(107,66,20,.72));
+  --sb-thumb-hi: linear-gradient(180deg, rgba(170,110,38,.95), rgba(122,74,22,.9));
+  --sb-edge: rgba(255,236,200,.5);
+  --sb-ff: rgba(122,74,22,.7) rgba(91,54,16,.12);
+}
+body *::-webkit-scrollbar { width: 10px; height: 10px; }
+body *::-webkit-scrollbar-track { background: var(--sb-track); border-radius: 999px; }
+body *::-webkit-scrollbar-track:vertical { margin: 14px 0; }      /* 让开卡片的大圆角 */
+body *::-webkit-scrollbar-track:horizontal { margin: 0 14px; }
+body *::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-image: var(--sb-thumb);
+  background-clip: padding-box;
+  box-shadow: inset 0 1px 0 var(--sb-edge);
+}
+body *::-webkit-scrollbar-thumb:hover, body *::-webkit-scrollbar-thumb:active { background-image: var(--sb-thumb-hi); }
+body *::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  body * { scrollbar-width: thin; scrollbar-color: var(--sb-ff); }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px; height: 1px;
@@ -4799,8 +4833,6 @@ body.day-mode .hy-visits li { border-color: rgba(91, 54, 16, .18); }
   max-height: 320px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,.25) transparent;
 }
 .hj-opt {
   position: relative;
@@ -4966,7 +4998,6 @@ body.day-mode .hj-pop {
   border-color: rgba(255,255,255,.6);
   box-shadow: 0 12px 30px rgba(96,64,16,.25), inset 0 1px 0 rgba(255,255,255,.75), var(--lg-edge-strong);
 }
-body.day-mode .hj-opt-list { scrollbar-color: rgba(122,84,32,.35) transparent; }
 body.day-mode .hj-opt:hover,
 body.day-mode .hj-opt.is-active,
 body.day-mode .hj-date-title:hover,
@@ -6339,6 +6370,11 @@ body.day-mode .load-corner { box-shadow: 0 4px 12px rgba(96,64,16,.22), inset 0 
    大厅 .hjs-lobby / 演奏 .hjs-play（轨道、气泡、判定字、HUD、键帽）/ 暂停与结算 .hjs-modal / 选曲、设置、玩法窗口 .hjs-sheet
    气泡沿用自由演奏点击光晕的样子反过来：外圈 .hjs-ring 由大收到和核心 .hjs-core 重合，--k 为 0→1 的收缩进度 */
 .hjs {
+  --sb-track: rgba(255,255,255,.05);              /* 滚动条：固定夜间配色 */
+  --sb-thumb: linear-gradient(180deg, rgba(232,222,250,.6), rgba(185,164,224,.5));
+  --sb-thumb-hi: linear-gradient(180deg, rgba(244,238,255,.85), rgba(201,182,244,.75));
+  --sb-edge: rgba(255,255,255,.35);
+  --sb-ff: rgba(201,182,244,.55) rgba(255,255,255,.05);
   --s-ink: #f6eedd;
   --s-soft: rgba(246, 238, 221, .8);
   --s-mute: rgba(222, 210, 238, .6);
@@ -6770,6 +6806,15 @@ body.hjs-open .toast { z-index: 540; }
   color: #3a1220; background: #f0b3c3;
   transform: rotate(8deg);
 }
+/* 完美：彩色描金；完成（学习、自动演奏、0 分）：小一号、不发光 */
+.hjs-res-rank.is-max { text-shadow: none; filter: drop-shadow(0 6px 18px rgba(242, 189, 109, .45)); }
+.hjs-res-rank.is-max span {
+  background: linear-gradient(90deg, #ffe3a3, #f0b3c3, #ddd0ff, #9fd3ff);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.hjs-res-rank.is-done { font-size: 2.6rem; color: var(--s-soft); text-shadow: none; }
+.hjs-res-parts { font-size: .74rem; font-variant-numeric: tabular-nums; }
 .hjs-res-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: -4px; }
 .hjs-res-tag {
   display: inline-flex; align-items: baseline; gap: 5px;

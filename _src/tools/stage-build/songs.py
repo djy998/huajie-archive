@@ -8,19 +8,21 @@
   note  （可选）大厅里的一行介绍
   inst  （可选）「跟随曲目」时用的音色，模拟器里的乐器 id；不写就按 MIDI 轨道名猜
   gap   （可选）谱面疏密倍数，>1 更稀、<1 更密，默认 1
+  show  （可选）True = 所有人都能在选曲窗口看到；不写 = 隐藏，要在选曲窗口的搜索框输入曲库密码（Worker 的 PASSWORD_STAGE）
+        按回车后才显示。build.py 把公开的写进 songs.json，全部写进 songs-all.json（只经 Worker 发给输对密码的人）
 星级、时长、速度、音数都由 build.py 从 MIDI 算出来，不用手填。列表顺序就是选曲窗口里的顺序。
 """
 
-DEFAULT = "you-are-my-sunshine"   # 第一次打开舞台时选中的曲子（挑一首短、简单、耳熟的）
+DEFAULT = "you-are-my-sunshine"   # 第一次打开舞台时选中的曲子（挑一首短、简单、耳熟的）；它是隐藏曲时，公开曲库改选公开曲里最简单的一首
 
 TAGS = ["古典", "游戏", "动画", "影视", "日系流行", "欧美流行", "菲律宾流行", "其他"]
 
 SONGS = [
     # ==== 古典 ====
-    dict(id="canon-in-d", t="D 大调卡农", o="Canon in D", c="帕赫贝尔", tag="古典"),
-    dict(id="fur-elise", t="致爱丽丝", o="Für Elise", c="贝多芬", tag="古典"),
-    dict(id="clair-de-lune", t="月光", o="Clair de lune（《贝加莫组曲》）", c="德彪西", tag="古典"),
-    dict(id="nocturne-op9-2", t="夜曲 Op.9 No.2", o="Nocturne in E♭ major", c="肖邦", tag="古典"),
+    dict(id="canon-in-d", t="D 大调卡农", o="Canon in D", c="帕赫贝尔", tag="古典", show=True),
+    dict(id="fur-elise", t="致爱丽丝", o="Für Elise", c="贝多芬", tag="古典", show=True),
+    dict(id="clair-de-lune", t="月光", o="Clair de lune（《贝加莫组曲》）", c="德彪西", tag="古典", show=True),
+    dict(id="nocturne-op9-2", t="夜曲 Op.9 No.2", o="Nocturne in E♭ major", c="肖邦", tag="古典", show=True),
     dict(id="beethoven-virus", t="贝多芬病毒", o="Beethoven Virus（改编自《悲怆》奏鸣曲）", c="BanYa", tag="古典"),
 
     # ==== 游戏 ====

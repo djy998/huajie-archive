@@ -3,6 +3,7 @@
    中文输入法、漏音不出声、补音、预备拍、声像居中）→ 手机点气泡（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
    → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻连击与 FULL COMBO
    → 点击范围（正常 / 宽松 / 放水）→ 双放水自动演奏 → 纪录按判定模式与点击范围分开 → 飞花线
+   → 百万分制（判定分折扣、连击分分档、宽松 / 放水的得分上限、评级、旧纪录换算）→ 隐藏曲目与曲库密码
    用法：cd _src && npm i --no-save jsdom && node tools/stage-build/smoke.mjs   （期望最后一行：全部通过） */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -16,10 +17,24 @@ const { JSDOM } = require("jsdom");
 
 const SRC = readFileSync(path.join(REPO, "_src", "bard-stage.js"), "utf8");
 const STAGE = path.join(REPO, "assets", "bard", "stage");
-const SONGS = JSON.parse(readFileSync(path.join(STAGE, "songs.json"), "utf8"));
+/* 大部分场景用全部曲目（等于输过曲库密码）；songs.json 只有公开曲目，在「隐藏曲目」场景里单独测 */
+const SONGS = JSON.parse(readFileSync(path.join(STAGE, "songs-all.json"), "utf8"));
+const PUBLIC = JSON.parse(readFileSync(path.join(STAGE, "songs.json"), "utf8"));
 const chartOf = (id) => JSON.parse(readFileSync(path.join(STAGE, "charts", `${id}.json`), "utf8"));
 /* 一路弹到底的场景用最短的一首，省时间 */
 const SHORT = SONGS.songs.reduce((a, b) => (b.dur < a.dur ? b : a));
+
+/* 百万分制，按玩法说明另写一遍（不照搬 bard-stage.js），两边对得上才算对 */
+function expectScore({ sumW, n, maxCombo, cap = 1000000 }) {
+  const raw = (500000 * sumW) / n;
+  const j = Math.round(raw <= 350000 ? raw : raw <= 560000 ? 350000 + 0.42 * (raw - 350000) : 438200 + (raw - 560000) * (261800 / 940000));
+  const r = maxCombo / n;
+  const c = maxCombo >= n ? 300000 : r > 0.95 ? 285000 : r > 0.9 ? 270000 : r > 0.85 ? 255000 : r > 0.8 ? 240000 : r > 0.7 ? 230000
+    : r > 0.6 ? 220000 : r > 0.5 ? 210000 : r > 0.4 ? 180000 : r > 0.3 ? 150000 : 0;
+  const t = j + c;
+  const knee = cap * 0.9;
+  return Math.round(cap >= 1000000 || t <= knee ? t : knee + ((t - knee) * (cap - knee)) / (1000000 - knee));
+}
 
 const results = [];
 const check = (name, cond, extra = "") => results.push([name, !!cond, extra]);
@@ -37,7 +52,7 @@ function crowd(st, approach) {
 }
 
 /* 每个场景一个干净的页面 */
-function makePage({ coarse = false, width = 1280, height = 800, chartFails = false, running = true, lat = 0, prefs = {} } = {}) {
+function makePage({ coarse = false, width = 1280, height = 800, chartFails = false, running = true, lat = 0, prefs = {}, publicOnly = false, worker = null } = {}) {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true, runScripts: "dangerously", url: "https://example.test/" });
   const win = dom.window;
   const doc = win.document;
@@ -48,7 +63,9 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
     remove: (k) => mem.delete(k),
     json: (k) => { try { return JSON.parse(mem.get(k) || "null"); } catch (e) { return null; } },
   };
-  const P = { mem, toasts: [], midi: [], unlocks: 0, now: 1000, audioT: 5, running, lat, frames: [], fetched: [] };
+  const P = { mem, toasts: [], midi: [], unlocks: 0, now: 1000, audioT: 5, running, lat, frames: [], fetched: [], calls: [] };
+  /* main.js 的 callWorker：只在「隐藏曲目」场景里接 stage_unlock */
+  win.callWorker = async (payload) => { P.calls.push(payload); return worker ? worker(payload) : null; };
   win.showToast = (m) => P.toasts.push(m);
   win.bgm = { playing: true, pause() { this.playing = false; }, play() { this.playing = true; } };
   win.siteVolume = { level: 0.6, get muted() { return this.level <= 0; }, set(v) { this.level = v; } };
@@ -69,7 +86,8 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
   win.fetch = async (url) => {
     const u = String(url);
     P.fetched.push(u);
-    if (/songs\.json/.test(u)) return { ok: true, json: async () => JSON.parse(JSON.stringify(SONGS)) };
+    if (/songs-all\.json/.test(u)) return { ok: false, status: 404, json: async () => ({}) };   // 网页不该直接读全部曲目
+    if (/songs\.json/.test(u)) return { ok: true, json: async () => JSON.parse(JSON.stringify(publicOnly ? PUBLIC : SONGS)) };
     const m = u.match(/charts\/([^/?]+)\.json/);
     if (m && !chartFails) return { ok: true, json: async () => chartOf(decodeURIComponent(m[1])) };
     return { ok: false, status: 404, json: async () => ({}) };
@@ -217,7 +235,7 @@ async function main() {
     check("设置里有判定模式（正常 / 宽松 / 放水）", P.$$('[aria-label="判定模式"] button').map((b) => b.textContent).join() === "正常,宽松,放水");
     check("设置里有点击范围（正常 / 宽松 / 放水）", P.$$('[aria-label="点击范围"] button').map((b) => b.textContent).join() === "正常,宽松,放水");
     check("设置里没有操作方式、轨道、键位", !/操作方式|轨道|键位/.test(sheet.textContent));
-    check("画面里有飞花线开关，默认关", P.$('[aria-label="飞花线"]') && !P.$('[aria-label="飞花线"]').checked);
+    check("画面里有飞花线开关，默认开", P.$('[aria-label="飞花线"]') && P.$('[aria-label="飞花线"]').checked);
     check("设置窗口单独打开", P.st().sheet === "settings" && !!P.$(".hjs-sheet-card.is-settings"));
     check("设置里不再提伴奏", !/伴奏/.test(sheet.textContent));
     P.click(P.btn("关闭", sheet));
@@ -225,7 +243,7 @@ async function main() {
     await go(P);
     const st = P.st();
     check("开始演奏：点气泡，没有轨道和键帽", st.view === "play" && st.playing && !P.$(".hjs-lane") && !P.$(".hjs-cap"));
-    check("飞花线默认关：不显示", P.$("#hjsFly").hidden && !P.$(".hjs-fly-flower"));
+    check("飞花线默认开：显示", !P.$("#hjsFly").hidden && !!P.$(".hjs-fly-flower"));
     check("仙人刺难度：气泡数等于谱面里级别 3 的音", st.notes.length === SHORT.cnt[0], `${st.notes.length}/${SHORT.cnt[0]}`);
     check("其余的音都是补音", st.bg.length === chartOf(SHORT.id).n.length - SHORT.cnt[0], `${st.bg.length}`);
     check("钟从负数开始（预备拍在第一个音之前）", st.startT < 0 && st.clock.run);
@@ -289,8 +307,15 @@ async function main() {
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
     check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
-    const best = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
-    check("本机纪录按难度、判定模式、点击范围分开写入", best[`${fin.song}:easy:normal:normal`] && best[`${fin.song}:easy:normal:normal`].score === fin.score && Object.keys(best).length === 1, Object.keys(best).join());
+    const want = expectScore({ sumW: 3 * (notes.length - 1), n: notes.length, maxCombo: fin.maxCombo });
+    check("百万分制：一个 MISS，分数 = 判定分折扣 + 连击分分档", fin.score === want, `${fin.score} / ${want}（最大连击 ${fin.maxCombo}/${notes.length}）`);
+    const rankWant = want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : "A+";
+    check("评级按得分", P.$(".hjs-res-rank span").textContent === rankWant, `${P.$(".hjs-res-rank span").textContent}/${rankWant}`);
+    check("结算写明判定分与连击分", /判定分 [\d,]+ \+ 连击分 [\d,]+/.test(P.$("#hjsModal").textContent));
+    const best = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
+    const rec = best[`${fin.song}:easy:normal:normal`];
+    check("本机纪录按难度、判定模式、点击范围分开写入（最高分 + 评级）", rec && rec.score === fin.score && rec.rank === rankWant && Object.keys(best).length === 1, Object.keys(best).join());
+    check("不再写旧纪录 hj_stage_best2", !P.mem.get("hj_stage_best2"));
     check("结算分别显示难度、判定模式、点击范围", ["难度仙人刺", "判定正常", "范围正常"].every((x) => P.$(".hjs-res-tags").textContent.includes(x)), P.$(".hjs-res-tags")?.textContent);
     check("结算里是「结束演奏」，没有「回大厅」", !!P.btn("结束演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
     P.click(P.btn("结束演奏", P.$("#hjsModal")));
@@ -447,9 +472,10 @@ async function main() {
     check("玩法说明讲清 MISS 和点空的区别", /MISS 与「点空」不同/.test(P.$("#hjsSheetCard").textContent));
     {
       const items = P.$$("#hjsSheetCard li").map((li) => li.textContent);
-      const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /扣 20%/.test(t));
-      check("玩法说明：判定模式、点击范围、得分扣减合成一条（共 14 条）", items.length === 14 && merged.length === 1
-        && !items.some((t) => /^点击范围（设置中修改）|^得分：/.test(t)), `${items.length} 条`);
+      const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /得分有上限/.test(t));
+      check("玩法说明：判定模式、点击范围、得分上限合成一条，得分与评级一条（共 15 条）", items.length === 15 && merged.length === 1
+        && items.filter((t) => /^得分与评级：/.test(t) && /完美（100 万）/.test(t) && /全连 30 万/.test(t)).length === 1
+        && !items.some((t) => /^点击范围（设置中修改）|扣 20%/.test(t)), `${items.length} 条`);
     }
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
     check("返回键先关窗口", P.st().sheet === "" && !P.$("#hjStage").hidden);
@@ -502,7 +528,7 @@ async function main() {
     for (let i = 2; i < st.notes.length; i++) { move(st.notes[i].x, st.notes[i].y); P.until(st.notes[i].t + 0.02); }
     P.until(P.st().endT + 2);
     check("放水：弹完出结算、判定写放水", P.st().finished && /判定放水/.test(P.$(".hjs-res-tags").textContent));
-    const rec = JSON.parse(P.mem.get("hj_stage_best2") || "{}");
+    const rec = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
     check("放水判定：纪录单独记在 :normal:hover:normal 下", !!rec[`${SHORT.id}:normal:hover:normal`] && Object.keys(rec).length === 1, Object.keys(rec).join(","));
   }
 
@@ -660,8 +686,8 @@ async function main() {
     check("自动演奏：不计分", st.score === 0 && /0 分|自动演奏/.test(P.$("#hjsModal").textContent));
     const tags = P.$(".hjs-res-tags").textContent;
     check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度泰坦", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
-    check("结算写明不计分、不记纪录，没有评级", /不计分、不记录/.test(P.$("#hjsModal").textContent) && !P.$(".hjs-res-rank"));
-    check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best2"));
+    check("结算写明不计分、不记纪录，评级为「完成」", /不计分、不记录/.test(P.$("#hjsModal").textContent) && P.$(".hjs-res-rank")?.textContent === "完成");
+    check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best3") && !P.mem.get("hj_stage_best2"));
   }
 
   /* 20. 飞花线：萤火虫大小的花沿曲线匀速掠过每个气泡，在气泡该判定的那一刻正好经过它；全部画在一张 canvas 上 */
@@ -711,7 +737,7 @@ async function main() {
     check("花停下后线清空", (Q.$(".hjs-fly-svg path").getAttribute("d") || "") === "");
   }
 
-  /* 21. 得分倍率：判定模式、点击范围各自宽松 −20%、放水 −50%，相加；同样全 PERFECT，分数按倍率缩 */
+  /* 21. 百万分制与得分上限：全 PERFECT 正好 100 万（完美）；宽松 / 放水按组合有上限，打满正好等于上限 */
   {
     const runAll = async (prefs) => {
       const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy", ...prefs } });
@@ -719,16 +745,37 @@ async function main() {
       const tip = P.$(".hjs-tip").textContent;
       await go(P);
       const ns = P.st().notes;
-      for (const n of ns) { P.until(n.t); P.pointer(n.x, n.y); }
+      const live = [];
+      for (const n of ns) { P.until(n.t); P.pointer(n.x, n.y); live.push(P.st().score); }
       P.until(P.st().endT + 2);
-      return { score: P.st().score, mult: P.st().mult, tip, res: P.$("#hjsModal").textContent, perfect: P.st().counts.perfect === ns.length };
+      return { score: P.st().score, cap: P.st().cap, tip, live, rank: P.$(".hjs-res-rank span")?.textContent,
+        res: P.$("#hjsModal").textContent, perfect: P.st().counts.perfect === ns.length };
     };
     const base = await runAll({});
-    const ll = await runAll({ hj_stage_judge: "loose", hj_stage_range: "loose" });
-    const hl = await runAll({ hj_stage_judge: "hover", hj_stage_range: "loose" });
-    check("得分倍率：正常 ×1、宽松+宽松 ×0.6、放水判定+宽松范围 ×0.3", base.mult === 1 && Math.abs(ll.mult - 0.6) < 1e-9 && Math.abs(hl.mult - 0.3) < 1e-9, `${base.mult}/${ll.mult}/${hl.mult}`);
-    check("同样全 PERFECT，分数按倍率缩（逐个四舍五入，误差 < 0.5%）", base.perfect && ll.perfect && Math.abs(ll.score / base.score - 0.6) < 0.005, `${base.score} → ${ll.score}`);
-    check("大厅和结算写明倍率", /得分 ×0\.6（宽松判定 −20%、宽松范围 −20%）/.test(ll.tip) && /得分 ×0\.6/.test(ll.res) && !/得分 ×/.test(base.res), ll.tip);
+    check("全 PERFECT 全连：正好 1,000,000 分、评级「完美」", base.perfect && base.score === 1000000 && base.rank === "完美", `${base.score} ${base.rank}`);
+    check("演奏中分数只涨不跌，最后一个音打完正好满分", base.live.every((v, i) => i === 0 || v >= base.live[i - 1]) && base.live[base.live.length - 1] === 1000000);
+    check("没有上限时不写上限", !/得分上限/.test(base.res) && !/得分上限/.test(base.tip));
+    const cases = [
+      [{ hj_stage_judge: "loose" }, 800000, "宽松判定"],
+      [{ hj_stage_range: "loose" }, 800000, "宽松范围"],
+      [{ hj_stage_judge: "loose", hj_stage_range: "loose" }, 700000, "宽松判定、宽松范围"],
+      [{ hj_stage_judge: "hover" }, 650000, "放水判定"],
+      [{ hj_stage_range: "free" }, 650000, "放水范围"],
+      [{ hj_stage_judge: "hover", hj_stage_range: "loose" }, 600000, "放水判定、宽松范围"],
+      [{ hj_stage_judge: "loose", hj_stage_range: "free" }, 600000, "宽松判定、放水范围"],
+    ];
+    for (const [prefs, cap, why] of cases) {
+      const r = await runAll(prefs);
+      check(`得分上限 ${cap / 10000} 万（${why}）：打满正好等于上限`, r.cap === cap && r.perfect && r.score === cap, `${r.cap} ${r.score}`);
+      check(`大厅与结算写明「得分上限 ${cap / 10000} 万（${why}）」`, r.tip.includes(`得分上限 ${cap / 10000} 万（${why}）`) && r.res.includes(`得分上限 ${cap / 10000} 万`), r.tip);
+    }
+    /* 上限的九成以内照算，往上压进最后一成；每多一分原始分都还有分 */
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
+    await openStage(P);
+    check("软上限：九成以内不变、往上压缩、到 100 万正好是上限", expectScore({ sumW: 3 * 100 * 0.6, n: 100, maxCombo: 0, cap: 800000 }) === expectScore({ sumW: 3 * 100 * 0.6, n: 100, maxCombo: 0 })
+      && expectScore({ sumW: 300, n: 100, maxCombo: 100, cap: 800000 }) === 800000
+      && expectScore({ sumW: 299, n: 100, maxCombo: 100, cap: 800000 }) < 800000
+      && expectScore({ sumW: 299, n: 100, maxCombo: 100, cap: 800000 }) > expectScore({ sumW: 298, n: 100, maxCombo: 100, cap: 800000 }));
   }
 
   /* 22. 简单显示不限帧：120 Hz 下每帧都更新；气泡只改外圈、核心的 transform，音名一次性淡入 */
@@ -822,7 +869,7 @@ async function main() {
       P.until(a.t + 0.34);                              // 晚 0.34 秒：过了 GOOD（0.29），还在 JUST 里（0.29 × 4/3 ≈ 0.39），还没判 MISS
       P.pointer(a.x, a.y);
       check("晚出 GOOD 不到 0.1 秒：JUST", P.st().judged[a.idx] === 4 && /JUST/.test(P.$("#hjsJudge").textContent), `judged=${P.st().judged[a.idx]}`);
-      check("JUST 断连击、给一点分、出声", combo0 > 0 && P.st().combo === 0 && P.st().score - score0 === 50 && P.midi.filter((m) => m.vel === 0.65).length === sounds0 + 1, `combo ${combo0}→${P.st().combo} +${P.st().score - score0}`);
+      check("JUST 断连击、给一点分、出声", combo0 > 0 && P.st().combo === 0 && P.st().score > score0 && P.midi.filter((m) => m.vel === 0.65).length === sounds0 + 1, `combo ${combo0}→${P.st().combo} +${P.st().score - score0}`);
       playTo(ks[1]);
       const b = ns[ks[1]];
       P.until(b.t - 0.35);                              // 早 0.35 秒
@@ -877,22 +924,77 @@ async function main() {
     }
   }
 
-  /* 13. 旧纪录（曲目:难度）算作宽松判定的纪录 */
+  /* 13. 百万分制以前的纪录（hj_stage_best2：曲目:难度[:判定模式[:点击范围]]）按准确率与最大连击换算 */
   {
+    const n = firstSong.cnt[1];
+    const conv = (acc, combo, cap) => expectScore({ sumW: (acc / 100) * 3 * n, n, maxCombo: combo, cap });
+    const fmt = (v) => v.toLocaleString("en-US");
     const old = JSON.stringify({ [`${firstSong.id}:normal`]: { score: 12345, acc: 90, rank: "A", combo: 10 } });
     const A = makePage({ prefs: { hj_stage_best2: old } });
     await openStage(A);
     check("旧纪录不算进正常判定", !/本机纪录/.test(A.$(".hjs-ctrl").textContent));
     const B = makePage({ prefs: { hj_stage_best2: old, hj_stage_judge: "loose", hj_stage_range: "loose" } });
     await openStage(B);
-    check("最早的旧纪录（曲目:难度）算宽松判定 + 宽松范围", /本机纪录（魔界花 · 宽松判定 · 宽松范围）· 12,345 分/.test(B.$(".hjs-ctrl").textContent), B.$(".hjs-best")?.textContent);
-    const mid = JSON.stringify({ [`${firstSong.id}:normal:normal`]: { score: 2222, acc: 90, rank: "A", combo: 10 } });
+    const wb = conv(90, 10, 700000);
+    check("最早的旧纪录（曲目:难度）算宽松判定 + 宽松范围，按准确率换算成百万分制", B.$(".hjs-best")?.textContent.includes(`本机纪录（魔界花 · 宽松判定 · 宽松范围）· ${fmt(wb)} 分 · `), `${B.$(".hjs-best")?.textContent} / ${wb}`);
+    const mid = JSON.stringify({ [`${firstSong.id}:normal:normal`]: { score: 2222, acc: 99.5, rank: "SS", combo: n } });
     const C = makePage({ prefs: { hj_stage_best2: mid } });
     await openStage(C);
-    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围", /本机纪录（魔界花 · 正常判定 · 正常范围）· 2,222 分/.test(C.$(".hjs-ctrl").textContent), C.$(".hjs-best")?.textContent);
+    const wc = conv(99.5, n, 1000000);
+    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围，全连按 30 万连击分", C.$(".hjs-best")?.textContent.includes(`· ${fmt(wc)} 分 · SSS`), `${C.$(".hjs-best")?.textContent} / ${wc}`);
     const D = makePage({ prefs: { hj_stage_best2: mid, hj_stage_range: "loose" } });
     await openStage(D);
     check("换了点击范围就不显示别的范围的纪录", !/本机纪录/.test(D.$(".hjs-ctrl").textContent));
+    const both = { hj_stage_best2: mid, hj_stage_best3: JSON.stringify({ [`${firstSong.id}:normal:normal:normal`]: { score: 500000, rank: "C" } }) };
+    const E = makePage({ prefs: both });
+    await openStage(E);
+    check("新旧纪录都有时显示分高的", E.$(".hjs-best")?.textContent.includes(`${fmt(wc)} 分`), E.$(".hjs-best")?.textContent);
+  }
+
+  /* 25. 隐藏曲目：songs.json 只有公开曲目；搜索框输入曲库密码按回车换成全部曲目，凭证记在本机，下次打开自动换 */
+  {
+    const ALL = JSON.parse(JSON.stringify(SONGS));
+    const worker = (p) => {
+      if (p.action !== "stage_unlock") return { ok: false, error: "unknown_action" };
+      if (p.password === "月见草" || p.token === "tk1") return { ok: true, token: "tk2", ...ALL };
+      return { ok: false, error: "auth" };
+    };
+    const hidden = SONGS.songs.find((s) => !PUBLIC.songs.some((x) => x.id === s.id));
+    check("公开曲库只有 show=True 的曲子，first 也是公开的", PUBLIC.songs.length > 0 && PUBLIC.songs.length < SONGS.songs.length && PUBLIC.songs.some((s) => s.id === PUBLIC.first), `${PUBLIC.songs.length}/${SONGS.songs.length}`);
+    const P = makePage({ publicOnly: true, worker, prefs: { hj_stage_song: hidden.id } });
+    await openStage(P);
+    check("没输密码：存着的隐藏曲目不选，改选公开的", P.st().song === PUBLIC.first, P.st().song);
+    check("网页不直接读 songs-all.json", !P.fetched.some((u) => /songs-all/.test(u)));
+    P.click(P.btn("更换曲目"));
+    check("选曲窗口只有公开曲目", P.$$(".hjs-song").length === PUBLIC.songs.length && /\d+ \/ \d+ 首/.test(P.$("#hjsCount").textContent), P.$("#hjsCount").textContent);
+    check("公开曲目只有一个分类：不显示分类筛选，也不多出 null 字样", !P.$(".hjs-chips.is-cat") && !/null|undefined/.test(P.$("#hjsSheetCard").textContent));
+    const input = P.$(".hjs-search-in");
+    const enter = (text) => {
+      input.value = text;
+      input.dispatchEvent(new P.win.Event("input", { bubbles: true }));
+      input.dispatchEvent(new P.win.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    };
+    enter("不对的密码");
+    await sleep(5);
+    check("密码不对：什么也不说，还是公开曲目", P.$$(".hjs-song").length <= PUBLIC.songs.length && !P.toasts.length && !P.mem.get("hj_stage_unlock"), P.toasts.join());
+    check("回车时把搜索框里的字发给 Worker 核对", P.calls.some((c) => c.action === "stage_unlock" && c.password === "不对的密码"));
+    enter("月见草");
+    await sleep(5);
+    check("密码对了：显示全部曲目、清空搜索、提示一下", P.$$(".hjs-song").length === SONGS.songs.length && P.$(".hjs-search-in").value === "" && /已显示全部曲目/.test(P.toasts.join()), `${P.$$(".hjs-song").length} ${P.toasts.join()}`);
+    check("凭证记在本机", P.mem.get("hj_stage_unlock") === "tk2");
+    const n0 = P.calls.length;
+    enter("别的字");
+    await sleep(5);
+    check("已经显示全部曲目后，回车不再发给 Worker", P.calls.length === n0);
+    const Q = makePage({ publicOnly: true, worker, prefs: { hj_stage_song: hidden.id, hj_stage_unlock: "tk1" } });
+    await openStage(Q);
+    await sleep(5);
+    Q.advance(0.02);
+    check("有凭证：打开舞台就是全部曲目，选回存着的隐藏曲目", Q.st().song === hidden.id && Q.calls.some((c) => c.token === "tk1") && Q.mem.get("hj_stage_unlock") === "tk2", Q.st().song);
+    const R = makePage({ publicOnly: true, worker, prefs: { hj_stage_unlock: "old" } });
+    await openStage(R);
+    await sleep(5);
+    check("凭证失效（换了密码、过期）：删掉凭证，用公开曲目", !R.mem.get("hj_stage_unlock") && R.st().song === PUBLIC.first);
   }
 
   const failed = results.filter((r) => !r[1]);

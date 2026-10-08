@@ -1,4 +1,4 @@
-"""曲库体检：曲目表、MIDI 文件、生成好的 songs.json 与 charts/ 是否对得上，谱面是否合理
+"""曲库体检：曲目表、MIDI 文件、生成好的 songs.json / songs-all.json 与 charts/ 是否对得上，谱面是否合理
 
 用法：python check.py   （先跑过 build.py；最后一行「问题 0」即可上传）
 """
@@ -44,15 +44,27 @@ extra = sorted(f for f in os.listdir(MIDI_DIR) if f.endswith(".mid") and f[:-4] 
 for f in extra:
     caution(f"midi/{f} 不在曲目表里（不会进曲库）")
 
-try:
-    with open(os.path.join(ASSET_DIR, "songs.json"), encoding="utf-8") as f:
-        index = json.load(f)
-except Exception as e:
-    problem(f"songs.json 读不了：{e!r}（先跑 build.py）")
-    index = {"songs": []}
+def read_index(name):
+    try:
+        with open(os.path.join(ASSET_DIR, name), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        problem(f"{name} 读不了：{e!r}（先跑 build.py）")
+        return {"songs": []}
+
+
+index = read_index("songs-all.json")
 built = {s["id"]: s for s in index.get("songs", [])}
 if [s["id"] for s in index.get("songs", [])] != ids:
-    problem("songs.json 和曲目表不一致：改过 songs.py 之后要重新跑 build.py")
+    problem("songs-all.json 和曲目表不一致：改过 songs.py 之后要重新跑 build.py")
+public = read_index("songs.json")
+pub_ids = [s["id"] for s in SONGS if s.get("show")]
+if not pub_ids:
+    problem("没有公开（show=True）的曲子")
+if [s["id"] for s in public.get("songs", [])] != pub_ids:
+    problem("songs.json 和曲目表里公开的曲子不一致：改过 songs.py 之后要重新跑 build.py")
+elif public.get("first") not in pub_ids:
+    problem(f"songs.json 的 first {public.get('first')!r} 不是公开的曲子")
 
 for sid, entry in built.items():
     path = os.path.join(CHART_DIR, sid + ".json")
@@ -85,5 +97,5 @@ stale = sorted(f for f in os.listdir(CHART_DIR) if f.endswith(".json") and f[:-5
 for f in stale:
     caution(f"charts/{f} 是多余的（build.py 会自动删）")
 
-print(f"\n曲目数 {len(SONGS)}，问题 {bad}，提醒 {warn}")
+print(f"\n曲目数 {len(SONGS)}（公开 {len(pub_ids)}、隐藏 {len(SONGS) - len(pub_ids)}），问题 {bad}，提醒 {warn}")
 sys.exit(1 if bad else 0)
