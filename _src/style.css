@@ -1170,10 +1170,7 @@ body.day-mode .tile-hint { color: var(--day-title); }
   z-index: 0;
   border-radius: inherit;
   background: center / cover no-repeat;
-  /* 卡片的内描边画在底图层，会被这层盖住；这里带一份，渐变过程中立体边框不消失 */
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.08),
-    inset 0 1px 0 rgba(255,255,255,.16);
+  /* 边框与透光画在 .tile::before（在这层之上），这层不再带描边，免得渐变时边框叠成两层 */
   opacity: 0;
   transition: opacity .6s ease;
   pointer-events: none;
@@ -2992,6 +2989,10 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) {
     inset 0 1px 0 rgba(255,255,255,.16),
     var(--lg-edge);
 }
+/* 昼夜切换（body.fx-crossfading，与 main.js 的 DAYNIGHT_FADE_MS 一致为 0.9 秒）：
+   磁贴的投影和透光跟着底图一起渐变到新模式，不在切换瞬间跳色 */
+body.fx-crossfading .tile { transition: transform .25s ease, box-shadow .9s ease; }
+body.fx-crossfading .tile::before { transition: box-shadow .9s ease; }
 .admin-modal .info-close { position: absolute; top: 14px; right: 14px; z-index: 2; }
 
 .ticket-card select optgroup { font-style: normal; font-weight: 600; color: var(--text-mute); background: var(--ink-2); }
