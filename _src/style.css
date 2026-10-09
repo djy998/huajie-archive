@@ -6269,6 +6269,8 @@ body.fx-off .bard-widget.is-nudge { animation: none; }
 .gm-spy-p-out { font-size: .74rem; color: var(--text-mute); }
 .gm-spy-players.is-hidden :is(.gm-spy-p-role, .gm-spy-p-word) { filter: blur(7px); opacity: .55; user-select: none; -webkit-user-select: none; }
 .gm-spy-players.is-hidden .gm-spy-p.is-spy:not(.is-out) { border-color: var(--line); background: rgba(255,255,255,.045); }
+.games-card select.gm-spy-vote.is-unset { border-color: rgba(232,164,155,.6); color: var(--text-mute); }
+.games-card select.gm-spy-vote:disabled { opacity: .6; cursor: not-allowed; }
 .games-card select.gm-spy-vote { width: 100%; min-width: 0; padding: 5px 26px 5px 10px; font-size: .8rem; background-position: right 9px center, 0 0; }
 
 /* 白天 */

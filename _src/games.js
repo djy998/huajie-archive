@@ -1361,8 +1361,17 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   const aliveList = () => S.roles.map((_, i) => i).filter((i) => S.alive[i]);
   /* 这一轮能投给谁：活着的、不是自己；平票重投时只在平票的几人里 */
   const voteTargets = (voter) => (S.cands || aliveList()).filter((i) => i !== voter && S.alive[i]);
-  /* 平票重投只剩两人时，这两人自己不投（只能投对方，等于各投一票，没有意义） */
+  /* 平票重投只剩两人时，这两人自己不投（只能投对方，等于各投一票，没有意义），固定为弃票 */
   const canVote = (i) => S.alive[i] && !(S.cands && S.cands.length === 2 && S.cands.includes(i));
+  const ABSTAIN = "x";                          // votes[i]：""＝还没选，ABSTAIN＝弃票，数字＝投给几号（下标）
+  const voteOf = (i) => (canVote(i) ? S.votes[i] : ABSTAIN);
+  const votesReady = () => aliveList().every((i) => voteOf(i) !== "");
+  function syncVoteGo() {
+    const go = el(G.root, "#gmSpyVoteGo");
+    const missing = aliveList().filter((i) => voteOf(i) === "").map((i) => `${i + 1}号`);
+    go.disabled = S.phase === "vote" && missing.length > 0;
+    go.title = go.disabled ? `还没选：${missing.join("、")}（不投可选「弃票」）` : "";
+  }
 
   function spyDeal() {
     const r = G.root;
@@ -1397,10 +1406,11 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (S.phase !== "vote") return;
     const msg = el(G.root, "#gmSpyMsg");
     const tally = Array(S.players).fill(0);
-    aliveList().filter(canVote).forEach((v) => { const t = S.votes[v]; if (t !== "" && S.alive[t] && voteTargets(v).includes(t)) tally[t] += 1; });
+    if (!votesReady()) return syncVoteGo();
+    aliveList().forEach((v) => { const t = voteOf(v); if (typeof t === "number" && S.alive[t] && voteTargets(v).includes(t)) tally[t] += 1; });
     const max = Math.max(...tally);
     msg.classList.remove("is-ok");
-    if (!max) return setMsg(msg, "还没有人投票：在每位玩家下面选好投给谁，再点「确认投票」");
+    if (!max) return setMsg(msg, "大家都弃票了，没人出局：请重新选择后再确认投票");
     setMsg(msg, "");
     S.tally = tally;
     const top = tally.map((c, i) => (c === max ? i : -1)).filter((i) => i >= 0);
@@ -1463,10 +1473,12 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       const out = !S.alive[i];
       const word = isSpy ? S.spy : S.civ;
       const votes = S.tally && S.tally[i] ? `<span class="gm-spy-p-votes">${S.tally[i]} 票</span>` : "";
-      const pick = voting && !out && !canVote(i) ? `<span class="gm-spy-p-out">平票待定，本轮不投票</span>`
-        : voting && !out
-        ? `<select class="gm-spy-vote" data-vote="${i}" aria-label="${i + 1}号投给谁"><option value="">投给…</option>${voteTargets(i).map((t) =>
-          `<option value="${t}"${S.votes[i] === t ? " selected" : ""}>${t + 1}号</option>`).join("")}</select>` : "";
+      const fixed = voting && !out && !canVote(i);   // 两人平票：这两人固定弃票
+      const pick = voting && !out
+        ? `<select class="gm-spy-vote${voteOf(i) === "" ? " is-unset" : ""}" data-vote="${i}" aria-label="${i + 1}号投给谁"${fixed ? ` disabled title="两人平票，平票的两人本轮弃票"` : ""}>`
+          + `<option value=""${voteOf(i) === "" ? " selected" : ""} disabled>投给…</option>`
+          + voteTargets(i).map((t) => `<option value="${t}"${voteOf(i) === t ? " selected" : ""}>${t + 1}号</option>`).join("")
+          + `<option value="${ABSTAIN}"${voteOf(i) === ABSTAIN ? " selected" : ""}>弃票</option></select>` : "";
       const cand = voting && S.cands && S.cands.includes(i) ? " is-cand" : "";
       return `<div class="gm-spy-p${isSpy ? " is-spy" : ""}${out ? " is-out" : ""}${cand}">`
         + `<div class="gm-spy-p-head"><b>${i + 1}号</b><span class="gm-spy-p-role">${roleName(i)}</span>${votes}</div>`
@@ -1478,6 +1490,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     el(r, "#gmSpyVoteStart").hidden = S.phase !== "describe";
     el(r, "#gmSpyVoteGo").hidden = S.phase !== "vote";
     el(r, "#gmSpyDeal").textContent = playing ? "重新分配身份" : "分配身份";
+    syncVoteGo();
   }
 
   function initSpy(panel) {
@@ -1521,15 +1534,20 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       spies.value = spyDefault(n);
     });
     spies.addEventListener("input", () => { S.spiesSet = spies.value.trim() !== ""; });
-    [players, spies].forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") spyDeal(); }));
-    el(panel, "#gmSpyDeal").addEventListener("click", spyDeal);
+    [players, spies].forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") el(panel, "#gmSpyDeal").click(); }));
+    el(panel, "#gmSpyDeal").addEventListener("click", () => {
+      if ((S.phase === "describe" || S.phase === "vote") && !confirm("确认重新开始游戏吗？")) return;
+      spyDeal();
+    });
     el(panel, "#gmSpyVoteStart").addEventListener("click", spyVoteStart);
     el(panel, "#gmSpyVoteGo").addEventListener("click", spyVoteGo);
     const list = el(panel, "#gmSpyList");
     list.addEventListener("change", (e) => {
       const sel = e.target.closest("[data-vote]");
       if (!sel) return;
-      S.votes[Number(sel.dataset.vote)] = sel.value === "" ? "" : Number(sel.value);
+      S.votes[Number(sel.dataset.vote)] = sel.value === "" || sel.value === ABSTAIN ? sel.value : Number(sel.value);
+      sel.classList.toggle("is-unset", sel.value === "");
+      syncVoteGo();
     });
     list.addEventListener("click", (e) => {
       const b = e.target.closest("[data-copy-p]");
@@ -1537,7 +1555,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       if (S.hidden) return showToast("先点「显示」再复制");
       const i = Number(b.dataset.copyP);
       const word = S.roles[i] ? S.spy : S.civ;
-      copyText(word, `已复制${i + 1}号的词「${word}」`, "复制失败");
+      copyText(`/tell <t> 本局游戏你的身份词是${word}，不要暴露哦~`, `已复制给${i + 1}号的私聊（词「${word}」），选中 ta 后粘贴发送`, "复制失败");
     });
     spyNext();
   }
