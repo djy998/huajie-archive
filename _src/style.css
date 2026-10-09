@@ -142,6 +142,16 @@
   --glass-on-edge: rgba(255,255,255,.42);
   --glass-on-shadow: 0 3px 8px rgba(10,7,22,.3), inset 0 1px 0 rgba(255,255,255,.45), inset 0 -3px 6px rgba(40,20,60,.18);
   --glass-well: inset 0 2px 5px rgba(9,6,20,.32), inset 0 -1px 0 rgba(255,255,255,.08);
+
+  /* 行动按钮（猜、核对、开始拼图、上舞台之类「按下就去做」的按钮）：横向渐变 + 外圈光晕，和切换类的 --glass-on 区分开；白天用标题的靛蓝 */
+  --act-bg:
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,0) 60%, rgba(0,0,0,.08) 100%),
+    linear-gradient(100deg, #a68bd8 0%, #c8b0ef 52%, #ecc58a 100%);
+  --act-ink: #241d3c;
+  --act-edge: rgba(255,255,255,.55);
+  --act-glow: rgba(201,182,244,.2);
+  --act-shadow: 0 4px 12px rgba(10,7,22,.34), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 4px rgba(60,30,90,.16);
+  --act-down: 0 1px 3px rgba(10,7,22,.3), inset 0 2px 5px rgba(40,20,70,.3);
 }
 body.day-mode {
   --pill-ink: var(--day-brown);
@@ -162,6 +172,15 @@ body.day-mode {
   --glass-on-edge: rgba(255,240,210,.7);
   --glass-on-shadow: 0 3px 9px rgba(96,64,16,.22), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -3px 6px rgba(90,50,10,.16);
   --glass-well: inset 0 2px 5px rgba(120,80,20,.2), inset 0 -1px 0 rgba(255,255,255,.5);
+
+  --act-bg:
+    linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,0) 60%, rgba(0,0,0,.07) 100%),
+    linear-gradient(100deg, #3f5b96 0%, #5f7cb6 55%, #8da3cf 100%);
+  --act-ink: #fffaf0;
+  --act-edge: rgba(240,236,255,.7);
+  --act-glow: rgba(60,87,142,.18);
+  --act-shadow: 0 4px 10px rgba(60,70,110,.24), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 4px rgba(20,30,70,.2);
+  --act-down: 0 1px 3px rgba(60,70,110,.22), inset 0 2px 5px rgba(20,30,70,.34);
 }
 
 /* ==== 2. 基础与背景 ==== */
@@ -1629,6 +1648,32 @@ body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearB
 body.day-mode .gate-card button:not(#cancelEditAnnouncementBtn, #starlightClearBtn, .tab-btn.is-active):active {
   box-shadow: 0 2px 6px rgba(96,60,10,.16), inset 0 2px 7px rgba(140,95,20,.22);
 }
+
+/* 行动按钮：上舞台演奏、小游戏的主按钮、拼图的开始 / 参赛 / 继续 */
+:is(body, body.day-mode) :is(.bard-stage-btn, .games-card .gm-btn-main, .gate-card button.pz-primary):not(#_) {
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--act-ink);
+  text-shadow: 0 1px 0 rgba(255,255,255,.25);
+  background: var(--act-bg);
+  border: 1px solid var(--act-edge);
+  box-shadow: 0 0 0 3px var(--act-glow), var(--act-shadow);
+  transition: transform .18s, box-shadow .25s, filter .2s;
+}
+body.day-mode :is(.bard-stage-btn, .games-card .gm-btn-main, .gate-card button.pz-primary):not(#_) { text-shadow: 0 1px 1px rgba(20,30,70,.35); }
+:is(body, body.day-mode) :is(.bard-stage-btn, .games-card .gm-btn-main, .gate-card button.pz-primary):not(#_):hover {
+  color: var(--act-ink);
+  border-color: var(--act-edge);
+  filter: brightness(1.05) saturate(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 5px var(--act-glow), var(--act-shadow);
+}
+:is(body, body.day-mode) :is(.bard-stage-btn, .games-card .gm-btn-main, .gate-card button.pz-primary):not(#_):active {
+  filter: brightness(.97);
+  transform: translateY(1px) scale(.99);
+  box-shadow: 0 0 0 2px var(--act-glow), var(--act-down);
+}
+:is(body, body.day-mode) :is(.games-card .gm-btn-main, .gate-card button.pz-primary):not(#_):disabled { transform: none; filter: none; box-shadow: var(--act-shadow); }
 
 #cancelEditAnnouncementBtn {
   margin-left: 12px;
@@ -4059,8 +4104,8 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 
 .survey-sec { margin-top: 30px; }
 .survey-sec:first-child { margin-top: 0; }
-/* 卡片里的小标题：问卷分节、购票须知、网站说明、闹铃列表共用一套，标题后接一条细线 */
-.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head {
+/* 卡片里的小标题：问卷分节、购票须知、网站说明（含反馈表单）、闹铃列表共用一套，标题后接一条细线 */
+.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head, .about-form .about-label {
   display: flex; align-items: center; gap: 10px;
   margin: 0 0 18px;
   font-size: 1.06rem;
@@ -4069,11 +4114,16 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
   line-height: 1.5;
   color: var(--lantern-soft);
 }
-:is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head)::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head) { color: var(--day-gold); }
-body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head)::after { background: rgba(138,90,28,.35); }
+:is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head, .about-form .about-label)::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head, .about-form .about-label) { color: var(--day-gold); }
+body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head, .about-form .about-label)::after { background: rgba(138,90,28,.35); }
 .guide-h, .about-text .about-sub { margin: 26px 0 14px; }
+.about-text .about-sub { color: var(--cream); }
+body.day-mode .about-text .about-sub { color: var(--day-cream); }
 .alarm-list-head { margin: 26px 0 0; }
+.about-form .about-label { margin: 0 0 10px; }
+.about-form .about-label:has(+ .about-hint) { margin-bottom: 4px; }
+.about-form .about-label.is-required::before { margin-right: -7px; }
 .survey-sec-no {
   display: inline-grid; place-items: center;
   width: 28px; height: 28px;
@@ -5274,8 +5324,6 @@ html.pz-open .toast { z-index: 460; }
 .pz-btn-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .pz-btn-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .pz-btn-col button { min-width: 220px; }
-.gate-card button.pz-primary { color: var(--accent-ink); background: var(--accent); border-color: rgba(255,255,255,.4); }
-.gate-card button.pz-primary:hover { color: var(--accent-ink); filter: brightness(1.06); }
 .gate-card button:disabled { opacity: .5; cursor: default; }
 .pz-resume {
   margin-bottom: 6px;
@@ -5868,14 +5916,6 @@ body.fx-off .bard-widget.is-nudge { animation: none; }
 /* 通用小按钮 / 主按钮 */
 .games-card .gm-mini { padding: 6px 14px; font-size: .8rem; font-weight: 500; }
 .games-card .gm-btn { padding: 9px 22px; font-size: .9rem; white-space: nowrap; }
-.games-card .gm-btn-main:not(#_) {
-  color: var(--accent-ink);
-  background:
-    linear-gradient(168deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.09) 100%),
-    var(--accent);
-  border-color: rgba(255,255,255,.36);
-}
-.games-card .gm-btn-main:not(#_):hover { color: var(--accent-ink); border-color: rgba(255,255,255,.55); }
 .games-card button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 .gm-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .gm-label { flex: none; font-size: .82rem; color: var(--text-mute); letter-spacing: .06em; }
@@ -6297,8 +6337,6 @@ body.day-mode .games-card .gm-kw-btn:not(#_) { color: var(--day-cream); }
 body.day-mode .games-card .gm-kw-btn:not(#_):hover { border-color: #8a5a1c; }
 body.day-mode .games-card .gm-kw-btn.is-partial:not(#_) { color: var(--day-lilac); border-style: dashed; }
 body.day-mode .games-card .gm-kw-btn.is-on:not(#_) { color: #fff6e0; }
-body.day-mode .games-card .gm-btn-main:not(#_) { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
-body.day-mode .games-card .gm-btn-main:not(#_):hover { color: #fff6e0; border-color: #6b4410; }
 body.day-mode .gm-kw-big {
   color: var(--day-gold);
   border-color: rgba(138,90,28,.45);
@@ -7186,13 +7224,5 @@ body.hjs-open .toast { z-index: 540; }
   padding: 8px 10px;
   border-radius: 999px;
   font-size: .78rem; font-weight: 700; letter-spacing: .06em;
-  color: var(--accent-ink);
-  background: var(--glass-on);
-  border: 1px solid var(--glass-on-edge);
-  box-shadow: var(--glass-on-shadow);
-  transition: filter .2s, transform .15s, box-shadow .15s;
 }
-.bard-stage-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
-.bard-stage-btn:active { transform: translateY(1px); box-shadow: var(--glass-down-shadow); }
 .bard-stage-btn .bss-ico { font-size: .9rem; }
-body.day-mode .bard-stage-btn { color: #fffaf0; text-shadow: 0 1px 1px rgba(90,50,10,.35); }
