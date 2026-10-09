@@ -200,10 +200,16 @@ async function main() {
     P.click(P.$$(".hjs-chips.is-cat .hjs-chip")[0]);
     check("分类回到全部", P.$$(".hjs-song").length === SONGS.songs.length);
 
-    check("曲库每首都有三档星级（仙人刺 1~3、魔界花 2~4、泰坦 3~5，越难不越低）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.every((d, k) => d >= k + 1 && d <= k + 3) && s.diffs[0] <= s.diffs[1] && s.diffs[1] <= s.diffs[2]));
-    P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[4]);
-    const four = SONGS.songs.filter((s) => s.diffs[1] === 4).length;
-    check("四星筛选（按当前难度「魔界花」）", four > 0 && P.$$(".hjs-song").length === four && !/星级按/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
+    check("曲库每首都有三档星级（0.5~5 星、半星一档，一档比一档高）", SONGS.songs.every((s) => Array.isArray(s.diffs) && s.diffs.length === 3 && s.diffs.every((d) => d >= 0.5 && d <= 5 && Number.isInteger(d * 2)) && s.diffs[0] < s.diffs[1] && s.diffs[1] < s.diffs[2]));
+    {
+      const all = SONGS.songs.flatMap((s) => s.diffs);
+      check("星级用满 0.5~5 星的 10 档", new Set(all).size === 10, [...new Set(all)].sort((a, b) => a - b).join(","));
+      check("星数只看谱面：有曲子的魔界花比别的曲子的泰坦星多", SONGS.songs.some((a) => SONGS.songs.some((b) => a.diffs[1] > b.diffs[2])));
+    }
+    check("星级筛选按半星：全部 + 0.5~5 星 10 个", P.$$(".hjs-chips:not(.is-cat) .hjs-chip").map((b) => b.textContent).join() === "全部,0.5★,1★,1.5★,2★,2.5★,3★,3.5★,4★,4.5★,5★");
+    P.click(P.$$(".hjs-chips:not(.is-cat) .hjs-chip")[7]);
+    const four = SONGS.songs.filter((s) => s.diffs[1] === 3.5).length;
+    check("3.5 星筛选（按当前难度「魔界花」），记在本机", P.mem.get("hj_stage_stars") === "3.5" && four > 0 && P.$$(".hjs-song").length === four && !/星级按/.test(P.$("#hjsCount").textContent), `${P.$$(".hjs-song").length}/${four}`);
     const row = P.$$(".hjs-song")[0];
     P.click(row);
     await sleep(5);
@@ -219,7 +225,7 @@ async function main() {
     P.key("Escape", "Escape");
     {
       const cur = SONGS.songs.find((x) => x.t === P.$(".hjs-hero-t").textContent);
-      const heroStars = () => (P.$(".hjs-hero .hjs-stars").textContent.match(/★/g) || []).length;
+      const heroStars = () => P.$$(".hjs-hero .hjs-star").reduce((a, e) => a + (e.classList.contains("is-half") ? 0.5 : e.textContent === "★" ? 1 : 0), 0);
       const before = heroStars();
       P.click(P.btn("泰坦"));
       check("大厅星级跟着难度变（魔界花 → 泰坦）", before === cur.diffs[1] && heroStars() === cur.diffs[2], `${before}→${heroStars()} ${cur.diffs}`);

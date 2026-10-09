@@ -235,11 +235,16 @@
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
-  const starText = (n) => "★".repeat(clamp(n, 1, 5)) + "☆".repeat(5 - clamp(n, 1, 5));
-  /* 星级按档：songs.json 的 diffs = [仙人刺, 魔界花, 泰坦]（仙人刺 1~3、魔界花 2~4、泰坦 3~5 星）；旧曲库只有 diff（魔界花档） */
+  /* 星级按档：songs.json 的 diffs = [仙人刺, 魔界花, 泰坦]，0.5 ~ 5 星、半星一档（build.py 的 rate_stars）；旧曲库只有 diff（魔界花档） */
   function starsOf(s, diffId = S.diff) {
     const k = Math.max(0, DIFFS.findIndex((d) => d.id === diffId));
-    return clamp(num(Array.isArray(s.diffs) ? s.diffs[k] : s.diff, 3), 1, 5);
+    return clamp(Math.round(num(Array.isArray(s.diffs) ? s.diffs[k] : s.diff, 3) * 2) / 2, 0.5, 5);
+  }
+  /* 五颗星：整星实心、半星左半边实心、其余空心（半星的实心半边由 CSS 盖在空心星上） */
+  function starsEl(n, title) {
+    return h("span", { class: "hjs-stars", role: "img", title, "aria-label": `${n} 星` },
+      [1, 2, 3, 4, 5].map((i) => (n >= i ? h("i", { class: "hjs-star", text: "★" })
+        : n >= i - 0.5 ? h("i", { class: "hjs-star is-half", text: "☆" }) : h("i", { class: "hjs-star", text: "☆" }))));
   }
   /* est：MIDI 没对齐节拍网格，速度是估出来的 */
   const tempoOf = (s) => (num(s.bpm, 0) > 0 ? `${s.est ? "约 " : ""}${Math.round(s.bpm)} 拍/分` : "");
@@ -336,7 +341,7 @@
     S.fly = getRaw(K.fly, "1") === "1";                // 飞花线默认开
     applyRender();
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
-    S.stars = clamp(num(getRaw(K.stars, 0), 0), 0, 5);
+    S.stars = clamp(Math.round(num(getRaw(K.stars, 0), 0) * 2) / 2, 0, 5);   // 0 = 全部，其余按半星筛
     S.cat = String(getRaw(K.cat, "") || "");
     K.old.forEach((k) => storage.remove(k));
   }
@@ -631,7 +636,7 @@
       h("h2", { class: "hjs-hero-t", text: s.t }),
       s.o ? h("p", { class: "hjs-hero-o", text: s.o }) : null,
       h("p", { class: "hjs-hero-meta" },
-        h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} / 5 星`, text: starText(starsOf(s)) }),
+        starsEl(starsOf(s), `${diffMeta().label}难度 ${starsOf(s)} / 5 星`),
         h("span", { text: metaOf(s) }),
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null),
       s.note ? h("p", { class: "hjs-hero-note", text: s.note }) : null,
@@ -806,9 +811,9 @@
           onclick: () => { S.cat = t; setRaw(K.cat, t); renderSheet(); },
         })))] : []),
       h("div", { class: "hjs-chips", role: "radiogroup", "aria-label": "按难度筛选" },
-        [0, 1, 2, 3, 4, 5].map((n) => h("button", {
+        [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((n) => h("button", {
           type: "button", class: `hjs-chip${S.stars === n ? " is-on" : ""}`, role: "radio", "aria-checked": String(S.stars === n),
-          text: n ? `${"★".repeat(n)}` : "全部", title: n ? `${diffMeta().label}难度 ${n} 星` : "全部难度",
+          text: n ? `${n}★` : "全部", title: n ? `${diffMeta().label}难度 ${n} 星` : "全部难度",
           onclick: () => { S.stars = n; setRaw(K.stars, n); renderSheet(); },
         }))),
       h("div", { class: "hjs-sheet-body hjs-songs", id: "hjsSongs", role: "listbox", "aria-label": "曲目" }),
@@ -848,7 +853,7 @@
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null,
         h("span", { class: "hjs-song-side" },
           h("span", { class: "hjs-eq", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
-          h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} 星`, text: starText(starsOf(s)) }),
+          starsEl(starsOf(s), `${diffMeta().label}难度 ${starsOf(s)} 星`),
           top ? h("span", { class: `hjs-song-rank${top === "Impeccable" ? " is-max" : ""}`, title: `${diffMeta().label}难度最高评级`, text: top }) : null)));
     });
   }

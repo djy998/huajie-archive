@@ -395,4 +395,5 @@ const HJ_CAL_ITEMS = [
   { start: "2026-08-04", end: "2026-10-05", label: "妖怪手表联动", tone: "teal" },
   { date: "2026-10-13", label: "国服 7.57 版本更新", tone: "wisteria" },
   { start: "2026-10-15", end: "2026-11-02", label: "守护天节", tone: "orange" },
+  { start: "2026-10-31", end: "2026-11-01", label: "「Fan Festival 2026」第三站", tone: "blue" },
 ];

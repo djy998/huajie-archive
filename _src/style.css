@@ -6572,7 +6572,9 @@ body.hjs-open .toast { z-index: 540; }
   box-shadow: 0 18px 50px rgba(6, 4, 16, .5), inset 0 1px 0 rgba(255, 255, 255, .1), inset 0 -6px 14px rgba(8, 6, 18, .22);
   -webkit-backdrop-filter: blur(14px) saturate(1.1); backdrop-filter: blur(14px) saturate(1.1);
 }
-.hjs-stars { color: var(--s-gold); letter-spacing: .04em; font-size: .78rem; white-space: nowrap; }
+.hjs-stars { display: inline-flex; gap: .04em; color: var(--s-gold); font-size: .78rem; line-height: 1; white-space: nowrap; }
+.hjs-star { position: relative; font-style: normal; }
+.hjs-star.is-half::before { content: "★"; position: absolute; left: 0; top: 0; width: 50%; overflow: hidden; }
 .hjs-tag {
   padding: 1px 9px;
   border-radius: 999px;

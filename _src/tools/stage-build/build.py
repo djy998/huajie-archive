@@ -2,6 +2,7 @@
 
 读取 songs.py 的曲目表和 midi/<id>.mid，产出：
   · assets/bard/stage/songs.json        公开曲目（songs.py 里 show=True 的）的索引（选曲窗口用：曲名、星级、时长、速度、音域…，不含谱面）
+    星级 diffs = [仙人刺, 魔界花, 泰坦]，半星为一档，0.5 ~ 5 星共 10 档（见 rate_stars）
   · assets/bard/stage/songs-all.json    全部曲目的索引：网页不直接读它，访客在选曲搜索框输对曲库密码后由 Worker 转发
   · assets/bard/stage/charts/<id>.json  每首的音符与分级（点开这首时才下载）
 
@@ -34,8 +35,12 @@ TRACK_INST = {
     "trumpet": "trumpet", "trombone": "trombone", "tuba": "tuba", "horn": "horn", "sax": "sax", "saxophone": "sax",
     "churchorgan": "clarinet", "organ": "clarinet", "fiddle": "fiddle",
 }
-STAR_CUTS = [0.3, 0.75]                # 每档里按难度分排名切成三段：仙人刺 1~3 星、魔界花 2~4 星、泰坦 3~5 星
+STAR_STEPS = 10                        # 星级 0.5 ~ 5 星，每半星一档
 LEVELS = (3, 2, 1)                     # 仙人刺 / 魔界花 / 泰坦 在谱面里的级别（lvl ≥ 这个数的音要弹）
+# 三档的判定窗不同（GOOD 半窗 0.45 / 0.36 / 0.29 秒，和 bard-stage.js 的 DIFFS 一致）：同样疏密，窗越窄越难。
+# 难度分乘上 √(仙人刺 GOOD 半窗 / 这一档 GOOD 半窗)
+GOOD_WIN = (0.45, 0.36, 0.29)
+WIN_FACTOR = tuple((GOOD_WIN[0] / w) ** 0.5 for w in GOOD_WIN)
 
 
 def guess_inst(info):
@@ -86,11 +91,11 @@ def build_song(song):
         "beat": round(extra["beat"], 3), "inst": song.get("inst") or guess_inst(info), "range": [lo, hi],
         "cnt": [len(times[3]), len(times[2]), len(times[1])],
     }
-    # 每档各算一个难度分：平均每秒音数和最密 5 秒的每秒音数
+    # 每档各算一个难度分：平均每秒音数和最密 5 秒的每秒音数，再按这一档的判定窗加权
     scores = []
-    for L in LEVELS:
+    for k, L in enumerate(LEVELS):
         avg, peak = chart.density(times[L])
-        scores.append(0.6 * avg + 0.4 * peak)
+        scores.append((0.6 * avg + 0.4 * peak) * WIN_FACTOR[k])
     stats = {"scores": scores, "all": len(notes), "covered": extra["covered"]}
     return entry, {"v": 2, "n": rows}, stats
 
@@ -118,24 +123,11 @@ def main():
         except Exception as e:
             raise SystemExit(f"!! {s['id']} 失败：{e!r}")
 
-    # 星级：仙人刺 / 魔界花 / 泰坦每档各一个。每档在整个曲库里按这一档的难度分排名，切成三段，
-    # 仙人刺占 1~3 星、魔界花 2~4 星、泰坦 3~5 星（谱面按最小间隔挑音，同一档的疏密本来就接近，
-    # 所有档混在一起排的话，魔界花档几乎全是 3 星）。仙人刺简单而泰坦很难的曲子，两档会差到 3 星。
-    # 同一首越难的档星级不低于前一档；diff 仍写魔界花档的星级，给旧版网页用
-    for k in range(len(LEVELS)):
-        order = sorted(range(len(built)), key=lambda i: built[i][2]["scores"][k])
-        for rank, i in enumerate(order):
-            q = rank / max(1, len(order) - 1)
-            built[i][0]["diffs"][k] = 1 + k + sum(1 for c in STAR_CUTS if q >= c)
-    for entry, _, _ in built:
-        d = entry["diffs"]
-        for k in range(1, len(d)):
-            d[k] = max(d[k], d[k - 1])
-        entry["diff"] = d[1]
+    rate_stars(built)
 
     for entry, _, st in built:
         print("  %-24s %s %5.0fs %3d拍/分%s 仙人刺/魔界花/泰坦 %4d/%4d/%4d（共 %4d）音域 %d-%d %s" % (
-            entry["id"], "/".join(str(d) for d in entry["diffs"]) + "星", entry["dur"], entry["bpm"],
+            entry["id"], star_text(entry["diffs"]), entry["dur"], entry["bpm"],
             "≈" if entry["est"] else " ", *entry["cnt"], st["all"], *entry["range"], entry["inst"]))
     if args.dry_run:
         return
@@ -156,6 +148,33 @@ def main():
     write_index("songs-all.json", DEFAULT, TAGS, entries)
     write_index("songs.json", public_first(public), [t for t in TAGS if any(e["tag"] == t for e in public)], public)
     print(f"{len(built)} 首（公开 {len(public)} 首）→ {os.path.join(ASSET_DIR, 'songs.json')}、songs-all.json、{CHART_DIR}")
+
+
+def rate_stars(built):
+    """星级：每首每档单独算，0.5 ~ 5 星每半星一档，共 STAR_STEPS 档。
+    所有曲子的三档混在一起，按难度分（已按判定窗加权）排名，均分成 10 档：星数只看这一档谱面本身有多难，
+    不看它是哪一档，所以疏的曲子的魔界花可以比密的曲子的泰坦星多，仙人刺也可以比别的曲子的泰坦星多。
+    同一首三档尽量不同星：越难的档至少比前一档多半星（顶到 5 星时往下让）。diff 仍写魔界花档的星级，给旧版网页用"""
+    pool = sorted((st["scores"][k], i, k) for i, (_, _, st) in enumerate(built) for k in range(len(LEVELS)))
+    steps = [[STAR_STEPS] * len(LEVELS) for _ in built]
+    for rank, (_, i, k) in enumerate(pool):
+        steps[i][k] = min(STAR_STEPS, 1 + rank * STAR_STEPS // len(pool))
+    for (entry, _, _), d in zip(built, steps):
+        for k in range(1, len(d)):
+            d[k] = max(d[k], d[k - 1] + 1)
+        for k in range(len(d)):
+            d[k] = min(d[k], STAR_STEPS - (len(d) - 1 - k))
+        entry["diffs"] = [star_value(x) for x in d]
+        entry["diff"] = entry["diffs"][1]
+
+
+def star_value(step):
+    """档位（1 ~ 10）→ 星数：整星写整数（3），半星写小数（2.5）"""
+    return step // 2 if step % 2 == 0 else step / 2
+
+
+def star_text(diffs):
+    return "/".join(f"{d:g}" for d in diffs) + "星"
 
 
 def public_first(public):
