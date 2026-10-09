@@ -14,7 +14,7 @@
    - 判定 Perfect / Great / Good / Just / Miss，没有血量、不会失败；漏掉的音不出声
    - 得分：满分 1,000,000（判定分 70 万 + combo得分 30 万），与曲子长短无关；评级按得分（见「得分」一节）
    - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用仙人刺的判定窗）/
-     放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
+     放水（判定窗同宽松，不用点：指针停在气泡附近（距离按点击范围），到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
    - 本机纪录（最高分与评级）按 曲目 × 难度 × 判定模式 × 点击范围 分开记
    - 飞花线（设置 → 画面，默认开）：一只萤火虫似的小花沿曲线掠过每个气泡，到点时正好经过该点的那个，身后撒星星（简单显示时拖一条金色的光）
    - 声像固定居中（不跟着左右位置偏）；音量跟随全站音量
@@ -40,7 +40,6 @@
     { id: "hard", label: "泰坦", approach: 1.05, win: [0.11, 0.19, 0.29], tap: 0.2 },
   ];
   const JUDGE_MODES = [{ id: "normal", label: "正常" }, { id: "loose", label: "宽松" }, { id: "hover", label: "放水" }];
-  const HOVER_R = 0.8;                                  // 放水模式：指针离气泡中心不到这么多个气泡直径就算「在气泡上」
   /* 输入：判 MISS 再多等 INPUT_GRACE 秒，免得排队中的点按还没处理、音就先被判漏了。TAP_R：点气泡的判定半径（气泡直径的倍数）
      点按排队的时间用 e.timeStamp 补回来，但最多补 TS_MAX 秒；有的手机浏览器（如一些 App 内置浏览器）的 timeStamp
      不是 performance.now 的时基，一旦对不上就整局不再用 */
@@ -891,7 +890,9 @@
         (v) => { S.range = v; setRaw(K.range, v); renderSheet(); }),
       S.range === "free"
         ? (S.judge === "hover" ? "判定模式也为放水：自动演奏，不计分" : "不限位置：外圈收至判定点的气泡，点击任意位置或按任意键均有效")
-        : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
+        : S.judge === "hover"
+          ? `判定模式为放水：指针停在气泡 ${rg.r} 倍直径内即有效`
+          : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
       capNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${capNote()}。按判定模式与点击范围组合：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万；上限的九成以内照常计分，超出部分压缩进最后一成` }) : null));
 
     /* 画面 */
@@ -906,7 +907,7 @@
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
     const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
       S.judge === "hover"
-        ? (S.range === "free" ? "点击范围也为放水：自动演奏，不计分" : "无需点击：指针停在气泡上，到判定点自动算弹中（手机可按住滑动）；判定窗口同宽松")
+        ? (S.range === "free" ? "点击范围也为放水：自动演奏，不计分" : `无需点击：指针停在气泡 ${(TAP_RANGES[S.range] || TAP_RANGES.normal).r} 倍直径内（随点击范围），到判定点自动算弹中（手机可按住滑动）；判定窗口同宽松`)
         : S.judge === "loose"
           ? `三档难度均按仙人刺判定：PERFECT / GREAT / GOOD 误差分别在 ${winText(LOOSE_WIN)} 秒以内`
           : `随难度收紧，当前「${diffBase().label}」：PERFECT / GREAT / GOOD 误差分别在 ${winText(diffBase().win)} 秒以内`);
@@ -1624,7 +1625,7 @@
   function onHoverEnd(e) {
     if (e.type === "pointerleave" || e.pointerType !== "mouse") S.hover = null;
   }
-  /* 放水判定：指针在气泡上，气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算。
+  /* 放水判定：指针在气泡附近（离中心不到点击范围的 r 个气泡直径，和点气泡一样），气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算。
      到点前指针在它上面停过（GREAT 窗以内），到点时已经移去下一个气泡了，也照样在到点那一下弹中，
      按最后一次离开时还差多久算判定（S.hovered 记着这个时间差）—— 不然鼠标得一直停到正好到点，稍早一点挪开就成了 MISS。
      点击范围也是放水（自动演奏）时不看指针，到点的都算 */
@@ -1632,7 +1633,7 @@
     const g = S.g;
     if (!g) return;
     const free = S.range === "free";
-    const R = g.size * HOVER_R;
+    const R = g.size * (TAP_RANGES[S.range] || TAP_RANGES.normal).r;
     const hv = S.hover;
     const on = (n) => free || (!!hv && Math.hypot(n.x - hv.x, n.y - hv.y) <= R);
     if (S.frozen && S.waiting) {

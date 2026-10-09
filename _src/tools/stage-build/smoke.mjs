@@ -523,7 +523,7 @@ async function main() {
     P.advance(0.1);
     check("放水：到点自动算弹中（PERFECT）", P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
     const n1 = st.notes[1];
-    move(n1.x + st.g.size * 3, n1.y + st.g.size * 3);
+    move(n1.x + st.g.size * 3, n1.y + st.g.size * 3);   // 正常点击范围 1.4 个直径以外
     P.until(n1.t + 0.1);
     check("放水：鼠标不在气泡上不算", P.st().judged[1] === -1);
     move(n1.x, n1.y);
@@ -551,6 +551,27 @@ async function main() {
     check("放水：弹完出结算、判定写放水", P.st().finished && /判定放水/.test(P.$(".hjs-res-tags").textContent));
     const rec = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
     check("放水判定：纪录单独记在 :normal:hover:normal 下", !!rec[`${SHORT.id}:normal:hover:normal`] && Object.keys(rec).length === 1, Object.keys(rec).join(","));
+  }
+
+  /* 11b. 放水判定的距离跟着点击范围：正常 1.4 个直径，宽松 1.7 个直径 */
+  for (const [range, ok] of [["normal", false], ["loose", true]]) {
+    const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "normal", hj_stage_judge: "hover", hj_stage_range: range } });
+    await openStage(P);
+    await go(P);
+    const st = P.st();
+    const move = (x, y) => {
+      const ev = new P.win.MouseEvent("pointermove", { clientX: x, clientY: y, bubbles: true, cancelable: true });
+      Object.defineProperty(ev, "pointerType", { value: "mouse" });
+      P.$("#hjsPlay").dispatchEvent(ev);
+    };
+    const n0 = st.notes[0];
+    move(n0.x + st.g.size * 1.2, n0.y + st.g.size * 0.6);     // 离中心约 1.34 个直径：两档都算
+    P.until(n0.t + 0.02);
+    check(`放水判定 + ${range === "loose" ? "宽松" : "正常"}范围：1.34 个直径内算`, P.st().judged[0] === 0, `judged=${P.st().judged[0]}`);
+    const n1 = st.notes[1];
+    move(n1.x + st.g.size * 1.6, n1.y);                      // 1.6 个直径：只有宽松算
+    P.until(n1.t + 0.02);
+    check(`放水判定 + ${range === "loose" ? "宽松" : "正常"}范围：1.6 个直径${ok ? "算" : "不算"}`, ok ? P.st().judged[1] === 0 : P.st().judged[1] === -1, `judged=${P.st().judged[1]}`);
   }
 
   /* 12. 电脑点气泡（非放水）：鼠标指着气泡按任意键也算点 */
