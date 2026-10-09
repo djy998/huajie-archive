@@ -1279,6 +1279,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     kind: "", civ: "", spy: "", group: null, hidden: false, recent: [],
     players: 6, spies: 2, spiesSet: false,       // spiesSet：卧底数手动改过（不再跟着人数自动变）
     roles: [], alive: [], outAt: [],             // roles[i] = 是卧底；outAt[i] = 第几轮淘汰
+    dealt: { civ: "", spy: "" },                 // 分配身份时的两个词：之后「换一组词」「交换」只改上面的词卡，重新分配身份才换到玩家身上
     round: 1, phase: "setup", cands: null, votes: [], tally: null,   // phase：setup / describe / vote / over；cands：平票重投时的候选
   };
   const SPY_RECENT = 40;
@@ -1385,6 +1386,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     S.players = n;
     S.spies = m;
     storage.set(STORE_SPY_PLAYERS, n);
+    S.dealt = { civ: S.civ, spy: S.spy };
     const spyAt = new Set(shuffle(Array.from({ length: n }, (_, i) => i)).slice(0, m));
     Object.assign(S, {
       roles: Array.from({ length: n }, (_, i) => spyAt.has(i)), alive: Array(n).fill(true), outAt: Array(n).fill(0),
@@ -1429,7 +1431,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const winner = !spiesLeft ? "平民" : left.length <= 3 ? "卧底" : "";
     if (winner) {
       Object.assign(S, { phase: "over", cands: null, winner });
-      lines.push(`${spyCh()}游戏结束啦，恭喜${winner}身份获胜！本轮的平民词是${S.civ}，卧底词是${S.spy}！`);
+      lines.push(`${spyCh()}游戏结束啦，恭喜${winner}身份获胜！本轮的平民词是${S.dealt.civ}，卧底词是${S.dealt.spy}！`);
     } else {
       Object.assign(S, { phase: "describe", cands: null, round: S.round + 1 });
       lines.push(`${spyCh()}现在进入第${S.round}轮描述~`);
@@ -1471,7 +1473,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     el(r, "#gmSpyList").classList.toggle("is-hidden", S.hidden);
     el(r, "#gmSpyList").innerHTML = !playing ? "" : S.roles.map((isSpy, i) => {
       const out = !S.alive[i];
-      const word = isSpy ? S.spy : S.civ;
+      const word = isSpy ? S.dealt.spy : S.dealt.civ;
       const votes = S.tally && S.tally[i] ? `<span class="gm-spy-p-votes">${S.tally[i]} 票</span>` : "";
       const fixed = voting && !out && !canVote(i);   // 两人平票：这两人固定弃票
       const pick = voting && !out
@@ -1554,7 +1556,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       if (!b) return;
       if (S.hidden) return showToast("先点「显示」再复制");
       const i = Number(b.dataset.copyP);
-      const word = S.roles[i] ? S.spy : S.civ;
+      const word = S.roles[i] ? S.dealt.spy : S.dealt.civ;
       copyText(`/tell <t> 本局游戏你的身份词是${word}，不要暴露哦~`, `已复制给${i + 1}号的私聊（词「${word}」），选中 ta 后粘贴发送`, "复制失败");
     });
     spyNext();
