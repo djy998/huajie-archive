@@ -820,7 +820,55 @@
       h("footer", { class: "hjs-sheet-foot" },
         h("span", { class: "hjs-foot-now", id: "hjsPickNow" }),
         h("button", { type: "button", class: "hjs-btn is-main", text: "确定", onclick: closeSheet })));
+    card.querySelectorAll(".hjs-chips").forEach((row, i) => dragRow(row, i ? "stars" : "cat"));
     renderSongList();
+  }
+  /* 分类、星级一行放不下时横着滑：手机手指滑；电脑鼠标按住拖、滚轮也能左右滚；两端还有没露出来的就淡出提示。
+     点按钮会重画窗口，记着滑到哪儿（S.chipX），重画后接着在原处，选中的那个也挪进视野 */
+  function dragRow(row, key) {
+    const keyOf = row.classList.contains("is-cat") ? "cat" : key;
+    S.chipX ||= {};
+    const edge = () => {
+      const max = row.scrollWidth - row.clientWidth;
+      row.classList.toggle("is-more-l", row.scrollLeft > 2);
+      row.classList.toggle("is-more-r", row.scrollLeft < max - 2);
+    };
+    row.addEventListener("scroll", () => { S.chipX[keyOf] = row.scrollLeft; edge(); }, { passive: true });
+    row.addEventListener("wheel", (e) => {
+      if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      row.scrollLeft += e.deltaY;
+    }, { passive: false });
+    let drag = null;
+    row.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0 || row.scrollWidth <= row.clientWidth) return;
+      drag = { x: e.clientX, left: row.scrollLeft, moved: false, id: e.pointerId };
+    });
+    row.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < 5) return;
+      if (!drag.moved) { drag.moved = true; row.setPointerCapture(e.pointerId); row.classList.add("is-dragging"); }
+      row.scrollLeft = drag.left - dx;
+    });
+    const end = () => {
+      if (!drag) return;
+      if (drag.moved) {   // 拖过就不算点了一下
+        row.addEventListener("click", (ev) => { ev.stopPropagation(); ev.preventDefault(); }, { capture: true, once: true });
+        setTimeout(() => row.classList.remove("is-dragging"), 0);
+      }
+      drag = null;
+    };
+    row.addEventListener("pointerup", end);
+    row.addEventListener("pointercancel", end);
+    requestAnimationFrame(() => {
+      row.scrollLeft = S.chipX[keyOf] || 0;
+      const on = row.querySelector(".is-on");
+      if (on && (on.offsetLeft < row.scrollLeft || on.offsetLeft + on.offsetWidth > row.scrollLeft + row.clientWidth)) {
+        row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+      }
+      edge();
+    });
   }
   function renderSongList() {
     const box = $id("hjsSongs");

@@ -7008,6 +7008,13 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-chips { flex: none; display: flex; gap: 6px; padding: 10px 16px 12px; overflow-x: auto; scrollbar-width: none; }
 .hjs-chips .hjs-chip { margin-bottom: 2px; }   /* 给阴影留点地方，不被横向滚动裁掉 */
 .hjs-chips::-webkit-scrollbar { display: none; }
+/* 一行放不下：鼠标按住可拖，两端还有内容时淡出 */
+.hjs-chips { position: relative; cursor: grab; }
+.hjs-chips.is-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+.hjs-chips.is-dragging .hjs-chip { pointer-events: none; }
+.hjs-chips.is-more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.hjs-chips.is-more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
+.hjs-chips.is-more-l.is-more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
 .hjs-chip {
   flex: none;
   padding: 5px 13px;
