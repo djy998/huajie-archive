@@ -12,7 +12,7 @@
    - 开头有四拍轻声预备拍（3·2·1），第一个气泡前就知道速度
    - 学习模式：不计分，气泡缩到判定点还没弹，音乐就停在这一拍，弹中才继续
    - 判定 Perfect / Great / Good / Just / Miss，没有血量、不会失败；漏掉的音不出声
-   - 得分：满分 1,000,000（判定分 70 万 + 连击分 30 万），与曲子长短无关；评级按得分（见「得分」一节）
+   - 得分：满分 1,000,000（判定分 70 万 + combo得分 30 万），与曲子长短无关；评级按得分（见「得分」一节）
    - 判定模式（设置里可改）：正常（默认，判定窗随难度收紧）/ 宽松（三档难度都用仙人刺的判定窗）/
      放水（判定窗同宽松，不用点：指针停在气泡上，到点就算弹中）。点击范围和判定模式都是放水 = 自动演奏，不计分
    - 本机纪录（最高分与评级）按 曲目 × 难度 × 判定模式 × 点击范围 分开记
@@ -28,7 +28,7 @@
     delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly",
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best3", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best3：百万分制的最高分与评级
-    oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大连击换算后显示
+    oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大combo换算后显示
     unlock: "hj_stage_unlock",                          // 曲库密码换来的凭证（全部曲目）
   };
   /* 判定半窗（秒）：Perfect / Great / Good。正常判定按难度收紧；宽松、放水三档难度都用 LOOSE_WIN（= 仙人刺那档） */
@@ -60,7 +60,7 @@
     { id: "great", label: "GREAT", w: 2, vel: 0.9 },
     { id: "good", label: "GOOD", w: 1, vel: 0.8 },
     { id: "miss", label: "MISS", w: 0, vel: 0 },
-    /* JUST：比 GOOD 早或晚出去一小段（GOOD 半窗的 JUST_RATIO）。给一点分、出声，但断连击 */
+    /* JUST：比 GOOD 早或晚出去一小段（GOOD 半窗的 JUST_RATIO）。给一点分、出声，但断combo */
     { id: "just", label: "JUST", w: 0.5, vel: 0.65 },
   ];
   const JUST = 4;                                       // JUDGE 里的下标（MISS 仍是 3）
@@ -104,7 +104,7 @@
     view: "lobby", sheet: "", sheetBack: null,
     song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, fl: null,
     delayMs: 0, stars: 0, cat: "", query: "", cal: null, calMsg: "",
-    gen: 0, notes: [], judged: null, next: 0, lo: 60, hi: 72, g: null,
+    gen: 0, notes: [], judged: null, hovered: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
     playing: false, paused: false, frozen: false, hover: null, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
@@ -127,10 +127,10 @@
   const isAuto = (judge = S.judge, range = S.range) => judge === "hover" && range === "free";
   const scored = () => !S.learn && !isAuto();
   /* ==== 得分 ====
-     满分 1,000,000 = 判定分 700,000 + 连击分 300,000，与曲子长短无关（N = 这一档要弹的音数）。
+     满分 1,000,000 = 判定分 700,000 + combo得分 300,000，与曲子长短无关（N = 这一档要弹的音数）。
      判定分：每个音的基础分 500000 / N × 判定权重，累加成原始分（全 PERFECT 为 150 万），再按 SCORE.curve 折算：
        原始分 0~50 万按 70%、50 万~100 万按 42%、100 万~150 万按 28%，全 PERFECT 正好 700,000（35 万 + 21 万 + 14 万）。
-     连击分：最大连击 / N 分档（SCORE.combo），全连 300,000。每 5% 一档：30% 15 万、40% 18 万、50% 21 万、60% 22 万、70% 23 万、80% 24 万、
+     combo得分：最大combo / N 分档（SCORE.combo），全连 300,000。每 5% 一档：30% 15 万、40% 18 万、50% 21 万、60% 22 万、70% 23 万、80% 24 万、
        85% 25.5 万、90% 27 万、95% 28.5 万这几个点是原有的，其余各档按它们用保形单调插值（PCHIP，过原点）补齐，取整到千位。
        玩法说明里不写这些细档
      上限：判定模式、点击范围选了宽松 / 放水时总分有上限（capOf）。上限的九成以内照算，往上把剩下的分按比例
@@ -140,7 +140,7 @@
     curve: [[0, 0.7], [500000, 0.42], [1000000, 0.28]],   // [原始分到这里起, 之后每分按多少计]
     combo: [[0.95, 285000], [0.9, 270000], [0.85, 255000], [0.8, 240000], [0.75, 234000], [0.7, 230000], [0.65, 225000],
       [0.6, 220000], [0.55, 216000], [0.5, 210000], [0.45, 197000], [0.4, 180000], [0.35, 166000], [0.3, 150000],
-      [0.25, 131000], [0.2, 110000], [0.15, 86000], [0.1, 60000], [0.05, 31000]],   // [最大连击占比超过, 连击分]，从高到低；全连 300000
+      [0.25, 131000], [0.2, 110000], [0.15, 86000], [0.1, 60000], [0.05, 31000]],   // [最大combo占比超过, combo得分]，从高到低；全连 300000
     full: 300000, knee: 0.9,
   };
   /* 上限按两项的宽松程度：0 正常、1 宽松、2 放水（两项都放水是自动演奏，不计分） */
@@ -174,7 +174,7 @@
     const knee = cap * SCORE.knee;
     return total <= knee ? total : knee + ((total - knee) * (cap - knee)) / (SCORE.max - knee);
   }
-  /* 准确率（0~1）、最大连击、音数 → 判定分、连击分、总分 */
+  /* 准确率（0~1）、最大combo、音数 → 判定分、combo得分、总分 */
   function scoreOf(acc, maxCombo, n, judge, range) {
     const j = judgeScore(acc * 3 * n, n);
     const c = comboScore(maxCombo, n);
@@ -204,7 +204,7 @@
   /* 大厅、暂停、演奏中标题下的一行：学习 / 自动演奏 / 判定与点击范围（默认的不写） */
   const modeTag = () => (S.learn ? " · 学习" : isAuto() ? " · 自动演奏" : judgeTag() + (S.range === "normal" ? "" : ` · ${rangeLabel()}范围`));
   /* 本机纪录（最高分与评级）按 曲目:难度:判定模式:点击范围 分开记在 hj_stage_best3。
-     百万分制以前的纪录（hj_stage_best2）记着准确率和最大连击，按新公式换算后一起比（准确率只记到 0.1%，换算有几百分的误差）：
+     百万分制以前的纪录（hj_stage_best2）记着准确率和最大combo，按新公式换算后一起比（准确率只记到 0.1%，换算有几百分的误差）：
      旧键 曲目:难度:判定模式（那时点击范围默认正常）算正常范围；更早的 曲目:难度（加判定模式以前）算宽松判定 + 宽松范围 */
   function oldBestOf(song, diff, judge, range) {
     const all = storage.json(K.oldBest) || {};
@@ -460,12 +460,12 @@
         h("div", { class: "hjs-notes", id: "hjsNotes", "aria-hidden": "true" }),
         h("div", { class: "hjs-judge", id: "hjsJudge", "aria-live": "polite" }),
         h("div", { class: "hjs-banner", id: "hjsBanner", "aria-live": "polite" }),
-        h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "连击" })),
+        h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "combo" })),
         h("header", { class: "hjs-hud", id: "hjsHud" },
           h("div", { class: "hjs-hud-song" }, h("b", { id: "hjsNowT" }), h("small", { id: "hjsNowS" })),
           h("div", { class: "hjs-hud-stats" },
             h("span", { class: "hjs-stat" }, h("b", { id: "hjsScore", text: "0" }), h("small", { id: "hjsScoreL", text: "分数" })),
-            h("span", { class: "hjs-stat" }, h("b", { id: "hjsCombo", text: "0" }), h("small", { text: "连击" }))),
+            h("span", { class: "hjs-stat" }, h("b", { id: "hjsCombo", text: "0" }), h("small", { text: "combo" }))),
           iconBtn("pause", "暂停", () => (S.paused ? resume() : pause()), "hjs-pause"),
           iconBtn("close", "结束演奏", () => backToLobby()),
           h("i", { class: "hjs-prog", "aria-hidden": "true" }, h("i", { id: "hjsProg" })))),
@@ -478,7 +478,7 @@
 
     const play = $id("hjsPlay");
     play.addEventListener("pointerdown", onPlayPointer);
-    play.addEventListener("pointermove", onHoverMove);
+    ["pointermove", "pointerover"].forEach((ev) => play.addEventListener(ev, onHoverMove));
     ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => play.addEventListener(ev, onHoverEnd));
     play.addEventListener("contextmenu", (e) => e.preventDefault());
     /* 安卓上只有手指抬起（pointerup / touchend / click）才算用户操作，按下（pointerdown）不算：音频没在运行时，在抬起时再叫一次 */
@@ -935,9 +935,9 @@
     card.append(h("div", { class: "hjs-sheet-body hjs-help" },
       h("ol", {},
         ["点击气泡即可弹奏，允许少许偏差。使用电脑时，也可将指针移至气泡上后按任意键",
-          "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，连击中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断连击，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
+          "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，combo中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断combo，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
           "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万",
-          "得分由判定分（70%）和连击分（30%）两部分组成，判定分根据每个音的判定评价记分，连击分按最大连击数评价，因此追求高分请尽可能不要断连击。",
+          "得分由判定分（70%）和combo得分（30%）两部分组成，判定分根据每个音的判定评价记分，combo得分按最大combo数评价，因此追求高分请尽可能不要断combo。",
           "点击范围与判定模式均设为放水时为自动演奏，不计分。本机纪录按难度、判定模式与点击范围分别保存最高分与评级",
           "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准，随提示音点击数次即可",
           "按 Esc 键或手机返回键，可暂停演奏、关闭窗口或返回上一层",
@@ -1034,6 +1034,7 @@
     const span = S.hi - S.lo + 1;
     S.notes.forEach((n) => { n.band = Math.floor(clamp((n.m - S.lo) / span, 0, 0.9999) * 4); });
     S.judged = new Int8Array(S.notes.length).fill(-1);
+    S.hovered = new Float32Array(S.notes.length).fill(NaN);
     S.next = 0;
     S.firstT = S.notes.length ? S.notes[0].t : 0;
     S.lastT = S.notes.length ? S.notes[S.notes.length - 1].t : 0;
@@ -1600,17 +1601,18 @@
   function onPlayPointer(e) {
     if (e.target.closest && e.target.closest("button")) return;
     if (e.pointerType === "mouse" && e.button !== 0 && e.button !== 2) return;   // 左右键都算点
+    const p = hoverPos(e);
+    if (S.judge === "hover" || e.pointerType === "mouse") S.hover = p;
     if (S.needTap) { e.preventDefault(); startSong(); return; }
     if (S.view !== "play" || !S.playing || S.paused) return;
     e.preventDefault();
     if (S.resuming) return;                             // 继续前的倒数：点了不算
-    const p = hoverPos(e);
-    if (S.judge === "hover" || e.pointerType === "mouse") S.hover = p;
     if (isAuto()) return;                               // 自动演奏：点了也不算
     tapAt(p.x, p.y, e);
   }
   /* 记下指针在哪（鼠标一直跟着；手指按着时才算，抬起就清掉）：
-     放水判定每帧由 hoverCheck 看它停在哪个气泡上；按键盘任意键＝在鼠标处点一下（onKeyDown） */
+     放水判定每帧由 hoverCheck 看它停在哪个气泡上；按键盘任意键＝在鼠标处点一下（onKeyDown）。
+     pointerover 也记：暂停卡、设置窗关掉后鼠标没动，浏览器只补发进出事件、不发 pointermove，不记的话指针位置一直是空的 */
   function hoverPos(e) {
     const r = S.root.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -1623,26 +1625,39 @@
     if (e.type === "pointerleave" || e.pointerType !== "mouse") S.hover = null;
   }
   /* 放水判定：指针在气泡上，气泡到点（外圈缩到核心）那一下自动算弹中；指针来晚了，还在判定窗里就按晚了多少算。
+     到点前指针在它上面停过（GREAT 窗以内），到点时已经移去下一个气泡了，也照样在到点那一下弹中，
+     按最后一次离开时还差多久算判定（S.hovered 记着这个时间差）—— 不然鼠标得一直停到正好到点，稍早一点挪开就成了 MISS。
      点击范围也是放水（自动演奏）时不看指针，到点的都算 */
   function hoverCheck(t, dm) {
     const g = S.g;
     if (!g) return;
     const free = S.range === "free";
     const R = g.size * HOVER_R;
-    const on = (n) => free || (S.hover && Math.hypot(n.x - S.hover.x, n.y - S.hover.y) <= R);
+    const hv = S.hover;
+    const on = (n) => free || (!!hv && Math.hypot(n.x - hv.x, n.y - hv.y) <= R);
     if (S.frozen && S.waiting) {
       if (on(S.waiting)) learnHit(S.waiting);
       return;
     }
+    let landed = false;                                 // 指针正停着的气泡一帧只弹一个（自动演奏除外：同一刻的和弦一起弹）
     for (let i = Math.max(0, S.next - 4); i < S.notes.length; i++) {
       const n = S.notes[i];
       const dt = n.t - t;
-      if (dt > 0) break;
+      if (dt > dm.win[1]) break;
       if (S.judged[n.idx] >= 0 || dt < -dm.win[2]) continue;
-      if (on(n)) {
-        hit(n, tierOf(-dt, dm), -dt);
-        if (!free) return;                              // 自动演奏：同一刻的和弦一起弹
+      const here = on(n);
+      if (dt > 0) {
+        if (here && !free) S.hovered[n.idx] = dt;
+        continue;
       }
+      if (here) {
+        if (landed && !free) continue;
+        hit(n, tierOf(-dt, dm), -dt);
+        landed = true;
+        continue;
+      }
+      const early = S.hovered[n.idx];
+      if (early >= 0) hit(n, tierOf(early, dm), -early);
     }
   }
   /* 事件发生时的歌曲时间：处理得晚了（主线程忙）就往回扣一点（最多 TS_MAX 秒） */
@@ -1776,7 +1791,7 @@
   }
   function ghost(x, y) {
     const el = h("div", { class: "hjs-ghost" });
-    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+    el.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;   // 位置放在 translate 上：缩放动画的 scale 只绕圈心缩放，不会把位置一起放大缩小
     $id("hjsNotes").appendChild(el);
     setTimeout(() => el.remove(), 420);
   }
@@ -1787,7 +1802,7 @@
     if (Number.isFinite(off) && scored()) S.offs.push(off);
     bard().playMidi?.(n.m, JUDGE[tier].vel, instId(), 0, 0);
     dropEl(n, "is-hit", 300);
-    if (tier === JUST) S.combo = 0;                     // JUST：出声、给一点分，但断连击
+    if (tier === JUST) S.combo = 0;                     // JUST：出声、给一点分，但断combo
     else S.combo += 1;
     S.maxCombo = Math.max(S.maxCombo, S.combo);
     S.counts[JUDGE[tier].id] += 1;
@@ -1863,14 +1878,14 @@
     $id("hjsScoreL").textContent = S.learn ? "已弹对" : isAuto() ? "自动演奏" : "分数";
     $id("hjsScore").textContent = scored() ? fmtNum(S.score) : `${S.learnHits}/${total}`;
     $id("hjsCombo").textContent = String(S.combo);
-    /* 判定字下方常驻的连击数：一直显示，涨了跳一下，断了变暗 */
+    /* 判定字下方常驻的combo数：一直显示，涨了跳一下，断了变暗 */
     const big = $id("hjsComboBig");
     const n = $id("hjsComboN");
     if (n.textContent !== String(S.combo)) {
       const up = S.combo > +n.textContent;
       n.textContent = String(S.combo);
       big.classList.toggle("is-zero", S.combo === 0);
-      /* 跳一下用 Web Animations，不用「删类 → 读 offsetWidth → 加类」：那样每涨一次连击都强制排版一次，密集段更卡 */
+      /* 跳一下用 Web Animations，不用「删类 → 读 offsetWidth → 加类」：那样每涨一次combo都强制排版一次，密集段更卡 */
       if (up && n.animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
         n.animate([{ transform: "scale(1.22)" }, { transform: "none" }], { duration: 220, easing: "ease-out" });
       }
@@ -1893,10 +1908,10 @@
     const done = doneCount();
     return done ? (sumW() / (3 * done)) * 100 : 100;
   }
-  /* 分数的组成：「判定分 63.2 万 + 连击分 27 万」，有上限时再写上限 */
+  /* 分数的组成：「判定分 63.2 万 + combo得分 27 万」，有上限时再写上限 */
   function scoreParts() {
     const p = liveScore();
-    return `判定分 ${fmtNum(p.judge)} + 连击分 ${fmtNum(p.combo)}${capNote() ? ` · ${capNote()}` : ""}`;
+    return `判定分 ${fmtNum(p.judge)} + combo得分 ${fmtNum(p.combo)}${capNote() ? ` · ${capNote()}` : ""}`;
   }
   /* 各档计数的格子（结算、暂停共用） */
   const resGrid = () => h("div", { class: "hjs-res-grid" }, GRID.map((id) => {
@@ -1952,12 +1967,12 @@
     S.raf = 0;
     clockStop(S.clock);
     setPauseIcon(true);
-    /* 到目前为止的成绩：进度、分数、准确率、连击、各档计数、点空 */
+    /* 到目前为止的成绩：进度、分数、准确率、combo、各档计数、点空 */
     const pos = Math.max(0, clockRaw(S.clock));
     const done = doneCount();
     const stats = scored()
       ? [h("div", { class: "hjs-res-big hjs-pause-score", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · 连击 ${S.combo} · 最大连击 ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · combo ${S.combo} · 最大combo ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
         h("p", { class: "hjs-res-sub hjs-res-parts", text: scoreParts() }),
         resGrid()]
       : [h("div", { class: "hjs-res-big hjs-pause-score", text: `${S.learnHits} / ${S.notes.length}` })];
@@ -2037,12 +2052,12 @@
       S.score = liveScore().score;
       const rank = rankOf(S.score);
       const isNew = saveBest(pct);
-      const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
+      const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，combo从头连到尾
       card.append(
         ...(fullCombo ? [h("div", { class: "hjs-res-fc", text: "FULL COMBO!" })] : []),   // 原生 append 会把 null 写成文字，不能传 null
         h("div", { class: `hjs-res-rank${rank === "Impeccable" ? " is-max" : ""}${rank.length > 4 ? " is-long" : ""}` }, h("span", { text: rank }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo} / ${total}` }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大combo ${S.maxCombo} / ${total}` }),
         h("p", { class: `hjs-res-sub hjs-res-parts${capNote() ? " hjs-res-mult" : ""}`, text: scoreParts() }),
         timingNote(),
         resGrid());
@@ -2089,7 +2104,7 @@
     const where = worst && worst.c >= 3 ? `，最多在 ${fmtTime(worst.k * 4)}~${fmtTime(worst.k * 4 + 4)}（${worst.c} 帧）` : "";
     return `掉帧 ${pct < 1 && dg.drop ? "<1" : Math.round(pct)}%（${Math.round(1000 / dg.base)} Hz${where}，最长一帧 ${Math.round(dg.max)} ms）${lite}`;
   }
-  /* 最高分与评级（评级随得分）；准确率、最大连击一起记着备查 */
+  /* 最高分与评级（评级随得分）；准确率、最大combo一起记着备查 */
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
     const key = `${S.song.id}:${S.diff}:${S.judge}:${S.range}`;

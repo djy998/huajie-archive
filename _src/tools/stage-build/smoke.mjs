@@ -1,9 +1,9 @@
 /* 舞台演奏的运行时冒烟测试：用 jsdom 直接跑 _src/bard-stage.js 本体（不是重写一份逻辑），音频时钟由测试手动推进
    覆盖：大厅 → 选曲窗口（搜索 / 分类 / 星级 / 试听）→ 设置窗口（点击范围、画面、判定模式）→ 电脑点气泡演奏（鼠标指着按键、
    中文输入法、漏音不出声、补音、预备拍、声像居中）→ 手机点气泡（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
-   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻连击与 FULL COMBO
+   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻combo与 FULL COMBO
    → 点击范围（正常 / 宽松 / 放水）→ 双放水自动演奏 → 纪录按判定模式与点击范围分开 → 飞花线
-   → 百万分制（判定分折扣、连击分分档、宽松 / 放水的得分上限、评级、旧纪录换算）→ 隐藏曲目与曲库密码
+   → 百万分制（判定分折扣、combo得分分档、宽松 / 放水的得分上限、评级、旧纪录换算）→ 隐藏曲目与曲库密码
    用法：cd _src && npm i --no-save jsdom && node tools/stage-build/smoke.mjs   （期望最后一行：全部通过） */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -29,7 +29,7 @@ function expectScore({ sumW, n, maxCombo, cap = 1000000 }) {
   const raw = (500000 * sumW) / n;
   const j = Math.round(raw <= 500000 ? 0.7 * raw : raw <= 1000000 ? 350000 + 0.42 * (raw - 500000) : 560000 + 0.28 * (raw - 1000000));
   const r = maxCombo / n;
-  /* 连击分每 5% 一档（下标 k = 超过 k×5%）；30/40/50/60/70/80/85/90/95% 是原有的点，其余按它们插值补齐 */
+  /* combo得分每 5% 一档（下标 k = 超过 k×5%）；30/40/50/60/70/80/85/90/95% 是原有的点，其余按它们插值补齐 */
   const COMBO5 = [0, 31000, 60000, 86000, 110000, 131000, 150000, 166000, 180000, 197000, 210000,
     216000, 220000, 225000, 230000, 234000, 240000, 255000, 270000, 285000];
   const k = Math.min(19, Math.ceil(r * 20 - 1e-9) - 1);   // r 刚好落在档位上时不算「超过」
@@ -277,7 +277,7 @@ async function main() {
     const bgPlayed = P.midi.filter((m) => m.vel === 0.4);
     check("补音按音频钟提前排进去（轻音、居中）", bgPlayed.length > 0 && bgPlayed.every((m) => m.pan === 0 && m.delay >= 0 && m.delay <= 0.121), `${bgPlayed.length}`);
 
-    check("漏音后连击归零、常驻连击变暗", P.$("#hjsComboN").textContent === "0" && P.$("#hjsComboBig").classList.contains("is-zero"));
+    check("漏音后combo归零、常驻combo变暗", P.$("#hjsComboN").textContent === "0" && P.$("#hjsComboBig").classList.contains("is-zero"));
     P.key("Escape", "Escape");
     check("Esc 暂停：钟停、出暂停卡", P.st().paused && !P.st().clock.run && !P.$("#hjsModal").hidden);
     check("暂停卡：继续 / 重来 / 停止演奏", !!P.btn("停止演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
@@ -312,10 +312,10 @@ async function main() {
     check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const want = expectScore({ sumW: 3 * (notes.length - 1), n: notes.length, maxCombo: fin.maxCombo });
-    check("百万分制：一个 MISS，分数 = 判定分折扣 + 连击分分档", fin.score === want, `${fin.score} / ${want}（最大连击 ${fin.maxCombo}/${notes.length}）`);
+    check("百万分制：一个 MISS，分数 = 判定分折扣 + combo得分分档", fin.score === want, `${fin.score} / ${want}（最大combo ${fin.maxCombo}/${notes.length}）`);
     const rankWant = want >= 1000000 ? "Impeccable" : want >= 995000 ? "SSS+" : want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : want >= 925000 ? "Almost S" : "A+";
     check("评级按得分", P.$(".hjs-res-rank span").textContent === rankWant, `${P.$(".hjs-res-rank span").textContent}/${rankWant}`);
-    check("结算写明判定分与连击分", /判定分 [\d,]+ \+ 连击分 [\d,]+/.test(P.$("#hjsModal").textContent));
+    check("结算写明判定分与combo得分", /判定分 [\d,]+ \+ combo得分 [\d,]+/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
     const rec = best[`${fin.song}:easy:normal:normal`];
     check("本机纪录按难度、判定模式、点击范围分开写入（最高分 + 评级）", rec && rec.score === fin.score && rec.rank === rankWant && Object.keys(best).length === 1, Object.keys(best).join());
@@ -478,7 +478,7 @@ async function main() {
       const items = P.$$("#hjsSheetCard li").map((li) => li.textContent);
       const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /得分设有上限/.test(t));
       check("玩法说明：共 7 条，判定模式与得分上限一条、得分组成一条，不带括号说明", items.length === 7 && merged.length === 1
-        && items.filter((t) => /^得分由判定分（70%）和连击分（30%）两部分组成/.test(t)).length === 1
+        && items.filter((t) => /^得分由判定分（70%）和combo得分（30%）两部分组成/.test(t)).length === 1
         && !items.some((t) => /星级|飞花线|预备拍|JUST/.test(t)), `${items.length} 条`);
     }
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
@@ -487,7 +487,7 @@ async function main() {
     check("再按返回键离开舞台", P.$("#hjStage").classList.contains("is-leaving"));
   }
 
-  /* 10. 判定模式：正常按难度收紧，宽松三档都按仙人刺；全弹中出 FULL COMBO，连击一直显示 */
+  /* 10. 判定模式：正常按难度收紧，宽松三档都按仙人刺；全弹中出 FULL COMBO，combo一直显示 */
   for (const [judge, want] of [["normal", 1], ["loose", 0]]) {
     const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "hard", ...(judge === "normal" ? {} : { hj_stage_judge: judge }) } });
     await openStage(P);
@@ -499,7 +499,7 @@ async function main() {
     for (let i = 1; i < ns.length; i++) {
       P.until(ns[i].t);
       P.pointer(ns[i].x, ns[i].y);
-      if (i === 5) check("连击数一直显示在判定字下方", P.$("#hjsComboN").textContent === "6" && !P.$("#hjsComboBig").classList.contains("is-zero"), P.$("#hjsComboN").textContent);
+      if (i === 5) check("combo数一直显示在判定字下方", P.$("#hjsComboN").textContent === "6" && !P.$("#hjsComboBig").classList.contains("is-zero"), P.$("#hjsComboN").textContent);
     }
     P.until(P.st().endT + 2);
     check(`${judge}：全部弹中 → FULL COMBO!`, P.st().finished && /FULL COMBO!/.test(P.$("#hjsModal").textContent) && !/null|undefined/.test(P.$("#hjsModal").textContent));
@@ -529,7 +529,24 @@ async function main() {
     move(n1.x, n1.y);
     P.advance(1 / 60);
     check("放水：晚了 0.1 秒移上去，按晚了多少算", P.st().judged[1] >= 0 && P.st().judged[1] < 3, `judged=${P.st().judged[1]}`);
-    for (let i = 2; i < st.notes.length; i++) { move(st.notes[i].x, st.notes[i].y); P.until(st.notes[i].t + 0.02); }
+    /* 到点前停过、稍早一点挪去下一个：到点照样弹中，按离开时还差多久算 */
+    const n2 = st.notes[2];
+    P.until(n2.t - 0.25);
+    move(n2.x, n2.y);
+    P.until(n2.t - 0.08);
+    move(-5000, -5000);
+    P.advance(1 / 60);
+    check("放水：到点前就挪开，没到点不算", P.st().judged[2] === -1);
+    P.until(n2.t + 0.02);
+    check("放水：到点前停过、提早 0.08 秒挪开，到点仍算弹中（PERFECT）", P.st().judged[2] === 0, `judged=${P.st().judged[2]}`);
+    /* 鼠标没动、只有进出事件（暂停卡关掉后浏览器补发的 pointerover）也记下指针位置 */
+    const n3 = st.notes[3];
+    const over = new P.win.MouseEvent("pointerover", { clientX: n3.x, clientY: n3.y, bubbles: true, cancelable: true });
+    Object.defineProperty(over, "pointerType", { value: "mouse" });
+    P.$("#hjsPlay").dispatchEvent(over);
+    P.until(n3.t + 0.02);
+    check("放水：只收到 pointerover 也算指针停在气泡上", P.st().judged[3] === 0, `judged=${P.st().judged[3]}`);
+    for (let i = 4; i < st.notes.length; i++) { move(st.notes[i].x, st.notes[i].y); P.until(st.notes[i].t + 0.02); }
     P.until(P.st().endT + 2);
     check("放水：弹完出结算、判定写放水", P.st().finished && /判定放水/.test(P.$(".hjs-res-tags").textContent));
     const rec = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
@@ -851,7 +868,7 @@ async function main() {
     check("结算写明点空原因", /点空 \d+ 次（偏早 1 · 点偏 1/.test(P.$("#hjsModal").textContent), (P.$("#hjsModal").textContent.match(/点空[^）]*）/) || [""])[0]);
   }
 
-  /* 26. JUST：比 GOOD 早 / 晚出去不到 0.1 秒算 JUST —— 给一点分、出声、断连击；再远就是点空 */
+  /* 26. JUST：比 GOOD 早 / 晚出去不到 0.1 秒算 JUST —— 给一点分、出声、断combo；再远就是点空 */
   {
     /* 挑一首泰坦难度里有几个前后都空出 0.8 秒的音的曲子（短的优先） */
     const hardTimes = (id) => { let ms = 0; return chartOf(id).n.map((r) => { ms += r[0]; return [ms / 1000, r[2]]; }).filter((x) => x[1] >= 1).map((x) => x[0]); };
@@ -873,7 +890,7 @@ async function main() {
       P.until(a.t + 0.34);                              // 晚 0.34 秒：过了 GOOD（0.29），还在 JUST 里（0.29 × 4/3 ≈ 0.39），还没判 MISS
       P.pointer(a.x, a.y);
       check("晚出 GOOD 不到 0.1 秒：JUST", P.st().judged[a.idx] === 4 && /JUST/.test(P.$("#hjsJudge").textContent), `judged=${P.st().judged[a.idx]}`);
-      check("JUST 断连击、给一点分、出声", combo0 > 0 && P.st().combo === 0 && P.st().score > score0 && P.midi.filter((m) => m.vel === 0.65).length === sounds0 + 1, `combo ${combo0}→${P.st().combo} +${P.st().score - score0}`);
+      check("JUST 断combo、给一点分、出声", combo0 > 0 && P.st().combo === 0 && P.st().score > score0 && P.midi.filter((m) => m.vel === 0.65).length === sounds0 + 1, `combo ${combo0}→${P.st().combo} +${P.st().score - score0}`);
       playTo(ks[1]);
       const b = ns[ks[1]];
       P.until(b.t - 0.35);                              // 早 0.35 秒
@@ -900,14 +917,14 @@ async function main() {
     ns.slice(0, 5).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
     P.key("Escape", "Escape");
     const card = P.$("#hjsModal").textContent;
-    check("暂停卡：进度、分数、准确率、连击、各档计数", /进度 \d+:\d\d \/ \d+:\d\d/.test(card) && card.includes(P.$("#hjsScore").textContent) && /准确率 100\.0% · 连击 5 · 最大连击 5/.test(card) && P.$$("#hjsModal .hjs-cell").length === 5 && P.$("#hjsModal .hjs-cell.is-perfect b").textContent === "5", card.slice(0, 80));
+    check("暂停卡：进度、分数、准确率、combo、各档计数", /进度 \d+:\d\d \/ \d+:\d\d/.test(card) && card.includes(P.$("#hjsScore").textContent) && /准确率 100\.0% · combo 5 · 最大combo 5/.test(card) && P.$$("#hjsModal .hjs-cell").length === 5 && P.$("#hjsModal .hjs-cell.is-perfect b").textContent === "5", card.slice(0, 80));
     P.click(P.btn("停止演奏", P.$("#hjsModal")));
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id } });
     await openStage(Q);
     await go(Q);
     Q.until(Q.st().notes[0].t - 0.5);
     Q.key("Escape", "Escape");
-    check("还没弹时暂停：准确率显示 —", /准确率 — · 连击 0/.test(Q.$("#hjsModal").textContent));
+    check("还没弹时暂停：准确率显示 —", /准确率 — · combo 0/.test(Q.$("#hjsModal").textContent));
   }
 
   /* 28. JUST 的宽度按 GOOD 的三分之一：仙人刺（GOOD 0.45）晚 0.58 秒还是 JUST，泰坦（0.29）晚 0.4 秒就判 MISS */
@@ -928,7 +945,7 @@ async function main() {
     }
   }
 
-  /* 13. 百万分制以前的纪录（hj_stage_best2：曲目:难度[:判定模式[:点击范围]]）按准确率与最大连击换算 */
+  /* 13. 百万分制以前的纪录（hj_stage_best2：曲目:难度[:判定模式[:点击范围]]）按准确率与最大combo换算 */
   {
     const n = firstSong.cnt[1];
     const conv = (acc, combo, cap) => expectScore({ sumW: (acc / 100) * 3 * n, n, maxCombo: combo, cap });
@@ -945,7 +962,7 @@ async function main() {
     const C = makePage({ prefs: { hj_stage_best2: mid } });
     await openStage(C);
     const wc = conv(99.5, n, 1000000);
-    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围，全连按 30 万连击分", C.$(".hjs-best")?.textContent.includes(`· ${fmt(wc)} 分 · SSS`), `${C.$(".hjs-best")?.textContent} / ${wc}`);
+    check("加点击范围以前的纪录（曲目:难度:判定模式）算正常范围，全连按 30 万combo得分", C.$(".hjs-best")?.textContent.includes(`· ${fmt(wc)} 分 · SSS`), `${C.$(".hjs-best")?.textContent} / ${wc}`);
     const D = makePage({ prefs: { hj_stage_best2: mid, hj_stage_range: "loose" } });
     await openStage(D);
     check("换了点击范围就不显示别的范围的纪录", !/本机纪录/.test(D.$(".hjs-ctrl").textContent));

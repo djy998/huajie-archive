@@ -6734,8 +6734,11 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-note.is-hit .hjs-name { opacity: 0 !important; }
 @keyframes hjsBurst { to { scale: 1.4; opacity: 0; } }
 @keyframes hjsBurstRing { from { transform: scale(1); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
+/* 漏掉的气泡原地缩小淡出：缩放加在里面三层上（各自绕圈心），不加在气泡本身 —— 它的位置在 transform 上，scale 会把位置一起缩放，气泡就朝左上角飘走了 */
 .hjs-note.is-miss { animation: hjsMiss .32s ease-in forwards; }
-@keyframes hjsMiss { to { scale: .7; opacity: 0; filter: grayscale(1); } }
+.hjs-note.is-miss > i { animation: hjsMissShrink .32s ease-in forwards; }
+@keyframes hjsMiss { to { opacity: 0; filter: grayscale(1); } }
+@keyframes hjsMissShrink { to { scale: .7; } }
 .hjs-ghost {
   position: absolute; left: 0; top: 0;
   width: 54px; height: 54px; margin: -27px 0 0 -27px;
@@ -6757,7 +6760,7 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-set-note { margin: 0; padding: 0 2px 10px; font-size: .74rem; line-height: 1.6; color: #ffe3b0; }
 /* 省电画法：手机连续掉帧时自动打开，去掉气泡的光晕阴影 */
 .hjs.is-lite .hjs-ring, .hjs.is-lite .hjs-core { box-shadow: none; }
-/* 简单显示（设置 → 画面）：在省电画法之外再去掉音名、判定字、连击和分数的模糊阴影（描边保留，音名照样看得清），提示条不做毛玻璃 */
+/* 简单显示（设置 → 画面）：在省电画法之外再去掉音名、判定字、combo和分数的模糊阴影（描边保留，音名照样看得清），提示条不做毛玻璃 */
 .hjs.is-simple .hjs-ring, .hjs.is-simple .hjs-core, .hjs.is-simple .hjs-note.is-wait .hjs-core { box-shadow: none; }
 .hjs.is-simple .hjs-name,
 .hjs.is-simple .hjs-pop b, .hjs.is-simple .hjs-pop.is-perfect b, .hjs.is-simple .hjs-pop small, .hjs.is-simple .hjs-pop em,
@@ -6775,7 +6778,7 @@ body.hjs-open .toast { z-index: 540; }
   70% { opacity: 1; transform: translateY(-4px) scale(1); }
   100% { opacity: 0; transform: translateY(-10px) scale(1); }
 }
-/* 常驻连击数：判定字正下方，一直显示，压在气泡下面（不挡音名）；中间有提示（倒数、点一下开始）时让开 */
+/* 常驻combo数：判定字正下方，一直显示，压在气泡下面（不挡音名）；中间有提示（倒数、点一下开始）时让开 */
 .hjs-combo {
   position: absolute; left: 0; right: 0; top: calc(24% + 3.2rem); z-index: 1;
   display: flex; align-items: baseline; justify-content: center; gap: 6px;
@@ -7135,11 +7138,11 @@ body.hjs-open .toast { z-index: 540; }
   .hjs-ibtn, .hjs-btn, .hjs-go { translate: none !important; scale: none !important; }
 }
 
-/* 模拟器「高级功能」里的入口 */
+/* 模拟器「高级功能」与开始演奏下方的入口 */
 .bard-stage-btn {
   width: 100%;
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin: 2px 0 6px;
+  margin: 8px 0 0;
   padding: 8px 10px;
   border-radius: 999px;
   font-size: .78rem; font-weight: 700; letter-spacing: .06em;
