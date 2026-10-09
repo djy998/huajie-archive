@@ -393,4 +393,6 @@ const HJ_CAL_ITEMS = [
   { start: "2026-09-24", end: "2026-10-13", label: "FFXV 联动", tone: "blue" },
   { start: "2026-10-07", end: "2026-10-27", label: "糖豆人联动", tone: "rose" },
   { start: "2026-08-04", end: "2026-10-05", label: "妖怪手表联动", tone: "teal" },
+  { date: "2026-10-13", label: "国服 7.57 版本更新", tone: "wisteria" },
+  { start: "2026-10-15", end: "2026-11-02", label: "守护天节", tone: "orange" },
 ];
