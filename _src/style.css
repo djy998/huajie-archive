@@ -239,6 +239,10 @@ body *::-webkit-scrollbar-corner { background: transparent; }
   background-position: center bottom;
 }
 #skyFade { opacity: 0; transition: opacity .9s ease; }
+/* 昼夜切换那一帧：除了天空和卡片底图的淡入层，其余元素的过渡都先关掉（main.js 的 applyDayNight，两帧后恢复） */
+body.dn-switching *:not(#skyFade):not(.tile-crossfade),
+body.dn-switching *::before,
+body.dn-switching *::after { transition: none !important; }
 
 body::after {
   content: "";
@@ -5400,6 +5404,13 @@ html.bard-on .toast { z-index: 495; }
   to   { opacity: 1; transform: none; }
 }
 .bard-widget.is-nudge { animation: bardNudge .45s ease; }
+.bard-head-tools { display: flex; align-items: center; gap: 4px; }
+/* 缩小：演奏时只留「结束演奏」按钮，少挡一点可以点的地方 */
+.bard-widget.is-mini { width: auto; padding: 6px; border-radius: 999px; }
+.bard-widget.is-mini > :not(.bard-actions),
+.bard-widget.is-mini .bard-actions > :not(.bard-play) { display: none; }
+.bard-widget.is-mini .bard-actions { margin-top: 0; }
+.bard-widget.is-mini .bard-play { padding: 8px 16px; }
 @keyframes bardNudge {
   30% { transform: translateY(-5px); }
   60% { transform: translateY(2px); }
@@ -6604,7 +6615,8 @@ body.hjs-open .toast { z-index: 540; }
   font-size: .8rem; line-height: 1.65;
   color: var(--s-soft);
 }
-.hjs-hero-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 10px; }
+.hjs-hero-btns { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; }
+.hjs-hero-rank { margin-left: auto; font-size: 1.7rem; }   /* 今晚演奏卡片右下角的最高评级（按钮行最右边） */
 .hjs-ctrl { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .hjs-line { display: flex; align-items: center; gap: 12px; }
 .hjs-line-l { flex: none; width: 2.4em; font-size: .78rem; letter-spacing: .14em; color: var(--s-mute); }
@@ -6826,7 +6838,7 @@ body.hjs-open .toast { z-index: 540; }
   color: #3a1220; background: #f0b3c3;
   transform: rotate(8deg);
 }
-/* 完美：彩色描金；完成（学习、自动演奏、0 分）：小一号、不发光 */
+/* Impeccable：彩色描金；Complete（学习、自动演奏、0 分）：小一号、不发光 */
 .hjs-res-rank.is-max { text-shadow: none; filter: drop-shadow(0 6px 18px rgba(242, 189, 109, .45)); }
 .hjs-res-rank.is-max span {
   background: linear-gradient(90deg, #ffe3a3, #f0b3c3, #ddd0ff, #9fd3ff);
@@ -6955,6 +6967,14 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-song-main b { font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hjs-song-main small { font-size: .7rem; color: var(--s-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hjs-song-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+/* 最高评级：结算页评级的毛笔字缩小，放在星级下面（行的右下角）；Impeccable 同样彩色描金 */
+.hjs-song-rank { font: 400 1.05rem/1 var(--brush); color: var(--s-gold); white-space: nowrap; text-shadow: 0 2px 8px rgba(242, 189, 109, .3); }
+.hjs-song-rank.is-max {
+  text-shadow: none;
+  background: linear-gradient(90deg, #ffe3a3, #f0b3c3, #ddd0ff, #9fd3ff);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
 .hjs-eq { display: none; align-items: flex-end; gap: 2px; height: 12px; }
 .hjs-song.is-preview .hjs-eq { display: inline-flex; }
 .hjs-eq i { width: 3px; height: 4px; border-radius: 2px; background: var(--s-gold); animation: hjsEq .8s ease-in-out infinite; }

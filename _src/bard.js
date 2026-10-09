@@ -145,6 +145,7 @@
     close: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     play: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
     stop: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>',
+    mini: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>',
   };
 
   const touchFirst = () => matchMedia("(pointer: coarse)").matches;
@@ -997,6 +998,10 @@
     btn.setAttribute("aria-pressed", String(B.playing));
     btn.innerHTML = (B.playing ? ICON.stop : ICON.play) + `<span>${B.playing ? "结束演奏" : "开始演奏"}</span>`;
     $("bardWidget").classList.toggle("is-playing", B.playing);
+    /* 演奏时可以缩小成只剩「结束演奏」（标题栏的「—」）；结束演奏后恢复完整的小组件，下次开始也是完整的 */
+    if (!B.playing) B.mini = false;
+    $("bardWidget").classList.toggle("is-mini", B.playing && !!B.mini);
+    $("bardMini").hidden = !B.playing;
     $("bardHint").textContent = !B.playing ? "开始后点页面任意位置，越往上音越高"
       : touchFirst() ? "再点一下按钮结束" : "再点一下按钮或按 Esc 结束";
   }
@@ -1061,7 +1066,10 @@
     w.innerHTML = `
       <div class="bard-head" title="拖动移动，双击复位">
         <span class="bard-title"><img class="bard-badge" src="${BADGE_SRC}" alt="" width="24" height="24" decoding="async" draggable="false">吟游诗人模拟器</span>
-        <button class="bard-tool" id="bardClose" type="button" aria-label="关闭吟游诗人模拟器" title="关闭">${ICON.close}</button>
+        <span class="bard-head-tools">
+          <button class="bard-tool" id="bardMini" type="button" aria-label="缩小：演奏时只留「结束演奏」按钮" title="缩小（只留「结束演奏」）" hidden>${ICON.mini}</button>
+          <button class="bard-tool" id="bardClose" type="button" aria-label="关闭吟游诗人模拟器" title="关闭">${ICON.close}</button>
+        </span>
       </div>
       <label class="visually-hidden" for="bardInst">音色</label>
       <select class="bard-select" id="bardInst">${options}</select>
@@ -1105,6 +1113,10 @@
     $("bardMore").addEventListener("click", () => toggleAdvanced(!$("bardAdv").classList.contains("is-open")));
     $("bardPlay").addEventListener("click", () => (B.playing ? stop() : start()));
     $("bardClose").addEventListener("click", close);
+    $("bardMini").addEventListener("click", () => {
+      B.mini = true;
+      syncButton();
+    });
     $("bardStageBtn").addEventListener("click", openStage);
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || !B.playing) return;

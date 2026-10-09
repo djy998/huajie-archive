@@ -1663,29 +1663,36 @@ function preloadDayNightImages(isDay) {
   HJ.late(() => urls.forEach((url) => { new Image().src = url; }));
 }
 
+/* 先把淡入层提升成独立图层、画好新图，隔两帧再开始淡入：栅格化大图和起动画不挤在同一帧 */
+const afterFrames = (n, fn) => requestAnimationFrame(() => (n > 1 ? afterFrames(n - 1, fn) : fn()));
+
 function crossfadeSky(isDay, duration) {
   const uri = skyUrl(isDay);
   const fade = $("skyFade");
+  fade.style.willChange = "opacity";
   fade.style.backgroundImage = `url('${uri}')`;
   fade.style.transitionDuration = duration + "ms";
-  requestAnimationFrame(() => { fade.style.opacity = "1"; });
+  afterFrames(2, () => { fade.style.opacity = "1"; });
   setTimeout(() => {
     $("skyBase").style.backgroundImage = `url('${uri}')`;
     fade.style.opacity = "0";
-  }, duration);
+    fade.style.willChange = "";
+  }, duration + 40);
 }
 
 function crossfadeTileBackgrounds(isDay, duration) {
   const bg = tileBgs(isDay);
+  const vh = window.innerHeight;
   TILE_IDS.forEach((id) => {
     const el = $(id);
-    /* 悬停中的卡片被设计图覆盖，直接替换 */
-    if (el.matches(":hover")) { setTileBg(el, bg[id]); return; }
+    /* 悬停中的卡片被设计图覆盖、屏幕外看不见的卡片（手机上大多数），都直接替换，不做淡入 */
+    const r = el.getBoundingClientRect();
+    if (el.matches(":hover") || !r.height || r.bottom < 0 || r.top > vh) { setTileBg(el, bg[id]); return; }
     const layer = document.createElement("div");
     layer.className = "tile-crossfade";
     layer.style.cssText = `background-image:url('${bg[id]}');transition-duration:${duration}ms`;
     el.appendChild(layer);
-    requestAnimationFrame(() => { layer.style.opacity = "1"; });
+    afterFrames(2, () => { layer.style.opacity = "1"; });
     setTimeout(() => {
       setTileBg(el, bg[id]);
       layer.remove();
@@ -1696,15 +1703,22 @@ function crossfadeTileBackgrounds(isDay, duration) {
 function applyDayNight(willBeDay) {
   const body = document.body;
   body.classList.remove("custom-bg");
+  /* 全页换配色那一下先关掉各元素的过渡（配色本来就是一下子换的），免得几十个按钮同时开始渐变；两帧后恢复 */
+  body.classList.add("dn-switching");
   body.classList.toggle("day-mode", willBeDay);
+  afterFrames(2, () => body.classList.remove("dn-switching"));
   if (fxEnabled) {
     body.classList.add("fx-crossfading");
+    clearFx();                                          // 旧的花叶 / 星光先撤掉，淡入结束后再按新昼夜重建
     crossfadeSky(willBeDay, DAYNIGHT_FADE_MS);
     crossfadeTileBackgrounds(willBeDay, DAYNIGHT_FADE_MS);
     setTimeout(() => {
       body.classList.remove("fx-crossfading");
       $("skyFade").style.backgroundImage = "";
+      applyFx();
     }, DAYNIGHT_FADE_MS + 80);
+    bgm.followDayNight();
+    return;
   } else {
     body.classList.remove("fx-crossfading");
     setSky(willBeDay);

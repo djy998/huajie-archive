@@ -226,6 +226,13 @@
     /* 评级只看得分，按现在的分档重新算（旧纪录里存的「完美」「完成」等旧名字也就换成新名字） */
     return old && old.score > num(cur.score, 0) ? old : { ...cur, rank: rankOf(num(cur.score, 0)) };
   }
+  /* 选曲列表右下角：这首在这个难度下的最高评级（各判定模式、点击范围里分最高的那条）；all 为 hj_stage_best3 */
+  function topRankOf(all, song, diff = S.diff) {
+    const prefix = `${song.id}:${diff}:`;
+    let top = 0;
+    for (const k in all) if (k.startsWith(prefix)) top = Math.max(top, num(all[k] && all[k].score, 0));
+    return top > 0 ? rankOf(top) : "";
+  }
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
   const midiName = (m) => `${NAMES[((m % 12) + 12) % 12]}${Math.floor(m / 12) - 1}`;
@@ -619,6 +626,7 @@
 
     const s = S.song;
     const previewing = S.preview.id === s.id;
+    const heroRank = topRankOf(storage.json(K.best) || {}, s);   // 右下角：这首在当前难度下的最高评级
     main.append(h("section", { class: "hjs-card hjs-hero" },
       h("p", { class: "hjs-eyebrow", text: "今晚演奏" }),
       h("h2", { class: "hjs-hero-t", text: s.t }),
@@ -632,7 +640,8 @@
         h("button", { type: "button", class: `hjs-btn hjs-prev-btn${previewing ? " is-on" : ""}`, id: "hjsLobbyPrev", "aria-pressed": String(previewing), onclick: () => togglePreview(s) },
           h("span", { class: "hjs-btn-ico", html: previewing ? ICON.stop : ICON.play }), h("span", { text: previewing ? "停止试听" : "试听" })),
         h("button", { type: "button", class: "hjs-btn", onclick: () => openSheet("picker") },
-          h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })))));
+          h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })),
+        heroRank ? h("span", { class: `hjs-song-rank hjs-hero-rank${heroRank === "Impeccable" ? " is-max" : ""}`, title: `${diffMeta().label}难度最高评级`, text: heroRank }) : null)));
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const best = bestOf(s);
@@ -817,7 +826,9 @@
     $id("hjsCount").textContent = `${list.length} / ${S.data.length} 首`;
     $id("hjsPickNow").textContent = S.song ? `已选：${S.song.t}` : "";
     if (!list.length) { box.append(h("p", { class: "hjs-empty", text: "没有符合条件的曲目" })); return; }
+    const bests = storage.json(K.best) || {};
     list.forEach((s) => {
+      const top = topRankOf(bests, s);
       const on = S.song && S.song.id === s.id;
       box.append(h("button", {
         type: "button", class: `hjs-song${on ? " is-on" : ""}${S.preview.id === s.id ? " is-preview" : ""}`, role: "option",
@@ -838,7 +849,8 @@
         s.tag ? h("span", { class: "hjs-tag", text: s.tag }) : null,
         h("span", { class: "hjs-song-side" },
           h("span", { class: "hjs-eq", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
-          h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} 星`, text: starText(starsOf(s)) }))));
+          h("span", { class: "hjs-stars", title: `${diffMeta().label}难度 ${starsOf(s)} 星`, text: starText(starsOf(s)) }),
+          top ? h("span", { class: `hjs-song-rank${top === "Impeccable" ? " is-max" : ""}`, title: `${diffMeta().label}难度最高评级`, text: top }) : null)));
     });
   }
 
