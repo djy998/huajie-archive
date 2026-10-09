@@ -25,6 +25,7 @@ SONGS = [
     dict(id="nocturne-op9-2", t="夜曲 Op.9 No.2", o="Nocturne in E♭ major", c="肖邦", tag="古典", show=True),
     dict(id="beethoven-virus", t="贝多芬病毒", o="Beethoven Virus（改编自《悲怆》奏鸣曲）", c="BanYa", tag="古典"),
     dict(id="auld-lang-syne-harp-solo-solo-mevari-navalo", t="友谊地久天长", o="Auld lang syne(Harp Solo)", c="Mevari Navalo", tag="古典", show=True),
+    dict(id="alla-turca", t="土耳其进行曲", o="Rondo Alla Turca", c="沃尔夫冈·阿玛多伊斯·莫扎特", tag="古典", gap=0.7, note="谱面比其他歌曲明显要难，献给热爱挑战的大人们", show=True),
 
     # ==== 游戏 ====
     dict(id="baka-mitai", t="像个笨蛋", o="ばかみたい（《如龙》系列）", c="", tag="游戏"),
