@@ -313,7 +313,7 @@ async function main() {
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const want = expectScore({ sumW: 3 * (notes.length - 1), n: notes.length, maxCombo: fin.maxCombo });
     check("百万分制：一个 MISS，分数 = 判定分折扣 + 连击分分档", fin.score === want, `${fin.score} / ${want}（最大连击 ${fin.maxCombo}/${notes.length}）`);
-    const rankWant = want >= 1000000 ? "Impeccable" : want >= 995000 ? "SSS+" : want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : want >= 925000 ? "almost S" : "A+";
+    const rankWant = want >= 1000000 ? "Impeccable" : want >= 995000 ? "SSS+" : want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : want >= 925000 ? "Almost S" : "A+";
     check("评级按得分", P.$(".hjs-res-rank span").textContent === rankWant, `${P.$(".hjs-res-rank span").textContent}/${rankWant}`);
     check("结算写明判定分与连击分", /判定分 [\d,]+ \+ 连击分 [\d,]+/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best3") || "{}");

@@ -5114,7 +5114,7 @@ html.pz-open, html.pz-open body { overflow: hidden; }
 html.pz-open .toast { z-index: 460; }
 .puzzle-overlay {
   position: fixed; inset: 0; z-index: 400;
-  background: #5f5c59;
+  background: #9c8e70;
   overscroll-behavior: contain;
   -webkit-user-select: none;
   user-select: none;
@@ -5125,19 +5125,31 @@ html.pz-open .toast { z-index: 460; }
   position: absolute; inset: 0;
   overflow: hidden;
   touch-action: none;
-  background-color: #77736f;
-  background-size: 160px 160px;
+  background: #9c8e70;
   cursor: grab;
 }
+/* 布纹桌面（打开拼图时才下载）：单独一层（translateZ），桌面平移、缩放、拖拼块时都不用重画这张大图 */
+.pz-stage::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: url('assets/site/puzzle-bg.webp') center / cover no-repeat;
+  transform: translateZ(0);
+  pointer-events: none;
+}
+@media (max-width: 760px) { .pz-stage::before { background-image: url('assets/site/puzzle-bg-m.webp'); } }
 .pz-stage.is-panning { cursor: grabbing; }
 .pz-stage.is-dragging { cursor: grabbing; }
+/* 整张桌面单独成层：平移、缩放、拖拼块时手机上不用每帧重画所有拼块。缩放比例变了以后 puzzle.js 的 applyView
+   停稳 0.3 秒再让它按新比例重画一次（不然放大后拼块会发糊） */
 .pz-table {
   position: absolute; left: 0; top: 0;
   transform-origin: 0 0;
+  will-change: transform;
   border-radius: 6px;
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.05), 0 0 0 1px rgba(0,0,0,.06);
 }
 .pz-table.is-animating { transition: transform .25s ease; }
+
 .pz-group { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .pz-group.is-lifted { will-change: transform; }
 .pz-group.is-gliding { transition: transform .9s cubic-bezier(.3,.8,.3,1); }
@@ -5255,6 +5267,7 @@ html.pz-open .toast { z-index: 460; }
   letter-spacing: .12em;
 }
 
+.pz-cards.is-setup { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .pz-cards {
   position: absolute; inset: 0; z-index: 5;
   display: flex; align-items: flex-start; justify-content: center;
@@ -5264,6 +5277,7 @@ html.pz-open .toast { z-index: 460; }
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   -webkit-user-select: text;
+  /* 难度设置页（.is-setup，见下）不压暗不模糊，直接看到布纹桌面；暂停、时间到、通关卡片照旧压暗 */
   user-select: text;
 }
 .pz-card { width: 100%; max-width: 440px; margin: auto; padding: 30px 26px 26px; }
@@ -6616,7 +6630,9 @@ body.hjs-open .toast { z-index: 540; }
   color: var(--s-soft);
 }
 .hjs-hero-btns { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; }
-.hjs-hero-rank { margin-left: auto; font-size: 1.7rem; }   /* 今晚演奏卡片右下角的最高评级（按钮行最右边） */
+/* 今晚演奏卡片右下角的最高评级（按钮行最右边）；手机上按钮右边空位有限，字号小一档，排不下时整行换到下面、仍靠右 */
+.hjs-song-rank.hjs-hero-rank { margin-left: auto; font-size: 3rem; line-height: .9; }
+@media (max-width: 760px) { .hjs-song-rank.hjs-hero-rank { font-size: 2.3rem; } }
 .hjs-ctrl { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .hjs-line { display: flex; align-items: center; gap: 12px; }
 .hjs-line-l { flex: none; width: 2.4em; font-size: .78rem; letter-spacing: .14em; color: var(--s-mute); }

@@ -188,7 +188,7 @@
     return { judge: j, combo: c, score: Math.round(capScore(j + c, capOf())) };
   }
   /* 评级按得分；0 分、学习、自动演奏为「完成」 */
-  const RANKS = [[1000000, "Impeccable"], [995000, "SSS+"], [990000, "SSS"], [980000, "SS"], [950000, "S"], [925000, "almost S"],
+  const RANKS = [[1000000, "Impeccable"], [995000, "SSS+"], [990000, "SSS"], [980000, "SS"], [950000, "S"], [925000, "Almost S"],
     [900000, "A+"], [850000, "A"], [800000, "B+"], [700000, "B"], [600000, "C+"], [500000, "C"], [400000, "D+"], [1, "D"]];
   const rankOf = (score) => (RANKS.find(([at]) => score >= at) || [0, "Complete"])[1];
   const fmtWan = (n) => `${+(n / 10000).toFixed(1)} 万`;

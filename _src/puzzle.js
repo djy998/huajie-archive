@@ -271,38 +271,7 @@
     return { cv, sc };
   }
 
-  /* 毛毡桌面纹理 */
-  let feltUrl = "";
-  function feltTexture() {
-    if (feltUrl) return feltUrl;
-    const size = 160;
-    const cv = el("canvas", "", { width: size, height: size });
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = "#77736f";
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 260; i++) {
-      const x = Math.random() * size, y = Math.random() * size, r = 4 + Math.random() * 14;
-      const light = Math.random() < 0.5;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, light ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.08)");
-      grad.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grad;
-      for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) {
-        ctx.save();
-        ctx.translate(dx, dy);
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
-        ctx.restore();
-      }
-    }
-    const data = ctx.getImageData(0, 0, size, size);
-    for (let i = 0; i < data.data.length; i += 4) {
-      const n = (Math.random() - 0.5) * 14;
-      data.data[i] += n; data.data[i + 1] += n; data.data[i + 2] += n;
-    }
-    ctx.putImageData(data, 0, 0);
-    feltUrl = cv.toDataURL("image/png");
-    return feltUrl;
-  }
+
 
   /* 吸附提示音，跟随全站音量 */
   let audioCtx = null;
@@ -457,6 +426,7 @@
   const card = (id) => {
     ["pzSetup", "pzPauseCard", "pzTimeUpCard", "pzResultCard"].forEach((c) => { $(c).hidden = c !== id; });
     $("pzCards").hidden = !id;
+    $("pzCards").classList.toggle("is-setup", id === "pzSetup");   // 难度设置页不压暗，布纹背景原样露出来
     if (id) playFadeOnly($(id));
     syncClock();
   };
@@ -467,7 +437,6 @@
     built = true;
     const root = $("puzzleRoot");
     root.innerHTML = ROOT_HTML;
-    $("pzStage").style.backgroundImage = `url('${feltTexture()}')`;
     DIFF_KEYS.forEach((k) => {
       const { cols, rows } = gridFor(k, 16 / 9);
       root.querySelector(`[data-diff-sub="${k}"]`).textContent = `${cols * rows}块`;
@@ -1071,12 +1040,28 @@
   const minScale = () => view.fit * 0.75;
   const maxScale = () => Math.max(view.fit * 8, 2.2);
 
+  /* 桌面是单独一层（will-change: transform），浏览器不会随缩放重画它：缩放比例变了，停稳 0.3 秒后撤掉再加回 will-change，
+     让它按新比例重画一次，放大后拼块才清楚。平移不变比例，不触发 */
+  let rasterScale = 0;
+  let rasterTimer = 0;
+  function sharpenLater(t) {
+    if (view.s === rasterScale) return;
+    clearTimeout(rasterTimer);
+    rasterTimer = setTimeout(() => {
+      if (pinch) { sharpenLater(t); return; }
+      rasterScale = view.s;
+      t.style.willChange = "auto";
+      requestAnimationFrame(() => { t.style.willChange = ""; });
+    }, 300);
+  }
+
   function applyView(animate) {
     const t = $("pzTable");
     t.classList.toggle("is-animating", !!animate && !prefersReducedMotion());
     clampView();
     t.style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${view.s})`;
     if (animate) setTimeout(() => t.classList.remove("is-animating"), 260);
+    sharpenLater(t);
   }
 
   /* 桌面至少留 30% 在屏幕内 */
@@ -1178,6 +1163,7 @@
       if (drag) dropDrag();
       pan = null;
       startPinch();
+      $("pzStage").classList.add("is-pinching");
       return;
     }
     if (pointers.size > 2) return;
@@ -1270,10 +1256,11 @@
     if (pan && pan.id === e.pointerId) pan = null;
     if (pinch && pointers.size < 2) {
       pinch = null;
+      $("pzStage").classList.remove("is-pinching");
       const rest = [...pointers.entries()][0];
       if (rest) pan = { id: rest[0], x: rest[1].x, y: rest[1].y, vx: view.x, vy: view.y };
     }
-    if (!pointers.size) $("pzStage").classList.remove("is-panning", "is-dragging");
+    if (!pointers.size) $("pzStage").classList.remove("is-panning", "is-dragging", "is-pinching");
   }
 
   function dropDrag() {
@@ -1725,6 +1712,7 @@
     togglePreview(false);
     pointers.clear();
     pan = pinch = null;
+    $("pzStage").classList.remove("is-panning", "is-dragging", "is-pinching");
     $("puzzleOverlay").hidden = true;
     document.documentElement.classList.remove("pz-open");
   }
