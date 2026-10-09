@@ -971,7 +971,10 @@ async function main() {
     check("网页不直接读 songs-all.json", !P.fetched.some((u) => /songs-all/.test(u)));
     P.click(P.btn("更换曲目"));
     check("选曲窗口只有公开曲目", P.$$(".hjs-song").length === PUBLIC.songs.length && /\d+ \/ \d+ 首/.test(P.$("#hjsCount").textContent), P.$("#hjsCount").textContent);
-    check("公开曲目只有一个分类：不显示分类筛选，也不多出 null 字样", !P.$(".hjs-chips.is-cat") && !/null|undefined/.test(P.$("#hjsSheetCard").textContent));
+    const pubTags = new Set(PUBLIC.songs.map((s) => s.tag)).size;
+    check("分类筛选只列公开曲目里有的分类（只有一个时不显示），也不多出 null 字样",
+      (pubTags > 1 ? P.$$(".hjs-chips.is-cat .hjs-chip").length === pubTags + 1 : !P.$(".hjs-chips.is-cat"))
+      && !/null|undefined/.test(P.$("#hjsSheetCard").textContent), `${pubTags} 个分类`);
     const input = P.$(".hjs-search-in");
     const enter = (text) => {
       input.value = text;
