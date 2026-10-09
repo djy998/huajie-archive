@@ -40,6 +40,7 @@ SONGS = [
     dict(id="your-reality", t="Your Reality", o="《心跳文学部》", c="Dan Salvato", tag="游戏"),
     dict(id="haru-urara", t="致春乌拉拉", o="Tribute to Haru Urara（《赛马娘》）", c="", tag="游戏"),
     dict(id="masayoshi-soken-bee-my-honey-solo-debra-vanhouten", t="Bee My Honey", o="Solo-Debra Vanhouten", c="Masayoshi Soken", tag="游戏", note="蜂蜂小甜心，甜到你心中！"),
+    dict(id="reflection-audio-to-midi-rough", t="Reflection(Mirror Night)", o="", c="V.K-Deemo", tag="游戏"),
 
     # ==== 动画 ====
     dict(id="ichirin-no-hana", t="一轮之花", o="一輪の花（《死神》OP）", c="HIGH and MIGHTY COLOR", tag="动画"),
