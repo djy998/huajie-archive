@@ -76,7 +76,7 @@
 - **身份**：
   - 密码 A、B、C 和查看密码分别对应 `a`、`b`、`c`（管理员）、`v`（只读）。查看密码在管理页改过后存在 D1（加盐哈希），以它为准。
   - 管理员密码 15 分钟内输错 3 次，封锁 15 分钟。
-- **人机验证**：`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`math`（理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
+- **人机验证**：手动验证的题面都不以文字下发：狒科生的职业图标、理科生的算式都是图片（data URL；算式由 Worker 的 `mathImage` 用笔画字形画成带扭曲和干扰线的 PNG，前端 `verify.js` 的 `paintImage` 按主题染色），文科生的令字在前端画到 canvas 上；答案只在加密的题目 id 里（AES-GCM），判卷在服务端。`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`math`（理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
 - **IP 属地**：`requestGeo` 从 Cloudflare 的 `request.cf` 取出「国家|地区|城市」。数据库不保存 IP 本身。访客标识（`client_key`）是带密钥的 IP 哈希，只用于限流和防重复。
 - **表结构**：
   - `SCHEMA_SQL` 只用 `CREATE … IF NOT EXISTS`。给已有表加列写在 `ADDED_COLUMNS`。

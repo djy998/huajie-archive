@@ -56,7 +56,7 @@
     });
   }
 
-  /* 题面画在 canvas 上并加干扰，页面文本中不出现题目 */
+  /* 文科生的令字画在 canvas 上并加干扰，页面文本中不出现 */
   const FONT_STACK = '"Noto Serif SC","Songti SC",serif';
 
   function paintChallenge(canvas, text, opts) {
@@ -107,6 +107,31 @@
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+  }
+
+  /* 理科生的题面由 Worker 画成图片下发（接口里没有算式文字）：图按 2 倍尺寸画、只有透明度，这里缩一半并染成当前主题的字色 */
+  function paintImage(canvas, src) {
+    if (!canvas || !src) return;
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext && canvas.getContext("2d");
+      if (!ctx || !canvas.isConnected) return;
+      const ink = (getComputedStyle(canvas).getPropertyValue("--verify-ink") || "#ffd699").trim() || "#ffd699";
+      const dpr = Math.min(global.devicePixelRatio || 1, 3);
+      const w = Math.round(img.naturalWidth / 2), h = Math.round(img.naturalHeight / 2);
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = ink;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    };
+    img.src = src;
   }
 
   const isManualMode = (mode) => MANUAL_MODES.indexOf(mode) >= 0;
@@ -415,7 +440,10 @@
       const cv = this.body.querySelector(".verify-canvas");
       if (!cv) return;
       if (this.mode === "poem") paintChallenge(cv, t.keyword, { size: 26, pad: 3, hFactor: 1.2 });
-      else if (this.mode === "math") paintChallenge(cv, t.question + " = ?", { size: 32, pad: 12 });
+      else if (this.mode === "math") {
+        if (t.image) paintImage(cv, t.image);
+        else if (t.question) paintChallenge(cv, t.question + " = ?", { size: 32, pad: 12 });
+      }
     }
 
     /* 昼夜切换时重画题面 */

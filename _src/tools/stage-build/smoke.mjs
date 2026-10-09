@@ -27,7 +27,7 @@ const SHORT = SONGS.songs.reduce((a, b) => (b.dur < a.dur ? b : a));
 /* 百万分制，按玩法说明另写一遍（不照搬 bard-stage.js），两边对得上才算对 */
 function expectScore({ sumW, n, maxCombo, cap = 1000000 }) {
   const raw = (500000 * sumW) / n;
-  const j = Math.round(raw <= 350000 ? raw : raw <= 560000 ? 350000 + 0.42 * (raw - 350000) : 438200 + (raw - 560000) * (261800 / 940000));
+  const j = Math.round(raw <= 500000 ? 0.7 * raw : raw <= 1000000 ? 350000 + 0.42 * (raw - 500000) : 560000 + 0.28 * (raw - 1000000));
   const r = maxCombo / n;
   /* 连击分每 5% 一档（下标 k = 超过 k×5%）；30/40/50/60/70/80/85/90/95% 是原有的点，其余按它们插值补齐 */
   const COMBO5 = [0, 31000, 60000, 86000, 110000, 131000, 150000, 166000, 180000, 197000, 210000,
