@@ -124,7 +124,7 @@
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
   /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫；--day-gold 为加粗小标题与强调字 */
-  --day-cream: #1e2810;   /* 深绿近黑：白天卡片里的正文深色字与毛笔标题 */
+  --day-cream: #3c578e;   /* 靛蓝：白天卡片里的正文深色字与毛笔标题 */
   --day-gold: #4b2341;   /* 深暖紫 */
   --day-lilac: #5b3610;
   --pill-ink: var(--cream);
