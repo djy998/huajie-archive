@@ -4035,13 +4035,13 @@ function initA11y() {
 /* 一次性重置：RESET_ID 换一个新值，每位访客下次进站时执行一次（记在 hj_reset_done）。
    这一次（舞台演奏加了判定模式等）：舞台演奏与吟游诗人模拟器的设置恢复默认（hj_stage_*、hj_bard_*；本机纪录 hj_stage_best2 / best3 与曲库凭证 hj_stage_unlock 保留），
    并清掉离线缓存里的旧文件（当前版本的除外），之后用到时重新下载 */
-const RESET_ID = "20261004b";
+const RESET_ID = "20261009j";
 function runOneTimeReset() {
   if (storage.get(STORE.reset) === RESET_ID) return;
   try {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
-    const keepStage = ["hj_stage_best2", "hj_stage_best3", "hj_stage_unlock"];
+    const keepStage = ["hj_stage_unlock"];   // 曲库凭证留着，免得重新输密码；纪录（best2 / best3）和设置都清掉
     keys.filter((k) => k && (k.startsWith("hj_bard_") || (k.startsWith("hj_stage_") && !keepStage.includes(k))))
       .forEach((k) => storage.remove(k));
   } catch (e) {}

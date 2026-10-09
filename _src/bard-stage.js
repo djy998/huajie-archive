@@ -188,10 +188,9 @@
     return { judge: j, combo: c, score: Math.round(capScore(j + c, capOf())) };
   }
   /* 评级按得分；0 分、学习、自动演奏为「完成」 */
-  const RANKS = [[1000000, "完美"], [990000, "SSS"], [980000, "SS"], [950000, "S"], [900000, "A+"], [850000, "A"],
-    [800000, "B+"], [700000, "B"], [600000, "C+"], [500000, "C"], [400000, "D+"], [1, "D"]];
-  const rankOf = (score) => (RANKS.find(([at]) => score >= at) || [0, "完成"])[1];
-  const RANK_ORDER = ["完成", ...RANKS.map((r) => r[1]).reverse()];
+  const RANKS = [[1000000, "Impeccable"], [995000, "SSS+"], [990000, "SSS"], [980000, "SS"], [950000, "S"], [925000, "almost S"],
+    [900000, "A+"], [850000, "A"], [800000, "B+"], [700000, "B"], [600000, "C+"], [500000, "C"], [400000, "D+"], [1, "D"]];
+  const rankOf = (score) => (RANKS.find(([at]) => score >= at) || [0, "Complete"])[1];
   const fmtWan = (n) => `${+(n / 10000).toFixed(1)} 万`;
   /* 有上限时的一行说明：「得分上限 80 万（宽松判定）」 */
   function capNote() {
@@ -224,7 +223,8 @@
     const cur = (storage.json(K.best) || {})[`${song.id}:${diff}:${judge}:${range}`] || null;
     const old = oldBestOf(song, diff, judge, range);
     if (!cur) return old;
-    return old && old.score > num(cur.score, 0) ? old : cur;
+    /* 评级只看得分，按现在的分档重新算（旧纪录里存的「完美」「完成」等旧名字也就换成新名字） */
+    return old && old.score > num(cur.score, 0) ? old : { ...cur, rank: rankOf(num(cur.score, 0)) };
   }
   const fmtTime = (sec) => { const n = Math.max(0, Math.round(sec)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
   const fmtNum = (n) => Math.round(n).toLocaleString("en-US");
@@ -2017,7 +2017,7 @@
         S.learn ? tag("模式", "学习") : isAuto() ? tag("模式", "自动演奏") : null));
     if (!scored()) {
       card.append(
-        h("div", { class: "hjs-res-rank is-done" }, h("span", { text: rankOf(0) })),
+        h("div", { class: "hjs-res-rank is-done is-long" }, h("span", { text: rankOf(0) })),
         h("div", { class: "hjs-res-big", text: `${S.learnHits} / ${total}` }),
         h("p", { class: "hjs-res-sub", text: S.learn ? "学习模式不计分，熟练后可切换至演出模式"
           : "点击范围与判定模式均为放水：自动演奏，不计分、不记录。如需自行弹奏，请在设置中修改其中一项" }));
@@ -2028,7 +2028,7 @@
       const fullCombo = total > 0 && S.maxCombo >= total;   // 一个 MISS 都没有，连击从头连到尾
       card.append(
         ...(fullCombo ? [h("div", { class: "hjs-res-fc", text: "FULL COMBO!" })] : []),   // 原生 append 会把 null 写成文字，不能传 null
-        h("div", { class: `hjs-res-rank${rank === "完美" ? " is-max" : ""}` }, h("span", { text: rank }), isNew ? h("em", { text: "新纪录" }) : null),
+        h("div", { class: `hjs-res-rank${rank === "Impeccable" ? " is-max" : ""}${rank.length > 4 ? " is-long" : ""}` }, h("span", { text: rank }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大连击 ${S.maxCombo} / ${total}` }),
         h("p", { class: `hjs-res-sub hjs-res-parts${capNote() ? " hjs-res-mult" : ""}`, text: scoreParts() }),
@@ -2077,14 +2077,13 @@
     const where = worst && worst.c >= 3 ? `，最多在 ${fmtTime(worst.k * 4)}~${fmtTime(worst.k * 4 + 4)}（${worst.c} 帧）` : "";
     return `掉帧 ${pct < 1 && dg.drop ? "<1" : Math.round(pct)}%（${Math.round(1000 / dg.base)} Hz${where}，最长一帧 ${Math.round(dg.max)} ms）${lite}`;
   }
-  /* 最高分与最高评级（评级随得分，分高评级就不会低）；准确率、最大连击一起记着备查 */
+  /* 最高分与评级（评级随得分）；准确率、最大连击一起记着备查 */
   function saveBest(pct) {
     const all = storage.json(K.best) || {};
     const key = `${S.song.id}:${S.diff}:${S.judge}:${S.range}`;
     const old = bestOf(S.song);
     if (old && S.score <= num(old.score, 0)) return false;
-    const rank = RANK_ORDER.indexOf(rankOf(S.score)) >= RANK_ORDER.indexOf(old ? old.rank : "完成") ? rankOf(S.score) : old.rank;
-    all[key] = { score: S.score, rank, acc: +pct.toFixed(1), combo: S.maxCombo, at: Date.now() };
+    all[key] = { score: S.score, rank: rankOf(S.score), acc: +pct.toFixed(1), combo: S.maxCombo, at: Date.now() };
     storage.set(K.best, JSON.stringify(all));
     return true;
   }

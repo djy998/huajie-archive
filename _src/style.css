@@ -6833,6 +6833,7 @@ body.hjs-open .toast { z-index: 540; }
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
 }
+.hjs-res-rank.is-long { font-size: 2.8rem; white-space: nowrap; }   /* Impeccable、almost S、Complete 这类长名字 */
 .hjs-res-rank.is-done { font-size: 2.6rem; color: var(--s-soft); text-shadow: none; }
 .hjs-res-parts { font-size: .74rem; font-variant-numeric: tabular-nums; }
 .hjs-res-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: -4px; }

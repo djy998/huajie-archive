@@ -313,7 +313,7 @@ async function main() {
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
     const want = expectScore({ sumW: 3 * (notes.length - 1), n: notes.length, maxCombo: fin.maxCombo });
     check("百万分制：一个 MISS，分数 = 判定分折扣 + 连击分分档", fin.score === want, `${fin.score} / ${want}（最大连击 ${fin.maxCombo}/${notes.length}）`);
-    const rankWant = want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : "A+";
+    const rankWant = want >= 1000000 ? "Impeccable" : want >= 995000 ? "SSS+" : want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : want >= 925000 ? "almost S" : "A+";
     check("评级按得分", P.$(".hjs-res-rank span").textContent === rankWant, `${P.$(".hjs-res-rank span").textContent}/${rankWant}`);
     check("结算写明判定分与连击分", /判定分 [\d,]+ \+ 连击分 [\d,]+/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
@@ -690,7 +690,7 @@ async function main() {
     check("自动演奏：不计分", st.score === 0 && /0 分|自动演奏/.test(P.$("#hjsModal").textContent));
     const tags = P.$(".hjs-res-tags").textContent;
     check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度泰坦", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
-    check("结算写明不计分、不记纪录，评级为「完成」", /不计分、不记录/.test(P.$("#hjsModal").textContent) && P.$(".hjs-res-rank")?.textContent === "完成");
+    check("结算写明不计分、不记纪录，评级为「Complete」", /不计分、不记录/.test(P.$("#hjsModal").textContent) && P.$(".hjs-res-rank")?.textContent === "Complete");
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best3") && !P.mem.get("hj_stage_best2"));
   }
 
@@ -741,7 +741,7 @@ async function main() {
     check("花停下后线清空", (Q.$(".hjs-fly-svg path").getAttribute("d") || "") === "");
   }
 
-  /* 21. 百万分制与得分上限：全 PERFECT 正好 100 万（完美）；宽松 / 放水按组合有上限，打满正好等于上限 */
+  /* 21. 百万分制与得分上限：全 PERFECT 正好 100 万（Impeccable）；宽松 / 放水按组合有上限，打满正好等于上限 */
   {
     const runAll = async (prefs) => {
       const P = makePage({ prefs: { hj_stage_song: SHORT.id, hj_stage_diff: "easy", ...prefs } });
@@ -756,7 +756,7 @@ async function main() {
         res: P.$("#hjsModal").textContent, perfect: P.st().counts.perfect === ns.length };
     };
     const base = await runAll({});
-    check("全 PERFECT 全连：正好 1,000,000 分、评级「完美」", base.perfect && base.score === 1000000 && base.rank === "完美", `${base.score} ${base.rank}`);
+    check("全 PERFECT 全连：正好 1,000,000 分、评级「Impeccable」", base.perfect && base.score === 1000000 && base.rank === "Impeccable", `${base.score} ${base.rank}`);
     check("演奏中分数只涨不跌，最后一个音打完正好满分", base.live.every((v, i) => i === 0 || v >= base.live[i - 1]) && base.live[base.live.length - 1] === 1000000);
     check("没有上限时不写上限", !/得分上限/.test(base.res) && !/得分上限/.test(base.tip));
     const cases = [
