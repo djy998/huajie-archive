@@ -7,13 +7,16 @@
      「提示」给 10 个字拼一句（同人机验证的文科生），「答案」直接给一句并注明出处；
      「核对」检查发言人的诗句：令字和位置对不对、本局有没有人说过、题库出处；题库外的句子主持人点「确认过关」才算过关；
      自带题库约 1230 句常见名篇，另有约 7.5 万句扩充题库在 games-poems.js，打开时在后台加载
-   - 谁是卧底：从同一类 FF14 词语里抽两个，一个给平民、一个给卧底 */
+   - 谁是卧底：从同一类 FF14 词语里抽两个，一个给平民、一个给卧底；填人数、卧底数后分配身份（1号~N号），
+     每轮描述完投票，得票最多的淘汰，平票的几人再描述一次、只在这几人里重投；剩三人（含卧底）卧底胜，卧底全出局平民胜
+   每个游戏下方都有一栏「播报 / 主持词」：按操作自动换成对应的话，也能手动改，复制后粘贴到游戏聊天栏 */
 (() => {
   const STORE_TAB = "hj_games_tab";
   const STORE_MACRO = "hj_games_macro_";        // + 宏 id，存改过的规则宏
   const STORE_POEM_MODE = "hj_games_poem_mode";
   const STORE_SPY_KIND = "hj_games_spy_kind";
   const STORE_BOMB_PLAYERS = "hj_games_bomb_players";
+  const STORE_SPY_PLAYERS = "hj_games_spy_players";
   const MACRO_MAX_LINES = 15;                   // 游戏里一个宏最多 15 行
 
   const GAMES = [
@@ -52,7 +55,7 @@
 /p 然后使用私聊频道把其中一个词发给1~2个【卧底】（根据玩家人数调整），另一个词发给其他的【平民】。<wait.3>
 /p 每人每轮只能说一句话描述自己拿到的词语（不能直接说出那个词语）。<wait.2>
 /p 既不能让卧底发现，也要给同伴以暗示。<wait.2>
-/p 每轮描述完毕，所有人投票选出怀疑是卧底的那个人，得票数最多的人出局；平票则进入下一轮描述。<wait.3>
+/p 每轮描述完毕，所有人投票选出怀疑是卧底的那个人，得票数最多的人出局；平票时得票最多的几人再各描述一次，大家在这几人中再次投票。<wait.3>
 /p 若最后仅剩三人（包含卧底），则卧底获胜；反之，则平民获胜。<wait.2>
 /p 一起来找出卧底吧！` },
   };
@@ -534,6 +537,53 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     return load;
   }
 
+  /* ==== 播报 / 主持词：随操作自动换成对应的话，也能手动改（改动不保存，下一次操作会换掉） ==== */
+  const sayHtml = (id, title, { copy = true, placeholder = "" } = {}) => `
+    <div class="gm-say" id="${id}">
+      <div class="gm-say-head">
+        <span class="gm-say-title">${title}</span>
+        <span class="gm-macro-meta"></span>
+        ${copy ? `<button type="button" class="gm-mini gm-say-copy">复制${title}</button>` : ""}
+      </div>
+      <textarea class="gm-macro-text gm-say-text" rows="2" spellcheck="false" aria-label="${title}" placeholder="${placeholder}"></textarea>
+    </div>`;
+
+  function bindSay(box, title) {
+    const ta = el(box, ".gm-say-text");
+    let last = null;
+    /* 高度跟着内容（折行也算），最高 12 行左右；面板没显示时量不出来，切过来时再量（G.fitSays） */
+    const fit = () => {
+      if (!ta.offsetParent) return;
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight + 2, 320)}px`;
+    };
+    (G.says ||= []).push(fit);
+    const sync = () => {
+      const lines = ta.value.split("\n").filter((l) => l.trim()).length;
+      fit();
+      const meta = el(box, ".gm-macro-meta");
+      meta.textContent = lines > MACRO_MAX_LINES ? `${lines} 行，超过 ${MACRO_MAX_LINES} 行放不进一个宏` : lines ? `${lines} 行 · 可直接修改` : "";
+      meta.classList.toggle("is-over", lines > MACRO_MAX_LINES);
+      const copy = el(box, ".gm-say-copy");
+      if (copy) copy.disabled = !ta.value.trim();
+    };
+    ta.addEventListener("input", sync);
+    const copy = () => (ta.value.trim() ? copyText(ta.value, `已复制${title}，粘贴到游戏聊天栏`, "复制失败，请手动复制") : showToast(`还没有${title}`));
+    el(box, ".gm-say-copy")?.addEventListener("click", copy);
+    sync();
+    return {
+      /* force：内容和上次一样也重写（同样的操作又做了一次，把手动改的盖掉） */
+      set(text, force = false) {
+        if (!force && text === last) return;
+        last = text;
+        ta.value = text;
+        sync();
+      },
+      copy,
+      get: () => ta.value,
+    };
+  }
+
   /* ==== 数字炸弹 ==== */
   const BOMB_MAX = 999999999;
   const BOMB_SPARKS = 14;
@@ -602,7 +652,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       <button type="button" class="gm-mini" id="gmBombUndo">撤销一步</button>
       <button type="button" class="gm-mini" id="gmBombPeek" aria-pressed="false">偷看炸弹</button>
       <button type="button" class="gm-mini" id="gmBombCopy">复制播报</button>
-    </div>`;
+    </div>
+    ${sayHtml("gmBombSay", "播报", { copy: false })}`;
 
   /* 爆炸星：spikes 个尖角，尖角长短略有参差，rot 为整体转角（度） */
   function burstPoints(spikes, outer, inner, rot) {
@@ -681,6 +732,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     el(r, "#gmBombGuess").disabled = B.over;
     el(r, "#gmBombTurn").textContent = `${B.turn}号`;
     r.querySelectorAll("[data-turn]").forEach((b) => { b.disabled = B.over; });
+    G.bombSay?.set(bombSayText());
   }
 
   /* 字号：范围越小越大，同时不超出舞台宽度 */
@@ -767,13 +819,16 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     setTimeout(() => { if (B.over) stage.classList.add("is-boomed"); }, 1100);
   }
 
-  function bombAnnounce() {
+  /* 播报内容跟着局面变；「复制播报」复制下面播报栏里的（可能手动改过） */
+  function bombSayText() {
     const head = macroChannel("bomb") + "【数字炸弹】";
     const last = B.guesses[B.guesses.length - 1];
-    const text = B.over ? `${head}砰！炸弹就是 ${B.bomb}～`
+    return B.over ? `${head}砰！炸弹就是 ${B.bomb}～`
       : last?.miss ? `${head}${last.n}不是炸弹！`
       : `${head}现在的范围：${B.lo}～${B.hi}`;
-    copyText(text, "已复制播报，粘贴到游戏聊天栏", "复制失败");
+  }
+  function bombAnnounce() {
+    G.bombSay.copy();
   }
 
   function nudge(input, msg, text) {
@@ -786,6 +841,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
 
   function initBomb(panel) {
     bindMacro(el(panel, "[data-macro-slot=bomb]"), () => "bomb");
+    G.bombSay = bindSay(el(panel, "#gmBombSay"), "播报");
     const setInput = el(panel, "#gmBombSet");
     panel.querySelectorAll("input[name=gmBombMode]").forEach((radio) => radio.addEventListener("change", () => {
       panel.querySelectorAll(".gm-seg label").forEach((l) => l.classList.toggle("is-active", l.contains(el(panel, "input[name=gmBombMode]:checked"))));
@@ -901,10 +957,11 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     <div class="gm-actions">
       <button type="button" class="gm-mini" id="gmPoemHint">提示</button>
       <button type="button" class="gm-mini" id="gmPoemAnswer">答案</button>
-      <button type="button" class="gm-mini" id="gmPoemNext" hidden>下一位</button>
+      <button type="button" class="gm-mini" id="gmPoemNext">下一位</button>
     </div>
     <div class="gm-hint" id="gmPoemHintBox" hidden></div>
     <div class="gm-answer" id="gmPoemAnswerBox" hidden></div>
+    ${sayHtml("gmPoemSay", "主持词")}
     <p class="gm-foot" id="gmPoemFoot"></p>`;
 
   /* 当前要求下可用的句子，优先没说过、没给过的 */
@@ -923,6 +980,18 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     return randomItem(famous.length ? famous : regular.length ? regular : list);
   }
 
+  /* 主持词：提示、核对结果、轮到下一位 */
+  const poemCh = () => macroChannel(P.strict ? "poemHard" : "poemEasy") || "/y ";
+  const poemTurnLine = () => (P.strict
+    ? `${poemCh()}<t>轮到你接下句啦，只要是“${P.kw}”在第${cn(P.pos)}位的诗句就行！`
+    : `${poemCh()}<t>轮到你接下句啦，只要是包含“${P.kw}”的诗句就行！`);
+  const poemSay = (...lines) => G.poemSay?.set(lines.join("\n"), true);
+  function poemHintSay(p) {
+    const at = P.strict ? P.pos : p.text.indexOf(P.kw) + 1;
+    poemSay(`${poemCh()}遇到困难了嘛，给个提示哦~在“${p.hint.join("、")}”这些字中拼出一句就行~`,
+      `${poemCh()}诗句是${cn(p.text.length)}个字，"${P.kw}"是第${cn(at)}个字~`);
+  }
+
   function setKeyword(kw) {
     setPending(null);
     P.kw = kw;
@@ -933,6 +1002,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     setMsg(el(G.root, "#gmPoemMsg"), "");
     el(G.root, "#gmPoemInput").value = "";
     poemRender();
+    poemSay(poemTurnLine());
   }
 
   /* 等主持人确认的题库外句子 */
@@ -958,6 +1028,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     P.pos = ((pos - 1 + POEM_SLOTS) % POEM_SLOTS) + 1;
     resetSuggest();
     poemRender();
+    poemSay(poemTurnLine());
   }
 
   const posLabel = (pos) => `第${cn(pos)}位 · 令字在第${cn(pos)}字`;
@@ -974,7 +1045,6 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       b.title = gaps.length ? `严格字序下第 ${gaps.join("、")} 字暂无收录` : `题库里有 ${suggestPool(b.dataset.kw).length} 句`;
     });
     el(r, "#gmPoemPos").hidden = !P.strict;
-    el(r, "#gmPoemNext").hidden = !P.strict;
     el(r, "#gmPoemPosText").textContent = posLabel(P.pos);
     const n = poemPool().length;
     const where = P.strict ? `「${kw}」在第${cn(P.pos)}字的` : `含「${kw}」的`;
@@ -996,13 +1066,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     ansBox.hidden = !(P.answerOn && p);
     if (!p) return;
     if (P.hintOn) {
-      if (!p.hint) {
-        const own = [...new Set(p.text)];
-        const out = own.slice(0, POEM_HINT_CHARS);
-        const pool = [...new Set(POEM_HINT_FILLER)].filter((ch) => !out.includes(ch));
-        while (out.length < POEM_HINT_CHARS && pool.length) out.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
-        p.hint = shuffle(out);
-      }
+      hintChars(p);
       const where = P.strict ? `，「${P.kw}」在第${cn(P.pos)}个` : "";
       hintBox.innerHTML = `<p class="gm-hint-note">从下面这些字里拼一句（共 ${p.text.length} 个字${where}，点字可以填进输入框）：</p>`
         + `<div class="gm-hint-chars">${p.hint.map((ch) => `<button type="button" class="gm-char" data-ch="${escapeHtml(ch)}">${escapeHtml(ch)}</button>`).join("")}</div>`;
@@ -1017,6 +1081,17 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     }
   }
 
+  function hintChars(p) {
+    if (!p.hint) {
+      const own = [...new Set(p.text)];
+      const out = own.slice(0, POEM_HINT_CHARS);
+      const pool = [...new Set(POEM_HINT_FILLER)].filter((ch) => !out.includes(ch));
+      while (out.length < POEM_HINT_CHARS && pool.length) out.push(pool.splice(randInt(0, pool.length - 1), 1)[0]);
+      p.hint = shuffle(out);
+    }
+    return p.hint;
+  }
+
   function showSuggest(kind) {
     if (!P.cur) P.cur = pickPoem();
     if (!P.cur) return;
@@ -1024,6 +1099,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (kind === "hint") P.hintOn = true;
     else P.answerOn = true;
     renderSuggest();
+    if (kind === "hint") poemHintSay(P.cur);
   }
 
   function swapSuggest() {
@@ -1032,6 +1108,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     P.cur = next;
     P.shown.add(next.text);
     renderSuggest();
+    if (P.hintOn) poemHintSay(next);
   }
 
   /* 把输入切成单句：按标点和空格分开，连着写的两句（10 或 14 个字）从中间拆开 */
@@ -1060,14 +1137,19 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (!lines.length) return nudge(input, msg, "先输入发言人的诗句");
     const withKw = lines.filter((l) => l.includes(kw));
     if (!withKw.length) {
+      poemSay(`${poemCh()}这句里好像没有“${kw}”字呢，要不换一句？`);
       return nudge(input, msg, `这句里没有「${kw}」字${P.strict ? "" : "（用的是「" + kw + "」的意象的话，请主持人判断）"}`);
     }
-    if (withKw.some((l) => P.said.has(l))) return nudge(input, msg, "这句本局已经有人说过了");
+    if (withKw.some((l) => P.said.has(l))) {
+      poemSay(`${poemCh()}这句前面已经有人说过啦，要不换一句？`);
+      return nudge(input, msg, "这句本局已经有人说过了");
+    }
     let line = withKw[0];
     if (P.strict) {
       const at = withKw.find((l) => l[P.pos - 1] === kw);
       if (!at) {
         const where = [...withKw[0]].map((ch, i) => (ch === kw ? cn(i + 1) : "")).filter(Boolean);
+        poemSay(`${poemCh()}这一位的“${kw}”要在第${cn(P.pos)}个字哦，要不换一句？`);
         return nudge(input, msg, `这一位「${kw}」要在第${cn(P.pos)}个字，这句在第${where.join("、")}个字`);
       }
       line = at;
@@ -1078,11 +1160,11 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       setMsg(msg, "请主持人确认是否是诗句");
       return;
     }
-    poemPass(hit.text, `出自${hit.author}《${hit.title}》`);
+    poemPass(hit.text, `出自${hit.author}《${hit.title}》`, `${poemCh()}接上啦！这句诗词出自${hit.author}的《${hit.title}》`);
   }
 
-  /* 过关：记下这句，严格字序轮到下一位 */
-  function poemPass(key, src) {
+  /* 过关：记下这句，严格字序轮到下一位；主持词 = 过关的话 + 轮到下一位的话 */
+  function poemPass(key, src, sayOk) {
     const r = G.root;
     const input = el(r, "#gmPoemInput");
     const msg = el(r, "#gmPoemMsg");
@@ -1097,6 +1179,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       poemRender();
       setMsg(msg, `✓ 过关，${src}`);
     }
+    poemSay(sayOk, poemTurnLine());
     msg.classList.add("is-ok");
     input.focus({ preventScroll: true });
   }
@@ -1111,10 +1194,12 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     resetSuggest();
     setMsg(el(G.root, "#gmPoemMsg"), "");
     poemRender();
+    poemSay(poemTurnLine());
   }
 
   function initPoem(panel) {
     G.reloadPoemMacro = bindMacro(el(panel, "[data-macro-slot=poem]"), () => (P.strict ? "poemHard" : "poemEasy"));
+    G.poemSay = bindSay(el(panel, "#gmPoemSay"), "主持词");
     panel.querySelectorAll("input[name=gmPoemMode]").forEach((i) => i.addEventListener("change", () => setPoemMode(i.value === "strict")));
     el(panel, "#gmPoemBoard").addEventListener("click", (e) => {
       const b = e.target.closest(".gm-kw-btn");
@@ -1136,20 +1221,26 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       setMsg(el(panel, "#gmPoemMsg"), "");
       setPos(P.pos + Number(b.dataset.step));
     });
+    /* 下一位：严格字序挪到下一个位置；任意字序只换主持词 */
     el(panel, "#gmPoemNext").addEventListener("click", () => {
       setMsg(el(panel, "#gmPoemMsg"), "");
-      setPos(P.pos + 1);
+      if (P.strict) return setPos(P.pos + 1);
+      setPending(null);
+      resetSuggest();
+      poemRender();
+      poemSay(poemTurnLine());
     });
     el(panel, "#gmPoemCheck").addEventListener("click", poemCheck);
     el(panel, "#gmPoemYes").addEventListener("click", () => {
       const line = P.pending;
       if (!line) return;
       setPending(null);
-      poemPass(line, "主持人确认是诗句");
+      poemPass(line, "主持人确认是诗句", `${poemCh()}接上啦！`);
     });
     el(panel, "#gmPoemNo").addEventListener("click", () => {
       setPending(null);
       setMsg(el(panel, "#gmPoemMsg"), "主持人判定不是诗句，不算过关");
+      poemSay(`${poemCh()}好像第一次听说这句诗句呢，要不换一句？`);
     });
     const input = el(panel, "#gmPoemInput");
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) poemCheck(); });
@@ -1179,8 +1270,16 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     const [kind, name, words] = row.split("|");
     return { kind, name, words: words.trim().split(/\s+/) };
   });
-  const S = { kind: "", civ: "", spy: "", group: null, hidden: false, recent: [] };
+  const S = {
+    kind: "", civ: "", spy: "", group: null, hidden: false, recent: [],
+    players: 6, spies: 2, spiesSet: false,       // spiesSet：卧底数手动改过（不再跟着人数自动变）
+    roles: [], alive: [], outAt: [],             // roles[i] = 是卧底；outAt[i] = 第几轮淘汰
+    round: 1, phase: "setup", cands: null, votes: [], tally: null,   // phase：setup / describe / vote / over；cands：平票重投时的候选
+  };
   const SPY_RECENT = 40;
+  const SPY_MIN_PLAYERS = 4;                     // 剩三人就结束，至少四人才玩得起来
+  const SPY_MAX_PLAYERS = 30;
+  const spyDefault = (n) => (n <= 5 ? 1 : 2);   // 5 人及以下 1 个卧底，以上 2 个
 
   const spyHtml = () => `
     ${macroHtml("spy")}
@@ -1208,7 +1307,28 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       <button type="button" class="gm-mini" id="gmSpySwap">交换</button>
       <button type="button" class="gm-mini" id="gmSpyHide" aria-pressed="false">遮住</button>
     </div>
-    <p class="gm-foot">把卧底词私聊发给 1~2 位卧底，平民词发给其他人；两个词出自同一类，描述起来才会难分辨。</p>`;
+    <div class="gm-setup gm-spy-setup">
+      <div class="gm-setup-players">
+        <label class="gm-label" for="gmSpyPlayers">玩家</label>
+        <input id="gmSpyPlayers" class="gm-num gm-num-s" type="text" inputmode="numeric" maxlength="2" aria-label="玩家人数">
+        <span class="gm-label">人</span>
+      </div>
+      <div class="gm-setup-players">
+        <label class="gm-label" for="gmSpySpies">卧底</label>
+        <input id="gmSpySpies" class="gm-num gm-num-s" type="text" inputmode="numeric" maxlength="2" aria-label="卧底人数">
+        <span class="gm-label">人</span>
+      </div>
+      <button type="button" class="gm-btn" id="gmSpyDeal">分配身份</button>
+    </div>
+    <p class="gm-msg" id="gmSpyMsg" hidden></p>
+    <p class="gm-spy-status" id="gmSpyStatus" hidden></p>
+    <div class="gm-spy-players" id="gmSpyList"></div>
+    <div class="gm-actions" id="gmSpyRound" hidden>
+      <button type="button" class="gm-btn gm-btn-main" id="gmSpyVoteStart">描述完毕，开始投票</button>
+      <button type="button" class="gm-btn gm-btn-main" id="gmSpyVoteGo">确认投票</button>
+    </div>
+    ${sayHtml("gmSpySay", "主持词", { placeholder: "分配身份后，这里会按游戏进度给出主持词" })}
+    <p class="gm-foot">分配身份后，把每位玩家的词私聊发给 ta（卧底发卧底词）。每轮描述完投票，得票最多的出局；平票的几人再描述一次，只在这几人里重投。剩三人（含卧底）时卧底获胜，卧底全部出局则平民获胜。</p>`;
 
   /* 词多的小类多抽几次，但不至于压过小类（按词数开方加权） */
   function pickGroup(groups) {
@@ -1230,6 +1350,79 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     spyRender(true);
   }
 
+  const spyCh = () => macroChannel("spy") || "/p ";
+  const spySay = (...lines) => G.spySay?.set(lines.join("\n"), true);
+  const roleName = (i) => (S.roles[i] ? "卧底" : "平民");
+  const aliveList = () => S.roles.map((_, i) => i).filter((i) => S.alive[i]);
+  /* 这一轮能投给谁：活着的、不是自己；平票重投时只在平票的几人里 */
+  const voteTargets = (voter) => (S.cands || aliveList()).filter((i) => i !== voter && S.alive[i]);
+
+  function spyDeal() {
+    const r = G.root;
+    const msg = el(r, "#gmSpyMsg");
+    const n = readInt(el(r, "#gmSpyPlayers").value);
+    const m = readInt(el(r, "#gmSpySpies").value);
+    msg.classList.remove("is-ok");
+    if (n === null || n < SPY_MIN_PLAYERS || n > SPY_MAX_PLAYERS) return setMsg(msg, `玩家人数请填 ${SPY_MIN_PLAYERS}～${SPY_MAX_PLAYERS}（剩三人时游戏就结束了）`);
+    if (m === null || m < 1) return setMsg(msg, "卧底至少 1 人");
+    if (m >= n) return setMsg(msg, "卧底人数要比玩家人数少");
+    S.players = n;
+    S.spies = m;
+    storage.set(STORE_SPY_PLAYERS, n);
+    const spyAt = new Set(shuffle(Array.from({ length: n }, (_, i) => i)).slice(0, m));
+    Object.assign(S, {
+      roles: Array.from({ length: n }, (_, i) => spyAt.has(i)), alive: Array(n).fill(true), outAt: Array(n).fill(0),
+      round: 1, phase: "describe", cands: null, votes: Array(n).fill(""), tally: null,
+    });
+    setMsg(msg, "");
+    spyRender(false);
+    spySay(`${spyCh()}现在进入第${S.round}轮描述~`);
+  }
+
+  function spyVoteStart() {
+    if (S.phase !== "describe") return;
+    Object.assign(S, { phase: "vote", cands: null, votes: Array(S.players).fill(""), tally: null });
+    spyRender(false);
+    spySay(`${spyCh()}经过了${S.round}轮的描述，现在大家投票选出怀疑是卧底的那个人吧~`);
+  }
+
+  function spyVoteGo() {
+    if (S.phase !== "vote") return;
+    const msg = el(G.root, "#gmSpyMsg");
+    const tally = Array(S.players).fill(0);
+    aliveList().forEach((v) => { const t = S.votes[v]; if (t !== "" && S.alive[t]) tally[t] += 1; });
+    const max = Math.max(...tally);
+    msg.classList.remove("is-ok");
+    if (!max) return setMsg(msg, "还没有人投票：在每位玩家下面选好投给谁，再点「确认投票」");
+    setMsg(msg, "");
+    S.tally = tally;
+    const top = tally.map((c, i) => (c === max ? i : -1)).filter((i) => i >= 0);
+    if (top.length > 1) {   // 平票：这几人再描述一次，只在这几人里重投
+      Object.assign(S, { cands: top, votes: Array(S.players).fill("") });
+      spyRender(false);
+      spySay(`${spyCh()}看起来有${top.length}名玩家都得到最多的票数呢，现在需要你们轮流再进行一轮描述，然后大家在这几人的范围内再次投票哦~`);
+      return;
+    }
+    const out = top[0];
+    S.alive[out] = false;
+    S.outAt[out] = S.round;
+    const lines = [`${spyCh()}<t>看来是本轮被怀疑最多的玩家，虽然很不舍但是只能淘汰啦！ta的身份是${roleName(out)}。`];
+    const left = aliveList();
+    const spiesLeft = left.filter((i) => S.roles[i]).length;
+    const winner = !spiesLeft ? "平民" : left.length <= 3 ? "卧底" : "";
+    if (winner) {
+      Object.assign(S, { phase: "over", cands: null, winner });
+      lines.push(`${spyCh()}游戏结束啦，恭喜${winner}身份获胜！本轮的平民词是${S.civ}，卧底词是${S.spy}！`);
+    } else {
+      Object.assign(S, { phase: "describe", cands: null, round: S.round + 1 });
+      lines.push(`${spyCh()}现在进入第${S.round}轮描述~`);
+    }
+    spyRender(false);
+    spySay(...lines);
+    setMsg(msg, winner ? `${out + 1}号出局（${roleName(out)}），${winner}获胜！` : `${out + 1}号出局（${roleName(out)}）`);
+    msg.classList.add("is-ok");
+  }
+
   function spyRender(fresh) {
     const r = G.root;
     el(r, "#gmSpyCiv").textContent = S.civ;
@@ -1244,10 +1437,44 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       void cards.offsetWidth;
       cards.classList.add("is-flip");
     }
+    spyRenderGame();
+  }
+
+  /* 玩家列表、轮次、投票 */
+  function spyRenderGame() {
+    const r = G.root;
+    const playing = S.phase !== "setup";
+    const status = el(r, "#gmSpyStatus");
+    const left = aliveList();
+    status.hidden = !playing;
+    status.textContent = !playing ? ""
+      : S.phase === "over" ? `游戏结束 · ${S.winner}获胜 · 共 ${S.round} 轮`
+      : `第 ${S.round} 轮 · ${S.phase === "describe" ? "描述中" : S.cands ? `平票重投（${S.cands.map((i) => `${i + 1}号`).join("、")}）` : "投票中"} · 剩 ${left.length} 人（卧底 ${left.filter((i) => S.roles[i]).length} 人）`;
+    const voting = S.phase === "vote";
+    el(r, "#gmSpyList").classList.toggle("is-hidden", S.hidden);
+    el(r, "#gmSpyList").innerHTML = !playing ? "" : S.roles.map((isSpy, i) => {
+      const out = !S.alive[i];
+      const word = isSpy ? S.spy : S.civ;
+      const votes = S.tally && S.tally[i] ? `<span class="gm-spy-p-votes">${S.tally[i]} 票</span>` : "";
+      const pick = voting && !out
+        ? `<select class="gm-spy-vote" data-vote="${i}" aria-label="${i + 1}号投给谁"><option value="">投给…</option>${voteTargets(i).map((t) =>
+          `<option value="${t}"${S.votes[i] === t ? " selected" : ""}>${t + 1}号</option>`).join("")}</select>` : "";
+      const cand = voting && S.cands && S.cands.includes(i) ? " is-cand" : "";
+      return `<div class="gm-spy-p${isSpy ? " is-spy" : ""}${out ? " is-out" : ""}${cand}">`
+        + `<div class="gm-spy-p-head"><b>${i + 1}号</b><span class="gm-spy-p-role">${roleName(i)}</span>${votes}</div>`
+        + `<span class="gm-spy-p-word">${escapeHtml(word)}</span>`
+        + (out ? `<span class="gm-spy-p-out">第${cn(S.outAt[i])}轮出局</span>` : `<button type="button" class="gm-mini" data-copy-p="${i}">复制词</button>`)
+        + pick + `</div>`;
+    }).join("");
+    el(r, "#gmSpyRound").hidden = !playing || S.phase === "over";
+    el(r, "#gmSpyVoteStart").hidden = S.phase !== "describe";
+    el(r, "#gmSpyVoteGo").hidden = S.phase !== "vote";
+    el(r, "#gmSpyDeal").textContent = playing ? "重新分配身份" : "分配身份";
   }
 
   function initSpy(panel) {
     bindMacro(el(panel, "[data-macro-slot=spy]"), () => "spy");
+    G.spySay = bindSay(el(panel, "#gmSpySay"), "主持词");
     const kind = el(panel, "#gmSpyKind");
     const saved = storage.get(STORE_SPY_KIND);
     if (SPY_KINDS.some(([k]) => k === saved)) S.kind = saved;
@@ -1271,6 +1498,39 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       copyText(word, `已复制${b.dataset.copy === "civ" ? "平民" : "卧底"}词「${word}」`, "复制失败");
     });
     el(panel, "#gmSpyCards").addEventListener("animationend", (e) => e.currentTarget.classList.remove("is-flip"));
+
+    /* 人数与卧底数：卧底数没手动改过时跟着人数走（5 人及以下 1 个，以上 2 个） */
+    const players = el(panel, "#gmSpyPlayers");
+    const spies = el(panel, "#gmSpySpies");
+    const savedN = Number(storage.get(STORE_SPY_PLAYERS));
+    if (Number.isInteger(savedN) && savedN >= SPY_MIN_PLAYERS && savedN <= SPY_MAX_PLAYERS) S.players = savedN;
+    S.spies = spyDefault(S.players);
+    players.value = S.players;
+    spies.value = S.spies;
+    players.addEventListener("input", () => {
+      const n = readInt(players.value);
+      if (n === null || S.spiesSet) return;
+      spies.value = spyDefault(n);
+    });
+    spies.addEventListener("input", () => { S.spiesSet = spies.value.trim() !== ""; });
+    [players, spies].forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") spyDeal(); }));
+    el(panel, "#gmSpyDeal").addEventListener("click", spyDeal);
+    el(panel, "#gmSpyVoteStart").addEventListener("click", spyVoteStart);
+    el(panel, "#gmSpyVoteGo").addEventListener("click", spyVoteGo);
+    const list = el(panel, "#gmSpyList");
+    list.addEventListener("change", (e) => {
+      const sel = e.target.closest("[data-vote]");
+      if (!sel) return;
+      S.votes[Number(sel.dataset.vote)] = sel.value === "" ? "" : Number(sel.value);
+    });
+    list.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-copy-p]");
+      if (!b) return;
+      if (S.hidden) return showToast("先点「显示」再复制");
+      const i = Number(b.dataset.copyP);
+      const word = S.roles[i] ? S.spy : S.civ;
+      copyText(word, `已复制${i + 1}号的词「${word}」`, "复制失败");
+    });
     spyNext();
   }
 
@@ -1285,6 +1545,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       b.tabIndex = on ? 0 : -1;
     });
     G.root.querySelectorAll(".gm-panel").forEach((p) => { p.hidden = p.dataset.game !== G.tab; });
+    G.says?.forEach((fit) => fit());
     if (G.tab === "bomb") requestAnimationFrame(() => bombRender());
   }
 
@@ -1316,7 +1577,10 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     [["bomb", initBomb], ["poem", initPoem], ["spy", initSpy]].forEach(([id, init]) => {
       try { init($(`gmPanel-${id}`)); } catch (e) { console.error(e); }
     });
-    if (typeof ResizeObserver === "function") new ResizeObserver(() => fitBombRange()).observe($("gmBombStage"));
+    if (typeof ResizeObserver === "function") {
+      new ResizeObserver(() => fitBombRange()).observe($("gmBombStage"));
+      new ResizeObserver(() => G.says?.forEach((fit) => fit())).observe(root);
+    }
     setTab(storage.get(STORE_TAB));
   }
 
@@ -1331,6 +1595,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
 
   function open() {
     build();
+    requestAnimationFrame(() => G.says?.forEach((fit) => fit()));
     loadPoemExtra();
     if (G.tab === "bomb") requestAnimationFrame(() => bombRender());
   }

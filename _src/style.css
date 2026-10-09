@@ -5957,6 +5957,18 @@ body.fx-off .bard-widget.is-nudge { animation: none; }
 .gm-macro-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gm-macro-note { font-size: .72rem; color: var(--text-mute); }
 
+/* 播报 / 主持词：随操作自动换内容，可手动改 */
+.gm-say {
+  margin-top: 16px;
+  padding: 8px 10px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.035);
+}
+.gm-say-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding-left: 2px; }
+.gm-say-title { flex: none; font-size: .86rem; font-weight: 600; letter-spacing: .04em; color: var(--lantern-soft); }
+.games-card .gm-say-text { min-height: 0; resize: vertical; }
+
 /* 数字炸弹：设置 */
 .gm-setup { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 12px; }
 .gm-setup-range, .gm-setup-bomb { display: flex; align-items: center; gap: 6px; }
@@ -6230,6 +6242,34 @@ body.fx-off .bard-widget.is-nudge { animation: none; }
 .gm-spy-cards.is-flip .gm-spy-card { animation: gmFlip .42s ease both; }
 .gm-spy-cards.is-flip .gm-spy-card.is-spy { animation-delay: .08s; }
 @keyframes gmFlip { 0% { transform: rotateX(80deg); opacity: .2; } 100% { transform: none; opacity: 1; } }
+/* 谁是卧底：人数、玩家列表与投票 */
+.gm-spy-setup { margin-top: 18px; }
+.gm-spy-status { margin: 12px 0 0; font-size: .84rem; text-align: center; color: var(--text-soft); letter-spacing: .04em; }
+.gm-spy-status[hidden] { display: none; }
+.gm-spy-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-top: 12px; }
+.gm-spy-players:empty { display: none; }
+.gm-spy-p {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.045);
+  text-align: center;
+  transition: opacity .25s, border-color .25s;
+}
+.gm-spy-p.is-spy { border-color: rgba(240,181,98,.45); background: rgba(240,181,98,.07); }
+.gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent); }
+.gm-spy-p.is-out { opacity: .45; }
+.gm-spy-p-head { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 6px; }
+.gm-spy-p-head b { font-size: .95rem; color: var(--cream); }
+.gm-spy-p-role { font-size: .72rem; font-weight: 700; letter-spacing: .12em; color: var(--text-mute); }
+.gm-spy-p.is-spy .gm-spy-p-role { color: var(--lantern-soft); }
+.gm-spy-p-votes { font-size: .72rem; font-weight: 700; color: #e8a49b; }
+.gm-spy-p-word { font-family: var(--serif); font-size: 1rem; font-weight: 700; color: var(--cream); overflow-wrap: anywhere; transition: filter .25s, opacity .25s; }
+.gm-spy-p-out { font-size: .74rem; color: var(--text-mute); }
+.gm-spy-players.is-hidden :is(.gm-spy-p-role, .gm-spy-p-word) { filter: blur(7px); opacity: .55; user-select: none; -webkit-user-select: none; }
+.gm-spy-players.is-hidden .gm-spy-p.is-spy:not(.is-out) { border-color: var(--line); background: rgba(255,255,255,.045); }
+.games-card select.gm-spy-vote { width: 100%; min-width: 0; padding: 5px 26px 5px 10px; font-size: .8rem; background-position: right 9px center, 0 0; }
 
 /* 白天 */
 body.day-mode .gm-label,
@@ -6284,6 +6324,13 @@ body.day-mode .gm-kw-big {
 body.day-mode .gm-pos-text,
 body.day-mode .gm-answer-line,
 body.day-mode .gm-spy-word { color: var(--day-cream); }
+body.day-mode :is(.gm-say, .gm-spy-p) { background: rgba(255,252,240,.42); border-color: rgba(138,90,28,.28); }
+body.day-mode .gm-say-title { color: var(--day-gold); }
+body.day-mode :is(.gm-spy-p-head b, .gm-spy-p-word) { color: var(--day-cream); }
+body.day-mode :is(.gm-spy-status, .gm-spy-p-role, .gm-spy-p-out) { color: var(--day-brown-soft); }
+body.day-mode .gm-spy-p.is-spy { border-color: rgba(160,70,26,.45); background: rgba(255,236,200,.5); }
+body.day-mode .gm-spy-p.is-spy .gm-spy-p-role { color: #a0461a; }
+body.day-mode .gm-spy-p-votes { color: #a03a26; }
 body.day-mode .gm-answer-line b { color: #a0461a; text-shadow: none; }
 body.day-mode .gm-spy-card.is-spy { border-color: rgba(160,70,26,.45); background: rgba(255,236,200,.5); }
 body.day-mode .gm-spy-card.is-spy .gm-spy-role { color: #a0461a; }
