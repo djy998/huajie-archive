@@ -3483,9 +3483,11 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 .about-tabs { margin-bottom: 22px; }
 
 .about-text p { margin-bottom: 14px; font-size: .98rem; line-height: 1.95; color: var(--text-soft); }
+.about-text .about-lead { font-weight: 700; color: var(--cream); }
 .about-text .about-sub {
   margin: 18px 0 8px;
   font-size: .82rem;
+  font-weight: 700;
   letter-spacing: .12em;
   color: var(--text-mute);
 }
@@ -3515,8 +3517,11 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 }
 .about-inline-link:hover { color: var(--cream); }
 
-.about-field { margin-bottom: 18px; }
-.about-label { display: block; margin-bottom: 6px; font-size: .92rem; font-weight: 600; color: var(--cream); }
+/* 「反馈与建议」的题目、说明、间距与场地使用登记、活动问卷一致（.ticket-field / .ticket-label / .ticket-sub） */
+.about-field { margin-bottom: 22px; }
+.about-label { display: block; margin-bottom: 9px; font-size: .95rem; font-weight: 600; color: var(--cream); }
+.about-label:has(+ .about-hint) { margin-bottom: 0; }
+.about-field .about-hint { margin: 3px 0 9px; line-height: inherit; }
 .about-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
 .about-hint { margin: -2px 0 8px; font-size: .8rem; line-height: 1.7; color: var(--text-mute); }
 .about-center { text-align: center; }
@@ -3600,6 +3605,7 @@ body.day-mode .about-text p,
 body.day-mode .about-list dd,
 body.day-mode .about-share-text { color: var(--day-lilac); }
 body.day-mode .about-text .about-sub { color: var(--day-lilac); }
+body.day-mode .about-text .about-lead { color: var(--day-cream); }
 body.day-mode .about-hint,
 body.day-mode .about-count { color: var(--day-lilac); }
 body.day-mode .about-list dt { color: var(--day-gold); }
@@ -4044,11 +4050,11 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 
 /* ==== 22. 活动问卷 ==== */
 .gate-card.survey-card { max-width: none; margin: 0 0 20px; }
-.survey-card .survey-intro { margin-bottom: 6px; line-height: 1.8; text-align: left; }
+.survey-card .survey-intro { line-height: 1.8; text-align: left; }   /* 与场地使用登记的说明一样：下方空 22px */
 .survey-card .ticket-blocked { margin: 18px 0 6px; }
 
 .survey-draft-note {
-  margin: 14px 0 0;
+  margin: -8px 0 22px;
   padding: 7px 14px;
   border-radius: 12px;
   font-size: .82rem;
@@ -4081,6 +4087,7 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 .survey-card button.survey-link:not(#_):active { transform: none; box-shadow: none; }
 
 .survey-sec { margin-top: 30px; }
+.survey-sec:first-child { margin-top: 0; }
 .survey-sec-title {
   display: flex; align-items: center; gap: 10px;
   margin: 0 0 18px;
