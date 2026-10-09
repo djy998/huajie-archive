@@ -3483,13 +3483,14 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 .about-tabs { margin-bottom: 22px; }
 
 .about-text p { margin-bottom: 14px; font-size: .98rem; line-height: 1.95; color: var(--text-soft); }
-.about-text .about-lead { font-weight: 700; color: var(--cream); }
+/* 加粗的几句：字号、颜色同下方列表正文（.about-list dd） */
+.about-text .about-lead { font-size: .92rem; font-weight: 700; color: var(--text-soft); }
 .about-text .about-sub {
   margin: 18px 0 8px;
-  font-size: .82rem;
+  font-size: .92rem;
   font-weight: 700;
   letter-spacing: .12em;
-  color: var(--text-mute);
+  color: var(--text-soft);
 }
 .about-list {
   display: grid;
@@ -3605,7 +3606,6 @@ body.day-mode .about-text p,
 body.day-mode .about-list dd,
 body.day-mode .about-share-text { color: var(--day-lilac); }
 body.day-mode .about-text .about-sub { color: var(--day-lilac); }
-body.day-mode .about-text .about-lead { color: var(--day-cream); }
 body.day-mode .about-hint,
 body.day-mode .about-count { color: var(--day-lilac); }
 body.day-mode .about-list dt { color: var(--day-gold); }
