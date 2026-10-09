@@ -123,9 +123,9 @@
   --day-brown: #5b3610;
   --day-brown-soft: #6b4a24;
   --day-text: #4a3018;
-  /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫；--day-gold 为加粗小标题与强调字 */
-  --day-cream: #3c578e;   /* 靛蓝：白天卡片里的正文深色字与毛笔标题 */
-  --day-gold: #4b2341;   /* 深暖紫 */
+  /* 白天金色窗口：--day-cream / --day-gold / --day-lilac 分别对应夜间的奶油色、金色、浅紫；--day-gold 为大小标题与强调字 */
+  --day-cream: #4b2341;   /* 深暖紫：卡片里的表单标签、输入文字等深色字 */
+  --day-gold: #3c578e;   /* 靛蓝：毛笔大标题、小标题与强调字 */
   --day-lilac: #5b3610;
   --pill-ink: var(--cream);
 
@@ -158,9 +158,9 @@ body.day-mode {
   --glass-up-edge: rgba(122,84,32,.26);
   --glass-up-shadow: 0 2px 6px rgba(96,64,16,.16), inset 0 1px 0 rgba(255,255,255,.85), inset 0 -3px 6px rgba(140,95,25,.1);
   --glass-down-shadow: 0 1px 2px rgba(96,64,16,.18), inset 0 2px 5px rgba(120,80,20,.24);
-  --glass-on: var(--glass-sheen), #8a5a1c;
-  --glass-on-edge: rgba(255,236,200,.5);
-  --glass-on-shadow: 0 3px 8px rgba(96,64,16,.26), inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 6px rgba(60,30,0,.2);
+  --glass-on: var(--glass-sheen), linear-gradient(180deg, #c99144, #a26c2a);
+  --glass-on-edge: rgba(255,240,210,.7);
+  --glass-on-shadow: 0 3px 9px rgba(96,64,16,.22), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -3px 6px rgba(90,50,10,.16);
   --glass-well: inset 0 2px 5px rgba(120,80,20,.2), inset 0 -1px 0 rgba(255,255,255,.5);
 }
 
@@ -1481,11 +1481,11 @@ body.day-mode .review-photo {
   border-radius: var(--radius);
   text-align: center;
 }
-.gate-card h2 { font-family: var(--brush); font-size: 1.8rem; color: var(--lantern-soft); margin-bottom: 10px; }
+.gate-card h2 { font-family: var(--brush); font-size: 2rem; line-height: 1.4; text-align: center; color: var(--lantern-soft); margin-bottom: 12px; }
 .gate-card .hint { color: var(--text-mute); font-size: .85rem; margin-bottom: 22px; }
 .admin-card { margin-bottom: 30px; }
 .admin-card h2 { font-size: 1.3rem; }
-body.day-mode .gate-card h2 { color: var(--day-cream); }
+body.day-mode .gate-card h2 { color: var(--day-gold); }
 body.day-mode .gate-card .hint { color: var(--day-lilac); }
 
 .gate-card input:not([type="checkbox"]) {
@@ -1932,13 +1932,13 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
     inset 0 0 0 1px rgba(255,255,255,.09),
     inset 0 1px 0 rgba(255,255,255,.18);
 }
-.info-title { font-family: var(--brush); font-size: 2.2rem; color: var(--lantern-soft); margin-bottom: 20px; }
-.info-tabs { margin-bottom: 22px; }
+.info-title { font-family: var(--brush); font-size: 2rem; line-height: 1.4; text-align: center; color: var(--lantern-soft); margin-bottom: 18px; }
+.info-tabs { justify-content: center; margin-bottom: 22px; }
 .info-text p { margin-bottom: 16px; font-size: 1.02rem; line-height: 2; color: var(--text-soft); }
 .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
 .gallery-credit { margin: 2px 0 16px; font-size: .86rem; line-height: 2; text-align: center; color: var(--text-mute); }
 
-body.day-mode .info-title { color: var(--day-cream); }
+body.day-mode .info-title { color: var(--day-gold); }
 body.day-mode .info-date,
 body.day-mode .gallery-credit { color: var(--day-lilac); }
 body.day-mode .info-text p { color: var(--day-lilac); }
@@ -2393,7 +2393,6 @@ body.day-mode footer { color: var(--day-title); }
 
 /* ==== 14. 购票 ==== */
 .gate-card.ticket-card { max-width: 600px; text-align: left; }
-.ticket-card h2 { text-align: center; }
 .ticket-card > .hint { text-align: center; }
 .ticket-card .ticket-h-sm { font-size: 1.35rem; }
 
@@ -2412,7 +2411,7 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-blocked { margin: 8px 0 4px; text-align: center; font-size: .95rem; color: var(--lantern-soft); }
 
 .ticket-field { margin-bottom: 22px; }
-.ticket-label { display: block; font-size: .95rem; font-weight: 600; color: var(--cream); }
+.ticket-label { display: block; font-size: .92rem; font-weight: 600; color: var(--cream); }
 .ticket-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
 .ticket-sub { margin: 3px 0 9px; font-size: .8rem; color: var(--text-mute); }
 .ticket-warn { margin-top: 8px; font-size: .8rem; color: var(--lantern-soft); }
@@ -3096,14 +3095,14 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
   overscroll-behavior: contain;
   text-align: left;
 }
-.alarm-card h2, .alarm-card > .hint { text-align: center; }
+.alarm-card > .hint { text-align: center; }
 .alarm-tabs { justify-content: center; margin-bottom: 18px; }
 
 .alarm-field { margin-bottom: 15px; }
 .alarm-label {
   display: block;
   margin-bottom: 6px;
-  font-size: .86rem;
+  font-size: .92rem;
   font-weight: 600;
   color: var(--cream);
 }
@@ -3191,14 +3190,6 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 
 .alarm-add { display: block; width: 100%; margin-top: 6px; }
 
-.alarm-list-head {
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(255,255,255,.18);
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--text-mute);
-}
 .alarm-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .alarm-empty { font-size: .8rem; color: var(--text-mute); }
 .alarm-item {
@@ -3225,8 +3216,6 @@ body.day-mode .alarm-check { color: var(--day-lilac); }
 body.day-mode .alarm-check:hover { color: var(--day-cream); }
 body.day-mode .alarm-hint,
 body.day-mode .alarm-empty { color: var(--day-lilac); }
-body.day-mode .alarm-list-head { color: var(--day-lilac); }
-body.day-mode .alarm-list-head { border-top-color: rgba(122,84,32,.3); }
 body.day-mode .alarm-card select {
   color: var(--day-cream);
   background:
@@ -3479,19 +3468,11 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 .ticket-tabs .tab-btn { min-width: 104px; }
 
 .about-box { max-width: 640px; padding: 42px 36px 36px; }
-.about-box .info-title { margin-bottom: 16px; }
-.about-tabs { margin-bottom: 22px; }
+.about-tabs { justify-content: center; margin-bottom: 22px; }
 
 .about-text p { margin-bottom: 14px; font-size: .98rem; line-height: 1.95; color: var(--text-soft); }
 /* 加粗的几句：字号、颜色同下方列表正文（.about-list dd） */
 .about-text .about-lead { font-size: .92rem; font-weight: 700; color: var(--text-soft); }
-.about-text .about-sub {
-  margin: 18px 0 8px;
-  font-size: .92rem;
-  font-weight: 700;
-  letter-spacing: .12em;
-  color: var(--text-soft);
-}
 .about-list {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -3520,7 +3501,7 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 
 /* 「反馈与建议」的题目、说明、间距与场地使用登记、活动问卷一致（.ticket-field / .ticket-label / .ticket-sub） */
 .about-field { margin-bottom: 22px; }
-.about-label { display: block; margin-bottom: 9px; font-size: .95rem; font-weight: 600; color: var(--cream); }
+.about-label { display: block; margin-bottom: 9px; font-size: .92rem; font-weight: 600; color: var(--cream); }
 .about-label:has(+ .about-hint) { margin-bottom: 0; }
 .about-field .about-hint { margin: 3px 0 9px; line-height: inherit; }
 .about-label.is-required::before { content: "*"; margin-right: 3px; color: #e08e84; }
@@ -3605,12 +3586,11 @@ footer .footer-copy + .footer-copy { margin-top: 2px; }
 body.day-mode .about-text p,
 body.day-mode .about-list dd,
 body.day-mode .about-share-text { color: var(--day-lilac); }
-body.day-mode .about-text .about-sub { color: var(--day-lilac); }
 body.day-mode .about-hint,
 body.day-mode .about-count { color: var(--day-lilac); }
 body.day-mode .about-list dt { color: var(--day-gold); }
 body.day-mode .about-text .about-thanks,
-body.day-mode .about-done-title { color: var(--day-cream); }
+body.day-mode .about-done-title { color: var(--day-gold); }
 body.day-mode .about-label { color: var(--day-cream); }
 body.day-mode .about-label.is-required::before { color: #b0261b; }
 body.day-mode .about-list,
@@ -3807,16 +3787,8 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 
   padding: 40px 40px 18px;
   outline: none;
 }
-.guide-eyebrow { margin: 0 0 2px; font-size: .9rem; letter-spacing: .14em; color: var(--text-mute); }
+.guide-eyebrow { margin: 0 0 2px; font-size: .9rem; letter-spacing: .14em; text-align: center; color: var(--text-mute); }
 .guide-title { margin-bottom: 18px; }
-.guide-h {
-  margin: 26px 0 12px;
-  padding-bottom: 6px;
-  font-size: 1.12rem;
-  font-weight: 700;
-  color: var(--lantern-soft);
-  border-bottom: 1px solid var(--line);
-}
 .guide-prices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .guide-price {
   display: flex; flex-direction: column; align-items: center;
@@ -3882,8 +3854,7 @@ body.fx-hover-enabled .ticket-entry-btn:not(:hover) { animation: ticketEntryBob 
 
 body.day-mode .guide-eyebrow { color: var(--day-lilac); }
 body.day-mode .guide-price-label { color: var(--day-lilac); }
-body.day-mode .guide-h,
-body.day-mode .guide-sign { color: var(--day-cream); border-color: rgba(138,90,28,.35); }
+body.day-mode .guide-sign { color: var(--day-gold); }
 body.day-mode .guide-price,
 body.day-mode .guide-way { background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .guide-price:first-child { border-color: #8a5a1c; background: rgba(255,244,214,.7); }
@@ -3979,7 +3950,7 @@ body.day-mode .gate-card input[type="radio"]:checked::after { background: #8a5a1
 .venue-form textarea { min-height: 84px; margin-bottom: 0; }
 
 .venue-places { display: grid; gap: 14px; margin-top: 9px; }
-.venue-place-title { margin-bottom: 7px; font-size: .82rem; font-weight: 600; letter-spacing: .06em; color: var(--lantern-soft); }
+.venue-place-title { margin-bottom: 7px; font-size: .92rem; font-weight: 600; color: var(--lantern-soft); }
 .venue-place-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .venue-place { padding: 9px 12px; font-size: .86rem; }
 
@@ -4088,15 +4059,21 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 
 .survey-sec { margin-top: 30px; }
 .survey-sec:first-child { margin-top: 0; }
-.survey-sec-title {
+/* 卡片里的小标题：问卷分节、购票须知、网站说明、闹铃列表共用一套，标题后接一条细线 */
+.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head {
   display: flex; align-items: center; gap: 10px;
   margin: 0 0 18px;
   font-size: 1.06rem;
   font-weight: 700;
   letter-spacing: .06em;
+  line-height: 1.5;
   color: var(--lantern-soft);
 }
-.survey-sec-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+:is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head)::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head) { color: var(--day-gold); }
+body.day-mode :is(.survey-sec-title, .guide-h, .about-text .about-sub, .alarm-list-head)::after { background: rgba(138,90,28,.35); }
+.guide-h, .about-text .about-sub { margin: 26px 0 14px; }
+.alarm-list-head { margin: 26px 0 0; }
 .survey-sec-no {
   display: inline-grid; place-items: center;
   width: 28px; height: 28px;
@@ -4157,7 +4134,7 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 }
 .survey-card-title { font-size: 1rem; font-weight: 700; color: var(--lantern-soft); }
 .survey-card-sub { margin: 1px 0 10px; font-size: .78rem; color: var(--text-mute); }
-.ticket-label.survey-card-label { font-size: .88rem; font-weight: 600; }
+.ticket-label.survey-card-label { font-weight: 600; }
 .survey-sublabel { display: block; margin: 14px 0 6px; font-size: .84rem; color: var(--text-soft); }
 .survey-sublabel em { font-style: normal; color: var(--text-mute); }
 .survey-card .survey-q textarea { min-height: 76px; margin-bottom: 0; }
@@ -4177,8 +4154,6 @@ body.day-mode .venue-form input[type="datetime-local"] { color-scheme: light; }
 body.day-mode .survey-draft-note { color: var(--day-lilac); background: rgba(255,252,240,.45); border-color: #c98f3a; }
 body.day-mode .survey-card button.survey-link:not(#_) { color: var(--day-brown); background: none; border: 0; box-shadow: none; }
 body.day-mode .survey-card button.survey-link:not(#_):hover { color: var(--day-cream); }
-body.day-mode .survey-sec-title { color: var(--day-gold); }
-body.day-mode .survey-sec-title::after { background: rgba(138,90,28,.35); }
 body.day-mode .survey-sec-no { color: #fff6e0; background: #8a5a1c; }
 body.day-mode .survey-choice-text small,
 body.day-mode .survey-scale-ends,
@@ -4453,7 +4428,7 @@ body.day-mode .tab-sec-title { color: var(--day-title); }
 body.custom-bg.day-mode .section-title,
 body.custom-bg.day-mode .tab-sec-title { text-shadow: 0 1px 2px rgba(38,24,6,.55), 0 3px 16px rgba(38,24,6,.34); }
 body.day-mode .tab-sec-title::after { background: linear-gradient(90deg, rgba(91,54,16,.45), rgba(91,54,16,0)); }
-body.day-mode .info-box .tab-sec-title { color: var(--day-cream); text-shadow: none; }
+body.day-mode .info-box .tab-sec-title { color: var(--day-gold); text-shadow: none; }
 
 .tab-video.video-block {
   aspect-ratio: var(--review-ratio);
@@ -5326,7 +5301,7 @@ html.pz-open .toast { z-index: 460; }
 .pz-submit-hint { margin-top: 4px; font-size: .8rem; color: var(--text-mute); }
 .gate-card input.pz-player { margin: 10px 0 0; }
 body.day-mode .pz-contest { background: rgba(255,250,236,.4); border-color: #c98f3a; }
-body.day-mode .pz-contest-title { color: var(--day-cream); }
+body.day-mode .pz-contest-title { color: var(--day-gold); }
 body.day-mode :is(.pz-contest-meta, .pz-submit-hint) { color: var(--day-gold); }
 .pz-help { margin-top: 16px; text-align: left; font-size: .82rem; color: var(--text-mute); }
 .pz-help summary { text-align: center; cursor: pointer; color: var(--text-soft); }
@@ -7212,12 +7187,12 @@ body.hjs-open .toast { z-index: 540; }
   border-radius: 999px;
   font-size: .78rem; font-weight: 700; letter-spacing: .06em;
   color: var(--accent-ink);
-  background: var(--accent);
-  border: 1px solid rgba(255, 255, 255, .34);
-  box-shadow: 0 3px 10px rgba(10, 7, 22, .26), inset 0 1px 0 rgba(255, 255, 255, .38);
-  transition: filter .2s, transform .15s;
+  background: var(--glass-on);
+  border: 1px solid var(--glass-on-edge);
+  box-shadow: var(--glass-on-shadow);
+  transition: filter .2s, transform .15s, box-shadow .15s;
 }
-.bard-stage-btn:hover { filter: brightness(1.08); }
-.bard-stage-btn:active { transform: scale(.98); }
+.bard-stage-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.bard-stage-btn:active { transform: translateY(1px); box-shadow: var(--glass-down-shadow); }
 .bard-stage-btn .bss-ico { font-size: .9rem; }
-body.day-mode .bard-stage-btn { color: #fff6df; background: var(--day-brown); border-color: rgba(255, 220, 150, .5); }
+body.day-mode .bard-stage-btn { color: #fffaf0; text-shadow: 0 1px 1px rgba(90,50,10,.35); }
