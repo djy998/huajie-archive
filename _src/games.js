@@ -992,6 +992,9 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       `${poemCh()}诗句是${cn(p.text.length)}个字，"${P.kw}"是第${cn(at)}个字~`);
   }
 
+  /* 答案：悄悄私聊给当前这位（目标选中 ta 后发 /tell <t>） */
+  const poemAnswerSay = (p) => poemSay(`/tell <t> 嘘~悄悄提示你一句~${p.text}……`);
+
   function setKeyword(kw) {
     setPending(null);
     P.kw = kw;
@@ -1100,6 +1103,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     else P.answerOn = true;
     renderSuggest();
     if (kind === "hint") poemHintSay(P.cur);
+    else poemAnswerSay(P.cur);
   }
 
   function swapSuggest() {
@@ -1108,7 +1112,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     P.cur = next;
     P.shown.add(next.text);
     renderSuggest();
-    if (P.hintOn) poemHintSay(next);
+    if (P.answerOn) poemAnswerSay(next);
+    else if (P.hintOn) poemHintSay(next);
   }
 
   /* 把输入切成单句：按标点和空格分开，连着写的两句（10 或 14 个字）从中间拆开 */
@@ -1356,6 +1361,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
   const aliveList = () => S.roles.map((_, i) => i).filter((i) => S.alive[i]);
   /* 这一轮能投给谁：活着的、不是自己；平票重投时只在平票的几人里 */
   const voteTargets = (voter) => (S.cands || aliveList()).filter((i) => i !== voter && S.alive[i]);
+  /* 平票重投只剩两人时，这两人自己不投（只能投对方，等于各投一票，没有意义） */
+  const canVote = (i) => S.alive[i] && !(S.cands && S.cands.length === 2 && S.cands.includes(i));
 
   function spyDeal() {
     const r = G.root;
@@ -1390,7 +1397,7 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
     if (S.phase !== "vote") return;
     const msg = el(G.root, "#gmSpyMsg");
     const tally = Array(S.players).fill(0);
-    aliveList().forEach((v) => { const t = S.votes[v]; if (t !== "" && S.alive[t]) tally[t] += 1; });
+    aliveList().filter(canVote).forEach((v) => { const t = S.votes[v]; if (t !== "" && S.alive[t] && voteTargets(v).includes(t)) tally[t] += 1; });
     const max = Math.max(...tally);
     msg.classList.remove("is-ok");
     if (!max) return setMsg(msg, "还没有人投票：在每位玩家下面选好投给谁，再点「确认投票」");
@@ -1456,7 +1463,8 @@ misc|狩猎|狩猎车 排点 抢开 农怪 定ET 恶名精英`;
       const out = !S.alive[i];
       const word = isSpy ? S.spy : S.civ;
       const votes = S.tally && S.tally[i] ? `<span class="gm-spy-p-votes">${S.tally[i]} 票</span>` : "";
-      const pick = voting && !out
+      const pick = voting && !out && !canVote(i) ? `<span class="gm-spy-p-out">平票待定，本轮不投票</span>`
+        : voting && !out
         ? `<select class="gm-spy-vote" data-vote="${i}" aria-label="${i + 1}号投给谁"><option value="">投给…</option>${voteTargets(i).map((t) =>
           `<option value="${t}"${S.votes[i] === t ? " selected" : ""}>${t + 1}号</option>`).join("")}</select>` : "";
       const cand = voting && S.cands && S.cands.includes(i) ? " is-cand" : "";
