@@ -6867,6 +6867,11 @@ body.hjs-open .toast { z-index: 540; }
   will-change: opacity;               /* 常驻一层：每帧只改透明度，不重画文字 */
 }
 .hjs-note.is-next .hjs-ring { border-width: 3px; border-color: rgb(var(--c)); }
+/* 手机上气泡小，加粗前后差别不明显：平时的圈线细一点，下一个要弹的加得更粗 */
+@media (pointer: coarse), (max-width: 760px) {
+  .hjs-ring { border-width: 1.5px; }
+  .hjs-note.is-next .hjs-ring { border-width: 4px; }
+}
 .hjs-note.is-wait .hjs-ring { border-color: #fff; animation: hjsPulse 1s ease-in-out infinite; }
 .hjs-note.is-wait .hjs-core { box-shadow: 0 0 28px rgb(var(--c) / .85); }
 @keyframes hjsPulse { 50% { scale: 1.16; opacity: .55; } }

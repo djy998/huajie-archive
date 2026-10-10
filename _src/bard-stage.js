@@ -941,7 +941,7 @@
     });
     const sel = h("select", { class: "hjs-select", "aria-label": "音色", onchange: () => { S.inst = sel.value; setRaw(K.inst, sel.value); } });
     sel.append(h("option", { value: "", text: `跟随模拟器（${(bard().instruments || []).find((i) => i.id === (bard().instName && bard().instName()))?.name || "钢琴"}）` }));
-    sel.append(h("option", { value: "song", text: "跟随曲目（MIDI 原本的乐器）" }));
+    sel.append(h("option", { value: "song", text: "跟随曲目原有乐器" }));
     const groups = new Map();
     (bard().instruments || [{ id: "piano", name: "钢琴", group: "弦乐" }]).forEach((i) => {
       if (!groups.has(i.group)) groups.set(i.group, h("optgroup", { label: i.group || "乐器" }));
@@ -952,16 +952,16 @@
     const demo = h("input", { type: "checkbox", class: "hjs-switch", checked: S.demo, "aria-label": "示范旋律", onchange: () => { S.demo = demo.checked; setRaw(K.demo, S.demo ? "1" : "0"); } });
     body.append(group("声音",
       row("音量", h("div", { class: "hjs-vol" }, range, volVal), "与全站音量同步"),
-      row("音色", sel, "整首曲目使用该音色；拨弦、钢琴类起音最清晰"),
-      row("示范旋律", demo, "轻声播放需弹奏的音，供跟弹参考")));
+      row("音色", sel, "整首曲目使用该音色。拨弦类与钢琴起音最清晰"),
+      row("示范旋律", demo, "轻声播放需要弹奏的音")));
 
     /* 画面 */
     const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
     body.append(group("画面",
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
-      S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
-      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
+      S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为金线，减轻音符密集时的负担" : "音符密集时如有卡顿，可改用简单显示"),
+      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过的时刻即为判定点。正常显示时身后带星光，简单显示时为金线")));
 
     /* 性能优化：用不上的项置灰（省电画法只去掉气泡光晕，简单显示本来就没有；金线只在简单显示、开着飞花线时才有） */
     const off = (el, why) => {
@@ -972,18 +972,18 @@
       if (hint) hint.textContent = why;
       return el;
     };
-    const POWER_HINT = { on: "一直去掉气泡光晕，最省", auto: "掉帧多时自动去掉气泡光晕（默认）", off: "一直保留气泡光晕" };
+    const POWER_HINT = { on: "始终去除气泡光晕", auto: "掉帧较多时自动去除气泡光晕，为默认设置", off: "始终保留气泡光晕" };
     body.append(group("性能优化",
       ...(CAN_ANIM ? [row("气泡动画", seg("气泡动画", [{ id: "frame", label: "逐帧" }, { id: "browser", label: "浏览器" }], S.anim,
         (v) => { S.anim = v; setRaw(K.anim, v); renderSheet(); }),
-      S.anim === "browser" ? "气泡收缩交给浏览器播放；不同手机效果不同，可对比结算里的性能测试记录" : "气泡收缩每帧由页面更新（默认，多数手机更顺）")] : []),
+      S.anim === "browser" ? "由浏览器播放气泡收缩动画。效果因设备而异，可对照结算中的性能测试记录选择" : "每帧由页面更新气泡收缩，为默认设置")] : []),
       off(row("省电画法", seg("省电画法", [{ id: "on", label: "开启" }, { id: "auto", label: "自动" }, { id: "off", label: "关闭" }], S.power,
         (v) => { S.power = v; setRaw(K.power, v); renderSheet(); }), POWER_HINT[S.power]),
-      S.render === "simple" ? "简单显示已去掉气泡光晕，此项不起作用" : ""),
+      S.render === "simple" ? "简单显示已去除气泡光晕，此项无效" : ""),
       off(row("金线", seg("金线", [{ id: "full", label: "完整" }, { id: "lite", label: "优化" }], S.lineMode,
         (v) => { S.lineMode = v; setRaw(K.line, v); renderSheet(); }),
-      S.lineMode === "full" ? "平滑的整条曲线，每帧重画，曲子密时较费" : "由短光条拼成，不用重画，更流畅（默认）"),
-      S.render !== "simple" ? "只在简单显示时出现（正常显示为星光）" : !S.fly ? "飞花线已关闭" : "")));
+      S.lineMode === "full" ? "整条平滑曲线，每帧重新绘制，音符密集时负担较大" : "由短光条拼接而成，无需重新绘制，为默认设置"),
+      S.render !== "simple" ? "仅在简单显示时使用，正常显示时为星光" : !S.fly ? "飞花线已关闭，此项无效" : "")));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -991,26 +991,26 @@
       row("点击范围", seg("点击范围", Object.entries(TAP_RANGES).map(([id, v]) => ({ id, label: v.label })), S.range,
         (v) => { S.range = v; setRaw(K.range, v); renderSheet(); }),
       S.range === "free"
-        ? (S.judge === "hover" ? "判定模式也为放水：自动演奏，不计分" : "不限位置：外圈收至判定点的气泡，点击任意位置或按任意键均有效")
+        ? (S.judge === "hover" ? "判定模式也为放水，将自动演奏，不计分" : "不限位置。外圈收至判定点时，点击任意位置或按任意键均有效")
         : S.judge === "hover"
-          ? `判定模式为放水：指针停在气泡 ${rg.r} 倍直径内即有效`
-          : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
-      capNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${capNote()}。按判定模式与点击范围组合：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万；上限的九成以内照常计分，超出部分压缩进最后一成` }) : null));
+          ? `判定模式为放水，指针停在气泡 ${rg.r} 倍直径范围内即有效`
+          : `点击位置在气泡 ${rg.r} 倍直径范围内有效。附近没有其他气泡时，外圈加粗的下一个气泡放宽至 ${rg.next} 倍`),
+      capNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${capNote()}。判定模式与点击范围组合的上限：一项宽松 80 万，两项宽松 70 万，一项放水 65 万，宽松与放水各一项 60 万。上限九成以内照常计分，超出部分压缩至最后一成` }) : null));
 
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
     const judgeRow = row("判定模式", seg("判定模式", JUDGE_MODES, S.judge, (v) => { S.judge = v; setRaw(K.judge, v); renderSheet(); }),
       S.judge === "hover"
-        ? (S.range === "free" ? "点击范围也为放水：自动演奏，不计分" : `无需点击：指针停在气泡 ${(TAP_RANGES[S.range] || TAP_RANGES.normal).r} 倍直径内（随点击范围），到判定点自动算弹中（手机可按住滑动）；判定窗口同宽松`)
+        ? (S.range === "free" ? "点击范围也为放水，将自动演奏，不计分" : `无需点击。指针停在气泡 ${(TAP_RANGES[S.range] || TAP_RANGES.normal).r} 倍直径范围内，到判定点即算弹中，手机可按住滑动。判定窗口与宽松相同`)
         : S.judge === "loose"
-          ? `三档难度均按仙人刺判定：PERFECT / GREAT / GOOD 误差分别在 ${winText(LOOSE_WIN)} 秒以内`
-          : `随难度收紧，当前「${diffBase().label}」：PERFECT / GREAT / GOOD 误差分别在 ${winText(diffBase().win)} 秒以内`);
+          ? `三档难度均按仙人刺标准判定，PERFECT / GREAT / GOOD 的误差分别在 ${winText(LOOSE_WIN)} 秒以内`
+          : `随难度收紧。当前为${diffBase().label}，PERFECT / GREAT / GOOD 的误差分别在 ${winText(diffBase().win)} 秒以内`);
     const val = h("b", { class: "hjs-num-v", text: `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` });
     const setv = (v) => { S.delayMs = clamp(Math.round(v / 5) * 5, -300, 300); setRaw(K.delay, S.delayMs); val.textContent = `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms`; };
     const step = (d, label) => h("button", { type: "button", class: "hjs-step", "aria-label": label, text: d > 0 ? "＋" : "－", onclick: () => setv(S.delayMs + d) });
     const timing = [judgeRow, row("判定延迟", h("div", { class: "hjs-num" }, step(-5, "提前 5 毫秒"), val, step(5, "推后 5 毫秒"),
       h("button", { type: "button", class: "hjs-btn hjs-cal-btn", text: S.cal ? "校准中…" : "校准", disabled: !!S.cal, onclick: startCal })),
-    "判定持续偏晚时调大，偏早时调小")];
+    "判定持续偏晚时调大，偏早时调小，也可点校准自动测定")];
     if (S.cal || S.calMsg) timing.push(calPanel());
     body.append(group("时机", ...timing));
 
