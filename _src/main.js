@@ -1245,6 +1245,16 @@ function openSiteAbout(tab = "about") {
 
 const closeSiteAbout = () => { $("siteAboutOverlay").hidden = true; };
 
+/* 从说明里的链接跳到反馈表单：预选类别，并勾上「留下联系方式」 */
+function presetFeedback(category) {
+  if ($("feedbackForm").hidden) $("feedbackAgainBtn").click();
+  const sel = $("feedbackCategory");
+  sel.value = category;
+  sel.dispatchEvent(new Event("change"));
+  $("feedbackWantContact").checked = true;
+  syncFeedbackContactField();
+}
+
 function syncFeedbackContactField() {
   const on = $("feedbackWantContact").checked;
   $("feedbackContact").hidden = !on;
@@ -1306,7 +1316,9 @@ function initSiteAbout() {
   closeOnBackdrop($("siteAboutOverlay"), closeSiteAbout);
   $("siteAboutOverlay").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-about-tab], [data-about-goto]");
-    if (btn) switchAboutTab(btn.dataset.aboutTab || btn.dataset.aboutGoto);
+    if (!btn) return;
+    switchAboutTab(btn.dataset.aboutTab || btn.dataset.aboutGoto);
+    if (btn.dataset.feedbackPreset) presetFeedback(btn.dataset.feedbackPreset);
   });
   $("feedbackCategory").addEventListener("change", (e) => {
     $("feedbackContentHint").textContent = FEEDBACK_HINTS[e.target.value] || FEEDBACK_HINTS[""];

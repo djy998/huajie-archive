@@ -3718,18 +3718,21 @@ body.day-mode .ticket-title-preview { color: var(--day-lilac); }
   font-weight: 700;
   line-height: 18px;
   text-align: center;
-  color: #fff;
-  background: #c9463c;
+  color: var(--accent-ink);
+  background: var(--new-dot);
 }
-/* 新提交提示：按钮右上角的小红点 */
+/* 新提交提示：按钮右上角的小圆点，夜间紫藤色、白天琥珀色 */
+:root { --new-dot: #c6aef5; }
+body.day-mode { --new-dot: #e08a1e; }
+body.day-mode .admin-pills .fb-pill-badge { color: #fff8ea; }
 .admin-pills .tab-btn { position: relative; }
 .admin-pills .admin-new-dot {
   position: absolute;
   top: -3px; right: -3px;
   width: 11px; height: 11px;
   border-radius: 50%;
-  background: #e0533f;
-  box-shadow: 0 0 0 2px rgba(20,14,36,.75), 0 1px 4px rgba(8,6,18,.4);
+  background: var(--new-dot);
+  box-shadow: 0 0 0 2px rgba(20,14,36,.75), 0 0 8px rgba(198,174,245,.55);
   pointer-events: none;
 }
 .admin-pills .admin-new-dot[hidden] { display: none; }
@@ -3747,7 +3750,7 @@ body.day-mode .ticket-title-preview { color: var(--day-lilac); }
 @media (prefers-reduced-motion: reduce) {
   .admin-pills .admin-new-dot::after { animation: none; }
 }
-body.day-mode .admin-pills .admin-new-dot { box-shadow: 0 0 0 2px rgba(255,248,232,.9), 0 1px 4px rgba(96,64,16,.3); }
+body.day-mode .admin-pills .admin-new-dot { box-shadow: 0 0 0 2px rgba(255,248,232,.9), 0 0 6px rgba(224,138,30,.5); }
 .fb-admin-filters { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
 .fb-admin-filters select { flex: 0 1 auto; padding-top: 8px; padding-bottom: 8px; }
 .gate-card .fb-admin-filters button { padding: 8px 20px; font-size: .84rem; }
@@ -5568,17 +5571,15 @@ html.bard-on .toast { z-index: 495; }
 .bard-select:focus { outline: none; border-color: var(--accent); }
 
 /* 高级功能：收起时高度为 0，点开向上展开（按钮在面板下方） */
-.bard-adv {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition: grid-template-rows .28s cubic-bezier(.3,.7,.3,1), opacity .2s ease;
-}
-.bard-adv.is-open { grid-template-rows: 1fr; opacity: 1; }
-.bard-adv-inner { min-height: 0; overflow: hidden; }
+/* 高级功能：高度一下子展开（只排版一次），里面的内容再用透明度 + 位移淡入；
+   不逐帧改高度，否则带毛玻璃和大阴影的小组件每一帧都要重排、重画，展开时会卡 */
+.bard-adv { display: none; }
+.bard-adv.is-open { display: block; }
+.bard-adv.is-open .bard-adv-inner { animation: bardAdvIn .24s cubic-bezier(.3,.7,.3,1) both; }
+@keyframes bardAdvIn { from { opacity: 0; transform: translateY(-6px); } }
 .bard-adv-inner > :first-child { margin-top: 10px; }
 .bard-adv-inner > :last-child { margin-bottom: 2px; }
-@media (prefers-reduced-motion: reduce) { .bard-adv { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .bard-adv.is-open .bard-adv-inner { animation: none; } }
 
 /* 三个勾选项 */
 .bard-opts {
