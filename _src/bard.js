@@ -759,7 +759,7 @@
     const x = note.x * vw;
     const y = note.y * vh;
     const calm = prefersReducedMotion();
-    if (stage.childElementCount > 60) stage.querySelector(".bard-ripple")?.remove();
+    if (stage.childElementCount > 40) stage.querySelector(".bard-ripple")?.remove();   // 波纹各占一层，太多时手机会掉帧
     const r = document.createElement("span");
     r.className = "bard-ripple" + (calm ? " is-calm" : "");
     const d = Math.round(clamp(Math.min(vw, vh) * 0.8, 240, 560));

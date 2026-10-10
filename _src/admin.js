@@ -499,18 +499,19 @@ function initAdminPanels() {
 /* 分享功能：库里存的是 lockdown（1 = 关闭） */
 async function refreshLockdownStatus() {
   const status = $("lockdownStatus");
-  status.textContent = "当前状态：加载中…";
+  const btn = $("lockdownToggleBtn");
+  status.textContent = "加载中…";
+  btn.disabled = true;
   const data = await callWorker({ action: "get_lockdown" });
   if (!data) {
-    status.textContent = "当前状态：读取失败";
+    status.textContent = "读取失败，请刷新后再试";
     return;
   }
+  btn.disabled = false;
   siteLockdown = !!data.value;
-  status.textContent = data.value
-    ? "当前状态：已关闭（纯静态展示，复制附言 / 活动群 / 场地登记 / 活动问卷 / 点赞都不可用）"
-    : "当前状态：已开启（正常运行）";
-  $("lockdownToggleBtn").textContent = data.value ? "开启分享功能" : "关闭分享功能";
-  $("lockdownToggleBtn").dataset.current = data.value ? "1" : "0";
+  status.textContent = data.value ? "现在：纯静态展示中" : "现在：正常运行";
+  setTicketSwitch(btn, !data.value, "开启", "关闭");
+  btn.dataset.current = data.value ? "1" : "0";
 }
 
 function initLockdownToggle() {
@@ -545,19 +546,17 @@ const MAINT_FALLBACK = "操作失败：Worker 可能还没更新（见更新说�
 async function refreshMaintStatus() {
   const status = $("maintStatus");
   const btn = $("maintToggleBtn");
-  status.textContent = "当前状态：加载中…";
+  status.textContent = "加载中…";
   btn.disabled = true;
   const data = await callWorker({ action: "get_maintenance" });
   if (!data || !data.ok) {
-    status.textContent = `当前状态：${adminErr(data, MAINT_FALLBACK, MAINT_ERRORS)}`;
+    status.textContent = adminErr(data, MAINT_FALLBACK, MAINT_ERRORS);
     return;
   }
   btn.disabled = false;
   applyMaintenance(!!data.value);
-  status.textContent = data.value
-    ? "当前状态：已关闭（维护中，访客只能看到维护提示）"
-    : "当前状态：已开启（正常访问）";
-  btn.textContent = data.value ? "开启全站" : "关闭全站（进入维护）";
+  status.textContent = data.value ? "现在：维护中，访客只能看到维护提示" : "现在：正常访问";
+  setTicketSwitch(btn, !data.value, "正常访问", "维护中");
   btn.dataset.current = data.value ? "1" : "0";
   delete btn.dataset.armed;
 }
@@ -571,7 +570,7 @@ function initMaintToggle() {
     /* 关闭全站要点两次确认 */
     if (closing && !(btn.dataset.armed && Date.now() - Number(btn.dataset.armed) < 4000)) {
       btn.dataset.armed = String(Date.now());
-      setMsg(msg, "关闭后访客将无法浏览网站，4 秒内再点一次确认");
+      setMsg(msg, "切到维护后访客将无法浏览网站，4 秒内再点一次「维护中」确认");
       return;
     }
     delete btn.dataset.armed;
@@ -590,18 +589,19 @@ function initMaintToggle() {
 
 async function refreshCaptchaSwitch() {
   const status = $("captchaStatus");
-  status.textContent = "当前状态：加载中…";
+  const btn = $("captchaToggleBtn");
+  status.textContent = "加载中…";
+  btn.disabled = true;
   const data = await callWorker({ action: "get_captcha" });
   if (!data || !data.ok) {
-    status.textContent = "当前状态：读取失败";
+    status.textContent = "读取失败，请刷新后再试";
     return;
   }
+  btn.disabled = false;
   applyCaptchaEnabled(!!data.enabled);
-  status.textContent = data.enabled
-    ? "当前状态：已开启（正常验证）"
-    : "当前状态：已关闭（全站不验证，任何人都能直接提交，请尽快开回来）";
-  $("captchaToggleBtn").textContent = data.enabled ? "关闭人机验证" : "开启人机验证";
-  $("captchaToggleBtn").dataset.current = data.enabled ? "1" : "0";
+  status.textContent = data.enabled ? "现在：正常验证" : "现在：全站不验证，请尽快开回来";
+  setTicketSwitch(btn, !!data.enabled, "开启", "关闭");
+  btn.dataset.current = data.enabled ? "1" : "0";
 }
 
 function initCaptchaSwitch() {
@@ -747,11 +747,25 @@ function computeTicketDuplicates(orders) {
       }]));
 }
 
+/* 开关：左右两段，onText 为开的一段、offText 为关的一段，当前状态那段高亮；整个按钮仍是一个开关（点哪段都由原来的 click 处理），
+   点在已选中的那段上时由下面的捕获监听拦下，不会切换 */
 function setTicketSwitch(btn, on, onText, offText) {
   btn.setAttribute("aria-pressed", on ? "true" : "false");
   btn.classList.toggle("is-on", on);
-  btn.textContent = on ? onText : offText;
+  if (!btn.querySelector(".sw-opt")) btn.innerHTML = '<span class="sw-opt"></span><span class="sw-opt"></span>';
+  const [a, b] = btn.querySelectorAll(".sw-opt");
+  a.textContent = onText;
+  b.textContent = offText;
+  a.classList.toggle("is-cur", on);
+  b.classList.toggle("is-cur", !on);
+  const key = btn.closest(".ticket-admin-row")?.querySelector(".ticket-admin-key")?.textContent.trim();
+  btn.setAttribute("aria-label", `${key ? `${key}：` : ""}${on ? onText : offText}`);
 }
+document.addEventListener("click", (e) => {
+  if (!e.target.closest?.(".ticket-switch .sw-opt.is-cur")) return;
+  e.stopPropagation();
+  e.preventDefault();
+}, true);
 
 function ticketTotals(orders) {
   const live = orders.filter((o) => !o.voided);
@@ -820,9 +834,9 @@ const setIdle = (el, v) => { if (el && document.activeElement !== el) el.value =
 
 function renderTicketSettings(st) {
   /* ---- 基本 ---- */
-  setTicketSwitch($("ticketOpenBtn"), st.open, "已开放（点击关闭）", "已关闭（点击开放）");
-  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许待定（点击关闭）", "不允许待定（点击开启）");
-  setTicketSwitch($("ticketTestBtn"), !!st.testMode, "显示「（测试）」（点击去掉）", "不显示（点击加上）");
+  setTicketSwitch($("ticketOpenBtn"), st.open, "开放", "关闭");
+  setTicketSwitch($("ticketPendingBtn"), st.allowPending, "允许", "不允许");
+  setTicketSwitch($("ticketTestBtn"), !!st.testMode, "加上", "不加");
   setIdle($("ticketTitleInput"), st.title || TICKET_TITLE);
   $("ticketTitlePreview").textContent = `访客看到：${st.title || TICKET_TITLE}${st.testMode ? "（测试）" : ""}`;
   $("ticketTitlePreview").hidden = false;
@@ -839,7 +853,7 @@ function renderTicketSettings(st) {
     <p>票额：基础 <b>${cur.base}</b> 张${cur.extra ? ` ${cur.extra > 0 ? "+" : "−"} 临时 <b>${Math.abs(cur.extra)}</b> 张` : ""} = <b>${cur.quota}</b> 张
       · 已售 <b>${st.sold}</b> · 余 <b>${st.remaining}</b></p>`;
   $("ticketExtraClearBtn").disabled = !cur.extra;
-  setTicketSwitch($("ticketDailyBtn"), st.dailyOn !== false, "开（点击关闭）", "关（点击打开）");
+  setTicketSwitch($("ticketDailyBtn"), st.dailyOn !== false, "开启", "关闭");
   setIdle($("ticketResetInput"), minutesToHHMM(st.resetMin || 0));
   setIdle($("ticketLimitInput"), String(st.limit));
   document.querySelectorAll(".ta-daily-only").forEach((el) => el.classList.toggle("is-off", st.dailyOn === false));
@@ -858,9 +872,9 @@ function renderTicketSettings(st) {
     : `访客现在看到：${stockText || "（不显示余票）"}`)
     + (mode === "range" ? " · ≤10 张为「余票10张以内」，≤ 票额一半为「余票不多」" : "");
   $("ticketRemainPreview").hidden = false;
-  setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示（点击隐藏）", "不显示（点击显示）");
-  setTicketSwitch($("ticketShowResetBtn"), st.showReset !== false, "显示（点击隐藏）", "不显示（点击显示）");
-  setTicketSwitch($("ticketViewerBtn"), st.viewerEnabled !== false, "已开放（点击关闭）", "已关闭（点击开放）");
+  setTicketSwitch($("ticketShowSchedBtn"), st.showSchedule !== false, "显示", "隐藏");
+  setTicketSwitch($("ticketShowResetBtn"), st.showReset !== false, "显示", "隐藏");
+  setTicketSwitch($("ticketViewerBtn"), st.viewerEnabled !== false, "开放", "关闭");
   renderTicketFlagSwitches(st);
   setIdle($("ticketIdleInput"), String(st.idleMin ?? 10));
   /* 与首页隔离时停留时限失效 */
@@ -2508,7 +2522,7 @@ function renderSurveyAdmin() {
   $("surveyAdminStatus").textContent = items.length
     ? `共 ${items.length} 份 · 有效 ${valid} 份${voided ? ` · 已作废 ${voided} 份` : ""}`
     : "暂无答卷";
-  setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "已开放（点击关闭）", "已关闭（点击开放）");
+  setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "开放", "关闭");
   $("surveyLockNote").hidden = !surveyAdmin.lockdown;
   const view = $("surveyViewSelect").value;
   $("surveyFilterState").hidden = view !== "list";
@@ -2704,13 +2718,12 @@ function renderPopupAdminStatus() {
   const p = popupAdmin.saved;
   const btn = $("popupToggleBtn");
   if (!p) {
-    $("popupAdminStatus").textContent = "当前状态：读取失败";
+    $("popupAdminStatus").textContent = "读取失败，请刷新后再试";
     btn.disabled = true;
     return;
   }
-  const when = p.updated_at ? ` · 更新于 ${formatCnTime(p.updated_at)}` : "";
-  $("popupAdminStatus").textContent = `当前状态：${p.enabled ? "已开启" : "已关闭"}${when}`;
-  btn.textContent = p.enabled ? "关闭弹窗" : "开启弹窗";
+  $("popupAdminStatus").textContent = p.updated_at ? `内容更新于 ${formatCnTime(p.updated_at)}` : "还没有保存过内容";
+  setTicketSwitch(btn, !!p.enabled, "开启", "关闭");
   btn.disabled = false;
 }
 
@@ -2723,7 +2736,7 @@ function fillPopupAdminForm(p) {
 }
 
 async function refreshPopupAdmin() {
-  $("popupAdminStatus").textContent = "当前状态：加载中…";
+  $("popupAdminStatus").textContent = "加载中…";
   $("popupToggleBtn").disabled = true;
   setMsg($("popupAdminMsg"), "");
   const data = await callWorker({ action: "popup_admin_get", password: internalAdminPassword });
@@ -3103,8 +3116,7 @@ function renderPuzzleAdmin(d) {
   const now = hjNow();
   puzzleAdmin.image = c.image;
   $("pzAdminStatus").textContent = `中断继续${d.resume ? "已开启" : "已关闭"} · ${pzContestStatusText(c, now)} · 当前第 ${c.rev} 届`;
-  $("pzAdminResumeStatus").textContent = d.resume ? "当前：已开启" : "当前：已关闭（默认）";
-  $("pzAdminResumeBtn").textContent = d.resume ? "关闭中断继续" : "开启中断继续";
+  setTicketSwitch($("pzAdminResumeBtn"), !!d.resume, "开启", "关闭");
   $("pzAdminTitle").value = c.title;
   $("pzAdminStart").value = c.start ? epochToCnLocal(c.start) : "";
   $("pzAdminEnd").value = c.end ? epochToCnLocal(c.end) : "";
@@ -3115,8 +3127,8 @@ function renderPuzzleAdmin(d) {
   $("pzAdminToolGrid").checked = tools.grid !== false;
   setHuayuSeg("pzAdminPauseSeg", c.pauseRun ? "run" : "stop");
   $("pzAdminMaxEntries").value = String(c.maxEntries || 0);
-  $("pzAdminContestStatus").textContent = `当前：${pzContestStatusText(c, now)}`;
-  $("pzAdminToggleBtn").textContent = c.enabled ? "关闭大赛" : "开启大赛";
+  $("pzAdminContestStatus").textContent = `现在：${pzContestStatusText(c, now)}`;
+  setTicketSwitch($("pzAdminToggleBtn"), !!c.enabled, "开启", "关闭");
   showPzAdminImage();
 }
 
@@ -3433,24 +3445,36 @@ function initPuzzleAdmin() {
 /* ==== 10. 管理面板 ==== */
 const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card" id="lockdownPanel" hidden>
-  <h2>分享功能开关</h2>
-  <p class="hint">关闭后为纯静态展示：活动群、复制附言、场地登记、问卷、点赞不可用。</p>
-  <p class="hint" id="lockdownStatus">当前状态：加载中…</p>
-  <button id="lockdownToggleBtn">切换</button>
-  <p class="form-msg" id="lockdownMsg" hidden></p>
-  <div class="maint-box">
-    <h3 class="maint-title">全站开关</h3>
-    <p class="hint">关闭后全站进入维护状态：除内部入口（#internal）外，首页及其他页面都只显示背景和「网站正在维护中……」。</p>
-    <p class="hint" id="maintStatus">当前状态：加载中…</p>
-    <button id="maintToggleBtn">切换</button>
+  <h2>分享功能与全站开关</h2>
+  <section class="ta-group">
+    <h3 class="ta-group-title">分享功能</h3>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">分享功能</span>
+      <button type="button" class="ticket-switch" id="lockdownToggleBtn" aria-pressed="false" disabled>—</button>
+    </div>
+    <p class="ta-group-hint">关闭后网站为纯静态展示：活动群、复制附言、场地登记、活动问卷、点赞都不可用。</p>
+    <p class="ta-group-hint" id="lockdownStatus">加载中…</p>
+    <p class="form-msg" id="lockdownMsg" hidden></p>
+  </section>
+  <section class="ta-group">
+    <h3 class="ta-group-title">全站访问</h3>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">全站访问</span>
+      <button type="button" class="ticket-switch" id="maintToggleBtn" aria-pressed="false" disabled>—</button>
+    </div>
+    <p class="ta-group-hint">维护时除内部入口（#internal）外，所有页面只显示背景和「网站正在维护中……」。切到维护需在 4 秒内点两次确认。</p>
+    <p class="ta-group-hint" id="maintStatus">加载中…</p>
     <p class="form-msg" id="maintMsg" hidden></p>
-  </div>
+  </section>
 </div>
 <div class="gate-card admin-card" id="captchaPanel" hidden>
-  <h2>人机验证开关</h2>
-  <p class="hint">关闭后全站不进行人机验证，仅用于压力测试。</p>
-  <p class="hint" id="captchaStatus">当前状态：加载中…</p>
-  <button id="captchaToggleBtn">切换</button>
+  <h2>人机验证</h2>
+  <div class="ticket-admin-row">
+    <span class="ticket-admin-key">人机验证</span>
+    <button type="button" class="ticket-switch" id="captchaToggleBtn" aria-pressed="false" disabled>—</button>
+  </div>
+  <p class="ta-group-hint">关闭后全站不做人机验证，任何人都能直接提交，仅用于压力测试，用完请尽快开回来。</p>
+  <p class="ta-group-hint" id="captchaStatus">加载中…</p>
   <p class="form-msg" id="captchaSwitchMsg" hidden></p>
 </div>
 <div class="gate-card admin-card" id="starlightPanel" hidden>
@@ -3500,12 +3524,12 @@ const ADMIN_PANELS_HTML = `
         </span>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">标题后缀「测试」</span>
+        <span class="ticket-admin-key">标题后加「（测试）」</span>
         <button type="button" class="ticket-switch" id="ticketTestBtn" aria-pressed="false">—</button>
       </div>
       <p class="ticket-sched-note ticket-title-preview" id="ticketTitlePreview" hidden></p>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">购票开放</span>
+        <span class="ticket-admin-key">购票</span>
         <button type="button" class="ticket-switch" id="ticketOpenBtn" aria-pressed="false">—</button>
       </div>
       <div class="ticket-admin-row ticket-sched-row">
@@ -3521,7 +3545,7 @@ const ADMIN_PANELS_HTML = `
       </div>
       <p class="ticket-sched-note" id="ticketSchedNote" hidden></p>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">持票 id 可待定</span>
+        <span class="ticket-admin-key">持票人 id 可填「待定」</span>
         <button type="button" class="ticket-switch" id="ticketPendingBtn" aria-pressed="false">—</button>
       </div>
       <div class="ticket-admin-row">
@@ -3594,7 +3618,7 @@ const ADMIN_PANELS_HTML = `
     </section>
 
     <section class="ta-group">
-      <h3 class="ta-group-title">购票页显示</h3>
+      <h3 class="ta-group-title">购票页向访客显示</h3>
       <div class="ticket-admin-row">
         <label class="ticket-admin-key" for="ticketRemainModeSelect">余票</label>
         <select id="ticketRemainModeSelect">
@@ -3605,36 +3629,36 @@ const ADMIN_PANELS_HTML = `
       </div>
       <p class="ticket-sched-note ticket-title-preview" id="ticketRemainPreview" hidden></p>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">定时开启 / 关闭时间</span>
+        <span class="ticket-admin-key">定时开放 / 关闭的时间</span>
         <button type="button" class="ticket-switch" id="ticketShowSchedBtn" aria-pressed="false">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">刷新时间</span>
+        <span class="ticket-admin-key">票额刷新时间</span>
         <button type="button" class="ticket-switch" id="ticketShowResetBtn" aria-pressed="false">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">向访客显示超额标记</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showOver" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">超额标记</span>
+        <button type="button" class="ticket-switch" data-ta-flag="showOver" data-on="显示" data-off="隐藏"
                 data-toast-on="已显示超额标记" data-toast-off="已隐藏超额标记">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">向访客显示重复标记</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showDup" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">重复标记</span>
+        <button type="button" class="ticket-switch" data-ta-flag="showDup" data-on="显示" data-off="隐藏"
                 data-toast-on="已显示重复标记" data-toast-off="已隐藏重复标记">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">购票留言栏</span>
-        <button type="button" class="ticket-switch" data-ta-flag="messageOn" data-on="有（点击去掉）" data-off="没有（点击加上）"
+        <button type="button" class="ticket-switch" data-ta-flag="messageOn" data-on="开启" data-off="关闭"
                 data-toast-on="已开启留言栏" data-toast-off="已关闭留言栏">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示网站标题（标题、地址、时间天气）</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showBrand" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">网站标题（含地址、时间天气）</span>
+        <button type="button" class="ticket-switch" data-ta-flag="showBrand" data-on="显示" data-off="隐藏"
                 data-toast-on="购票页显示网站标题" data-toast-off="购票页不显示网站标题、地址和时间天气">—</button>
       </div>
       <div class="ticket-admin-row">
         <span class="ticket-admin-key">与首页隔离</span>
-        <button type="button" class="ticket-switch" data-ta-flag="isolated" data-on="已隔离（点击取消）" data-off="不隔离（点击隔离）"
+        <button type="button" class="ticket-switch" data-ta-flag="isolated" data-on="隔离" data-off="不隔离"
                 data-toast-on="购票页已与首页隔离" data-toast-off="已取消隔离"
                 data-confirm-on="与首页隔离？&#10;&#10;购票页将没有返回按钮，首页不显示入口，停留时限失效。">—</button>
       </div>
@@ -3646,8 +3670,8 @@ const ADMIN_PANELS_HTML = `
         </span>
       </div>
       <div class="ticket-admin-row ta-idle-row">
-        <span class="ticket-admin-key">向访客显示剩余时间</span>
-        <button type="button" class="ticket-switch" data-ta-flag="showIdle" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">剩余停留时间</span>
+        <button type="button" class="ticket-switch" data-ta-flag="showIdle" data-on="显示" data-off="隐藏"
                 data-toast-on="购票页显示剩余时间" data-toast-off="购票页不显示剩余时间">—</button>
       </div>
       <p class="ticket-sched-note" id="ticketIdleIsoNote" hidden>已与首页隔离，停留时限不生效。</p>
@@ -3656,8 +3680,8 @@ const ADMIN_PANELS_HTML = `
     <section class="ta-group">
       <h3 class="ta-group-title">购票须知</h3>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示购票须知</span>
-        <button type="button" class="ticket-switch" data-ta-flag="guideOn" data-on="显示（点击关闭）" data-off="不显示（点击打开）"
+        <span class="ticket-admin-key">购票须知</span>
+        <button type="button" class="ticket-switch" data-ta-flag="guideOn" data-on="显示" data-off="隐藏"
                 data-toast-on="购票须知已开启" data-toast-off="购票须知已关闭：首页入口直接进购票页，购票页也没有须知按钮">—</button>
       </div>
       <details class="ta-guide" id="ticketGuideEditor">
@@ -3704,18 +3728,18 @@ const ADMIN_PANELS_HTML = `
       <p class="ticket-sched-note" id="ticketViewerSchedNote" hidden></p>
       <p class="form-msg" id="ticketViewerMsg" hidden></p>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示「售票统计」</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">「售票统计」</span>
+        <button type="button" class="ticket-switch" data-ta-flag="viewerStats" data-on="显示" data-off="隐藏"
                 data-toast-on="只读端可查看售票统计" data-toast-off="只读端不可查看售票统计">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">显示「活动问卷」（只读）</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerSurvey" data-on="显示（点击隐藏）" data-off="不显示（点击显示）"
+        <span class="ticket-admin-key">「活动问卷」（只读）</span>
+        <button type="button" class="ticket-switch" data-ta-flag="viewerSurvey" data-on="显示" data-off="隐藏"
                 data-toast-on="只读端可查看活动问卷" data-toast-off="只读端不可查看活动问卷">—</button>
       </div>
       <div class="ticket-admin-row">
-        <span class="ticket-admin-key">可以勾选取票</span>
-        <button type="button" class="ticket-switch" data-ta-flag="viewerPickup" data-on="可以（点击关闭）" data-off="不可以（点击打开）"
+        <span class="ticket-admin-key">勾选取票（记日志）</span>
+        <button type="button" class="ticket-switch" data-ta-flag="viewerPickup" data-on="允许" data-off="不允许"
                 data-toast-on="只读端可以勾选取票了（操作会记日志）" data-toast-off="只读端不可勾选取票">—</button>
       </div>
       <div class="ticket-admin-row">
@@ -3796,7 +3820,7 @@ const ADMIN_PANELS_HTML = `
   <h2>活动问卷</h2>
   <p class="hint" id="surveyAdminStatus">加载中…</p>
   <div class="ticket-admin-row">
-    <span class="ticket-admin-key">问卷开放</span>
+    <span class="ticket-admin-key">问卷收集</span>
     <button type="button" class="ticket-switch" id="surveyOpenBtn" aria-pressed="false">—</button>
   </div>
   <p class="ticket-sched-note" id="surveyLockNote" hidden>分享功能已关闭，访客暂时无法提交问卷。</p>
@@ -3837,9 +3861,12 @@ const ADMIN_PANELS_HTML = `
 </div>
 <div class="gate-card admin-card" id="popupAdminPanel" hidden>
   <h2>弹窗公告</h2>
-  <p class="hint">开启后访客打开首页时弹出，每次打开网站最多一次；修改内容并保存后会重新弹出。</p>
-  <p class="hint" id="popupAdminStatus">当前状态：加载中…</p>
-  <button type="button" id="popupToggleBtn" disabled>切换</button>
+  <div class="ticket-admin-row">
+    <span class="ticket-admin-key">首页弹窗</span>
+    <button type="button" class="ticket-switch" id="popupToggleBtn" aria-pressed="false" disabled>—</button>
+  </div>
+  <p class="ta-group-hint">开启后访客打开首页时弹出，每次打开网站最多一次；修改内容并保存后会重新弹出。</p>
+  <p class="ta-group-hint" id="popupAdminStatus">加载中…</p>
 
   <label class="popup-admin-label" for="popupTitleInput">标题（选填）</label>
   <input type="text" id="popupTitleInput" maxlength="60" placeholder="例如：中秋月轮祭 活动回顾上线啦" autocomplete="off">
@@ -3951,13 +3978,19 @@ const ADMIN_PANELS_HTML = `
   <p class="hint" id="pzAdminStatus">加载中…</p>
   <section class="ta-group">
     <h3 class="ta-group-title">中断继续</h3>
-    <p class="ta-group-hint">开启后，访客关掉拼图、刷新或切走页面，再打开时可以从中断处继续（进度存在访客自己的浏览器里）。关闭时关掉拼图即放弃本局。</p>
-    <p class="ta-group-hint" id="pzAdminResumeStatus"></p>
-    <div class="popup-admin-btns"><button type="button" id="pzAdminResumeBtn">切换</button></div>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">中断后继续</span>
+      <button type="button" class="ticket-switch" id="pzAdminResumeBtn" aria-pressed="false">—</button>
+    </div>
+    <p class="ta-group-hint">开启后，访客关掉拼图、刷新或切走页面，再打开时可以从中断处继续（进度存在访客自己的浏览器里）。关闭时关掉拼图即放弃本局。默认关闭。</p>
   </section>
   <section class="ta-group">
     <h3 class="ta-group-title">大赛拼图</h3>
-    <p class="ta-group-hint">开启后在设定时段内，拼图首页出现大赛入口。大赛用下面的图片和难度、正计时；通关后访客填写游戏 ID 登记成绩，并自动生成一代通关码。更换图片或难度算新一届，记录分开显示。</p>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">大赛</span>
+      <button type="button" class="ticket-switch" id="pzAdminToggleBtn" aria-pressed="false">—</button>
+    </div>
+    <p class="ta-group-hint">开启后在设定时段内，拼图首页出现大赛入口。大赛用下面的图片和难度、正计时；通关后访客填写游戏 ID 登记成绩，并自动生成一代通关码。更换图片或难度算新一届，记录分开显示。开启时会一并保存下面的设置。</p>
     <p class="ta-group-hint" id="pzAdminContestStatus"></p>
     <label class="pz-admin-field"><span>大赛名称</span><input type="text" id="pzAdminTitle" maxlength="30" placeholder="如：中秋花街拼图大赛"></label>
     <div class="starlight-fields">
@@ -4027,7 +4060,6 @@ const ADMIN_PANELS_HTML = `
     <p class="form-msg" id="pzAdminImageMsg" hidden></p>
     <div class="popup-admin-btns">
       <button type="button" id="pzAdminSaveBtn">保存设置</button>
-      <button type="button" id="pzAdminToggleBtn">开启大赛</button>
     </div>
     <p class="form-msg" id="pzAdminMsg" hidden></p>
   </section>

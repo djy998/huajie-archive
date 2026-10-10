@@ -464,12 +464,12 @@
         h("div", { class: "hjs-notes", id: "hjsNotes", "aria-hidden": "true" }),
         h("div", { class: "hjs-judge", id: "hjsJudge", "aria-live": "polite" }),
         h("div", { class: "hjs-banner", id: "hjsBanner", "aria-live": "polite" }),
-        h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "combo" })),
+        h("div", { class: "hjs-combo is-zero", id: "hjsComboBig", "aria-hidden": "true" }, h("b", { id: "hjsComboN", text: "0" }), h("small", { text: "COMBO" })),
         h("header", { class: "hjs-hud", id: "hjsHud" },
           h("div", { class: "hjs-hud-song" }, h("b", { id: "hjsNowT" }), h("small", { id: "hjsNowS" })),
           h("div", { class: "hjs-hud-stats" },
             h("span", { class: "hjs-stat" }, h("b", { id: "hjsScore", text: "0" }), h("small", { id: "hjsScoreL", text: "分数" })),
-            h("span", { class: "hjs-stat" }, h("b", { id: "hjsCombo", text: "0" }), h("small", { text: "combo" }))),
+            h("span", { class: "hjs-stat" }, h("b", { id: "hjsCombo", text: "0" }), h("small", { text: "COMBO" }))),
           iconBtn("pause", "暂停", () => (S.paused ? resume() : pause()), "hjs-pause"),
           iconBtn("close", "结束演奏", () => backToLobby()),
           h("i", { class: "hjs-prog", "aria-hidden": "true" }, h("i", { id: "hjsProg" })))),
@@ -735,6 +735,7 @@
     const sh = $id("hjsSheet");
     sh.hidden = false;
     void sh.offsetWidth;
+    if (kind === "picker") fitPicker($id("hjsSheetCard"));   // 窗口藏着时量不到按钮宽度，显示出来后再量一次
     sh.classList.add("is-in");
     requestAnimationFrame(() => {
       const card = $id("hjsSheetCard");
@@ -820,8 +821,17 @@
       h("footer", { class: "hjs-sheet-foot" },
         h("span", { class: "hjs-foot-now", id: "hjsPickNow" }),
         h("button", { type: "button", class: "hjs-btn is-main", text: "确定", onclick: closeSheet })));
+    fitPicker(card);
     card.querySelectorAll(".hjs-chips").forEach((row, i) => dragRow(row, i ? "stars" : "cat"));
     renderSongList();
+  }
+  /* 电脑上宽度够时把选曲窗口加宽到分类、难度按钮一行全露出来；放不下（手机、窄窗口）仍横着滑 */
+  function fitPicker(card) {
+    if (!card.classList.contains("is-picker")) return;
+    card.style.removeProperty("--pick-w");
+    if (window.matchMedia("(max-width: 760px)").matches) return;
+    const need = Math.max(0, ...Array.from(card.querySelectorAll(".hjs-chips"), (r) => r.scrollWidth));
+    if (need) card.style.setProperty("--pick-w", `${Math.ceil(need) + 4}px`);
   }
   /* 分类、星级一行放不下时横着滑：手机手指滑；电脑鼠标按住拖、滚轮也能左右滚；两端还有没露出来的就淡出提示。
      点按钮会重画窗口，记着滑到哪儿（S.chipX），重画后接着在原处，选中的那个也挪进视野 */
@@ -936,6 +946,14 @@
       row("音色", sel, "整首曲目使用该音色；拨弦、钢琴类起音最清晰"),
       row("示范旋律", demo, "轻声播放需弹奏的音，供跟弹参考")));
 
+    /* 画面 */
+    const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
+    body.append(group("画面",
+      row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
+        (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
+      S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
+      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
+
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
     body.append(group("操作",
@@ -947,14 +965,6 @@
           ? `判定模式为放水：指针停在气泡 ${rg.r} 倍直径内即有效`
           : `点击位置在气泡 ${rg.r} 倍直径内有效；附近无其他气泡时，下一个气泡（外圈加粗）放宽至 ${rg.next} 倍`),
       capNote() && scored() ? h("p", { class: "hjs-set-note", text: `当前${capNote()}。按判定模式与点击范围组合：一项宽松 80 万、两项宽松 70 万、一项放水 65 万、宽松 + 放水 60 万；上限的九成以内照常计分，超出部分压缩进最后一成` }) : null));
-
-    /* 画面 */
-    const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
-    body.append(group("画面",
-      row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
-        (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
-      S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
-      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
 
     /* 时机 */
     const winText = (w) => w.map((x) => x.toFixed(2)).join(" / ");
@@ -989,9 +999,9 @@
     card.append(h("div", { class: "hjs-sheet-body hjs-help" },
       h("ol", {},
         ["点击气泡即可弹奏，允许少许偏差。使用电脑时，也可将指针移至气泡上后按任意键",
-          "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，combo中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断combo，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
+          "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，COMBO中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断COMBO，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
           "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万",
-          "得分由判定分（70%）和combo得分（30%）两部分组成，判定分根据每个音的判定评价记分，combo得分按最大combo数评价，因此追求高分请尽可能不要断combo。",
+          "得分由判定分（70%）和COMBO得分（30%）两部分组成，判定分根据每个音的判定评价记分，COMBO得分按最大COMBO数评价，因此追求高分请尽可能不要断COMBO。",
           "点击范围与判定模式均设为放水时为自动演奏，不计分。本机纪录按难度、判定模式与点击范围分别保存最高分与评级",
           "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准，随提示音点击数次即可",
           "按 Esc 键或手机返回键，可暂停演奏、关闭窗口或返回上一层",
@@ -1965,7 +1975,7 @@
   /* 分数的组成：「判定分 63.2 万 + combo得分 27 万」，有上限时再写上限 */
   function scoreParts() {
     const p = liveScore();
-    return `判定分 ${fmtNum(p.judge)} + combo得分 ${fmtNum(p.combo)}${capNote() ? ` · ${capNote()}` : ""}`;
+    return `判定分 ${fmtNum(p.judge)} + COMBO得分 ${fmtNum(p.combo)}${capNote() ? ` · ${capNote()}` : ""}`;
   }
   /* 各档计数的格子（结算、暂停共用） */
   const resGrid = () => h("div", { class: "hjs-res-grid" }, GRID.map((id) => {
@@ -2026,7 +2036,7 @@
     const done = doneCount();
     const stats = scored()
       ? [h("div", { class: "hjs-res-big hjs-pause-score", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · combo ${S.combo} · 最大combo ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${done ? `${accPct().toFixed(1)}%` : "—"} · COMBO ${S.combo} · 最大COMBO ${S.maxCombo}${S.ghosts ? ` · 点空 ${S.ghosts} 次` : ""}` }),
         h("p", { class: "hjs-res-sub hjs-res-parts", text: scoreParts() }),
         resGrid()]
       : [h("div", { class: "hjs-res-big hjs-pause-score", text: `${S.learnHits} / ${S.notes.length}` })];
@@ -2111,7 +2121,7 @@
         ...(fullCombo ? [h("div", { class: "hjs-res-fc", text: "FULL COMBO!" })] : []),   // 原生 append 会把 null 写成文字，不能传 null
         h("div", { class: `hjs-res-rank${rank === "Impeccable" ? " is-max" : ""}${rank.length > 4 ? " is-long" : ""}` }, h("span", { text: rank }), isNew ? h("em", { text: "新纪录" }) : null),
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
-        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大combo ${S.maxCombo} / ${total}` }),
+        h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大COMBO ${S.maxCombo} / ${total}` }),
         h("p", { class: `hjs-res-sub hjs-res-parts${capNote() ? " hjs-res-mult" : ""}`, text: scoreParts() }),
         timingNote(),
         resGrid());

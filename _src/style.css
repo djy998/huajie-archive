@@ -145,13 +145,13 @@
 
   /* 行动按钮（猜、核对、开始拼图、上舞台之类「按下就去做」的按钮）：横向渐变 + 外圈光晕，和切换类的 --glass-on 区分开；白天用标题的靛蓝 */
   --act-bg:
-    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,0) 60%, rgba(0,0,0,.08) 100%),
-    linear-gradient(100deg, #a68bd8 0%, #c8b0ef 52%, #ecc58a 100%);
-  --act-ink: #241d3c;
-  --act-edge: rgba(255,255,255,.55);
-  --act-glow: rgba(201,182,244,.2);
-  --act-shadow: 0 4px 12px rgba(10,7,22,.34), inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 4px rgba(60,30,90,.16);
-  --act-down: 0 1px 3px rgba(10,7,22,.3), inset 0 2px 5px rgba(40,20,70,.3);
+    linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,0) 60%, rgba(0,0,0,.07) 100%),
+    linear-gradient(100deg, #f2bd6d 0%, #ffe3a3 40%, #f6cdbd 72%, #dccfff 100%);   /* 同舞台 Impeccable / FULL COMBO 的描金，金色为主 */
+  --act-ink: #2e1d10;
+  --act-edge: rgba(255,240,205,.7);
+  --act-glow: rgba(242,189,109,.22);
+  --act-shadow: 0 4px 12px rgba(10,7,22,.34), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -2px 4px rgba(120,70,20,.16);
+  --act-down: 0 1px 3px rgba(10,7,22,.3), inset 0 2px 5px rgba(110,60,20,.3);
 }
 body.day-mode {
   --pill-ink: var(--day-brown);
@@ -175,10 +175,10 @@ body.day-mode {
 
   --act-bg:
     linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.06) 48%, rgba(0,0,0,0) 60%, rgba(0,0,0,.07) 100%),
-    linear-gradient(100deg, #3f5b96 0%, #5f7cb6 55%, #8da3cf 100%);
+    linear-gradient(100deg, #2b4277 0%, #3a5590 48%, #5f68ad 80%, #8d84c6 100%);   /* 深靛蓝，尾端带一点淡紫 */
   --act-ink: #fffaf0;
-  --act-edge: rgba(240,236,255,.7);
-  --act-glow: rgba(60,87,142,.18);
+  --act-edge: rgba(236,230,255,.72);
+  --act-glow: rgba(70,80,150,.18);
   --act-shadow: 0 4px 10px rgba(60,70,110,.24), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 4px rgba(20,30,70,.2);
   --act-down: 0 1px 3px rgba(60,70,110,.22), inset 0 2px 5px rgba(20,30,70,.34);
 }
@@ -2616,18 +2616,55 @@ body.day-mode footer { color: var(--day-title); }
 .ticket-admin-row {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 8px 16px;
-  max-width: 520px;
+  max-width: 560px;
   margin: 0 auto 12px;
   text-align: left;
 }
 .ticket-admin-key { font-size: .9rem; color: var(--text-soft); }
-.gate-card .ticket-switch { min-width: 190px; color: var(--text-soft); }
-.gate-card .ticket-switch.is-on {
-  color: var(--accent-ink);
-  background: var(--accent);
-  border-color: var(--accent);
+/* 管理端开关：左右两段（开 | 关），当前状态那一段为选中的玻璃块，点另一段切换；与模拟器的「C 大调 | D 大调」同一种样子 */
+:is(body, body.day-mode) .gate-card button.ticket-switch:not(#_),
+:is(body, body.day-mode) .gate-card button.ticket-switch:not(#_):is(:hover, :active) {
+  flex: none;
+  display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  min-width: 180px;
+  padding: 3px;
+  border-radius: 999px;
+  font-size: .86rem; font-weight: 500; letter-spacing: .04em;
+  color: var(--text-soft);
+  background: rgba(10,7,22,.24);
+  border: 1px solid var(--glass-up-edge);
+  box-shadow: var(--glass-well);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  transform: none; filter: none;
+  cursor: default;
 }
-.gate-card .ticket-switch.is-on:hover { color: var(--accent-ink); border-color: var(--accent-soft); }
+body.day-mode .gate-card button.ticket-switch:not(#_),
+body.day-mode .gate-card button.ticket-switch:not(#_):is(:hover, :active) { color: var(--day-lilac); background: rgba(122,84,32,.1); }
+.ticket-switch .sw-opt {
+  display: block;
+  padding: 6px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-align: center;
+  cursor: var(--cursor-img), pointer;
+  transition: color .2s, background .2s, box-shadow .2s;
+}
+.ticket-switch .sw-opt:not(.is-cur):hover { color: var(--cream); }
+body.day-mode .ticket-switch .sw-opt:not(.is-cur):hover { color: var(--day-ink); }
+.ticket-switch .sw-opt.is-cur {
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--glass-on);
+  box-shadow: var(--glass-on-shadow);
+  cursor: default;
+}
+body.day-mode .ticket-switch .sw-opt.is-cur { color: #fff6e0; }
+.gate-card button.ticket-switch:disabled { opacity: .55; }
+:is(body, body.day-mode) .gate-card button.ticket-switch:not(:has(.sw-opt)):not(#_) { display: inline-flex; justify-content: center; padding: 6px 16px; }   /* 读取前的占位 */
+#popupAdminPanel :is(.ticket-admin-row, .ta-group-hint) { max-width: none; }
+.admin-card > h2 + .ticket-admin-row { margin-top: 16px; }
+.gate-card button.ticket-switch:disabled .sw-opt { cursor: not-allowed; }
+.ticket-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
 .gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
 
@@ -2774,8 +2811,6 @@ body.day-mode .gate-card .ticket-btn-danger:hover { color: #fff; border-color: #
 /* 与白天按钮规则同等特指度，依书写顺序覆盖 */
 body.day-mode .gate-card button#ticketClearBtn { color: #fff; background: #a83a2e; border-color: #7a2418; }
 body.day-mode .gate-card button#ticketClearBtn:hover { color: #fff; border-color: #5e1a10; }
-body.day-mode .gate-card button.ticket-switch.is-on:not(#_) { color: #fff6e0; background: #8a5a1c; border-color: #8a5a1c; }
-body.day-mode .gate-card button.ticket-switch.is-on:not(#_):hover { color: #fff6e0; border-color: #6b4310; }
 
 /* ==== 15. 人机验证 ==== */
 .verify-host {
@@ -3655,6 +3690,7 @@ body.day-mode .about-form input[type="checkbox"]:checked::after { color: #fff6e0
   .about-list { grid-template-columns: 1fr; gap: 2px; padding: 12px 14px; }
   .about-list dd { margin-bottom: 8px; }
   .about-list dd:last-child { margin-bottom: 0; }
+  .about-text .about-thanks { font-size: min(1.1rem, 4.2vw); white-space: nowrap; }   /* 手机上一行放下 */
 }
 
 .ticket-reset-hint { display: block; margin-top: 1px; font-size: .72rem; line-height: 1.6; text-align: center; white-space: pre-line; color: var(--text-mute); }
@@ -5086,10 +5122,6 @@ body.day-mode .hj-date-cal + .hj-time,
 body.day-mode .hj-date-foot { border-color: rgba(122,84,32,.22); }
 
 /* 管理页 · 全站开关 */
-.maint-box { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
-.maint-title { margin-bottom: 8px; font-size: 1.05rem; color: var(--lantern-soft); }
-body.day-mode .maint-box { border-color: rgba(138,90,28,.32); }
-body.day-mode .maint-title { color: var(--day-gold); }
 
 /* ==== 27. 花街拼图 ==== */
 /* 管理页 */
@@ -5442,6 +5474,20 @@ body.day-mode .pz-last { border-color: rgba(138,90,28,.32); }
   animation: bardPop .28s cubic-bezier(.34,1.3,.64,1);
 }
 html.bard-on .bard-widget { z-index: 490; }
+/* 演奏中下面一直有波纹在动、拖动时位置在变，毛玻璃要每帧重算，改成不透明一些的底色 */
+html.bard-on .bard-widget,
+.bard-widget.is-drag {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.03) 46%, rgba(255,255,255,.06) 100%),
+    rgba(30,25,52,.9);
+}
+body.day-mode .bard-widget.is-drag,
+html.bard-on body.day-mode .bard-widget {
+  background:
+    linear-gradient(158deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.2) 46%, rgba(255,255,255,.32) 100%),
+    rgba(250,238,212,.94);
+}
 html.bard-on .toast { z-index: 495; }
 @keyframes bardPop {
   from { opacity: 0; transform: scale(.92) translateY(-8px); }
@@ -5663,14 +5709,21 @@ body.day-mode .bard-opt input:checked {
 .bard-play:active { transform: scale(.97); }
 .bard-play .ico { width: 14px; height: 14px; flex: none; fill: currentColor; }
 .bard-play.is-on {
+  position: relative;
   color: #ffe6ea;
   background: rgba(190,84,110,.5);
   border-color: rgba(240,160,178,.75);
+}
+/* 演奏中的呼吸光圈：单独一层只变透明度，不用每帧重画阴影 */
+.bard-play.is-on::after {
+  content: ""; position: absolute; inset: -5px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 4px rgba(240,160,178,.22);
+  opacity: 0;
+  pointer-events: none;
   animation: bardPulse 1.6s ease-in-out infinite;
 }
-@keyframes bardPulse {
-  50% { box-shadow: 0 0 0 4px rgba(240,160,178,.2), 0 4px 12px rgba(10,7,22,.28), inset 0 1px 0 rgba(255,255,255,.35); }
-}
+@keyframes bardPulse { 50% { opacity: 1; } }
 .bard-hint {
   margin-top: 7px;
   font-size: .72rem;
@@ -5883,7 +5936,7 @@ body.day-mode .bard-tip { color: var(--day-ink); background: rgba(255,249,235,.7
 body.fx-off .bard-widget,
 body.fx-off .bard-widget.is-nudge { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-  .bard-widget, .bard-widget.is-nudge, .bard-stage, .bard-play.is-on { animation: none; }
+  .bard-widget, .bard-widget.is-nudge, .bard-stage, .bard-play.is-on::after { animation: none; }
   .bard-guide-card { transition: none; }
   .bard-tip { animation-name: bardTipCalm; }
   @keyframes bardTipCalm { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
@@ -6997,7 +7050,7 @@ body.hjs-open .toast { z-index: 540; }
   box-shadow: 0 24px 60px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .1);
   animation: hjsRise .26s ease-out;
 }
-.hjs-sheet-card.is-picker { width: min(640px, 100%); height: min(760px, 100%); }
+.hjs-sheet-card.is-picker { width: min(max(640px, var(--pick-w, 0px)), 100%, 1080px); height: min(760px, 100%); }
 .hjs-sheet-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 16px 16px 10px 24px; }
 .hjs-sheet-head b { font: 400 1.55rem/1.2 var(--brush); letter-spacing: .1em; color: var(--lantern-soft); }
 .hjs-count { font-size: .72rem; color: var(--s-mute); }

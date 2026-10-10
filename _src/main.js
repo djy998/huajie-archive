@@ -2277,12 +2277,13 @@ function syncZoomButtons(zoomOut, zoomIn, zoom) {
   zoomIn.disabled = zoom >= WIDGET_ZOOMS[WIDGET_ZOOMS.length - 1];
 }
 
+/* 拖动时每帧最多挪一次位置，松手后才调用 move（写本机存储），拖起来不卡 */
 function makeWidgetDraggable(el, head, { move, reset }) {
   let drag = null;
   head.addEventListener("pointerdown", (e) => {
     if ((e.pointerType === "mouse" && e.button !== 0) || e.target.closest("button")) return;
     const r = el.getBoundingClientRect();
-    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, ...viewportSize() };
+    drag = { ox: e.clientX - r.left, oy: e.clientY - r.top, w: r.width, h: r.height, ...viewportSize(), pos: null, raf: 0 };
     try { head.setPointerCapture(e.pointerId); } catch (err) {}
     el.classList.add("is-drag");
     e.preventDefault();
@@ -2293,9 +2294,17 @@ function makeWidgetDraggable(el, head, { move, reset }) {
     let top = e.clientY - drag.oy;
     if (drag.w) right = clamp(right, WIDGET_EDGE, drag.vw - WIDGET_KEEP_VISIBLE);
     if (drag.h) top = clamp(top, WIDGET_EDGE, drag.vh - WIDGET_KEEP_VISIBLE);
-    move(Math.round(right), Math.round(top));
+    drag.pos = [Math.round(right), Math.round(top)];
+    if (!drag.raf) drag.raf = requestAnimationFrame(() => {
+      if (!drag) return;
+      drag.raf = 0;
+      placeWidget(el, ...drag.pos);
+    });
   });
   const end = () => {
+    if (!drag) return;
+    cancelAnimationFrame(drag.raf);
+    if (drag.pos) move(...drag.pos);
     drag = null;
     el.classList.remove("is-drag");
   };
