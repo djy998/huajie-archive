@@ -6860,9 +6860,9 @@ body.hjs-open .toast { z-index: 540; }
 @keyframes hjsBurst { to { scale: 1.4; opacity: 0; } }
 @keyframes hjsBurstRing { from { transform: scale(1); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
 /* 漏掉的气泡原地缩小淡出：缩放加在里面三层上（各自绕圈心），不加在气泡本身 —— 它的位置在 transform 上，scale 会把位置一起缩放，气泡就朝左上角飘走了 */
-.hjs-note.is-miss { animation: hjsMiss .32s ease-in forwards; }
+.hjs-note.is-miss { --c: 150 146 160; animation: hjsMiss .32s ease-in forwards; }   /* 漏掉的变灰：换一次颜色，不做滤镜动画 */
 .hjs-note.is-miss > i { animation: hjsMissShrink .32s ease-in forwards; }
-@keyframes hjsMiss { to { opacity: 0; filter: grayscale(1); } }
+@keyframes hjsMiss { to { opacity: 0; } }   /* 只动透明度（滤镜动画每帧要重画整个气泡） */
 @keyframes hjsMissShrink { to { scale: .7; } }
 .hjs-ghost {
   position: absolute; left: 0; top: 0;
@@ -6873,7 +6873,10 @@ body.hjs-open .toast { z-index: 540; }
 }
 @keyframes hjsGhost { from { scale: .55; opacity: .9; } to { scale: 1.3; opacity: 0; } }
 
-.hjs-judge { position: absolute; left: 0; right: 0; top: 24%; z-index: 3; display: flex; justify-content: center; pointer-events: none; }
+.hjs-judge { position: absolute; left: 0; right: 0; top: 24%; z-index: 3; display: grid; justify-items: center; pointer-events: none; }
+.hjs-judge > .hjs-pop { grid-area: 1 / 1; }
+/* 常驻的判定字：平时透明，动画由 bard-stage.js 的 popJudge 重放 */
+.hjs-pop.is-pooled { animation: none; opacity: 0; will-change: transform, opacity; }
 .hjs-pop { display: flex; flex-direction: column; align-items: center; gap: 2px; animation: hjsPop .6s cubic-bezier(.2, .8, .3, 1) forwards; }
 .hjs-pop b { font-size: clamp(1.3rem, 4vw, 1.9rem); font-weight: 800; line-height: 1; letter-spacing: .14em; color: #fff; text-shadow: 0 2px 14px rgba(0, 0, 0, .5); }
 .hjs-pop small { font-size: .76rem; letter-spacing: .16em; color: var(--s-soft); text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }

@@ -107,7 +107,7 @@
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
     playing: false, paused: false, frozen: false, hover: null, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
-    raf: 0, pump: 0, els: new Map(), clock: null, bannerKey: "",
+    raf: 0, pump: 0, els: new Map(), pool: [], pops: new Map(), animSync: 0, animForce: false, clock: null, bannerKey: "",
     preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
     bgmWasOn: false, closeTimer: 0, coverTimer: 0, resuming: false, resumeTimer: 0, hist: false, closing: false, needTap: false,
   };
@@ -1388,6 +1388,7 @@
     }
     if (S.judge === "hover" && (S.hover || S.range === "free")) hoverCheck(t, dm);
     draw(t, dm);
+    syncAnims(t);
     if (S.fl) flyFrame(t);
     $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
@@ -1432,7 +1433,9 @@
     }
   }
 
-  /* 画气泡：位置在布局时就定好，每帧只改收缩进度 */
+  /* 画气泡：位置在布局时就定好。收缩（外圈缩小渐亮、核心略放大、音名渐亮、出场淡入）交给 Web Animations，
+     由合成线程按屏幕刷新率自己走（120 Hz 屏也是每帧都动），主线程每帧不用再一个个改样式，点按、出声忙的那几帧也不会让气泡顿住；
+     动画的进度每隔一会儿（syncAnims）对一次音频钟。浏览器不支持时退回每帧改样式（setK） */
   function draw(t, dm) {
     const ap = dm.approach;
     let nextIdx = -1;
@@ -1442,13 +1445,59 @@
       const dt = n.t - t;
       if (dt > ap) break;
       if (S.judged[n.idx] >= 0 || dt < -0.6) { S.els.get(n.idx)?.classList.remove("is-next"); continue; }
-      const el = S.els.get(n.idx) || noteEl(n);
+      const el = S.els.get(n.idx) || noteEl(n, t, ap);
       const next = n.idx === nextIdx && dt <= NEXT_LEAD;   // 下一个该弹的：快到点时外圈才加粗
       if (next !== el._next) { el._next = next; el.classList.toggle("is-next", next); }
-      setK(el, clamp(1 - dt / ap, 0, 1));
-      const op = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
-      if (op !== el._op) { el._op = op; el.style.opacity = op; }
+      if (!el._anims) {
+        setK(el, clamp(1 - dt / ap, 0, 1));
+        const op = dt > ap - 0.22 ? clamp((ap - dt) / 0.22, 0, 1).toFixed(2) : "";
+        if (op !== el._op) { el._op = op; el.style.opacity = op; }
+      }
     }
+  }
+  const CAN_ANIM = typeof Element !== "undefined" && typeof Element.prototype.animate === "function"
+    && typeof Animation !== "undefined" && typeof Animation.prototype.commitStyles === "function";
+  /* 收缩动画：和 setK 同一条曲线（k 从 0 到 1 线性），时长 = 气泡提前出现的时间；fill 停在到点时的样子，等判定 */
+  function startAnims(el, t, ap) {
+    const dur = ap * 1000;
+    const opt = { duration: dur, easing: "linear", fill: "forwards" };
+    const fade = Math.min(0.99, 0.22 / ap);
+    el._anims = [
+      el.animate([{ opacity: 0 }, { opacity: 1, offset: fade }, { opacity: 1 }], opt),
+      el._ring.animate([{ transform: "scale(2.3)", opacity: 0.3 }, { transform: "scale(1)", opacity: 1 }], opt),
+      el._core.animate([{ transform: "scale(0.84)" }, { transform: "scale(1)" }], opt),
+      el._name.animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1, offset: 0.95 }, { opacity: 1 }], opt),
+    ];
+    seekAnims(el, t);
+  }
+  function seekAnims(el, t) {
+    const want = Math.max(0, (t - el._t0) * 1000);
+    for (const a of el._anims) {
+      if (S.frozen || S.paused) { if (a.playState === "running") a.pause(); }
+      else if (a.playState === "paused") a.play();
+      if (Math.abs((a.currentTime || 0) - want) > 12) a.currentTime = want;
+    }
+  }
+  /* 每 250 ms 把动画进度对回音频钟一次（停住、暂停、跳回时马上对） */
+  function syncAnims(t) {
+    const now = performance.now();
+    if (!S.frozen && !S.animForce && now - S.animSync < 250) return;
+    S.animSync = now;
+    S.animForce = false;
+    S.els.forEach((el) => { if (el._anims) seekAnims(el, t); });
+  }
+  function pauseAnims() {
+    S.animForce = true;
+    S.els.forEach((el) => el._anims?.forEach((a) => a.pause()));
+  }
+  /* 动画停在当前的样子写成行内样式再撤掉，命中 / 漏掉的 CSS 动画从这里接着演 */
+  function endAnims(el) {
+    if (!el._anims) return;
+    for (const a of el._anims) {
+      try { a.commitStyles(); } catch (e) {}
+      a.cancel();
+    }
+    el._anims = null;
   }
   /* 收缩进度 k（0 → 1）：外圈由大缩到和核心重合、渐亮，核心略放大，音名过半后渐亮、到点最亮。
      直接改这三层的 transform / opacity（都是常驻的单独一层，只合成不重画、不会一会儿建层一会儿拆层），
@@ -1465,31 +1514,52 @@
     if (!n) return;
     el.style.transform = `translate3d(${n.x.toFixed(1)}px, ${n.y.toFixed(1)}px, 0)`;
   }
-  function noteEl(n) {
+  /* 气泡元素循环使用：弹完 / 漏掉的收起来留给后面的音，不反复建、拆（每个气泡有四层，建拆层在密集段很费） */
+  const POOL_MAX = 40;
+  function makeNoteEl() {
     const ring = h("i", { class: "hjs-ring" });
     const core = h("i", { class: "hjs-core" });
-    const name = h("i", { class: "hjs-name", text: midiName(n.m) });
+    const name = h("i", { class: "hjs-name" });
     const el = h("div", { class: "hjs-note" }, ring, core, name);
-    Object.assign(el, { _ring: ring, _core: core, _name: name, _k: -1, _next: false, _op: null });
+    Object.assign(el, { _ring: ring, _core: core, _name: name });
+    $id("hjsNotes").appendChild(el);
+    return el;
+  }
+  function noteEl(n, t, ap) {
+    const el = S.pool.pop() || makeNoteEl();
+    Object.assign(el, { _k: -1, _next: false, _op: null, _anims: null, _t0: n.t - (ap || diffMeta().approach) });
+    el.className = "hjs-note";
+    for (const x of [el, el._ring, el._core, el._name]) { x.style.removeProperty("opacity"); x.style.removeProperty("transform"); }
+    el.style.visibility = "";
+    if (el._name.textContent !== midiName(n.m)) el._name.textContent = midiName(n.m);
     el.style.setProperty("--c", PALETTE[n.c]);
     el.style.zIndex = String(S.notes.length - n.idx);   // 先到的叠在上面
     placeEl(el, n);
-    $id("hjsNotes").appendChild(el);
     S.els.set(n.idx, el);
+    if (CAN_ANIM && Number.isFinite(t)) startAnims(el, t, ap);
     return el;
   }
   function dropEl(n, cls, ms) {
     const el = S.els.get(n.idx);
     if (!el) return;
     S.els.delete(n.idx);
+    endAnims(el);
     el.classList.remove("is-wait", "is-next");
     el.classList.add(cls);
-    setTimeout(() => el.remove(), ms);
+    const gen = S.gen;
+    setTimeout(() => {
+      if (!el.isConnected || gen !== S.gen || S.pool.length >= POOL_MAX) { el.remove(); return; }
+      el.style.visibility = "hidden";
+      el.classList.remove("is-hit", "is-miss");
+      S.pool.push(el);
+    }, ms);
   }
   function clearNotes() {
     const f = $id("hjsNotes");
+    S.els.forEach(endAnims);
     if (f) f.textContent = "";
     S.els.clear();
+    S.pool = [];
   }
 
   /* ==== 飞花线：一只小萤火虫一样的花，沿平滑曲线掠过每个气泡；正常显示身后撒星星，简单显示拖一条细金线（设置 → 画面，默认关）====
@@ -1889,14 +1959,42 @@
     updateHud();
   }
 
+  /* 判定字：每种各留一个常驻元素（字已经画好），弹一下只重放它的动画（Web Animations，只动透明度和位移），
+     不再每次删掉重建 —— 密集段每秒要弹十几次，重建要重新排版、重画带阴影的大字 */
+  const POP_KF = [
+    { opacity: 0, transform: "translateY(8px) scale(.86)" },
+    { opacity: 1, transform: "translateY(0) scale(1.06)", offset: 0.18 },
+    { opacity: 1, transform: "translateY(-4px) scale(1)", offset: 0.7 },
+    { opacity: 0, transform: "translateY(-10px) scale(1)" },
+  ];
   function popJudge(label, cls, off) {
     const box = $id("hjsJudge");
-    box.textContent = "";
     const ms = Number.isFinite(off) ? Math.round(off * 1000) : 0;
-    box.append(h("div", { class: `hjs-pop ${cls}` },
-      h("b", { text: label }),
-      /* 不是 PERFECT 时标出早还是晚，一直「晚」就该去校准了 */
-      Math.abs(ms) >= 20 && cls !== "is-perfect" ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` }) : null));
+    /* 不是 PERFECT 时标出早还是晚，一直「晚」就该去校准了 */
+    const note = Math.abs(ms) >= 20 && cls !== "is-perfect" ? `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` : "";
+    if (!CAN_ANIM) {
+      box.textContent = "";
+      box.append(h("div", { class: `hjs-pop ${cls}` }, h("b", { text: label }),
+        note ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: note }) : null));
+      return;
+    }
+    const key = `${label}|${cls}`;
+    let p = S.pops.get(key);
+    if (!p || !p.isConnected) {
+      p = h("div", { class: `hjs-pop is-pooled ${cls}` }, h("b", { text: label }), h("em", {}));
+      box.append(p);
+      S.pops.set(key, p);
+    }
+    S.pops.forEach((q) => { if (q !== p && q._anim && q._anim.playState === "running") q._anim.finish(); });
+    const em = p.lastChild;
+    if (em.textContent !== note) {
+      em.textContent = note;
+      em.className = note ? (ms > 0 ? "is-late" : "is-early") : "";
+      em.hidden = !note;
+    }
+    p._anim?.cancel();
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    p._anim = p.animate(POP_KF, calm ? { duration: 900, easing: "linear", fill: "forwards" } : { duration: 600, easing: "cubic-bezier(.2, .8, .3, 1)", fill: "forwards" });
   }
 
   /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿；
@@ -1921,6 +2019,11 @@
         dg.max = Math.max(dg.max, iv);
         if (iv > dg.base * 1.5) {
           dg.drop += 1;
+          /* 高刷屏（90 Hz 以上）上面的 34 ms 门槛几乎碰不到：按本机刷新率算，掉帧超过四分之一也切省电画法 */
+          if (!dg.lite && dg.n >= 240 && dg.base < 12 && dg.drop / dg.n > 0.25) {
+            dg.lite = true;
+            S.root.classList.add("is-lite");
+          }
           const k = Math.floor(Math.max(0, clockRaw(S.clock) - S.clock.lat) / 4);
           dg.buckets.set(k, (dg.buckets.get(k) || 0) + 1);
         }
@@ -1991,10 +2094,11 @@
     /* 钟停下并退回这一拍：补音只排到这一拍之前，弹中后从这里接着走，你弹的这一下和后面的音对得上 */
     clockStop(S.clock);
     S.clock.base = n.t;
-    const el = S.els.get(n.idx) || noteEl(n);
-    setK(el, 1);
-    el._op = "";
-    el.style.opacity = "";
+    const ap = diffMeta().approach;
+    const el = S.els.get(n.idx) || noteEl(n, n.t, ap);
+    if (el._anims) seekAnims(el, n.t);
+    else { setK(el, 1); el._op = ""; el.style.opacity = ""; }
+    S.animForce = true;
     el.classList.add("is-wait");
     banner(S.range === "free" ? "点击屏幕" : "点击亮起的气泡", "is-hint");
   }
@@ -2008,6 +2112,7 @@
     }
     S.frozen = false;
     S.waiting = null;
+    S.animForce = true;                                 // 停住的气泡下一帧接着缩
     banner("", "");
     resumeAudio();
   }
@@ -2030,6 +2135,7 @@
     cancelAnimationFrame(S.raf);
     S.raf = 0;
     clockStop(S.clock);
+    pauseAnims();
     setPauseIcon(true);
     /* 到目前为止的成绩：进度、分数、准确率、combo、各档计数、点空 */
     const pos = Math.max(0, clockRaw(S.clock));
@@ -2068,6 +2174,7 @@
         S.resuming = false;
         banner("", "");
         if (S.diag) S.diag.last = 0;                    // 倒数这段不算掉帧
+        S.animForce = true;
         if (!S.frozen) resumeAudio();
         else banner(S.range === "free" ? "点击屏幕" : "点击亮起的气泡", "is-hint");
         loop();

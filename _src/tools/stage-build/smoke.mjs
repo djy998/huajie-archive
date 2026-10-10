@@ -321,7 +321,7 @@ async function main() {
     check("百万分制：一个 MISS，分数 = 判定分折扣 + combo得分分档", fin.score === want, `${fin.score} / ${want}（最大combo ${fin.maxCombo}/${notes.length}）`);
     const rankWant = want >= 1000000 ? "Impeccable" : want >= 995000 ? "SSS+" : want >= 990000 ? "SSS" : want >= 980000 ? "SS" : want >= 950000 ? "S" : want >= 925000 ? "Almost S" : "A+";
     check("评级按得分", P.$(".hjs-res-rank span").textContent === rankWant, `${P.$(".hjs-res-rank span").textContent}/${rankWant}`);
-    check("结算写明判定分与combo得分", /判定分 [\d,]+ \+ combo得分 [\d,]+/.test(P.$("#hjsModal").textContent));
+    check("结算写明判定分与combo得分", /判定分 [\d,]+ \+ COMBO得分 [\d,]+/.test(P.$("#hjsModal").textContent));
     const best = JSON.parse(P.mem.get("hj_stage_best3") || "{}");
     const rec = best[`${fin.song}:easy:normal:normal`];
     check("本机纪录按难度、判定模式、点击范围分开写入（最高分 + 评级）", rec && rec.score === fin.score && rec.rank === rankWant && Object.keys(best).length === 1, Object.keys(best).join());
@@ -484,7 +484,7 @@ async function main() {
       const items = P.$$("#hjsSheetCard li").map((li) => li.textContent);
       const merged = items.filter((t) => /判定模式/.test(t) && /点击范围/.test(t) && /得分设有上限/.test(t));
       check("玩法说明：共 7 条，判定模式与得分上限一条、得分组成一条，不带括号说明", items.length === 7 && merged.length === 1
-        && items.filter((t) => /^得分由判定分（70%）和combo得分（30%）两部分组成/.test(t)).length === 1
+        && items.filter((t) => /^得分由判定分（70%）和COMBO得分（30%）两部分组成/.test(t)).length === 1
         && !items.some((t) => /星级|飞花线|预备拍|JUST/.test(t)), `${items.length} 条`);
     }
     P.win.dispatchEvent(new P.win.PopStateEvent("popstate", { state: null }));
@@ -944,14 +944,14 @@ async function main() {
     ns.slice(0, 5).forEach((a) => { P.until(a.t); P.pointer(a.x, a.y); });
     P.key("Escape", "Escape");
     const card = P.$("#hjsModal").textContent;
-    check("暂停卡：进度、分数、准确率、combo、各档计数", /进度 \d+:\d\d \/ \d+:\d\d/.test(card) && card.includes(P.$("#hjsScore").textContent) && /准确率 100\.0% · combo 5 · 最大combo 5/.test(card) && P.$$("#hjsModal .hjs-cell").length === 5 && P.$("#hjsModal .hjs-cell.is-perfect b").textContent === "5", card.slice(0, 80));
+    check("暂停卡：进度、分数、准确率、combo、各档计数", /进度 \d+:\d\d \/ \d+:\d\d/.test(card) && card.includes(P.$("#hjsScore").textContent) && /准确率 100\.0% · COMBO 5 · 最大COMBO 5/.test(card) && P.$$("#hjsModal .hjs-cell").length === 5 && P.$("#hjsModal .hjs-cell.is-perfect b").textContent === "5", card.slice(0, 80));
     P.click(P.btn("停止演奏", P.$("#hjsModal")));
     const Q = makePage({ prefs: { hj_stage_song: SHORT.id } });
     await openStage(Q);
     await go(Q);
     Q.until(Q.st().notes[0].t - 0.5);
     Q.key("Escape", "Escape");
-    check("还没弹时暂停：准确率显示 —", /准确率 — · combo 0/.test(Q.$("#hjsModal").textContent));
+    check("还没弹时暂停：准确率显示 —", /准确率 — · COMBO 0/.test(Q.$("#hjsModal").textContent));
   }
 
   /* 28. JUST 的宽度按 GOOD 的三分之一：仙人刺（GOOD 0.45）晚 0.58 秒还是 JUST，泰坦（0.29）晚 0.4 秒就判 MISS */
