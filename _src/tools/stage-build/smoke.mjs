@@ -24,6 +24,9 @@ const chartOf = (id) => JSON.parse(readFileSync(path.join(STAGE, "charts", `${id
 /* 一路弹到底的场景用最短的一首，省时间 */
 const SHORT = SONGS.songs.reduce((a, b) => (b.dur < a.dur ? b : a));
 
+/* 结算「性能测试记录」里的设备诊断（列表各项用 · 连起来，和以前那一行一样） */
+const perfDiag = (P) => P.$$(".hjs-perf-list li").map((li) => li.textContent).join(" · ");
+
 /* 百万分制，按玩法说明另写一遍（不照搬 bard-stage.js），两边对得上才算对 */
 function expectScore({ sumW, n, maxCombo, cap = 1000000 }) {
   const raw = (500000 * sumW) / n;
@@ -312,8 +315,8 @@ async function main() {
     const fin = P.st();
     check("弹完出结算", fin.finished && /演出结束/.test(P.$("#hjsModal").textContent));
     check("结算里有手感诊断（平均早晚）", /时机准确|平均偏/.test(P.$("#hjsModal").textContent));
-    check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
-    check("帧率稳定时：掉帧 0%、认出 60 Hz", /掉帧 0%（60 Hz，最长一帧 1\d ms）/.test(P.$(".hjs-res-diag")?.textContent || ""), P.$(".hjs-res-diag")?.textContent);
+    check("结算里有设备诊断（输出延迟、点按排队、掉帧）", /输出延迟 \d+ ms · 点按排队 \d+ ms · 掉帧 \d+%/.test(perfDiag(P)), perfDiag(P));
+    check("帧率稳定时：掉帧 0%、认出 60 Hz", /掉帧 0%（60 Hz，最长一帧 1\d ms）/.test(perfDiag(P)), perfDiag(P));
     check("结算计数对得上", fin.counts.perfect === notes.length - 1 && fin.counts.miss === 1, JSON.stringify(fin.counts));
     check("有 MISS 就没有 FULL COMBO（也不多出 null 字样）", !/FULL COMBO|null|undefined/.test(P.$("#hjsModal").textContent));
     check("结算不再提示去校准", !/一直这样/.test(P.$("#hjsModal").textContent));
@@ -623,7 +626,7 @@ async function main() {
     };
     for (let i = 0; i < 20; i++) { longFrame(); P.advance(2 / 60); }
     P.until(P.st().endT + 2);
-    const diag = P.$(".hjs-res-diag")?.textContent || "";
+    const diag = perfDiag(P);
     const span = `${Math.floor((k0 * 4) / 60)}:${String((k0 * 4) % 60).padStart(2, "0")}`;
     check("单独掉一帧也计入、指出最卡的 4 秒", /掉帧 (<1|[1-9]\d*)%/.test(diag) && diag.includes(`最多在 ${span}`) && /最长一帧 3\d ms/.test(diag), diag);
   }

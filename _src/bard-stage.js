@@ -107,7 +107,7 @@
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
     playing: false, paused: false, frozen: false, hover: null, waiting: null, frozenT: 0, finished: false,
     score: 0, combo: 0, maxCombo: 0, counts: null, learnHits: 0,
-    raf: 0, pump: 0, els: new Map(), pool: [], pops: new Map(), animSync: 0, animForce: false, clock: null, bannerKey: "",
+    raf: 0, pump: 0, els: new Map(), pool: [], pops: new Map(), animSync: 0, clockRate: 1, rateSample: null, animForce: false, clock: null, bannerKey: "",
     preview: { id: "", timer: 0, clock: null, list: null, i: 0 },
     bgmWasOn: false, closeTimer: 0, coverTimer: 0, resuming: false, resumeTimer: 0, hist: false, closing: false, needTap: false,
   };
@@ -1256,7 +1256,11 @@
     /* 手感诊断：掉帧、点按排队时间。base：本机一帧多长（开头 120 帧的中位数，按屏幕刷新率）；drop：比 base 长一半以上的帧；
        buckets：每 4 秒歌曲时间里掉了几帧，结算时指出最卡的一段；max：最长一帧 */
     S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map(),
-      busy: 0, busyN: 0, busyMax: 0, longs: 0, longMax: 0, resizes: 0 };   // busy：每帧主线程上 tick 自己花的时间；longs：50 ms 以上的长任务
+      busy: 0, busyN: 0, busyMax: 0, longs: 0, longMax: 0, resizes: 0, secs: new Map(), longList: [], fixes: 0, ghostList: [] };
+    S.rec = [];                                         // 每个音的结果（性能测试记录导出用）
+    S.clockRate = 1;
+    S.rateSample = null;
+    S.tapCtx = null;   // busy：每帧主线程上 tick 自己花的时间；longs：50 ms 以上的长任务
     S.ghosts = 0;                                       // 点气泡时点空的次数
     S.ghostWhy = { early: 0, late: 0, off: 0 };         // 点空的原因：早了（附近的气泡还没到判定窗）/ 晚了 / 时间对但点偏了
     S.playing = false;
@@ -1362,7 +1366,14 @@
     S.longObs = new PerformanceObserver((list) => {
       const dg = S.diag;
       if (!dg || !S.playing || S.paused) return;
-      for (const e of list.getEntries()) { dg.longs += 1; dg.longMax = Math.max(dg.longMax, e.duration); }
+      const pos = Math.max(0, clockRaw(S.clock) - S.clock.lat);
+      for (const e of list.getEntries()) {
+        dg.longs += 1;
+        dg.longMax = Math.max(dg.longMax, e.duration);
+        if (dg.longList.length < 400) dg.longList.push([pos, e.duration]);
+        const b = secBucket(pos);
+        if (b) { b.lt += 1; b.ltMax = Math.max(b.ltMax, e.duration); }
+      }
     });
     try { S.longObs.observe({ type: "longtask" }); } catch (e) { S.longObs = null; }
   }
@@ -1408,11 +1419,11 @@
     S.raf = requestAnimationFrame(tick);
   }
 
-  function tick() {
+  function tick(ts) {
     S.raf = 0;
     if (!S.playing || S.paused) return;
     const t0 = performance.now();
-    noteFrame();
+    noteFrame(ts);
     const dm = diffMeta();
     let t = S.frozen ? S.frozenT : songTime();
     if (!S.frozen) {
@@ -1439,6 +1450,8 @@
       S.diag.busy += spent;
       S.diag.busyN += 1;
       if (spent > S.diag.busyMax) S.diag.busyMax = spent;
+      const b = secBucket(t);
+      if (b) b.busy += spent;
     }
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
     S.raf = requestAnimationFrame(tick);
@@ -1517,23 +1530,56 @@
       el._core.animate([{ transform: "scale(0.84)" }, { transform: "scale(1)" }], opt),
       el._name.animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1, offset: 0.95 }, { opacity: 1 }], opt),
     ];
-    seekAnims(el, t);
+    seekAnims(el, t, true);
   }
-  function seekAnims(el, t) {
+  /* 对时：差得多（暂停、停住、刚出来）直接跳到该在的位置；平时只差几毫秒到几十毫秒，就把播放速度微调几个百分点、半秒左右慢慢追上，
+     不一下跳过去（120 Hz 屏上气泡突然跳一下也看得出来） */
+  function seekAnims(el, t, hard) {
     const want = Math.max(0, (t - el._t0) * 1000);
+    const hold = S.frozen || S.paused;
+    const now = performance.now();
+    /* 动画的 currentTime 是这一帧开始时的值，比此刻（脚本读钟时）早一点，比较前把这段补上 */
+    const tl = document.timeline && Number.isFinite(document.timeline.currentTime) ? document.timeline.currentTime : now;
+    const lag = Math.max(0, now - tl);
     for (const a of el._anims) {
-      if (S.frozen || S.paused) { if (a.playState === "running") a.pause(); }
-      else if (a.playState === "paused") a.play();
-      if (Math.abs((a.currentTime || 0) - want) > 20) a.currentTime = want;
+      if (hold) {
+        if (a.playState === "running") a.pause();
+        if (Math.abs((a.currentTime || 0) - want) > 1) a.currentTime = want;
+        continue;
+      }
+      if (a.playState === "paused") { a.play(); hard = true; }
+      const err = want - lag * a.playbackRate - (a.currentTime || 0);
+      if (hard || Math.abs(err) > 120) {
+        /* 用 startTime 定在浏览器动画钟上（不用 currentTime：新建 / 刚继续的动画要等下一帧才开始走，设 currentTime 会整整慢一帧） */
+        if (a.playbackRate !== S.clockRate) a.playbackRate = S.clockRate;
+        a.startTime = now - want / S.clockRate;
+        continue;
+      }
+      /* 基础速度 = 歌曲钟相对浏览器动画钟的快慢（音频钟和系统钟常差零点几个百分点，syncAnims 里量）；
+         另外差 10 ms 以上（脚本读钟本来就比这一帧开始晚几毫秒）才按差多少再加减一点，约 0.6 秒追平 */
+      const off = Math.abs(err) >= 10;
+      const rate = S.clockRate * (off ? clamp(1 + err / 600, 0.9, 1.1) : 1);
+      if (Math.abs(rate - a.playbackRate) > 0.002) {
+        if (a.updatePlaybackRate) a.updatePlaybackRate(rate); else a.playbackRate = rate;
+        if (off && S.diag) { S.diag.fixes += 1; const b = secBucket(t); if (b) b.fix += 1; }
+      }
     }
   }
   /* 每 250 ms 把动画进度对回音频钟一次（停住、暂停、跳回时马上对） */
   function syncAnims(t) {
     const now = performance.now();
     if (!S.frozen && !S.animForce && now - S.animSync < 250) return;
+    /* 量歌曲钟走得比浏览器钟快还是慢：两次对时之间（没停、没暂停）各走了多少，慢慢平均 */
+    const rs = S.rateSample;
+    if (!S.frozen && !S.paused && rs && now - rs.now > 200 && now - rs.now < 2000 && !S.animForce) {
+      const r = (t - rs.t) / ((now - rs.now) / 1000);
+      if (r > 0.9 && r < 1.1) S.clockRate = clamp(S.clockRate * 0.85 + r * 0.15, 0.97, 1.03);
+    }
+    S.rateSample = S.frozen || S.paused ? null : { t, now };
+    const hard = S.animForce;
     S.animSync = now;
     S.animForce = false;
-    S.els.forEach((el) => { if (el._anims) seekAnims(el, t); });
+    S.els.forEach((el) => { if (el._anims) seekAnims(el, t, hard); });
   }
   function pauseAnims() {
     S.animForce = true;
@@ -1961,7 +2007,8 @@
         break;
       }
     }
-    if (best) { hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t); return; }
+    S.tapCtx = { x, y, t, wait: e && Number(e.timeStamp) ? (performance.now() - e.timeStamp) / 1000 : null };
+    if (best) { hit(best, tierOf(Math.abs(best.t - t), dm), t - best.t); S.tapCtx = null; return; }
     /* 正常规则都没算到：比 GOOD 早或晚出去不到 justWin 秒（GOOD 半窗的三分之一）、点在范围里的那个（时间最近的）算 JUST。
        只在这一下本来要算点空时才看，不会抢走判定窗里的音，防多米诺的规则不受影响 */
     const J = dm.win[2] + justWin(dm);
@@ -1974,9 +2021,22 @@
       if (!free && Math.hypot(n.x - x, n.y - y) > R) continue;
       if (!jn || Math.abs(dt) < Math.abs(jn.t - t)) jn = n;
     }
-    if (jn) { hit(jn, JUST, t - jn.t); return; }
+    if (jn) { hit(jn, JUST, t - jn.t); S.tapCtx = null; return; }
+    S.tapCtx = null;
     S.ghosts += 1;
-    S.ghostWhy[ghostWhy(x, y, t, dm, R)] += 1;
+    const why = ghostWhy(x, y, t, dm, R);
+    S.ghostWhy[why] += 1;
+    if (S.diag && S.diag.ghostList.length < 300) {
+      /* 点空时离得最近的（时间上）还没弹的音：它在哪、差多少 */
+      let near = null;
+      for (let i = Math.max(0, S.next - 8); i < S.notes.length; i++) {
+        const n = S.notes[i];
+        if (n.t - t > 1.5) break;
+        if (S.judged[n.idx] >= 0) continue;
+        if (!near || Math.abs(n.t - t) < Math.abs(near.t - t)) near = n;
+      }
+      S.diag.ghostList.push({ t, x, y, why, near: near ? near.idx : -1, dt: near ? t - near.t : null, d: near ? Math.hypot(near.x - x, near.y - y) / g.size : null });
+    }
     ghost(x, y);
   }
   /* 点空是为什么：判定窗里有没弹的气泡（只是离得远）= 点偏了；否则看点按处附近最近的那个没弹的气泡是在后面（早了）还是前面（晚了） */
@@ -2001,6 +2061,10 @@
   /* ==== 判定 ==== */
   function hit(n, tier, off) {
     S.judged[n.idx] = tier;
+    if (S.rec) {
+      const c = S.tapCtx;
+      S.rec[n.idx] = { r: tier, off, how: c ? "点" : S.learn ? "学" : S.judge === "hover" ? "停" : "自动", d: c && S.g ? Math.hypot(n.x - c.x, n.y - c.y) / S.g.size : null, w: c ? c.wait : null };
+    }
     if (Number.isFinite(off) && scored()) S.offs.push(off);
     bard().playMidi?.(n.m, JUDGE[tier].vel, instId(), 0, 0);
     dropEl(n, "is-hit", 300);
@@ -2020,6 +2084,7 @@
   }
   function miss(n) {
     S.judged[n.idx] = 3;
+    if (S.rec) S.rec[n.idx] = { r: 3 };
     dropEl(n, "is-miss", 320);
     S.combo = 0;
     S.counts.miss += 1;
@@ -2065,44 +2130,57 @@
     p._anim = p.animate(POP_KF, calm ? { duration: 900, easing: "linear", fill: "forwards" } : { duration: 600, easing: "cubic-bezier(.2, .8, .3, 1)", fill: "forwards" });
   }
 
-  /* 记帧间隔：手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影），气泡收缩不再卡顿；
-     另按本机刷新率记掉帧（单独掉一帧也算）给结算的诊断行用 */
-  function noteFrame() {
+  /* 记帧间隔：按浏览器给的这一帧的时间戳（和屏幕刷新对齐）算，不用脚本开始跑的时刻（那个会忽早忽晚，120 Hz 屏会被量成 144、165 Hz）。
+     手机画不动（连续掉帧）时自动切到省电画法（去掉光晕阴影）；另按本机刷新率记掉帧（单独掉一帧也算）、每秒一格，给结算的性能测试记录用 */
+  function noteFrame(ts) {
     const dg = S.diag;
     if (!dg) return;
-    const now = performance.now();
-    if (dg.last && now - dg.last < 1000) {
+    const now = Number.isFinite(ts) && ts > 0 ? ts : performance.now();
+    if (dg.last && now - dg.last < 1000 && now > dg.last) {
       dg.frames += 1;
-      if (now - dg.last > 34) dg.slow += 1;
+      const iv = now - dg.last;
+      if (iv > 34) dg.slow += 1;
       if (!dg.lite && dg.frames >= 90 && dg.slow / dg.frames > 0.2) {
         dg.lite = true;
         S.root.classList.add("is-lite");
       }
-      const iv = now - dg.last;
       if (!dg.base) {
         dg.warm.push(iv);
         if (dg.warm.length >= 120) { dg.base = frameBase(dg.warm); dg.warm = null; }
       } else {
         dg.n += 1;
         dg.max = Math.max(dg.max, iv);
+        const pos = Math.max(0, clockRaw(S.clock) - S.clock.lat);
+        const b = secBucket(pos);
+        if (b) { b.f += 1; if (iv > b.mx) b.mx = iv; }
         if (iv > dg.base * 1.5) {
           dg.drop += 1;
+          if (b) b.d += 1;
+          const k = Math.floor(pos / 4);
+          dg.buckets.set(k, (dg.buckets.get(k) || 0) + 1);
           /* 高刷屏（90 Hz 以上）上面的 34 ms 门槛几乎碰不到：按本机刷新率算，掉帧超过四分之一也切省电画法 */
           if (!dg.lite && dg.n >= 240 && dg.base < 12 && dg.drop / dg.n > 0.25) {
             dg.lite = true;
             S.root.classList.add("is-lite");
           }
-          const k = Math.floor(Math.max(0, clockRaw(S.clock) - S.clock.lat) / 4);
-          dg.buckets.set(k, (dg.buckets.get(k) || 0) + 1);
         }
       }
     }
     dg.last = now;
   }
+  /* 性能测试记录：歌曲时间每秒一格 —— 帧数、掉帧、最长一帧、主线程花在 tick 上的时间、长任务、动画对时 */
+  function secBucket(t) {
+    const dg = S.diag;
+    if (!dg || !dg.secs || !Number.isFinite(t) || t < -5) return null;
+    const k = Math.floor(t);
+    let b = dg.secs.get(k);
+    if (!b) { b = { f: 0, d: 0, mx: 0, busy: 0, lt: 0, ltMax: 0, fix: 0 }; dg.secs.set(k, b); }
+    return b;
+  }
 
-  /* 一帧本该多长：开头 120 帧里较快的那些（第 15 百分位，开头就卡也不会估成低刷新率），再贴到最近的常见刷新率 */
+  /* 一帧本该多长：开头 120 帧间隔的中位数（帧时间戳和屏幕刷新对齐，正常的帧都在同一个值上），再贴到最近的常见刷新率 */
   function frameBase(ivs) {
-    const v = ivs.slice().sort((a, b) => a - b)[Math.floor(ivs.length * 0.15)];
+    const v = ivs.slice().sort((a, b) => a - b)[Math.floor(ivs.length / 2)];
     const hz = 1000 / v;
     const near = [60, 75, 90, 120, 144, 165].reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a));
     return Math.abs(near - hz) / near < 0.1 ? 1000 / near : v;
@@ -2164,7 +2242,7 @@
     S.clock.base = n.t;
     const ap = diffMeta().approach;
     const el = S.els.get(n.idx) || noteEl(n, n.t, ap);
-    if (el._anims) seekAnims(el, n.t);
+    if (el._anims) seekAnims(el, n.t, true);
     else { setK(el, 1); el._op = ""; el.style.opacity = ""; }
     S.animForce = true;
     el.classList.add("is-wait");
@@ -2332,9 +2410,87 @@
       S.root && S.root.classList.contains("is-lite") ? "已自动省电" : null,
       bard().audioState && bard().audioState() !== "running" ? `音频 ${bard().audioState()}` : null,
     ].filter(Boolean).join(" · ");
-    return h("div", {},
+    /* 设备诊断收进「性能测试记录」（默认收起），展开后可以导出这一局每个音的详细情况 */
+    const perf = h("details", { class: "hjs-perf" },
+      h("summary", { text: "性能测试记录" }),
+      h("div", { class: "hjs-perf-body" },
+        h("ul", { class: "hjs-perf-list" }, dev.split(" · ").map((x) => h("li", { text: x }))),
+        h("button", { type: "button", class: "hjs-btn hjs-perf-export", text: "导出 txt", onclick: exportPerf })));
+    return h("div", { class: "hjs-res-diagbox" },
       parts.length ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
-      h("p", { class: "hjs-res-diag", text: dev }));
+      perf);
+  }
+
+  /* 导出这一局的性能测试记录：设备与设置、汇总、每秒的帧情况、长任务、点空、每个音的结果。纯文本，发给开发者诊断用 */
+  function perfText() {
+    const dg = S.diag || {};
+    const g = S.g || {};
+    const dm = diffMeta();
+    const ms = (v) => (Number.isFinite(v) ? `${Math.round(v * 1000)}` : "");
+    const f1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : "");
+    const pad = (v, n) => String(v).padEnd(n);
+    const L = [];
+    L.push("花舞之街 · 舞台演奏 性能测试记录");
+    L.push(`时间：${new Date().toLocaleString("zh-CN", { hour12: false })}　版本：${typeof HJ !== "undefined" && HJ.version ? HJ.version : ""}`);
+    L.push(`曲目：${S.song ? `${S.song.t}（${S.song.id}）` : ""}　难度：${dm.label}　判定：${judgeLabel()}　范围：${rangeLabel()}${S.learn ? "　学习模式" : ""}`);
+    L.push(`画面：${S.render === "simple" ? "简单显示" : "正常显示"}　飞花线：${S.fly ? "开" : "关"}　音色：${S.inst || "跟随模拟器"}　判定延迟：${S.delayMs} ms　示范旋律：${S.demo ? "开" : "关"}`);
+    L.push(`浏览器：${navigator.userAgent}`);
+    L.push(`屏幕：${screen.width}×${screen.height} @${window.devicePixelRatio}x　舞台：${Math.round(g.w || 0)}×${Math.round(g.h || 0)}　气泡直径：${f1(g.size)} px`);
+    L.push(`刷新率：${dg.base ? `${Math.round(1000 / dg.base)} Hz（一帧 ${dg.base.toFixed(2)} ms）` : "未测出"}　Web Animations：${CAN_ANIM ? "用" : "不支持"}　省电画法：${dg.lite ? "已自动切换" : "否"}`);
+    L.push(`音频：${bard().audioState ? bard().audioState() : ""}　输出延迟：${ms(S.clock ? S.clock.lat : NaN)} ms`);
+    L.push("");
+    L.push("【汇总】");
+    L.push(`得分 ${fmtNum(S.score)}　准确率 ${accPct().toFixed(1)}%　最大COMBO ${S.maxCombo} / ${S.notes.length}`);
+    L.push(`PERFECT ${S.counts.perfect}　GREAT ${S.counts.great}　GOOD ${S.counts.good}　JUST ${S.counts.just}　MISS ${S.counts.miss}　点空 ${S.ghosts}（偏早 ${S.ghostWhy.early}，偏晚 ${S.ghostWhy.late}，点偏 ${S.ghostWhy.off}）`);
+    L.push(`帧：${dg.n || 0} 帧，掉帧 ${dg.drop || 0}（${dg.n ? ((100 * dg.drop) / dg.n).toFixed(1) : 0}%），最长一帧 ${Math.round(dg.max || 0)} ms`);
+    L.push(`主线程（舞台每帧）：平均 ${dg.busyN ? (dg.busy / dg.busyN).toFixed(2) : 0} ms，最多 ${Math.round(dg.busyMax || 0)} ms　长任务：${dg.longs || 0} 次，最长 ${Math.round(dg.longMax || 0)} ms`);
+    L.push(`动画对时（调速）：${dg.fixes || 0} 次　歌曲钟 / 动画钟：${S.clockRate.toFixed(4)}　窗口大小变化：${dg.resizes || 0} 次`);
+    const w = (dg.waits || []).slice().sort((a, b) => a - b);
+    if (w.length) L.push(`点按排队：中位 ${ms(w[Math.floor(w.length / 2)])} ms，最长 ${ms(w[w.length - 1])} ms`);
+    L.push("");
+    L.push("【每秒】秒 | 帧数 | 掉帧 | 最长一帧ms | 主线程ms | 长任务(最长ms) | 对时");
+    [...(dg.secs || new Map()).entries()].sort((a, b) => a[0] - b[0]).forEach(([k, b]) => {
+      L.push(`${pad(k < 0 ? `-${fmtTime(-k)}` : fmtTime(k), 6)}| ${pad(b.f, 5)}| ${pad(b.d, 5)}| ${pad(Math.round(b.mx), 11)}| ${pad(b.busy.toFixed(1), 9)}| ${pad(b.lt ? `${b.lt}(${Math.round(b.ltMax)})` : "0", 15)}| ${b.fix}`);
+    });
+    if (dg.longList && dg.longList.length) {
+      L.push("");
+      L.push("【长任务】歌曲时间 | 时长ms");
+      dg.longList.forEach(([t, d]) => L.push(`${t.toFixed(2)} | ${Math.round(d)}`));
+    }
+    if (dg.ghostList && dg.ghostList.length) {
+      L.push("");
+      L.push("【点空】歌曲时间 | 原因 | 点按位置 | 最近的音 | 差多少秒 | 距离(气泡直径)");
+      const WHY = { early: "偏早", late: "偏晚", off: "点偏" };
+      dg.ghostList.forEach((q) => {
+        const n = q.near >= 0 ? S.notes.find((m) => m.idx === q.near) : null;
+        L.push(`${q.t.toFixed(3)} | ${WHY[q.why] || q.why} | ${Math.round(q.x)},${Math.round(q.y)} | ${n ? `#${n.idx + 1} ${midiName(n.m)} @${n.t.toFixed(3)} (${Math.round(n.x)},${Math.round(n.y)})` : "-"} | ${Number.isFinite(q.dt) ? (q.dt >= 0 ? "+" : "") + q.dt.toFixed(3) : ""} | ${f1(q.d)}`);
+      });
+    }
+    L.push("");
+    L.push("【每个音】序号 | 时间s | 音 | 位置 | 结果 | 偏差ms(+晚) | 方式 | 距离(气泡直径) | 点按排队ms");
+    const RES = ["PERFECT", "GREAT", "GOOD", "MISS", "JUST"];
+    S.notes.forEach((n) => {
+      const r = S.rec && S.rec[n.idx];
+      L.push(`${pad(n.idx + 1, 5)}| ${pad(n.t.toFixed(3), 8)}| ${pad(midiName(n.m), 4)}| ${pad(`${Math.round(n.x)},${Math.round(n.y)}`, 9)}| ${pad(r ? RES[r.r] : "—", 8)}| ${pad(r && Number.isFinite(r.off) ? (r.off >= 0 ? "+" : "") + ms(r.off) : "", 7)}| ${pad(r && r.how ? r.how : "", 3)}| ${pad(r && Number.isFinite(r.d) ? r.d.toFixed(2) : "", 5)}| ${r && Number.isFinite(r.w) ? ms(r.w) : ""}`);
+    });
+    return L.join("\n");
+  }
+  function exportPerf() {
+    const text = perfText();
+    const stamp = new Date();
+    const p2 = (v) => String(v).padStart(2, "0");
+    const name = `舞台演奏记录_${(S.song && S.song.t) || "曲目"}_${stamp.getFullYear()}${p2(stamp.getMonth() + 1)}${p2(stamp.getDate())}_${p2(stamp.getHours())}${p2(stamp.getMinutes())}.txt`;
+    try {
+      const url = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/plain;charset=utf-8" }));
+      const a = h("a", { href: url, download: name });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast("已导出性能测试记录");
+    } catch (e) {
+      toast("导出失败，请换个浏览器再试");
+    }
   }
   /* 掉帧：按本机刷新率算（单独掉一帧也算），再标出最卡的那 4 秒在哪、最长一帧多久 */
   function frameNote(dg) {

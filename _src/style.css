@@ -6886,6 +6886,28 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-pop em.is-early { color: #9fd3ff; }
 .hjs-pop em.is-late { color: #ffb38a; }
 .hjs-res-diag { margin: 2px 0 0; font-size: .68rem; color: var(--s-mute); }
+/* 结算的「性能测试记录」：默认收起的小按钮，展开后是设备诊断和导出按钮 */
+.hjs-res-diagbox { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.hjs-perf { width: 100%; text-align: center; }
+.hjs-perf > summary {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: .72rem; letter-spacing: .08em;
+  color: var(--s-mute);
+  background: rgba(10, 7, 22, .26);
+  border: 1px solid var(--line);
+  cursor: var(--cursor-img), pointer;
+  list-style: none;
+  user-select: none; -webkit-user-select: none;
+}
+.hjs-perf > summary::-webkit-details-marker { display: none; }
+.hjs-perf > summary::after { content: "▾"; font-size: .7rem; transition: transform .2s; }
+.hjs-perf[open] > summary::after { transform: rotate(180deg); }
+.hjs-perf > summary:hover { color: var(--s-soft); }
+.hjs-perf-body { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 8px; }
+.hjs-perf-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; font-size: .68rem; line-height: 1.6; color: var(--s-mute); }
+.hjs-perf-export { padding: 6px 16px; font-size: .78rem; }
 .hjs-res-mult { color: #ffe3b0; }
 .hjs-set-note { margin: 0; padding: 0 2px 10px; font-size: .74rem; line-height: 1.6; color: #ffe3b0; }
 /* 省电画法：手机连续掉帧时自动打开，去掉气泡的光晕阴影 */
