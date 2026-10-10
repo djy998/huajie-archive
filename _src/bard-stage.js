@@ -25,7 +25,7 @@
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly",
+    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly", anim: "hj_stage_anim",
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best3", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best3：百万分制的最高分与评级
     oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大combo换算后显示
@@ -101,7 +101,7 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(), unlocked: false,
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, fl: null,
+    song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, anim: "frame", fl: null,
     delayMs: 0, stars: 0, cat: "", query: "", cal: null, calMsg: "",
     gen: 0, notes: [], judged: null, hovered: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
@@ -339,6 +339,7 @@
     const range = getRaw(K.range, "normal");
     S.range = Object.prototype.hasOwnProperty.call(TAP_RANGES, range) ? range : "normal";
     S.fly = getRaw(K.fly, "1") === "1";                // 飞花线默认开
+    S.anim = getRaw(K.anim, "frame") === "browser" ? "browser" : "frame";   // 气泡动画：默认逐帧由页面更新
     applyRender();
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(Math.round(num(getRaw(K.stars, 0), 0) * 2) / 2, 0, 5);   // 0 = 全部，其余按半星筛
@@ -954,7 +955,10 @@
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
       S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
-      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
+      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）"),
+      ...(CAN_ANIM ? [row("气泡动画", seg("气泡动画", [{ id: "frame", label: "逐帧" }, { id: "browser", label: "浏览器" }], S.anim,
+        (v) => { S.anim = v; setRaw(K.anim, v); renderSheet(); }),
+      S.anim === "browser" ? "气泡收缩交给浏览器播放，页面忙时也不停；不同手机效果不同，可与逐帧对比结算里的性能测试记录" : "气泡收缩每帧由页面更新（默认）")] : [])));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -988,7 +992,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -1262,7 +1266,7 @@
     S.rateSample = null;
     S.tapCtx = null;   // busy：每帧主线程上 tick 自己花的时间；longs：50 ms 以上的长任务
     S.ghosts = 0;                                       // 点气泡时点空的次数
-    S.ghostWhy = { early: 0, late: 0, off: 0 };         // 点空的原因：早了（附近的气泡还没到判定窗）/ 晚了 / 时间对但点偏了
+    S.ghostWhy = { early: 0, late: 0, off: 0, again: 0 };         // 点空的原因：早了（附近的气泡还没到判定窗）/ 晚了 / 时间对但点偏了
     S.playing = false;
     S.paused = false;
     S.frozen = false;
@@ -1650,7 +1654,7 @@
     el.style.zIndex = String(S.notes.length - n.idx);   // 先到的叠在上面
     placeEl(el, n);
     S.els.set(n.idx, el);
-    if (CAN_ANIM && Number.isFinite(t)) startAnims(el, t, ap);
+    if (CAN_ANIM && S.anim === "browser" && Number.isFinite(t)) startAnims(el, t, ap);
     return el;
   }
   function dropEl(n, cls, ms) {
@@ -1700,15 +1704,14 @@
     S.fl = null;
     if (!S.fly) return;
     const line = S.render === "simple";
-    let path = null, grad = null;
+    const segs = [];
     const stars = [];
     if (line) {
-      box.insertAdjacentHTML("beforeend", '<svg class="hjs-fly-svg" aria-hidden="true"><defs><linearGradient id="hjsFlyGrad" gradientUnits="userSpaceOnUse">'
-        + '<stop offset="0" stop-color="#fff6d8" stop-opacity=".95"/><stop offset=".4" stop-color="#ffd27a" stop-opacity=".6"/>'
-        + '<stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></linearGradient></defs>'
-        + '<path fill="none" stroke="url(#hjsFlyGrad)" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-      path = box.querySelector("path");
-      grad = box.querySelector("linearGradient");
+      for (let k = 0; k < FLY.samples; k++) {
+        const el = h("i", { class: "hjs-fly-seg" });
+        box.append(el);
+        segs.push(el);
+      }
     } else {
       flyImage("fly-stars.webp");
       for (let k = 0; k < FLY.stars; k++) {
@@ -1722,7 +1725,7 @@
     box.append(flower);
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     S.fl = {
-      flower, line, path, grad, stars, live: [], si: 0, calm, curve: [], x: 0, y: 0, placed: false, movedAt: -Infinity,
+      flower, line, segs, stars, live: [], si: 0, calm, curve: [], x: 0, y: 0, placed: false, movedAt: -Infinity,
       sx: 0, sy: 0, lastSpawn: 0, lineOn: false, draws: 0,
     };
   }
@@ -1733,7 +1736,7 @@
     const box = $id("hjsFly");
     box.style.setProperty("--fly", `${(S.g.size * FLY.flower).toFixed(1)}px`);
     box.style.setProperty("--star", `${(S.g.size * FLY.star).toFixed(1)}px`);
-    if (f.path) f.path.setAttribute("stroke-width", (S.g.size * FLY.line).toFixed(2));
+    box.style.setProperty("--fly-line", `${(S.g.size * FLY.line).toFixed(2)}px`);
     const pts = [];
     for (const n of S.notes) {
       const t = n.t - FLY.ahead;
@@ -1817,30 +1820,34 @@
       return true;
     });
   }
-  /* 简单显示：沿花在过去 tail 秒里走过的路取点，用相邻点的中点做二次曲线连起来（没有折角），从花这头往尾巴渐隐；
-     花停下、线收拢之后清空一次就不再改 */
+  /* 简单显示：沿花在过去 tail 秒里走过的路取点，相邻两点之间各放一小段光（一条细的圆头光条），从花这头往尾巴渐隐。
+     光条是事先画好的固定元素（各自常驻一层），每帧只改它们的 transform / opacity —— 不再每帧重画一条 SVG 曲线
+     （那样整条线经过的地方每帧都要重新栅格化，曲子越快线越长，手机越卡）。花停下、线收拢之后全部隐藏一次就不再改 */
+  const SEG_W = 100;                                   // 光条的原始长度（px），每段按实际长度横向缩放
   function flyLine(f, t, moved) {
-    if (!moved && t - f.movedAt > FLY.tail + 0.05) {
-      if (f.lineOn) { f.lineOn = false; f.path.setAttribute("d", ""); }
-      return;
-    }
+    const hide = () => {
+      if (!f.lineOn) return;
+      f.lineOn = false;
+      for (const el of f.segs) el.style.opacity = "0";
+    };
+    if (!moved && t - f.movedAt > FLY.tail + 0.05) { hide(); return; }
     const pts = [[f.x, f.y]];
     for (let k = 1; k <= FLY.samples; k++) pts.push(flyAt(f.curve, t - (FLY.tail * k) / FLY.samples));
     const tail = pts[pts.length - 1];
-    if (Math.hypot(tail[0] - f.x, tail[1] - f.y) < 1) {
-      if (f.lineOn) { f.lineOn = false; f.path.setAttribute("d", ""); }
-      return;
+    if (Math.hypot(tail[0] - f.x, tail[1] - f.y) < 1) { hide(); return; }
+    const thick = S.g.size * FLY.line;
+    const n = f.segs.length;
+    for (let k = 0; k < n; k++) {
+      const [x0, y0] = pts[k];
+      const [x1, y1] = pts[k + 1];
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const st = f.segs[k].style;
+      if (len < 0.3) { if (st.opacity !== "0") st.opacity = "0"; continue; }
+      const a = Math.atan2(y1 - y0, x1 - x0);
+      const u = k / n;
+      st.transform = `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${a.toFixed(3)}rad) scaleX(${((len + thick * 0.6) / SEG_W).toFixed(3)})`;
+      st.opacity = (0.95 * (1 - u) * (1 - u * 0.35)).toFixed(2);
     }
-    let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-    for (let k = 1; k < pts.length - 1; k++) {
-      d += `Q${pts[k][0].toFixed(1)} ${pts[k][1].toFixed(1)} ${((pts[k][0] + pts[k + 1][0]) / 2).toFixed(1)} ${((pts[k][1] + pts[k + 1][1]) / 2).toFixed(1)}`;
-    }
-    d += `L${tail[0].toFixed(1)} ${tail[1].toFixed(1)}`;
-    f.path.setAttribute("d", d);
-    f.grad.setAttribute("x1", f.x.toFixed(1));
-    f.grad.setAttribute("y1", f.y.toFixed(1));
-    f.grad.setAttribute("x2", tail[0].toFixed(1));
-    f.grad.setAttribute("y2", tail[1].toFixed(1));
     f.lineOn = true;
     f.draws += 1;
   }
@@ -1965,6 +1972,11 @@
      cands：[{ n, d }]，按时间先后，d 为离点按处多少个气泡（放水范围为 0） */
   function pickNote(cands, t, dm) {
     if (!cands.length) return null;
+    /* 手指正点在气泡上（离圆心不到 0.6 个气泡直径）就算这个，哪怕旁边还有更早的音：
+       密集段里气泡挨得近，按「最早的那个」算，点 B 会被算到旁边的 A 上，下一下再点 A 就扑空成了点偏。
+       压在一起的几个里取最早的（先到的叠在上面，看到的就是它） */
+    const on = cands.find((c) => c.d <= 0.6);
+    if (on) return on.n;
     const first = cands[0];
     for (let i = 1; i < cands.length; i++) {
       const c = cands[i];
@@ -2041,6 +2053,16 @@
   }
   /* 点空是为什么：判定窗里有没弹的气泡（只是离得远）= 点偏了；否则看点按处附近最近的那个没弹的气泡是在后面（早了）还是前面（晚了） */
   function ghostWhy(x, y, t, dm, R) {
+    /* 点的正是刚弹掉（0.6 秒内）的那个气泡：多点了一下（手指在气泡上停留、两指连点，或上一下被算到了它头上） */
+    if (S.rec && S.g) {
+      for (let i = Math.max(0, S.next - 12); i < S.notes.length; i++) {
+        const n = S.notes[i];
+        if (n.t - t > 0.6) break;
+        const r = S.rec[n.idx];
+        if (!r || r.r === 3 || !Number.isFinite(r.off)) continue;
+        if (Math.abs(n.t + r.off - t) <= 0.6 && Math.hypot(n.x - x, n.y - y) <= S.g.size * 0.7) return "again";
+      }
+    }
     let near = null;
     for (let i = Math.max(0, S.next - 8); i < S.notes.length; i++) {
       const n = S.notes[i];
@@ -2392,7 +2414,7 @@
     const parts = o.length >= 8 ? [Math.abs(ms) < 10 ? "平均时机准确" : `平均偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`] : [];
     if (S.ghosts) {
       const w = S.ghostWhy;
-      const why = [w.early && `偏早 ${w.early}`, w.late && `偏晚 ${w.late}`, w.off && `点偏 ${w.off}`].filter(Boolean).join(" · ");
+      const why = [w.early && `偏早 ${w.early}`, w.late && `偏晚 ${w.late}`, w.off && `点偏 ${w.off}`, w.again && `重复点 ${w.again}`].filter(Boolean).join(" · ");
       parts.push(`点空 ${S.ghosts} 次（${why}）`);
     }
     /* 设备诊断：声音输出延迟、点按排队时间、掉帧比例（反馈问题时把这一行发过来） */
@@ -2436,12 +2458,12 @@
     L.push(`画面：${S.render === "simple" ? "简单显示" : "正常显示"}　飞花线：${S.fly ? "开" : "关"}　音色：${S.inst || "跟随模拟器"}　判定延迟：${S.delayMs} ms　示范旋律：${S.demo ? "开" : "关"}`);
     L.push(`浏览器：${navigator.userAgent}`);
     L.push(`屏幕：${screen.width}×${screen.height} @${window.devicePixelRatio}x　舞台：${Math.round(g.w || 0)}×${Math.round(g.h || 0)}　气泡直径：${f1(g.size)} px`);
-    L.push(`刷新率：${dg.base ? `${Math.round(1000 / dg.base)} Hz（一帧 ${dg.base.toFixed(2)} ms）` : "未测出"}　Web Animations：${CAN_ANIM ? "用" : "不支持"}　省电画法：${dg.lite ? "已自动切换" : "否"}`);
+    L.push(`刷新率：${dg.base ? `${Math.round(1000 / dg.base)} Hz（一帧 ${dg.base.toFixed(2)} ms）` : "未测出"}　气泡动画：${CAN_ANIM && S.anim === "browser" ? "浏览器" : "逐帧"}　省电画法：${dg.lite ? "已自动切换" : "否"}`);
     L.push(`音频：${bard().audioState ? bard().audioState() : ""}　输出延迟：${ms(S.clock ? S.clock.lat : NaN)} ms`);
     L.push("");
     L.push("【汇总】");
     L.push(`得分 ${fmtNum(S.score)}　准确率 ${accPct().toFixed(1)}%　最大COMBO ${S.maxCombo} / ${S.notes.length}`);
-    L.push(`PERFECT ${S.counts.perfect}　GREAT ${S.counts.great}　GOOD ${S.counts.good}　JUST ${S.counts.just}　MISS ${S.counts.miss}　点空 ${S.ghosts}（偏早 ${S.ghostWhy.early}，偏晚 ${S.ghostWhy.late}，点偏 ${S.ghostWhy.off}）`);
+    L.push(`PERFECT ${S.counts.perfect}　GREAT ${S.counts.great}　GOOD ${S.counts.good}　JUST ${S.counts.just}　MISS ${S.counts.miss}　点空 ${S.ghosts}（偏早 ${S.ghostWhy.early}，偏晚 ${S.ghostWhy.late}，点偏 ${S.ghostWhy.off}，重复点 ${S.ghostWhy.again || 0}）`);
     L.push(`帧：${dg.n || 0} 帧，掉帧 ${dg.drop || 0}（${dg.n ? ((100 * dg.drop) / dg.n).toFixed(1) : 0}%），最长一帧 ${Math.round(dg.max || 0)} ms`);
     L.push(`主线程（舞台每帧）：平均 ${dg.busyN ? (dg.busy / dg.busyN).toFixed(2) : 0} ms，最多 ${Math.round(dg.busyMax || 0)} ms　长任务：${dg.longs || 0} 次，最长 ${Math.round(dg.longMax || 0)} ms`);
     L.push(`动画对时（调速）：${dg.fixes || 0} 次　歌曲钟 / 动画钟：${S.clockRate.toFixed(4)}　窗口大小变化：${dg.resizes || 0} 次`);
@@ -2460,7 +2482,7 @@
     if (dg.ghostList && dg.ghostList.length) {
       L.push("");
       L.push("【点空】歌曲时间 | 原因 | 点按位置 | 最近的音 | 差多少秒 | 距离(气泡直径)");
-      const WHY = { early: "偏早", late: "偏晚", off: "点偏" };
+      const WHY = { early: "偏早", late: "偏晚", off: "点偏", again: "重复点" };
       dg.ghostList.forEach((q) => {
         const n = q.near >= 0 ? S.notes.find((m) => m.idx === q.near) : null;
         L.push(`${q.t.toFixed(3)} | ${WHY[q.why] || q.why} | ${Math.round(q.x)},${Math.round(q.y)} | ${n ? `#${n.idx + 1} ${midiName(n.m)} @${n.t.toFixed(3)} (${Math.round(n.x)},${Math.round(n.y)})` : "-"} | ${Number.isFinite(q.dt) ? (q.dt >= 0 ? "+" : "") + q.dt.toFixed(3) : ""} | ${f1(q.d)}`);

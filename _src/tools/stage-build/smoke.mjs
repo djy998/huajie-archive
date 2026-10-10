@@ -782,10 +782,14 @@ async function main() {
     const qs = Q.st().notes;
     const qk = qs.findIndex((a, i) => i > 1 && a.t - qs[i - 1].t > 0.4 && Math.hypot(a.x - qs[i - 1].x, a.y - qs[i - 1].y) > Q.st().g.size);
     Q.until((qs[qk - 1].t + qs[qk].t) / 2);
-    const dpath = Q.$(".hjs-fly-svg path").getAttribute("d") || "";
-    check("飞花线（简单显示）：一条平滑的细线（SVG 路径，二次曲线连接），没有星星", Q.st().flyPos.line && !Q.$(".hjs-fly-star") && /^M[\d.\- ]+Q/.test(dpath) && (dpath.match(/Q/g) || []).length >= 10, dpath.slice(0, 60));
+    const segs = Q.$$(".hjs-fly-seg");
+    const lit = segs.filter((e) => +e.style.opacity > 0);
+    check("飞花线（简单显示）：一串首尾相接的细光条（只改 transform / 透明度，不重画 SVG），没有星星",
+      Q.st().flyPos.line && !Q.$(".hjs-fly-star") && !Q.$(".hjs-fly-svg") && segs.length === 20 && lit.length >= 10
+      && lit.every((e) => /^translate3d\(.*rotate\(.*scaleX\(/.test(e.style.transform))
+      && +lit[0].style.opacity > +lit[lit.length - 1].style.opacity, `${lit.length} 段亮着`);
     Q.until(Q.st().endT + 1);
-    check("花停下后线清空", (Q.$(".hjs-fly-svg path").getAttribute("d") || "") === "");
+    check("花停下后线清空", Q.$$(".hjs-fly-seg").every((e) => !+e.style.opacity));
   }
 
   /* 21. 百万分制与得分上限：全 PERFECT 正好 100 万（Impeccable）；宽松 / 放水按组合有上限，打满正好等于上限 */
