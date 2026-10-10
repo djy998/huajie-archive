@@ -6590,7 +6590,9 @@ body.day-mode .load-corner { box-shadow: 0 4px 12px rgba(96,64,16,.22), inset 0 
 .hjs[hidden] { display: none; }
 .hjs.is-in { opacity: 1; }
 .hjs.is-leaving { opacity: 0; }
-body.hjs-open { overflow: hidden; }
+body.hjs-open { overflow: hidden; overscroll-behavior: none; }
+html.hjs-lock { overflow: hidden; overscroll-behavior: none; }
+.hjs.is-playing .hjs-hud { touch-action: none; }   /* 演奏中顶栏上滑动也不滚页面 */
 /* 舞台盖满时（hjs-covered，淡入后加、开始淡出前去掉）：下面的网站不画、动画暂停；用 visibility 不用 display，滚动位置不变。
    只点名藏网站本身的内容（页头、正文、页脚、背景特效、各弹窗、模拟器小组件），不用「除了某几个都藏」的写法：
    浮在舞台上面的东西（下拉选单 .hj-pop、加载中的莫古力、提示条…）都是动态挂到 body 上的，漏列一个就会看不见、点了没反应 */

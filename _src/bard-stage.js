@@ -511,6 +511,7 @@
     void r.offsetWidth;
     r.classList.add("is-in");
     document.body.classList.add("hjs-open");
+    document.documentElement.classList.add("hjs-lock");   // 连 html 一起锁住滚动：手指稍微一滑，手机浏览器的工具栏就会出来 / 收起，整个舞台跟着变高变矮
     /* 舞台淡入盖满后，把下面的网站藏起来、停掉它的动画：被挡住的东西不再参与绘制 */
     S.coverTimer = setTimeout(() => document.body.classList.add("hjs-covered"), 260);
     if (typeof bgm !== "undefined" && bgm.playing) { S.bgmWasOn = true; bgm.pause(); }
@@ -540,6 +541,7 @@
       r.classList.remove("is-leaving");
       r.hidden = true;
       document.body.classList.remove("hjs-open");
+      document.documentElement.classList.remove("hjs-lock");
     }, 240);
     bard().release?.();
     if (S.bgmWasOn) {
@@ -1120,8 +1122,7 @@
     return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
   }
 
-  function layout() {
-    const dm = diffMeta();
+  function geometry(dm) {
     const w = S.root.clientWidth || window.innerWidth;
     const hh = S.root.clientHeight || window.innerHeight;
     const size = clamp(Math.min(w, hh) * dm.tap, 66, 118);
@@ -1129,8 +1130,12 @@
     const hud = $id("hjsHud").offsetHeight || 56;
     const top = hud + size * 0.62 + 10;
     const bottom = Math.max(top + 80, hh - size * 0.62 - 14 - inset.bottom);
-    S.g = { w, h: hh, size, top, bottom };
-    $id("hjsNotes").style.setProperty("--size", `${size.toFixed(1)}px`);
+    return { w, h: hh, size, top, bottom };
+  }
+  function layout() {
+    const dm = diffMeta();
+    S.g = geometry(dm);
+    $id("hjsNotes").style.setProperty("--size", `${S.g.size.toFixed(1)}px`);
 
     placeNotes(S.g, dm);
     S.els.forEach((el, idx) => { placeEl(el, S.notes[idx]); el.style.setProperty("--c", PALETTE[S.notes[idx].c]); });
@@ -1215,8 +1220,29 @@
     });
   }
 
+  /* 窗口变了：手机浏览器的工具栏出来 / 收起只改高度，这时已经在屏幕上和马上要出来的气泡一个都不动（不然手指正对着的气泡会突然挪开，
+     点下去算点偏），后面的按新高度等比例挪一下；宽度变了（横竖屏切换）才整首重新摆。等窗口停下来 120 ms 再做，免得连着重算 */
   function onResize() {
-    if (S.view === "play" && S.notes.length) layout();
+    if (S.view !== "play" || !S.notes.length) return;
+    clearTimeout(S.resizeTimer);
+    S.resizeTimer = setTimeout(relayout, 120);
+  }
+  function relayout() {
+    if (S.view !== "play" || !S.notes.length || !S.g) return;
+    const dm = diffMeta();
+    const g = geometry(dm);
+    if (S.diag) S.diag.resizes += 1;
+    if (Math.abs(g.w - S.g.w) > 1 || Math.abs(g.size - S.g.size) > 0.5) { layout(); return; }
+    if (Math.abs(g.h - S.g.h) < 1) return;
+    const old = S.g;
+    const keep = (S.frozen ? S.frozenT : songTime()) + dm.approach + 0.6;
+    const k = (g.bottom - g.top) / Math.max(1, old.bottom - old.top);
+    for (const n of S.notes) {
+      if (n.t <= keep || S.els.has(n.idx)) continue;
+      n.y = g.top + (n.y - old.top) * k;
+    }
+    S.g = g;
+    flyLayout();
   }
 
   /* ==== 开始 / 结束 ==== */
@@ -1229,7 +1255,8 @@
     S.offs = [];                                        // 每次弹中的偏差（秒，正 = 晚），结算时给个平均
     /* 手感诊断：掉帧、点按排队时间。base：本机一帧多长（开头 120 帧的中位数，按屏幕刷新率）；drop：比 base 长一半以上的帧；
        buckets：每 4 秒歌曲时间里掉了几帧，结算时指出最卡的一段；max：最长一帧 */
-    S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map() };
+    S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map(),
+      busy: 0, busyN: 0, busyMax: 0, longs: 0, longMax: 0, resizes: 0 };   // busy：每帧主线程上 tick 自己花的时间；longs：50 ms 以上的长任务
     S.ghosts = 0;                                       // 点气泡时点空的次数
     S.ghostWhy = { early: 0, late: 0, off: 0 };         // 点空的原因：早了（附近的气泡还没到判定窗）/ 晚了 / 时间对但点偏了
     S.playing = false;
@@ -1278,6 +1305,7 @@
       }
       prepare(s, chart);
       layout();
+      prewarm();
       updateHud();
       warmSounds().then(() => {
         if (gen !== S.gen || S.view !== "play") return;
@@ -1324,7 +1352,19 @@
     /* 排音另用一个计时器：画面掉帧（低端机卡顿、窗口被挡住时浏览器压低帧率）也不会漏掉补音 */
     clearInterval(S.pump);
     S.pump = setInterval(scheduleSounds, 25);
+    watchLongTasks(true);
     loop();
+  }
+  /* 长任务（主线程一口气占用 50 ms 以上，期间画面和点按都会卡住）：浏览器支持时记下次数和最长一次，给结算的诊断行 */
+  function watchLongTasks(on) {
+    if (S.longObs) { S.longObs.disconnect(); S.longObs = null; }
+    if (!on || typeof PerformanceObserver === "undefined" || !(PerformanceObserver.supportedEntryTypes || []).includes("longtask")) return;
+    S.longObs = new PerformanceObserver((list) => {
+      const dg = S.diag;
+      if (!dg || !S.playing || S.paused) return;
+      for (const e of list.getEntries()) { dg.longs += 1; dg.longMax = Math.max(dg.longMax, e.duration); }
+    });
+    try { S.longObs.observe({ type: "longtask" }); } catch (e) { S.longObs = null; }
   }
 
   function stopPlay() {
@@ -1332,6 +1372,8 @@
     cancelAnimationFrame(S.raf);
     S.raf = 0;
     clearInterval(S.pump);
+    clearTimeout(S.resizeTimer);
+    watchLongTasks(false);
     S.playing = false;
     S.paused = false;
     S.frozen = false;
@@ -1369,6 +1411,7 @@
   function tick() {
     S.raf = 0;
     if (!S.playing || S.paused) return;
+    const t0 = performance.now();
     noteFrame();
     const dm = diffMeta();
     let t = S.frozen ? S.frozenT : songTime();
@@ -1391,6 +1434,12 @@
     syncAnims(t);
     if (S.fl) flyFrame(t);
     $id("hjsProg").style.transform = `scaleX(${clamp(t / (S.endT + 1), 0, 1).toFixed(4)})`;
+    if (S.diag) {
+      const spent = performance.now() - t0;
+      S.diag.busy += spent;
+      S.diag.busyN += 1;
+      if (spent > S.diag.busyMax) S.diag.busyMax = spent;
+    }
     if (!S.finished && S.next >= S.notes.length && t > S.endT + 1.6) { finish(); return; }
     S.raf = requestAnimationFrame(tick);
   }
@@ -1475,7 +1524,7 @@
     for (const a of el._anims) {
       if (S.frozen || S.paused) { if (a.playState === "running") a.pause(); }
       else if (a.playState === "paused") a.play();
-      if (Math.abs((a.currentTime || 0) - want) > 12) a.currentTime = want;
+      if (Math.abs((a.currentTime || 0) - want) > 20) a.currentTime = want;
     }
   }
   /* 每 250 ms 把动画进度对回音频钟一次（停住、暂停、跳回时马上对） */
@@ -1514,6 +1563,25 @@
     if (!n) return;
     el.style.transform = `translate3d(${n.x.toFixed(1)}px, ${n.y.toFixed(1)}px, 0)`;
   }
+  /* 开演前先备好：一批气泡元素（藏着）、每种判定字各一个，第一次用到时不用现建图层、现画字 */
+  function prewarm() {
+    const want = Math.min(POOL_MAX, 24);
+    while (S.pool.length < want) {
+      const el = makeNoteEl();
+      el.style.visibility = "hidden";
+      S.pool.push(el);
+    }
+    if (!CAN_ANIM) return;
+    const box = $id("hjsJudge");
+    const labels = scored() ? JUDGE.map((j) => [j.label, `is-${j.id}`]).concat([["MISS", "is-miss"]]) : [[S.learn ? "WELL" : "AUTO", "is-ok"], ["MISS", "is-miss"]];
+    for (const [label, cls] of labels) {
+      const key = `${label}|${cls}`;
+      if (S.pops.get(key)?.isConnected) continue;
+      const p = h("div", { class: `hjs-pop is-pooled ${cls}` }, h("b", { text: label }), h("em", { hidden: true }));
+      box.append(p);
+      S.pops.set(key, p);
+    }
+  }
   /* 气泡元素循环使用：弹完 / 漏掉的收起来留给后面的音，不反复建、拆（每个气泡有四层，建拆层在密集段很费） */
   const POOL_MAX = 40;
   function makeNoteEl() {
@@ -1526,7 +1594,7 @@
     return el;
   }
   function noteEl(n, t, ap) {
-    const el = S.pool.pop() || makeNoteEl();
+    const el = S.pool.shift() || makeNoteEl();
     Object.assign(el, { _k: -1, _next: false, _op: null, _anims: null, _t0: n.t - (ap || diffMeta().approach) });
     el.className = "hjs-note";
     for (const x of [el, el._ring, el._core, el._name]) { x.style.removeProperty("opacity"); x.style.removeProperty("transform"); }
@@ -1981,7 +2049,7 @@
     const key = `${label}|${cls}`;
     let p = S.pops.get(key);
     if (!p || !p.isConnected) {
-      p = h("div", { class: `hjs-pop is-pooled ${cls}` }, h("b", { text: label }), h("em", {}));
+      p = h("div", { class: `hjs-pop is-pooled ${cls}` }, h("b", { text: label }), h("em", { hidden: true }));
       box.append(p);
       S.pops.set(key, p);
     }
@@ -2256,6 +2324,9 @@
       `输出延迟 ${Math.round((S.clock ? S.clock.lat : 0) * 1000)} ms`,
       dg.tsBad ? "点按时间戳不可用" : w.length ? `点按排队 ${Math.round(w[Math.floor(w.length / 2)] * 1000)} ms` : null,
       dg.frames ? frameNote(dg) : null,
+      dg.busyN ? `主线程每帧 ${(dg.busy / dg.busyN).toFixed(1)} ms（最多 ${Math.round(dg.busyMax)} ms）` : null,
+      dg.longs ? `长任务 ${dg.longs} 次（最长 ${Math.round(dg.longMax)} ms）` : null,
+      dg.resizes ? `窗口大小变了 ${dg.resizes} 次` : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
       S.root && S.root.classList.contains("is-lite") ? "已自动省电" : null,
