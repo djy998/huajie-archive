@@ -25,7 +25,7 @@
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly", anim: "hj_stage_anim",
+    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly", anim: "hj_stage_anim", power: "hj_stage_power", line: "hj_stage_line",
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best3", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best3：百万分制的最高分与评级
     oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大combo换算后显示
@@ -82,7 +82,7 @@
   const FLY = {
     ahead: 0, flower: 0.24, spin: 6,
     star: 0.13, stars: 16, every: 55, gap: 0.05, life: [850, 1150], kinds: 3,
-    line: 0.045, tail: 0.45, samples: 20,
+    line: 0.045, tail: 0.45, pathSamples: 20, samples: 32,   // samples：拖尾取几个点（简单显示时就是几段光条，段越短弯得越圆）
   };
   const BAND_COLORS = ["241 192 122", "239 163 180", "198 174 245", "150 212 232"];   // 按音高：低 → 高
   const PALETTE = [...BAND_COLORS, "150 226 180", "246 150 120"];   // 后两色只在挨得近、撞色时补位
@@ -101,7 +101,7 @@
   const S = {
     built: false, root: null, data: null, tags: [], loading: null, err: "", charts: new Map(), unlocked: false,
     view: "lobby", sheet: "", sheetBack: null,
-    song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, anim: "frame", fl: null,
+    song: null, diff: "normal", learn: false, demo: false, inst: "", judge: "normal", render: "normal", range: "normal", fly: false, anim: "frame", power: "auto", lineMode: "lite", fl: null,
     delayMs: 0, stars: 0, cat: "", query: "", cal: null, calMsg: "",
     gen: 0, notes: [], judged: null, hovered: null, next: 0, lo: 60, hi: 72, g: null,
     bg: [], bgAll: [], bgList: [], bgNext: 0, ticks: [], tickNext: 0, firstT: 0, lastT: 0, endT: 0, startT: 0, spb: 0.5,
@@ -145,8 +145,10 @@
   /* 上限按两项的宽松程度：0 正常、1 宽松、2 放水（两项都放水是自动演奏，不计分） */
   const LOOSENESS = { normal: 0, loose: 1, hover: 2, free: 2 };
   const CAPS = { "0,0": 1000000, "0,1": 800000, "1,1": 700000, "0,2": 650000, "1,2": 600000 };
-  function capOf(judge = S.judge, range = S.range) {
-    const k = [LOOSENESS[judge] || 0, LOOSENESS[range] || 0].sort().join();
+  /* 判定模式算几档宽松：仙人刺的正常判定本来就是宽松那一档的窗口（LOOSE_WIN），选宽松并没有放宽，不算宽松、不降上限 */
+  const judgeLoose = (judge = S.judge, diff = S.diff) => (judge === "loose" && diff === "easy" ? 0 : LOOSENESS[judge] || 0);
+  function capOf(judge = S.judge, range = S.range, diff = S.diff) {
+    const k = [judgeLoose(judge, diff), LOOSENESS[range] || 0].sort().join();
     return CAPS[k] || SCORE.max;
   }
   function judgeScore(sumW, n) {
@@ -174,10 +176,11 @@
     return total <= knee ? total : knee + ((total - knee) * (cap - knee)) / (SCORE.max - knee);
   }
   /* 准确率（0~1）、最大combo、音数 → 判定分、combo得分、总分 */
-  function scoreOf(acc, maxCombo, n, judge, range) {
+  function scoreOf(acc, maxCombo, n, judge, range, diff) {
     const j = judgeScore(acc * 3 * n, n);
     const c = comboScore(maxCombo, n);
-    return { judge: j, combo: c, cap: capOf(judge, range), score: Math.round(capScore(j + c, capOf(judge, range))) };
+    const cap = capOf(judge, range, diff);
+    return { judge: j, combo: c, cap, score: Math.round(capScore(j + c, cap)) };
   }
   const sumW = () => { const c = S.counts || {}; return 3 * (c.perfect || 0) + 2 * (c.great || 0) + (c.good || 0) + 0.5 * (c.just || 0); };
   function liveScore() {
@@ -196,7 +199,7 @@
     const cap = capOf();
     if (cap >= SCORE.max) return "";
     const parts = [];
-    if (LOOSENESS[S.judge]) parts.push(`${judgeLabel()}判定`);
+    if (judgeLoose()) parts.push(`${judgeLabel()}判定`);
     if (LOOSENESS[S.range]) parts.push(`${rangeLabel()}范围`);
     return `得分上限 ${fmtWan(cap)}（${parts.join("、")}）`;
   }
@@ -214,7 +217,7 @@
     const n = Array.isArray(song.cnt) ? num(song.cnt[DIFFS.findIndex((d) => d.id === diff)], 0) : 0;
     const acc = o ? num(o.acc, NaN) : NaN;
     if (!o || !n || !Number.isFinite(acc) || isAuto(judge, range)) return null;
-    const { score } = scoreOf(clamp(acc / 100, 0, 1), clamp(num(o.combo, 0), 0, n), n, judge, range);
+    const { score } = scoreOf(clamp(acc / 100, 0, 1), clamp(num(o.combo, 0), 0, n), n, judge, range, diff);
     return { score, rank: rankOf(score), old: true };
   }
   function bestOf(song, diff = S.diff, judge = S.judge, range = S.range) {
@@ -340,6 +343,9 @@
     S.range = Object.prototype.hasOwnProperty.call(TAP_RANGES, range) ? range : "normal";
     S.fly = getRaw(K.fly, "1") === "1";                // 飞花线默认开
     S.anim = getRaw(K.anim, "frame") === "browser" ? "browser" : "frame";   // 气泡动画：默认逐帧由页面更新
+    const power = getRaw(K.power, "auto");
+    S.power = power === "on" || power === "off" ? power : "auto";        // 省电画法：开启 / 自动（掉帧多时切换）/ 关闭
+    S.lineMode = getRaw(K.line, "lite") === "full" ? "full" : "lite";    // 简单显示的金线：优化（光条）/ 完整（SVG 曲线）
     applyRender();
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(Math.round(num(getRaw(K.stars, 0), 0) * 2) / 2, 0, 5);   // 0 = 全部，其余按半星筛
@@ -955,10 +961,29 @@
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
       S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为光线，音符密集时更流畅" : "音符密集时卡顿可改用简单显示"),
-      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）"),
+      row("飞花线", fly, "小花沿曲线依次经过各气泡，经过时即为判定点；身后带星光（简单显示时为金色光线）")));
+
+    /* 性能优化：用不上的项置灰（省电画法只去掉气泡光晕，简单显示本来就没有；金线只在简单显示、开着飞花线时才有） */
+    const off = (el, why) => {
+      if (!why) return el;
+      el.classList.add("is-disabled");
+      el.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      const hint = el.querySelector(".hjs-set-l small");
+      if (hint) hint.textContent = why;
+      return el;
+    };
+    const POWER_HINT = { on: "一直去掉气泡光晕，最省", auto: "掉帧多时自动去掉气泡光晕（默认）", off: "一直保留气泡光晕" };
+    body.append(group("性能优化",
       ...(CAN_ANIM ? [row("气泡动画", seg("气泡动画", [{ id: "frame", label: "逐帧" }, { id: "browser", label: "浏览器" }], S.anim,
         (v) => { S.anim = v; setRaw(K.anim, v); renderSheet(); }),
-      S.anim === "browser" ? "气泡收缩交给浏览器播放，页面忙时也不停；不同手机效果不同，可与逐帧对比结算里的性能测试记录" : "气泡收缩每帧由页面更新（默认）")] : [])));
+      S.anim === "browser" ? "气泡收缩交给浏览器播放；不同手机效果不同，可对比结算里的性能测试记录" : "气泡收缩每帧由页面更新（默认，多数手机更顺）")] : []),
+      off(row("省电画法", seg("省电画法", [{ id: "on", label: "开启" }, { id: "auto", label: "自动" }, { id: "off", label: "关闭" }], S.power,
+        (v) => { S.power = v; setRaw(K.power, v); renderSheet(); }), POWER_HINT[S.power]),
+      S.render === "simple" ? "简单显示已去掉气泡光晕，此项不起作用" : ""),
+      off(row("金线", seg("金线", [{ id: "full", label: "完整" }, { id: "lite", label: "优化" }], S.lineMode,
+        (v) => { S.lineMode = v; setRaw(K.line, v); renderSheet(); }),
+      S.lineMode === "full" ? "平滑的整条曲线，每帧重画，曲子密时较费" : "由短光条拼成，不用重画，更流畅（默认）"),
+      S.render !== "simple" ? "只在简单显示时出现（正常显示为星光）" : !S.fly ? "飞花线已关闭" : "")));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -992,7 +1017,7 @@
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim, K.power, K.line].forEach((k) => storage.remove(k));
         readPrefs();
         S.calMsg = "";
         renderSheet();
@@ -1006,7 +1031,7 @@
       h("ol", {},
         ["点击气泡即可弹奏，允许少许偏差。使用电脑时，也可将指针移至气泡上后按任意键",
           "MISS 与点空含义不同：MISS 指音符到达判定点时未弹奏，该音不发声，COMBO中断，并计入准确率；点空指点击时附近没有待弹奏的气泡，不扣分，也不中断COMBO，仅在结算时记录次数。点空较多时，通常是点击过早或位置偏离所致",
-          "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万",
+          "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万。仙人刺难度的正常判定已与宽松相同，选宽松判定不降上限",
           "得分由判定分（70%）和COMBO得分（30%）两部分组成，判定分根据每个音的判定评价记分，COMBO得分按最大COMBO数评价，因此追求高分请尽可能不要断COMBO。",
           "点击范围与判定模式均设为放水时为自动演奏，不计分。本机纪录按难度、判定模式与点击范围分别保存最高分与评级",
           "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准，随提示音点击数次即可",
@@ -1262,6 +1287,7 @@
     S.diag = { frames: 0, slow: 0, last: 0, waits: [], tsBad: false, lite: false, warm: [], base: 0, n: 0, drop: 0, max: 0, buckets: new Map(),
       busy: 0, busyN: 0, busyMax: 0, longs: 0, longMax: 0, resizes: 0, secs: new Map(), longList: [], fixes: 0, ghostList: [] };
     S.rec = [];                                         // 每个音的结果（性能测试记录导出用）
+    if (S.root) S.root.classList.toggle("is-lite", S.power === "on");   // 省电画法：开启时一开始就用；自动时掉帧多了才切
     S.clockRate = 1;
     S.rateSample = null;
     S.tapCtx = null;   // busy：每帧主线程上 tick 自己花的时间；longs：50 ms 以上的长任务
@@ -1706,7 +1732,15 @@
     const line = S.render === "simple";
     const segs = [];
     const stars = [];
-    if (line) {
+    let path = null, grad = null;
+    if (line && S.lineMode === "full") {
+      box.insertAdjacentHTML("beforeend", '<svg class="hjs-fly-svg" aria-hidden="true"><defs><linearGradient id="hjsFlyGrad" gradientUnits="userSpaceOnUse">'
+        + '<stop offset="0" stop-color="#fff6d8" stop-opacity=".95"/><stop offset=".4" stop-color="#ffd27a" stop-opacity=".6"/>'
+        + '<stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></linearGradient></defs>'
+        + '<path fill="none" stroke="url(#hjsFlyGrad)" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+      path = box.querySelector("path");
+      grad = box.querySelector("linearGradient");
+    } else if (line) {
       for (let k = 0; k < FLY.samples; k++) {
         const el = h("i", { class: "hjs-fly-seg" });
         box.append(el);
@@ -1725,7 +1759,7 @@
     box.append(flower);
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     S.fl = {
-      flower, line, segs, stars, live: [], si: 0, calm, curve: [], x: 0, y: 0, placed: false, movedAt: -Infinity,
+      flower, line, segs, path, grad, stars, live: [], si: 0, calm, curve: [], x: 0, y: 0, placed: false, movedAt: -Infinity,
       sx: 0, sy: 0, lastSpawn: 0, lineOn: false, draws: 0,
     };
   }
@@ -1737,6 +1771,7 @@
     box.style.setProperty("--fly", `${(S.g.size * FLY.flower).toFixed(1)}px`);
     box.style.setProperty("--star", `${(S.g.size * FLY.star).toFixed(1)}px`);
     box.style.setProperty("--fly-line", `${(S.g.size * FLY.line).toFixed(2)}px`);
+    if (f.path) f.path.setAttribute("stroke-width", (S.g.size * FLY.line).toFixed(2));
     const pts = [];
     for (const n of S.notes) {
       const t = n.t - FLY.ahead;
@@ -1825,6 +1860,7 @@
      （那样整条线经过的地方每帧都要重新栅格化，曲子越快线越长，手机越卡）。花停下、线收拢之后全部隐藏一次就不再改 */
   const SEG_W = 100;                                   // 光条的原始长度（px），每段按实际长度横向缩放
   function flyLine(f, t, moved) {
+    if (f.path) { flyPath(f, t, moved); return; }
     const hide = () => {
       if (!f.lineOn) return;
       f.lineOn = false;
@@ -1835,7 +1871,6 @@
     for (let k = 1; k <= FLY.samples; k++) pts.push(flyAt(f.curve, t - (FLY.tail * k) / FLY.samples));
     const tail = pts[pts.length - 1];
     if (Math.hypot(tail[0] - f.x, tail[1] - f.y) < 1) { hide(); return; }
-    const thick = S.g.size * FLY.line;
     const n = f.segs.length;
     for (let k = 0; k < n; k++) {
       const [x0, y0] = pts[k];
@@ -1845,9 +1880,32 @@
       if (len < 0.3) { if (st.opacity !== "0") st.opacity = "0"; continue; }
       const a = Math.atan2(y1 - y0, x1 - x0);
       const u = k / n;
-      st.transform = `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${a.toFixed(3)}rad) scaleX(${((len + thick * 0.6) / SEG_W).toFixed(3)})`;
+      st.transform = `translate3d(${x0.toFixed(1)}px, ${y0.toFixed(1)}px, 0) rotate(${a.toFixed(3)}rad) scaleX(${((len + 0.5 / (window.devicePixelRatio || 1)) / SEG_W).toFixed(3)})`;   // 各段多出半个屏幕像素，补上接缝处的抗锯齿边，不亮不暗
       st.opacity = (0.95 * (1 - u) * (1 - u * 0.35)).toFixed(2);
     }
+    f.lineOn = true;
+    f.draws += 1;
+  }
+
+  /* 金线「完整」：整条平滑曲线（SVG 路径，相邻点的中点用二次曲线连起来），从花这头往尾巴渐隐；每帧重画，曲子密时比光条费 */
+  function flyPath(f, t, moved) {
+    const clear = () => { if (f.lineOn) { f.lineOn = false; f.path.setAttribute("d", ""); } };
+    if (!moved && t - f.movedAt > FLY.tail + 0.05) { clear(); return; }
+    const N = FLY.pathSamples;
+    const pts = [[f.x, f.y]];
+    for (let k = 1; k <= N; k++) pts.push(flyAt(f.curve, t - (FLY.tail * k) / N));
+    const tail = pts[pts.length - 1];
+    if (Math.hypot(tail[0] - f.x, tail[1] - f.y) < 1) { clear(); return; }
+    let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    for (let k = 1; k < pts.length - 1; k++) {
+      d += `Q${pts[k][0].toFixed(1)} ${pts[k][1].toFixed(1)} ${((pts[k][0] + pts[k + 1][0]) / 2).toFixed(1)} ${((pts[k][1] + pts[k + 1][1]) / 2).toFixed(1)}`;
+    }
+    d += `L${tail[0].toFixed(1)} ${tail[1].toFixed(1)}`;
+    f.path.setAttribute("d", d);
+    f.grad.setAttribute("x1", f.x.toFixed(1));
+    f.grad.setAttribute("y1", f.y.toFixed(1));
+    f.grad.setAttribute("x2", tail[0].toFixed(1));
+    f.grad.setAttribute("y2", tail[1].toFixed(1));
     f.lineOn = true;
     f.draws += 1;
   }
@@ -2162,7 +2220,7 @@
       dg.frames += 1;
       const iv = now - dg.last;
       if (iv > 34) dg.slow += 1;
-      if (!dg.lite && dg.frames >= 90 && dg.slow / dg.frames > 0.2) {
+      if (!dg.lite && S.power === "auto" && dg.frames >= 90 && dg.slow / dg.frames > 0.2) {
         dg.lite = true;
         S.root.classList.add("is-lite");
       }
@@ -2181,7 +2239,7 @@
           const k = Math.floor(pos / 4);
           dg.buckets.set(k, (dg.buckets.get(k) || 0) + 1);
           /* 高刷屏（90 Hz 以上）上面的 34 ms 门槛几乎碰不到：按本机刷新率算，掉帧超过四分之一也切省电画法 */
-          if (!dg.lite && dg.n >= 240 && dg.base < 12 && dg.drop / dg.n > 0.25) {
+          if (!dg.lite && S.power === "auto" && dg.n >= 240 && dg.base < 12 && dg.drop / dg.n > 0.25) {
             dg.lite = true;
             S.root.classList.add("is-lite");
           }
@@ -2429,7 +2487,7 @@
       dg.resizes ? `窗口大小变了 ${dg.resizes} 次` : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
-      S.root && S.root.classList.contains("is-lite") ? "已自动省电" : null,
+      dg.lite ? "已自动省电" : S.power === "on" && S.render !== "simple" ? "省电画法" : null,
       bard().audioState && bard().audioState() !== "running" ? `音频 ${bard().audioState()}` : null,
     ].filter(Boolean).join(" · ");
     /* 设备诊断收进「性能测试记录」（默认收起），展开后可以导出这一局每个音的详细情况 */
@@ -2458,7 +2516,7 @@
     L.push(`画面：${S.render === "simple" ? "简单显示" : "正常显示"}　飞花线：${S.fly ? "开" : "关"}　音色：${S.inst || "跟随模拟器"}　判定延迟：${S.delayMs} ms　示范旋律：${S.demo ? "开" : "关"}`);
     L.push(`浏览器：${navigator.userAgent}`);
     L.push(`屏幕：${screen.width}×${screen.height} @${window.devicePixelRatio}x　舞台：${Math.round(g.w || 0)}×${Math.round(g.h || 0)}　气泡直径：${f1(g.size)} px`);
-    L.push(`刷新率：${dg.base ? `${Math.round(1000 / dg.base)} Hz（一帧 ${dg.base.toFixed(2)} ms）` : "未测出"}　气泡动画：${CAN_ANIM && S.anim === "browser" ? "浏览器" : "逐帧"}　省电画法：${dg.lite ? "已自动切换" : "否"}`);
+    L.push(`刷新率：${dg.base ? `${Math.round(1000 / dg.base)} Hz（一帧 ${dg.base.toFixed(2)} ms）` : "未测出"}　气泡动画：${CAN_ANIM && S.anim === "browser" ? "浏览器" : "逐帧"}　省电画法：${{ on: "开启", auto: "自动", off: "关闭" }[S.power]}${dg.lite ? "（已自动切换）" : ""}　金线：${S.lineMode === "full" ? "完整" : "优化"}`);
     L.push(`音频：${bard().audioState ? bard().audioState() : ""}　输出延迟：${ms(S.clock ? S.clock.lat : NaN)} ms`);
     L.push("");
     L.push("【汇总】");

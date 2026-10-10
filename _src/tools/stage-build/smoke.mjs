@@ -785,7 +785,7 @@ async function main() {
     const segs = Q.$$(".hjs-fly-seg");
     const lit = segs.filter((e) => +e.style.opacity > 0);
     check("飞花线（简单显示）：一串首尾相接的细光条（只改 transform / 透明度，不重画 SVG），没有星星",
-      Q.st().flyPos.line && !Q.$(".hjs-fly-star") && !Q.$(".hjs-fly-svg") && segs.length === 20 && lit.length >= 10
+      Q.st().flyPos.line && !Q.$(".hjs-fly-star") && !Q.$(".hjs-fly-svg") && segs.length === 32 && lit.length >= 16
       && lit.every((e) => /^translate3d\(.*rotate\(.*scaleX\(/.test(e.style.transform))
       && +lit[0].style.opacity > +lit[lit.length - 1].style.opacity, `${lit.length} 段亮着`);
     Q.until(Q.st().endT + 1);
@@ -811,18 +811,24 @@ async function main() {
     check("演奏中分数只涨不跌，最后一个音打完正好满分", base.live.every((v, i) => i === 0 || v >= base.live[i - 1]) && base.live[base.live.length - 1] === 1000000);
     check("没有上限时不写上限", !/得分上限/.test(base.res) && !/得分上限/.test(base.tip));
     const cases = [
-      [{ hj_stage_judge: "loose" }, 800000, "宽松判定"],
+      [{ hj_stage_judge: "loose", hj_stage_diff: "normal" }, 800000, "宽松判定"],
       [{ hj_stage_range: "loose" }, 800000, "宽松范围"],
-      [{ hj_stage_judge: "loose", hj_stage_range: "loose" }, 700000, "宽松判定、宽松范围"],
+      [{ hj_stage_judge: "loose", hj_stage_range: "loose", hj_stage_diff: "normal" }, 700000, "宽松判定、宽松范围"],
       [{ hj_stage_judge: "hover" }, 650000, "放水判定"],
       [{ hj_stage_range: "free" }, 650000, "放水范围"],
       [{ hj_stage_judge: "hover", hj_stage_range: "loose" }, 600000, "放水判定、宽松范围"],
-      [{ hj_stage_judge: "loose", hj_stage_range: "free" }, 600000, "宽松判定、放水范围"],
+      [{ hj_stage_judge: "loose", hj_stage_range: "free", hj_stage_diff: "normal" }, 600000, "宽松判定、放水范围"],
+      /* 仙人刺：正常判定本来就是宽松的窗口，选宽松判定不算宽松 */
+      [{ hj_stage_judge: "loose", hj_stage_range: "loose" }, 800000, "宽松范围"],
     ];
     for (const [prefs, cap, why] of cases) {
       const r = await runAll(prefs);
       check(`得分上限 ${cap / 10000} 万（${why}）：打满正好等于上限`, r.cap === cap && r.perfect && r.score === cap, `${r.cap} ${r.score}`);
       check(`结算写明「得分上限 ${cap / 10000} 万」，大厅提示保持简短`, !r.tip.includes("得分上限") && r.res.includes(`得分上限 ${cap / 10000} 万`), r.tip);
+    }
+    {
+      const r = await runAll({ hj_stage_judge: "loose" });
+      check("仙人刺 + 宽松判定：不降得分上限（打满 100 万）", r.cap === 1000000 && r.perfect && r.score === 1000000 && !/得分上限/.test(r.res), `${r.cap} ${r.score}`);
     }
     /* 上限的九成以内照算，往上压进最后一成；每多一分原始分都还有分 */
     const P = makePage({ prefs: { hj_stage_song: SHORT.id } });
