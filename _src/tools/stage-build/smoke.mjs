@@ -474,7 +474,9 @@ async function main() {
     }
     check("教程 3 个气泡，点中各出一声琴声", played.join() === "72,76,79", played.join());
     await sleep(950);
-    check("教程后进入校准示范", G()?.step === "demo", G()?.step);
+    check("教程后进入延迟校准，先等「确认」", G()?.step === "ready" && !!P.btn("确认") && !P.$(".hjs-guide-note:not(.is-pop)"), G()?.step);
+    P.click(P.btn("确认"));
+    check("点确认：按钮消失，开始示范", G()?.step === "demo" && !P.btn("确认"));
     const T = 0.8 + 0.32 * 6;
     const run = async (lateBy) => {             // 推到这个气泡的第 7 下（加输出延迟 50 ms、玩家晚 lateBy）
       const c = G().clock;
@@ -486,11 +488,16 @@ async function main() {
     P.advance(0.02); await sleep(50);
     check("示范：第 7 下时外圈显出、自动消散，不用点", P.$(".hjs-guide-note.is-shown") && G().offs.length === 0);
     for (let i = 0; i < 30 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
-    check("示范后开始校准，气泡在正中、外圈先显示", G()?.step === "cal" && P.$(".hjs-guide-note").style.left === "50%");
+    check("示范完：出「开始」按钮", G()?.step === "ready2" && !!P.btn("开始"));
+    await sleep(350);
+    P.click(P.btn("开始"));
+    check("点开始：按钮消失，正式校准，第一个气泡在正中", G()?.step === "cal" && !P.btn("开始") && P.$(".hjs-guide-note:last-child").style.left === "50%");
+    const lefts = [];
     const offs = [0.04, 0.03, 0.05, 0.04, 0.06, 0.02];
     const colors = [];
     for (let r = 0; r < 6; r++) {
       colors.push(P.$(".hjs-guide-note:last-child").style.getPropertyValue("--c"));
+      lefts.push(P.$(".hjs-guide-note:last-child").style.left + "," + P.$(".hjs-guide-note:last-child").style.top);
       if (r === 0) { P.advance(1.1); check("外圈很快淡出", +P.$(".hjs-guide-note:last-child .hjs-ring").style.opacity === 0, P.$(".hjs-guide-note:last-child .hjs-ring").style.opacity); }
       await run(offs[r]);
       const tap = new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
@@ -499,6 +506,7 @@ async function main() {
       if (r === 0) check("点了以后外圈显出来，比气泡略小（偏晚）", P.$(".hjs-guide-note:last-child.is-shown") && /scale\(0\.9/.test(P.$(".hjs-guide-note:last-child .hjs-ring").style.transform), P.$(".hjs-guide-note:last-child .hjs-ring").style.transform);
       for (let i = 0; i < 30 && G().step === "cal" && G().offs.length === r + 1 && P.$(".hjs-guide-note:last-child.is-shown"); i++) { P.advance(0.1); await sleep(45); }
     }
+    check("第二个起换位置", new Set(lefts).size === 6 && lefts.slice(1).every((x) => x !== "50%,50%"), lefts.join(" "));
     check("每个气泡换一种颜色", new Set(colors).size >= 5, colors.join("|"));
     const ticks = P.midi.filter((m) => m.midi === 88);
     check("示范加 6 个，每个 7 下「嗒」，第 7 下重一些", ticks.length === 49 && ticks.filter((m) => m.vel === 0.85).length === 7, `${ticks.length}`);
@@ -521,8 +529,10 @@ async function main() {
     check("看过教程就不出", !P.$(".hjs-guide"));
     P.click(P.btn("设置"));
     P.click(P.btn("校准"));
-    check("设置里点校准：直接是演奏画面，从示范开始", G()?.step === "demo" && P.$("#hjStage").classList.contains("is-guide"));
+    check("设置里点校准：直接是演奏画面，先等确认", G()?.step === "ready" && P.$("#hjStage").classList.contains("is-guide"));
+    P.click(P.btn("确认"));
     for (let i = 0; i < 80 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
+    P.click(P.btn("开始"));
     const c = G().clock;
     const pos = () => c.base + (P.audioT - c.at);
     while (pos() < 2.2) P.advance(1 / 60);
@@ -536,6 +546,9 @@ async function main() {
     P.key("Escape", "Escape");
     check("Esc 取消校准，回到设置，判定延迟不变", !G() && P.st().sheet === "settings" && P.st().delayMs === 0 && !P.$("#hjStage").classList.contains("is-guide"));
     P.click(P.btn("校准"));
+    P.click(P.btn("确认"));
+    for (let i = 0; i < 80 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
+    P.click(P.btn("开始"));
     for (let i = 0; i < 200 && G()?.step !== "idle"; i++) { P.advance(0.1); await sleep(20); }
     check("连续 2 个没点：校准暂停", G()?.step === "idle" && /连续 2 个/.test(P.$(".hjs-guide-msg").textContent) && !!P.btn("继续校准"), G()?.step);
     P.click(P.btn("取消"));
@@ -557,6 +570,10 @@ async function main() {
     check("关掉飞花线：飞花线轨迹也不列", !labels().includes("飞花线轨迹"), labels().join(","));
     const perfRow = P.$$(".hjs-set-row").find((r) => r.querySelector("b")?.textContent === "性能测试记录");
     check("性能测试记录默认不显示，有说明", !!perfRow && perfRow.querySelector(".is-on, [aria-pressed=true], [aria-checked=true]")?.textContent === "不显示" && perfRow.textContent.includes("运行卡顿时，请设置为显示，以获取详细的掉帧情况。"), perfRow?.innerHTML.slice(0, 300));
+    P.click(P.btn("显示", perfRow));
+    const perfRow2 = P.$$(".hjs-set-row").find((r) => r.querySelector("b")?.textContent === "性能测试记录");
+    check("选显示后说明改为结算显示帧率", perfRow2.textContent.includes("结算界面将显示帧率等数据") && P.mem.get("hj_stage_perf") === "1");
+    P.click(P.btn("不显示", perfRow2));
     P.click(P.btn("关闭", P.$("#hjsSheetCard")));
     await go(P);
     P.until(P.st().endT + 2);

@@ -674,7 +674,7 @@
           : `按节拍演奏${nNow ? `，本难度 ${nNow} 个音` : ""}` }),
       vol().muted
         ? h("p", { class: "hjs-muted" }, h("span", { text: "当前为静音" }),
-          h("button", { type: "button", class: "hjs-link", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
+          h("button", { type: "button", class: "hjs-btn", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
       best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank}` }) : null,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
@@ -977,7 +977,7 @@
       S.lineMode === "full" ? "整条平滑曲线，每帧重新绘制，音符密集时负担较大" : "由短光条拼接而成，无需重新绘制，为默认设置") : null,
       row("性能测试记录", seg("性能测试记录", [{ id: "1", label: "显示" }, { id: "0", label: "不显示" }], S.perfLog ? "1" : "0",
         (v) => { S.perfLog = v === "1"; setRaw(K.perf, v); renderSheet(); }),
-      "运行卡顿时，请设置为显示，以获取详细的掉帧情况。")));
+      S.perfLog ? "结算界面将显示帧率等数据" : "运行卡顿时，请设置为显示，以获取详细的掉帧情况。")));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -1013,7 +1013,7 @@
       .sort((x, y) => ORDER.indexOf(x.querySelector("h4").textContent) - ORDER.indexOf(y.querySelector("h4").textContent))
       .forEach((sec) => body.append(sec));
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
-      type: "button", class: "hjs-link", text: "恢复默认设置",
+      type: "button", class: "hjs-btn", text: "恢复默认设置",
       onclick: () => {
         [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim, K.power, K.line, K.perf].forEach((k) => storage.remove(k));
         readPrefs();
@@ -1086,10 +1086,12 @@
     if (!g) return;
     const q = (sel) => g.box.querySelector(sel);
     const first = g.from === "first";
-    const btn = (text, onclick, cls = "hjs-link") => h("button", { type: "button", class: cls, text, onclick });
+    const btn = (text, onclick, cls = "hjs-btn") => h("button", { type: "button", class: cls, text, onclick });
     const T = {
       intro: ["教程", "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键"],
+      ready: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
       demo: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
+      ready2: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
       cal: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
       idle: ["延迟校准", "校准已暂停"],
       done: ["校准完成", g.result || ""],
@@ -1103,11 +1105,14 @@
     const quit = btn(first ? "跳过" : "取消", () => closeGuide());
     q(".hjs-guide-btns").replaceChildren(...{
       intro: [btn("跳过", () => closeGuide())],
+      ready: [btn("确认", () => calGo("demo"), "hjs-btn is-main"), quit],
       demo: [quit],
+      ready2: [btn("开始", () => calGo("cal"), "hjs-btn is-main"), quit],
       cal: [quit],
       idle: [btn("继续校准", () => calStart(true), "hjs-btn"), quit],
       done: [btn("重新校准", () => calStart(), "hjs-btn"), btn(first ? "开始演奏" : "完成", () => closeGuide(), "hjs-btn is-main")],
     }[g.step]);
+    if (g.step === "ready" || g.step === "ready2") requestAnimationFrame(() => { const b = g.box.querySelector(".is-main"); if (b) b.focus({ preventScroll: true }); });
     /* 结果：弹出判定延迟的设置框，可再按 ±5 ms 手动微调（同设置里的判定延迟） */
     g.stage.querySelector(".hjs-guide-adjust")?.remove();
     if (g.step === "done") {
@@ -1219,8 +1224,18 @@
     g.acts = [];
     if (g.cur) { g.cur.el.remove(); g.cur = null; }
     if (!b.playMidi) { g.step = "idle"; g.msg = "节拍音无法播放，请刷新页面后重试"; renderGuide(); return; }
-    g.step = keep ? "cal" : "demo";
-    g.msg = keep ? "" : "先示范一次：第 7 下时气泡消散，这一个不用点";
+    if (keep) { calGo("cal"); return; }
+    g.tries = 0;
+    g.step = "ready";                                   // 点「确认」先看示范，示范完点「开始」正式校准
+    g.msg = "";
+    renderGuide();
+  }
+  function calGo(step) {
+    const g = S.guide;
+    if (!g) return;
+    bard().unlock?.();
+    g.step = step;
+    g.msg = step === "demo" ? "先示范一次：第 7 下时气泡消散，这一个不用点" : "";
     renderGuide();
     calRound();
   }
@@ -1231,7 +1246,18 @@
     if (g.cur) g.cur.el.remove();
     g.tries = (g.tries || 0) + 1;                       // 每出一个就换一种颜色
     const color = g.step === "demo" ? BAND_COLORS[0] : PALETTE[g.tries % PALETTE.length];
-    const el = guideBubble(color, "");
+    /* 示范和第一个在正中，之后每个换个位置（离上一个远一点） */
+    let x = 50, y = 50;
+    if (g.step === "cal" && g.offs.length > 0) {
+      const last = g.lastPos || [50, 50];
+      for (let i = 0; i < 20; i++) {
+        x = 22 + Math.random() * 56;
+        y = 28 + Math.random() * 44;
+        if (Math.hypot(x - last[0], y - last[1]) >= 22) break;
+      }
+    }
+    g.lastPos = [x, y];
+    const el = guideBubble(color, "", x, y);
     el.classList.add("is-in");
     g.cur = { el, tapped: false };
     g.clock = makeClock(0);
@@ -1257,7 +1283,7 @@
     if (g.step === "demo" && heard >= T) {
       c.done = true;
       calReveal(c, 0);
-      g.acts.push({ at: T + CAL.hold, fn: () => popBubble(c.el) }, { at: T + CAL.hold + CAL.pause, fn: () => { g.step = "cal"; g.msg = ""; renderGuide(); calRound(); } });
+      g.acts.push({ at: T + CAL.hold, fn: () => popBubble(c.el) }, { at: T + CAL.hold + CAL.pause, fn: () => { if (g.cur) { g.cur.el.remove(); g.cur = null; } g.clock = null; g.step = "ready2"; g.msg = "示范结束，点击「开始」正式校准"; renderGuide(); } });
       return;
     }
     if (g.step === "cal" && heard > T + CAL.wait) calMiss("没有检测到点击，这个气泡重来一次");
@@ -2730,7 +2756,7 @@
       h("summary", { text: "性能测试记录" }),
       h("div", { class: "hjs-perf-body" },
         h("ul", { class: "hjs-perf-list" }, dev.split(" · ").map((x) => h("li", { text: x }))),
-        h("button", { type: "button", class: "hjs-btn hjs-perf-export", text: "导出 txt", onclick: exportPerf })));
+        h("button", { type: "button", class: "hjs-btn hjs-perf-export", text: "导出详细记录", onclick: exportPerf })));
     if (!parts.length && !perf) return null;
     return h("div", { class: "hjs-res-diagbox" },
       parts.length ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
