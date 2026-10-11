@@ -25,7 +25,8 @@
   const BASE = "assets/bard/stage/";
   const K = {
     song: "hj_stage_song", diff: "hj_stage_diff", learn: "hj_stage_learn", demo: "hj_stage_demo", inst: "hj_stage_inst",
-    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly", anim: "hj_stage_anim", power: "hj_stage_power", line: "hj_stage_line",
+    delay: "hj_stage_delay", judge: "hj_stage_judge", render: "hj_stage_render", range: "hj_stage_range", fly: "hj_stage_fly", anim: "hj_stage_anim", power: "hj_stage_power", line: "hj_stage_line", perf: "hj_stage_perf",
+    guide: "hj_stage_guide",                            // 新手教程看过了（「恢复默认设置」不清）
     old: ["hj_stage_input", "hj_stage_lanes", "hj_stage_codes"],   // 键盘轨道模式去掉后不再用：操作方式、轨道数、键位
     best: "hj_stage_best3", stars: "hj_stage_stars", cat: "hj_stage_cat",   // best3：百万分制的最高分与评级
     oldBest: "hj_stage_best2",                          // 百万分制以前的纪录：按准确率与最大combo换算后显示
@@ -74,7 +75,6 @@
   const PREVIEW = { sec: 8, vel: 0.6 };                 // 试听：从第一个音起放 8 秒
   const AHEAD = 0.12;                 // 补音提前多少秒排进 Web Audio
   const TICK = { midi: 88, vel: 0.32, inst: "harp" };   // 预备拍、校准的「嗒」
-  const CAL = { lead: 1.2, gap: 0.6, count: 10 };       // 校准：第一下在 1.2 秒，之后每 0.6 秒一下
   /* 飞花线：像一只小萤火虫，沿一条平滑的曲线掠过每个气泡，在这个气泡该判定的那一刻正好经过它（ahead：提前多少秒经过，0 = 正好判定时）。
      正常显示：身后撒星星 —— 同时最多 stars 颗，花至少挪了 gap 个气泡直径、离上一颗至少 every 毫秒才撒，每颗停留 life 毫秒；
      简单显示：身后拖一条细细的金线 —— 取花在过去 tail 秒里走过的 samples 个点，连成平滑曲线（一条 SVG 路径），越往尾巴越淡。
@@ -345,7 +345,8 @@
     S.anim = getRaw(K.anim, "frame") === "browser" ? "browser" : "frame";   // 气泡动画：默认逐帧由页面更新
     const power = getRaw(K.power, "auto");
     S.power = power === "on" || power === "off" ? power : "auto";        // 省电画法：开启 / 自动（掉帧多时切换）/ 关闭
-    S.lineMode = getRaw(K.line, "lite") === "full" ? "full" : "lite";    // 简单显示的金线：优化（光条）/ 完整（SVG 曲线）
+    S.lineMode = getRaw(K.line, "lite") === "full" ? "full" : "lite";    // 飞花线轨迹（简单显示的金线）：优化（光条）/ 完整（SVG 曲线）
+    S.perfLog = getRaw(K.perf, "0") === "1";           // 结算里显示「性能测试记录」：默认不显示
     applyRender();
     S.delayMs = clamp(Math.round(num(getRaw(K.delay, 0), 0) / 5) * 5, -300, 300);
     S.stars = clamp(Math.round(num(getRaw(K.stars, 0), 0) * 2) / 2, 0, 5);   // 0 = 全部，其余按半星筛
@@ -502,7 +503,7 @@
       if (!document.hidden) return;
       if (S.view === "play" && S.playing && !S.paused) pause();
       stopPreview();
-      if (S.cal) stopCal("页面已切至后台，校准中断");
+      if (S.guide) guidePause("页面已切至后台，校准已暂停");
     });
     S.built = true;
   }
@@ -529,12 +530,13 @@
     renderLobby();
     if (!S.data) loadData().then(() => { if (S.view === "lobby" && !r.hidden) renderLobby(); });
     requestAnimationFrame(() => { const go = $id("hjsGo"); if (go) go.focus({ preventScroll: true }); });
+    if (getRaw(K.guide, "") !== "1") openGuide("intro", "first");   // 第一次来：先看教程、校准延迟
   }
 
   function close(fromPop) {
     if (!S.root || S.root.hidden) return;
     S.gen += 1;
-    stopCal();
+    closeGuide();
     stopPreview();
     stopPlay();
     hideSheet();
@@ -573,7 +575,7 @@
   function onPopState() {
     if (!S.root || S.root.hidden || S.closing) return;
     S.hist = false;
-    if (S.cal || S.sheet) goBack();
+    if (S.guide || S.sheet) goBack();
     else if (S.view === "play") {
       if (S.playing && !S.paused && !S.finished) pause();
       else backToLobby();
@@ -586,7 +588,7 @@
 
   /* Esc：一层一层往回退 */
   function goBack() {
-    if (S.cal) { stopCal("校准已取消"); return; }
+    if (S.guide) { closeGuide(); return; }
     if (S.sheet) { closeSheet(); return; }
     if (S.view === "play") {
       if (S.finished) backToLobby();
@@ -766,7 +768,6 @@
   function closeSheet() {
     if (!S.sheet) return;
     const kind = S.sheet;
-    stopCal();
     if (kind === "picker") stopPreview();
     hideSheet();
     if (S.view === "lobby") renderLobby();
@@ -956,34 +957,27 @@
       row("示范旋律", demo, "轻声播放需要弹奏的音")));
 
     /* 画面 */
-    const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); } });
+    const fly = h("input", { type: "checkbox", class: "hjs-switch", checked: S.fly, "aria-label": "飞花线", onchange: () => { S.fly = fly.checked; setRaw(K.fly, S.fly ? "1" : "0"); renderSheet(); } });
     body.append(group("画面",
       row("显示", seg("显示", [{ id: "normal", label: "正常显示" }, { id: "simple", label: "简单显示" }], S.render,
         (v) => { S.render = v; setRaw(K.render, v); applyRender(); renderSheet(); }),
       S.render === "simple" ? "去除气泡光晕与文字阴影，飞花线改为金线，减轻音符密集时的负担" : "音符密集时如有卡顿，可改用简单显示"),
       row("飞花线", fly, "小花沿曲线依次经过各气泡，经过的时刻即为判定点。正常显示时身后带星光，简单显示时为金线")));
 
-    /* 性能优化：用不上的项置灰（省电画法只去掉气泡光晕，简单显示本来就没有；金线只在简单显示、开着飞花线时才有） */
-    const off = (el, why) => {
-      if (!why) return el;
-      el.classList.add("is-disabled");
-      el.querySelectorAll("button").forEach((b) => { b.disabled = true; });
-      const hint = el.querySelector(".hjs-set-l small");
-      if (hint) hint.textContent = why;
-      return el;
-    };
+    /* 性能优化：只列当前显示方式下有用的项（省电渲染只去掉气泡光晕，简单显示本来就没有；飞花线轨迹只在简单显示、开着飞花线时才有） */
     const POWER_HINT = { on: "始终去除气泡光晕", auto: "掉帧较多时自动去除气泡光晕，为默认设置", off: "始终保留气泡光晕" };
     body.append(group("性能优化",
       ...(CAN_ANIM ? [row("气泡动画", seg("气泡动画", [{ id: "frame", label: "逐帧" }, { id: "browser", label: "浏览器" }], S.anim,
         (v) => { S.anim = v; setRaw(K.anim, v); renderSheet(); }),
       S.anim === "browser" ? "由浏览器播放气泡收缩动画。效果因设备而异，可对照结算中的性能测试记录选择" : "每帧由页面更新气泡收缩，为默认设置")] : []),
-      off(row("省电画法", seg("省电画法", [{ id: "on", label: "开启" }, { id: "auto", label: "自动" }, { id: "off", label: "关闭" }], S.power,
-        (v) => { S.power = v; setRaw(K.power, v); renderSheet(); }), POWER_HINT[S.power]),
-      S.render === "simple" ? "简单显示已去除气泡光晕，此项无效" : ""),
-      off(row("金线", seg("金线", [{ id: "full", label: "完整" }, { id: "lite", label: "优化" }], S.lineMode,
+      S.render !== "simple" ? row("省电渲染", seg("省电渲染", [{ id: "on", label: "开启" }, { id: "auto", label: "自动" }, { id: "off", label: "关闭" }], S.power,
+        (v) => { S.power = v; setRaw(K.power, v); renderSheet(); }), POWER_HINT[S.power]) : null,
+      S.render === "simple" && S.fly ? row("飞花线轨迹", seg("飞花线轨迹", [{ id: "full", label: "完整" }, { id: "lite", label: "优化" }], S.lineMode,
         (v) => { S.lineMode = v; setRaw(K.line, v); renderSheet(); }),
-      S.lineMode === "full" ? "整条平滑曲线，每帧重新绘制，音符密集时负担较大" : "由短光条拼接而成，无需重新绘制，为默认设置"),
-      S.render !== "simple" ? "仅在简单显示时使用，正常显示时为星光" : !S.fly ? "飞花线已关闭，此项无效" : "")));
+      S.lineMode === "full" ? "整条平滑曲线，每帧重新绘制，音符密集时负担较大" : "由短光条拼接而成，无需重新绘制，为默认设置") : null,
+      row("性能测试记录", seg("性能测试记录", [{ id: "1", label: "显示" }, { id: "0", label: "不显示" }], S.perfLog ? "1" : "0",
+        (v) => { S.perfLog = v === "1"; setRaw(K.perf, v); renderSheet(); }),
+      "运行卡顿时，请设置为显示，以获取详细的掉帧情况。")));
 
     /* 操作：只有点气泡；点击范围 */
     const rg = TAP_RANGES[S.range];
@@ -1009,17 +1003,15 @@
     const setv = (v) => { S.delayMs = clamp(Math.round(v / 5) * 5, -300, 300); setRaw(K.delay, S.delayMs); val.textContent = `${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms`; };
     const step = (d, label) => h("button", { type: "button", class: "hjs-step", "aria-label": label, text: d > 0 ? "＋" : "－", onclick: () => setv(S.delayMs + d) });
     const timing = [judgeRow, row("判定延迟", h("div", { class: "hjs-num" }, step(-5, "提前 5 毫秒"), val, step(5, "推后 5 毫秒"),
-      h("button", { type: "button", class: "hjs-btn hjs-cal-btn", text: S.cal ? "校准中…" : "校准", disabled: !!S.cal, onclick: startCal })),
+      h("button", { type: "button", class: "hjs-btn hjs-cal-btn", text: "校准", onclick: () => openGuide("cal", "settings") })),
     "判定持续偏晚时调大，偏早时调小，也可点校准自动测定")];
-    if (S.cal || S.calMsg) timing.push(calPanel());
     body.append(group("时机", ...timing));
 
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
       type: "button", class: "hjs-link", text: "恢复默认设置",
       onclick: () => {
-        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim, K.power, K.line].forEach((k) => storage.remove(k));
+        [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim, K.power, K.line, K.perf].forEach((k) => storage.remove(k));
         readPrefs();
-        S.calMsg = "";
         renderSheet();
         toast("设置已恢复默认");
       },
@@ -1034,80 +1026,220 @@
           "判定模式与点击范围均分为正常、宽松、放水三档。选择宽松或放水时，得分设有上限：一项宽松为 80 万，两项宽松为 70 万，一项放水为 65 万，宽松与放水各一项为 60 万。仙人刺难度的正常判定已与宽松相同，选宽松判定不降上限",
           "得分由判定分（70%）和COMBO得分（30%）两部分组成，判定分根据每个音的判定评价记分，COMBO得分按最大COMBO数评价，因此追求高分请尽可能不要断COMBO。",
           "点击范围与判定模式均设为放水时为自动演奏，不计分。本机纪录按难度、判定模式与点击范围分别保存最高分与评级",
-          "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准，随提示音点击数次即可",
+          "若判定持续偏早或偏晚，可在设置的判定延迟一项中进行校准：每个气泡出现后会连响 7 下「嗒」，在第 7 下时点击气泡，共 6 个气泡，取平均值作为判定延迟",
           "按 Esc 键或手机返回键，可暂停演奏、关闭窗口或返回上一层",
         ].map((t) => h("li", { text: t })))));
   }
 
-  /* ==== 延迟校准：在游戏同一个音频钟上排 10 下「嗒」，跟着按任意键或点圆圈，取后几下偏差的中位数 ==== */
-  function calPanel() {
-    const c = S.cal;
-    const n = c ? c.taps.length : 0;
-    return h("div", { class: "hjs-cal" },
-      c ? h("button", {
-        type: "button", class: "hjs-cal-pad", "aria-label": "随节拍点击此处",
-        onpointerdown: (e) => { e.preventDefault(); calTap(); },
-        onkeydown: (e) => { if (e.key === " " || e.key === "Enter") e.preventDefault(); },
-      }, h("span", { text: "随「嗒」声点击此处" }), h("small", { text: "或按任意键" })) : null,
-      c ? h("div", { class: "hjs-cal-dots", "aria-hidden": "true" }, Array.from({ length: CAL.count }, (_, i) => h("i", { class: i < n ? "is-on" : "" }))) : null,
-      S.calMsg ? h("p", { class: "hjs-cal-msg", text: S.calMsg }) : null,
-      c ? h("button", { type: "button", class: "hjs-link", text: "取消", onclick: () => stopCal("校准已取消") }) : null);
-  }
-  function startCal() {
-    if (S.cal) return;
+  /* ==== 新手教程与延迟校准 ====
+     第一次打开舞台演奏时先出教程：一个气泡反复收圈，点它（电脑也可把指针放在气泡上按任意键）就进入延迟校准。
+     校准：屏幕上出一个气泡，外圈先藏着；在游戏同一个音频钟上连响 7 下「嗒」，第 7 下时点气泡，点下去才把外圈按那一刻应在的位置显出来。
+     共 6 个气泡，取 6 次偏差的平均值作为判定延迟。设置里的「校准」也走这里 */
+  const CAL = { lead: 0.8, gap: 0.32, beats: 7, rounds: 6, win: 0.25, wait: 0.45, pause: 0.9, idle: 4 };
+  const CAL_POS = [[50, 50], [30, 36], [70, 64], [32, 66], [68, 34], [50, 50]];   // 6 个气泡的位置（舞台的百分比）
+  function openGuide(step, from) {
+    closeGuide(true);
     stopPreview();
-    S.calMsg = "";
-    const b = bard();
-    if (!b.playMidi) { S.calMsg = "节拍音无法播放，请刷新页面后重试"; renderSheet(); return; }
-    b.unlock?.();
-    const clock = makeClock(0);
-    clockStart(clock);
-    S.cal = { taps: [], clock, k: 0, timer: setInterval(calStep, 50) };
-    calStep();
-    renderSheet();
+    const ring = h("i", { class: "hjs-ring" });
+    const core = h("i", { class: "hjs-core" });
+    const note = h("div", { class: "hjs-note hjs-guide-note", onpointerenter: () => { if (S.guide) S.guide.hover = true; }, onpointerleave: () => { if (S.guide) S.guide.hover = false; } }, ring, core);
+    const stage = h("div", { class: "hjs-guide-stage", onpointerdown: guidePointer }, note);
+    const box = h("div", { class: "hjs-guide", role: "dialog", "aria-modal": "true", "aria-label": "新手教程与延迟校准", tabindex: "-1" },
+      h("div", { class: "hjs-guide-head" }, h("p", { class: "hjs-guide-title" }), h("p", { class: "hjs-guide-tip" })),
+      stage,
+      h("div", { class: "hjs-guide-foot" }, h("p", { class: "hjs-guide-msg", "aria-live": "polite" }), h("div", { class: "hjs-cal-dots", "aria-hidden": "true" }), h("div", { class: "hjs-guide-btns" })));
+    S.root.append(box);
+    S.guide = { from, step, box, note, ring, stage, offs: [], miss: 0, hover: false, clock: null, timer: 0, later: 0, msg: "" };
+    if (step === "cal") guideCal(); else renderGuide();
+    requestAnimationFrame(() => { try { box.focus({ preventScroll: true }); } catch (e) {} });
   }
-  /* 边走边排（提前 0.25 秒），取消了就不会再响 */
-  function calStep() {
-    const c = S.cal;
-    if (!c) return;
-    const pos = clockRaw(c.clock);
-    for (; c.k < CAL.count && CAL.lead + c.k * CAL.gap <= pos + 0.25; c.k++) {
-      bard().playMidi?.(TICK.midi, 0.7, TICK.inst, 0, Math.max(0, CAL.lead + c.k * CAL.gap - pos));
+  function closeGuide(quiet) {
+    const g = S.guide;
+    if (!g) return;
+    clearInterval(g.timer);
+    clearTimeout(g.later);
+    g.box.remove();
+    S.guide = null;
+    setRaw(K.guide, "1");
+    if (!quiet && S.sheet === "settings") renderSheet();
+  }
+  function renderGuide() {
+    const g = S.guide;
+    if (!g) return;
+    const q = (sel) => g.box.querySelector(sel);
+    const first = g.from === "first";
+    const btn = (text, onclick, cls = "hjs-link") => h("button", { type: "button", class: cls, text, onclick });
+    const T = {
+      intro: ["新手教程", "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键"],
+      cal: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
+      idle: ["延迟校准", "校准已暂停"],
+      done: ["校准完成", g.result || ""],
+    }[g.step];
+    q(".hjs-guide-title").textContent = T[0];
+    q(".hjs-guide-tip").textContent = T[1];
+    q(".hjs-guide-msg").textContent = g.msg || "";
+    const dots = q(".hjs-cal-dots");
+    dots.hidden = g.step === "intro";
+    dots.replaceChildren(...Array.from({ length: CAL.rounds }, (_, i) => h("i", { class: i < g.offs.length ? "is-on" : "" })));
+    g.note.hidden = g.step === "done" || g.step === "idle";
+    if (g.step === "intro") {
+      g.note.className = "hjs-note hjs-guide-note is-demo";
+      Object.assign(g.note.style, { left: "50%", top: "50%" });
     }
-    if (pos >= CAL.lead + CAL.gap * (CAL.count - 1) + 0.6) finishCal();
+    const btns = q(".hjs-guide-btns");
+    btns.replaceChildren(...{
+      intro: [btn("跳过", () => closeGuide())],
+      cal: [btn(first ? "跳过" : "取消", () => closeGuide())],
+      idle: [btn("继续校准", () => guideCal(true), "hjs-btn"), btn(first ? "跳过" : "取消", () => closeGuide())],
+      done: [btn("重新校准", () => guideCal(), "hjs-btn"), btn(first ? "开始演奏" : "完成", () => closeGuide(), "hjs-btn is-main")],
+    }[g.step]);
+    if (g.step === "done") requestAnimationFrame(() => { const b = btns.querySelector(".is-main"); if (b) b.focus({ preventScroll: true }); });
   }
-  function calTap() {
-    const c = S.cal;
-    if (!c) return;
-    const t = clockPos(c.clock) - c.clock.lat;          // 听到的位置
-    const k = Math.round((t - CAL.lead) / CAL.gap);
-    if (k < 0 || k >= CAL.count || c.taps.some((x) => x.k === k)) return;
-    const d = t - (CAL.lead + k * CAL.gap);
-    if (Math.abs(d) > 0.28) return;
-    c.taps.push({ k, d });
-    const dots = document.querySelectorAll(".hjs-cal-dots i");
-    if (dots[c.taps.length - 1]) dots[c.taps.length - 1].classList.add("is-on");
-    const pad = document.querySelector(".hjs-cal-pad");
-    if (pad) { pad.classList.remove("is-hit"); void pad.offsetWidth; pad.classList.add("is-hit"); }
+  /* 进入校准：keep = 暂停后接着测（已测的几个保留） */
+  function guideCal(keep) {
+    const g = S.guide;
+    if (!g) return;
+    const b = bard();
+    b.unlock?.();
+    g.step = "cal";
+    if (!keep) g.offs = [];
+    g.miss = 0;
+    g.msg = b.playMidi ? "" : "节拍音无法播放，请刷新页面后重试";
+    renderGuide();
+    if (b.playMidi) calRound();
   }
-  function finishCal() {
-    const c = S.cal;
-    if (!c) return;
-    const use = c.taps.filter((x) => x.k >= 2).map((x) => x.d).sort((a, b) => a - b);
-    if (use.length < 4) { stopCal("有效次数不足，请重试：从第三拍起跟随点击"); return; }
-    const mid = use.length % 2 ? use[(use.length - 1) / 2] : (use[use.length / 2 - 1] + use[use.length / 2]) / 2;
-    const ms = clamp(Math.round((mid * 1000) / 5) * 5, -300, 300);
+  /* 一个气泡：位置换一换，外圈藏起来，开一个新钟排 7 下「嗒」 */
+  function calRound() {
+    const g = S.guide;
+    if (!g || g.step !== "cal") return;
+    const [x, y] = CAL_POS[g.offs.length % CAL_POS.length];
+    g.note.hidden = false;
+    g.note.className = "hjs-note hjs-guide-note is-cal";
+    Object.assign(g.note.style, { left: `${x}%`, top: `${y}%` });
+    g.ring.style.removeProperty("transform");
+    g.ring.style.removeProperty("opacity");
+    void g.note.offsetWidth;
+    g.note.classList.add("is-in");
+    g.clock = makeClock(0);
+    clockStart(g.clock);
+    g.k = 0;
+    g.over = false;
+    g.after = null;
+    g.target = CAL.lead + (CAL.beats - 1) * CAL.gap;
+    clearInterval(g.timer);
+    g.timer = setInterval(calStep, 40);
+    calStep();
+  }
+  /* 边走边排（提前 0.25 秒），取消了就不会再响；第 7 下重一点 */
+  function calStep() {
+    const g = S.guide;
+    if (!g || g.step !== "cal" || !g.clock) return;
+    const pos = clockRaw(g.clock);
+    /* 这个气泡已经结束：停一会儿（按同一个钟算）再出下一个 */
+    if (g.over) { if (g.after && pos >= g.next) { const f = g.after; g.after = null; f(); } return; }
+    for (; g.k < CAL.beats && CAL.lead + g.k * CAL.gap <= pos + 0.25; g.k++) {
+      bard().playMidi?.(TICK.midi, g.k === CAL.beats - 1 ? 0.85 : 0.5, TICK.inst, 0, Math.max(0, CAL.lead + g.k * CAL.gap - pos));
+    }
+    if (pos - g.clock.lat > g.target + CAL.wait) calMiss("没有检测到点击，这个气泡重来一次");
+  }
+  function calTap(e) {
+    const g = S.guide;
+    if (!g || g.step !== "cal" || !g.clock || g.over) return;
+    /* 点按排队的时间补回来（同演奏时，最多 TS_MAX 秒） */
+    const ts = e && e.timeStamp;
+    const lag = Number.isFinite(ts) && ts > 0 && ts <= performance.now() ? Math.min(TS_MAX, (performance.now() - ts) / 1000) : 0;
+    const t = clockPos(g.clock) - g.clock.lat - lag;    // 听到的位置
+    const d = t - g.target;
+    if (t < CAL.lead - 0.1) return;                     // 还没开始响
+    if (d < -CAL.win) { g.msg = "早了，请在第 7 下时点击"; renderGuide(); return; }
+    if (d > CAL.win) { calMiss("晚了，这个气泡重来一次"); return; }
+    g.over = true;
+    g.offs.push(d);
+    g.miss = 0;
+    /* 外圈显出来：按点击那一刻在演奏里应缩到的位置（早点 = 圈比气泡大，晚点 = 比气泡小） */
+    const s = clamp(1 - (d / diffBase().approach) * 1.3, 0.6, 2.3);
+    g.ring.style.transform = `scale(${s.toFixed(3)})`;
+    g.ring.style.opacity = "1";
+    g.note.classList.add("is-shown");
+    const ms = Math.round(d * 1000);
+    g.msg = Math.abs(ms) < 15 ? `第 ${g.offs.length} 个：正好` : `第 ${g.offs.length} 个：偏${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms`;
+    renderGuide();
+    calNext(() => { if (g.offs.length >= CAL.rounds) calFinish(); else calRound(); });
+  }
+  function calMiss(msg) {
+    const g = S.guide;
+    if (!g) return;
+    g.over = true;
+    g.miss += 1;
+    g.note.classList.add("is-gone");
+    if (g.miss >= CAL.idle) { guidePause("连续多次未检测到点击，校准已暂停"); return; }
+    g.msg = msg;
+    renderGuide();
+    calNext(calRound);
+  }
+  function calNext(f) {
+    const g = S.guide;
+    g.next = clockRaw(g.clock) + CAL.pause;
+    g.after = f;
+  }
+  function guidePause(msg) {
+    const g = S.guide;
+    if (!g || g.step !== "cal") return;
+    g.over = true;
+    clearInterval(g.timer);
+    clearTimeout(g.later);
+    g.step = "idle";
+    g.msg = msg;
+    renderGuide();
+  }
+  function calFinish() {
+    const g = S.guide;
+    if (!g) return;
+    clearInterval(g.timer);
+    const mean = g.offs.reduce((a, b) => a + b, 0) / g.offs.length;
+    const ms = clamp(Math.round((mean * 1000) / 5) * 5, -300, 300);
     S.delayMs = ms;
     setRaw(K.delay, ms);
-    const d = Math.round(mid * 1000);
-    stopCal(Math.abs(d) < 8 ? "时机准确，判定延迟保持 0 附近" : `平均偏${d > 0 ? "晚" : "早"} ${Math.abs(d)} ms，判定延迟已设为 ${ms > 0 ? "+" : ""}${ms} ms`);
-  }
-  function stopCal(msg) {
-    if (!S.cal && msg === undefined) return;
-    if (S.cal) clearInterval(S.cal.timer);
-    S.cal = null;
-    if (msg !== undefined) S.calMsg = msg;
+    const d = Math.round(mean * 1000);
+    g.step = "done";
+    g.msg = "";
+    g.result = Math.abs(d) < 8 ? "6 次平均时机准确，判定延迟设为 0 ms" : `6 次平均偏${d > 0 ? "晚" : "早"} ${Math.abs(d)} ms，判定延迟已设为 ${ms > 0 ? "+" : ""}${ms} ms`;
+    renderGuide();
     if (S.sheet === "settings") renderSheet();
+  }
+  /* 教程：点在气泡上才算；校准：点舞台任意处都算（按钮除外） */
+  function guidePointer(e) {
+    const g = S.guide;
+    if (!g || (e.button !== undefined && e.button > 0)) return;
+    if (g.step === "intro") {
+      if (!e.target.closest(".hjs-guide-note")) return;
+      e.preventDefault();
+      introDone();
+    } else if (g.step === "cal") {
+      e.preventDefault();
+      calTap(e);
+    }
+  }
+  function introDone() {
+    const g = S.guide;
+    if (!g || g.step !== "intro" || g.leaving) return;
+    g.leaving = true;
+    g.note.classList.add("is-hit");
+    g.later = setTimeout(() => { g.leaving = false; guideCal(); }, 420);
+  }
+  function guideKey(e) {
+    const g = S.guide;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); goBack(); return; }
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || /^(F\d+|Tab|CapsLock|Control|Alt|Meta|Shift|ContextMenu)$/.test(e.key)) return;
+    const onBtn = e.target && e.target.tagName === "BUTTON" && (e.key === "Enter" || e.key === " ");
+    if (g.step === "cal") { e.preventDefault(); calTap(e); return; }
+    if (g.step === "intro") {
+      if (g.hover) { e.preventDefault(); introDone(); return; }
+      if (onBtn) return;
+      e.preventDefault();
+      g.msg = "请先把鼠标移到气泡上，再按任意键";
+      renderGuide();
+    }
   }
 
   /* ==== 谱面与布局 ==== */
@@ -1307,7 +1439,7 @@
     if (!S.data) return;
     if (!S.song) { openSheet("picker"); return; }
     stopPreview();
-    stopCal();
+    closeGuide(true);
     if (S.sheet) hideSheet();
     const s = S.song;
     const gen = ++S.gen;
@@ -1987,13 +2119,7 @@
 
   function onKeyDown(e) {
     if (!S.root || S.root.hidden) return;
-    if (S.cal) {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); stopCal("校准已取消"); return; }
-      if (e.repeat || e.key === "Tab") return;
-      e.preventDefault();
-      calTap();
-      return;
-    }
+    if (S.guide) { guideKey(e); return; }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -2487,15 +2613,16 @@
       dg.resizes ? `窗口大小变了 ${dg.resizes} 次` : null,
       S.delayMs ? `判定延迟 ${S.delayMs > 0 ? "+" : ""}${S.delayMs} ms` : null,
       S.render === "simple" ? "简单显示" : null,
-      dg.lite ? "已自动省电" : S.power === "on" && S.render !== "simple" ? "省电画法" : null,
+      dg.lite ? "已自动切换省电渲染" : S.power === "on" && S.render !== "simple" ? "省电渲染" : null,
       bard().audioState && bard().audioState() !== "running" ? `音频 ${bard().audioState()}` : null,
     ].filter(Boolean).join(" · ");
-    /* 设备诊断收进「性能测试记录」（默认收起），展开后可以导出这一局每个音的详细情况 */
-    const perf = h("details", { class: "hjs-perf" },
+    /* 设备诊断收进「性能测试记录」（默认收起），展开后可以导出这一局每个音的详细情况；设置 → 性能优化里选「显示」才出这个按钮 */
+    const perf = S.perfLog && h("details", { class: "hjs-perf" },
       h("summary", { text: "性能测试记录" }),
       h("div", { class: "hjs-perf-body" },
         h("ul", { class: "hjs-perf-list" }, dev.split(" · ").map((x) => h("li", { text: x }))),
         h("button", { type: "button", class: "hjs-btn hjs-perf-export", text: "导出 txt", onclick: exportPerf })));
+    if (!parts.length && !perf) return null;
     return h("div", { class: "hjs-res-diagbox" },
       parts.length ? h("p", { class: "hjs-res-sub hjs-res-timing", text: parts.join(" · ") }) : null,
       perf);
@@ -2604,7 +2731,7 @@
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
         cap: capOf(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.live.length, draws: S.fl.draws } : null,
         resuming: S.resuming, spb: S.spb, ghostWhy: S.ghostWhy,
-        cat: S.cat, tags: S.tags, preview: S.preview.id, cal: !!S.cal, clock: S.clock && { run: S.clock.run, base: S.clock.base },
+        cat: S.cat, tags: S.tags, preview: S.preview.id, guide: S.guide && { step: S.guide.step, offs: S.guide.offs.slice(), target: S.guide.target, clock: S.guide.clock }, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };
     },

@@ -7252,30 +7252,50 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-step:active { scale: .93; box-shadow: var(--glass-down-shadow); }
 .hjs-num-v { min-width: 4.6em; text-align: center; font-size: .86rem; font-variant-numeric: tabular-nums; }
 .hjs-cal-btn { margin-left: 4px; padding: 6px 12px; font-size: .78rem; }
-.hjs-cal {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  margin: 2px 0 6px; padding: 14px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed var(--s-line-hi);
-  background: rgba(10, 7, 22, .26);
-  box-shadow: var(--glass-well);
-}
-.hjs-cal-pad {
-  width: 136px; height: 136px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 50%;
-  border: 2px solid rgba(242, 189, 109, .6);
-  background: radial-gradient(circle, rgba(242, 189, 109, .2), rgba(242, 189, 109, .04) 70%);
-  touch-action: manipulation;
-}
-.hjs-cal-pad span { font-size: .82rem; }
-.hjs-cal-pad small { font-size: .66rem; color: var(--s-mute); }
-.hjs-cal-pad.is-hit { animation: hjsTap .2s ease-out; }
-@keyframes hjsTap { 50% { scale: .94; background-color: rgba(242, 189, 109, .25); } }
 .hjs-cal-dots { display: flex; gap: 6px; }
+.hjs-cal-dots[hidden] { display: none; }
 .hjs-cal-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .18); transition: background .15s; }
 .hjs-cal-dots i.is-on { background: var(--s-gold); }
-.hjs-cal-msg { margin: 0; font-size: .8rem; color: var(--s-gold); text-align: center; }
+/* 新手教程与延迟校准：盖在大厅和设置窗口上面 */
+.hjs-guide {
+  position: absolute; inset: 0; z-index: 9;
+  display: flex; flex-direction: column; align-items: center;
+  padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: rgba(8, 6, 18, .82);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  animation: hjsFade .2s ease-out;
+  outline: none;
+}
+@keyframes hjsFade { from { opacity: 0; } }
+.hjs-guide-head { width: min(520px, 100%); text-align: center; }
+.hjs-guide-title { margin: 0 0 6px; font: 400 1.5rem/1.3 var(--brush); letter-spacing: .12em; color: var(--lantern-soft); }
+.hjs-guide-tip { margin: 0; font-size: .9rem; line-height: 1.7; color: var(--s-soft); }
+.hjs-guide-stage {
+  position: relative; flex: 1 1 auto; width: min(640px, 100%); min-height: 0;
+  --size: min(22vmin, 120px);
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+.hjs-guide-note { margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); transition: left .25s ease, top .25s ease; }
+.hjs-guide-note .hjs-core { transform: none; }
+/* 教程：外圈循环收缩，收到与气泡重合时停一下再淡出 */
+.hjs-guide-note.is-demo .hjs-ring { animation: hjsGuideRing 1.9s linear infinite; }
+@keyframes hjsGuideRing {
+  0% { transform: scale(2.3); opacity: .3; }
+  68% { transform: scale(1); opacity: 1; }
+  84% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.hjs-guide-note.is-demo { cursor: pointer; }
+/* 校准：外圈先藏着，点了才按那一刻的位置显出来 */
+.hjs-guide-note.is-cal .hjs-ring { opacity: 0; }
+.hjs-guide-note.is-cal.is-shown .hjs-ring { opacity: 1; border-width: 3px; border-color: rgb(var(--c)); }
+.hjs-guide-note.is-cal.is-in { animation: hjsGuideIn .25s ease-out; }
+@keyframes hjsGuideIn { from { scale: .6; opacity: 0; } }
+.hjs-guide-note.is-gone { opacity: .35; transition: opacity .2s; }
+.hjs-guide-foot { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 96px; }
+.hjs-guide-msg { margin: 0; min-height: 1.4em; font-size: .86rem; color: var(--s-gold); text-align: center; }
+.hjs-guide-btns { display: flex; align-items: center; gap: 12px; }
 .hjs-set-foot { display: flex; justify-content: center; padding-top: 2px; }
 .hjs-help { padding: 0 22px calc(20px + env(safe-area-inset-bottom, 0px)); }
 .hjs-help ol { display: flex; flex-direction: column; gap: 10px; margin: 0; padding-left: 1.3em; font-size: .86rem; line-height: 1.7; color: var(--s-soft); }
