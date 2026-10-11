@@ -454,65 +454,90 @@ async function main() {
     check("点了以后开始演奏", P.st().playing && P.st().clock.run);
   }
 
-  /* 8. 第一次来：新手教程 → 延迟校准（6 个气泡，每个连响 7 下「嗒」，第 7 下时点）；每次都晚 40 ms → +40 */
+  /* 8. 第一次来：教程（3 个气泡）→ 延迟校准（示范 1 个 + 6 个，每个连响 7 下「嗒」，第 7 下时点）；每次都晚约 40 ms → +40 */
   {
     const P = makePage({ lat: 0.05, fresh: true });
     await openStage(P);
-    check("第一次打开舞台：出新手教程", P.st().guide?.step === "intro" && /在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键/.test(P.$(".hjs-guide").textContent));
-    P.key("KeyA", "a");
-    check("指针不在气泡上时按键：提示先移到气泡上", P.st().guide?.step === "intro" && /移到气泡上/.test(P.$(".hjs-guide-msg").textContent));
-    const ev = new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
-    P.$(".hjs-guide-note").dispatchEvent(ev);
-    await sleep(480);
-    check("点了教程气泡：进入延迟校准，外圈藏起来", P.st().guide?.step === "cal" && P.$(".hjs-guide-note").classList.contains("is-cal") && !P.$(".hjs-guide-note").classList.contains("is-shown"));
-    const offs = [0.04, 0.03, 0.05, 0.04, 0.06, 0.02];   // 平均 40 ms
-    for (let r = 0; r < 6; r++) {
-      const c = P.st().guide.clock;
-      const target = 0.8 + 0.32 * 6 + 0.05 + offs[r];    // 第 7 下排在 0.8 + 0.32×6，听到还要晚 50 ms 输出延迟，玩家再晚一点
+    const G = () => P.st().guide;
+    check("第一次打开舞台：出教程，大厅藏起来", G()?.step === "intro" && P.$("#hjStage").classList.contains("is-guide") && /^教程/.test(P.$(".hjs-guide-title").textContent) && /在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键/.test(P.$(".hjs-guide").textContent));
+    check("教程时后台加载曲库", P.fetched.some((u) => /songs\.json/.test(u)));
+    const tapNote = () => P.$(".hjs-guide-stage").dispatchEvent(new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    check("教程气泡有白色音名", P.$(".hjs-guide-note .hjs-name")?.textContent === "C5", P.$(".hjs-guide-note .hjs-name")?.textContent);
+    tapNote();
+    check("外圈还没收到就点：提示早了", /早了/.test(P.$(".hjs-guide-msg").textContent));
+    const played = [];
+    for (let i = 0; i < 3; i++) {
+      P.now += 1700; P.advance(0.02);
+      tapNote();
+      played.push(P.midi.length && P.midi[P.midi.length - 1].midi);
+      await sleep(420);
+    }
+    check("教程 3 个气泡，点中各出一声琴声", played.join() === "72,76,79", played.join());
+    await sleep(950);
+    check("教程后进入校准示范", G()?.step === "demo", G()?.step);
+    const T = 0.8 + 0.32 * 6;
+    const run = async (lateBy) => {             // 推到这个气泡的第 7 下（加输出延迟 50 ms、玩家晚 lateBy）
+      const c = G().clock;
       const pos = () => c.base + (P.audioT - c.at);
-      while (pos() < target - 1e-6) { P.advance(Math.min(1 / 60, target - pos())); if (r === 0) await sleep(0); }
-      await sleep(60);
+      while (pos() < T + 0.05 + lateBy - 1e-6) P.advance(Math.min(1 / 60, T + 0.05 + lateBy - pos()));
+      await sleep(50);
+    };
+    await run(0);
+    P.advance(0.02); await sleep(50);
+    check("示范：第 7 下时外圈显出、自动消散，不用点", P.$(".hjs-guide-note.is-shown") && G().offs.length === 0);
+    for (let i = 0; i < 30 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
+    check("示范后开始校准，气泡在正中、外圈先显示", G()?.step === "cal" && P.$(".hjs-guide-note").style.left === "50%");
+    const offs = [0.04, 0.03, 0.05, 0.04, 0.06, 0.02];
+    const colors = [];
+    for (let r = 0; r < 6; r++) {
+      colors.push(P.$(".hjs-guide-note:last-child").style.getPropertyValue("--c"));
+      if (r === 0) { P.advance(1.1); check("外圈很快淡出", +P.$(".hjs-guide-note:last-child .hjs-ring").style.opacity === 0, P.$(".hjs-guide-note:last-child .hjs-ring").style.opacity); }
+      await run(offs[r]);
       const tap = new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
       Object.defineProperty(tap, "timeStamp", { value: P.now });
       P.$(".hjs-guide-stage").dispatchEvent(tap);
-      if (r === 0) check("点了以后外圈显出来，比气泡略小（偏晚）", P.$(".hjs-guide-note").classList.contains("is-shown") && /scale\(0\.9/.test(P.$(".hjs-guide-note .hjs-ring").style.transform), P.$(".hjs-guide-note .hjs-ring").style.transform);
-      P.advance(1);
-      await sleep(60);
+      if (r === 0) check("点了以后外圈显出来，比气泡略小（偏晚）", P.$(".hjs-guide-note:last-child.is-shown") && /scale\(0\.9/.test(P.$(".hjs-guide-note:last-child .hjs-ring").style.transform), P.$(".hjs-guide-note:last-child .hjs-ring").style.transform);
+      for (let i = 0; i < 30 && G().step === "cal" && G().offs.length === r + 1 && P.$(".hjs-guide-note:last-child.is-shown"); i++) { P.advance(0.1); await sleep(45); }
     }
+    check("每个气泡换一种颜色", new Set(colors).size >= 5, colors.join("|"));
     const ticks = P.midi.filter((m) => m.midi === 88);
-    check("每个气泡 7 下「嗒」，第 7 下重一些", ticks.length === 42 && ticks.filter((m) => m.vel === 0.85).length === 6, `${ticks.length}`);
-    check("6 次平均写进判定延迟", P.st().guide?.step === "done" && P.st().delayMs === 40 && P.mem.get("hj_stage_delay") === "40", `${P.st().delayMs}`);
+    check("示范加 6 个，每个 7 下「嗒」，第 7 下重一些", ticks.length === 49 && ticks.filter((m) => m.vel === 0.85).length === 7, `${ticks.length}`);
+    check("6 次平均写进判定延迟", G()?.step === "done" && P.st().delayMs === 40 && P.mem.get("hj_stage_delay") === "40", `${G()?.step} ${P.st().delayMs}`);
+    check("结果弹出判定延迟框，显示 +40 ms", /判定延迟/.test(P.$(".hjs-guide-adjust")?.textContent) && P.$(".hjs-guide-adjust .hjs-num-v").textContent === "+40 ms");
+    P.click(P.btn("推后 5 毫秒", P.$(".hjs-guide-adjust")));
+    check("可以再手动微调", P.st().delayMs === 45 && P.mem.get("hj_stage_delay") === "45" && P.$(".hjs-guide-adjust .hjs-num-v").textContent === "+45 ms");
     P.click(P.btn("开始演奏"));
-    check("教程看完记在本机，下次不再出", !P.st().guide && P.mem.get("hj_stage_guide") === "1");
+    check("教程看完记在本机，大厅出来", !G() && P.mem.get("hj_stage_guide") === "1" && !P.$("#hjStage").classList.contains("is-guide"));
     P.HJ.close();
     await sleep(300);
     await openStage(P);
     check("再打开不出教程", !P.$(".hjs-guide"));
   }
-  /* 8b. 设置里的校准也走同一套；按键也算，太早有提示；Esc 取消 */
+  /* 8b. 设置里的校准也走同一套（先示范）；按键也算，太早有提示；Esc 取消；连续 2 个没点就暂停 */
   {
     const P = makePage();
     await openStage(P);
+    const G = () => P.st().guide;
     check("看过教程就不出", !P.$(".hjs-guide"));
     P.click(P.btn("设置"));
     P.click(P.btn("校准"));
-    check("设置里点校准：直接进入校准", P.st().guide?.step === "cal" && !!P.$("#hjsSheetCard"));
-    const c = P.st().guide.clock;
+    check("设置里点校准：直接是演奏画面，从示范开始", G()?.step === "demo" && P.$("#hjStage").classList.contains("is-guide"));
+    for (let i = 0; i < 80 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
+    const c = G().clock;
     const pos = () => c.base + (P.audioT - c.at);
     while (pos() < 2.2) P.advance(1 / 60);
-    await sleep(60);
+    await sleep(50);
     P.key("Space", " ");
-    check("第 7 下之前按：提示早了，不算", /早了/.test(P.$(".hjs-guide-msg").textContent) && P.st().guide.offs.length === 0);
+    check("第 7 下之前按：提示早了，不算", /早了/.test(P.$(".hjs-guide-msg").textContent) && G().offs.length === 0);
     while (pos() < 2.72) P.advance(1 / 60);
-    await sleep(60);
+    await sleep(50);
     P.key("Space", " ");
-    check("按键也算", P.st().guide.offs.length === 1 && Math.abs(P.st().guide.offs[0]) < 0.02, `${P.st().guide.offs}`);
+    check("按键也算", G().offs.length === 1 && Math.abs(G().offs[0]) < 0.02, `${G().offs}`);
     P.key("Escape", "Escape");
-    check("Esc 取消校准，回到设置，判定延迟不变", !P.st().guide && P.st().sheet === "settings" && P.st().delayMs === 0);
-    /* 一直不点：连续 4 次后暂停 */
+    check("Esc 取消校准，回到设置，判定延迟不变", !G() && P.st().sheet === "settings" && P.st().delayMs === 0 && !P.$("#hjStage").classList.contains("is-guide"));
     P.click(P.btn("校准"));
-    for (let i = 0; i < 8 && P.st().guide?.step === "cal"; i++) { P.advance(4); await sleep(60); }
-    check("连续不点：校准暂停", P.st().guide?.step === "idle" && !!P.btn("继续校准"), P.st().guide?.step);
+    for (let i = 0; i < 200 && G()?.step !== "idle"; i++) { P.advance(0.1); await sleep(20); }
+    check("连续 2 个没点：校准暂停", G()?.step === "idle" && /连续 2 个/.test(P.$(".hjs-guide-msg").textContent) && !!P.btn("继续校准"), G()?.step);
     P.click(P.btn("取消"));
   }
 
@@ -528,6 +553,7 @@ async function main() {
     const fly = P.$('input[aria-label="飞花线"]');
     fly.checked = false;
     fly.dispatchEvent(new P.win.Event("change", { bubbles: true }));
+    check("设置从上到下：时机、操作、声音、画面、性能优化", P.$$(".hjs-set-g h4").map((x) => x.textContent).join() === "时机,操作,声音,画面,性能优化", P.$$(".hjs-set-g h4").map((x) => x.textContent).join());
     check("关掉飞花线：飞花线轨迹也不列", !labels().includes("飞花线轨迹"), labels().join(","));
     const perfRow = P.$$(".hjs-set-row").find((r) => r.querySelector("b")?.textContent === "性能测试记录");
     check("性能测试记录默认不显示，有说明", !!perfRow && perfRow.querySelector(".is-on, [aria-pressed=true], [aria-checked=true]")?.textContent === "不显示" && perfRow.textContent.includes("运行卡顿时，请设置为显示，以获取详细的掉帧情况。"), perfRow?.innerHTML.slice(0, 300));

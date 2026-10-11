@@ -7256,45 +7256,43 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-cal-dots[hidden] { display: none; }
 .hjs-cal-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .18); transition: background .15s; }
 .hjs-cal-dots i.is-on { background: var(--s-gold); }
-/* 新手教程与延迟校准：盖在大厅和设置窗口上面 */
+/* 教程与延迟校准：直接是演奏画面（大厅、设置窗口先藏起来，不模糊） */
+.hjs.is-guide .hjs-lobby, .hjs.is-guide .hjs-sheet { visibility: hidden; }
+.hjs.is-guide .hjs-veil { background-color: rgba(0, 0, 0, .14); }
 .hjs-guide {
   position: absolute; inset: 0; z-index: 9;
   display: flex; flex-direction: column; align-items: center;
   padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px));
-  background: rgba(8, 6, 18, .82);
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   animation: hjsFade .2s ease-out;
   outline: none;
 }
 @keyframes hjsFade { from { opacity: 0; } }
 .hjs-guide-head { width: min(520px, 100%); text-align: center; }
-.hjs-guide-title { margin: 0 0 6px; font: 400 1.5rem/1.3 var(--brush); letter-spacing: .12em; color: var(--lantern-soft); }
-.hjs-guide-tip { margin: 0; font-size: .9rem; line-height: 1.7; color: var(--s-soft); }
+.hjs-guide-title { margin: 0 0 6px; font: 400 1.5rem/1.3 var(--brush); letter-spacing: .12em; color: var(--lantern-soft); text-shadow: 0 2px 10px rgba(0, 0, 0, .55); }
+.hjs-guide-tip { margin: 0; font-size: .9rem; line-height: 1.7; color: #f3ecff; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
 .hjs-guide-stage {
-  position: relative; flex: 1 1 auto; width: min(640px, 100%); min-height: 0;
-  --size: min(22vmin, 120px);
+  position: relative; flex: 1 1 auto; width: min(760px, 100%); min-height: 0;
+  --size: min(21vmin, 120px);
   touch-action: manipulation;
   -webkit-user-select: none; user-select: none;
 }
-.hjs-guide-note { margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); transition: left .25s ease, top .25s ease; }
-.hjs-guide-note .hjs-core { transform: none; }
-/* 教程：外圈循环收缩，收到与气泡重合时停一下再淡出 */
-.hjs-guide-note.is-demo .hjs-ring { animation: hjsGuideRing 1.9s linear infinite; }
-@keyframes hjsGuideRing {
-  0% { transform: scale(2.3); opacity: .3; }
-  68% { transform: scale(1); opacity: 1; }
-  84% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1); opacity: 0; }
+.hjs-guide-note { margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); }
+.hjs-guide-note.is-in { animation: hjsGuideIn .2s ease-out; }
+@keyframes hjsGuideIn { from { opacity: 0; } }
+.hjs-guide-note.is-shown .hjs-ring { border-width: 3px; border-color: rgb(var(--c)); }
+/* 消散：核心像演奏时一样炸开，外圈留在原处淡出 */
+.hjs-guide-note.is-pop .hjs-core { animation: hjsBurst .3s ease-out forwards; }
+.hjs-guide-note.is-pop .hjs-ring { opacity: 0 !important; transition: opacity .3s ease-out; }
+.hjs-guide-note.is-pop .hjs-name { opacity: 0 !important; }
+.hjs-guide-adjust {
+  position: absolute; inset: 0; margin: auto;
+  width: min(440px, 100%); height: fit-content; max-height: none;
+  padding: 14px 18px;
+  animation: hjsRise .28s ease-out;
 }
-.hjs-guide-note.is-demo { cursor: pointer; }
-/* 校准：外圈先藏着，点了才按那一刻的位置显出来 */
-.hjs-guide-note.is-cal .hjs-ring { opacity: 0; }
-.hjs-guide-note.is-cal.is-shown .hjs-ring { opacity: 1; border-width: 3px; border-color: rgb(var(--c)); }
-.hjs-guide-note.is-cal.is-in { animation: hjsGuideIn .25s ease-out; }
-@keyframes hjsGuideIn { from { scale: .6; opacity: 0; } }
-.hjs-guide-note.is-gone { opacity: .35; transition: opacity .2s; }
+.hjs-guide-adjust .hjs-set-row { border: 0; padding: 0; }
 .hjs-guide-foot { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 96px; }
-.hjs-guide-msg { margin: 0; min-height: 1.4em; font-size: .86rem; color: var(--s-gold); text-align: center; }
+.hjs-guide-msg { margin: 0; min-height: 1.4em; font-size: .86rem; color: var(--s-gold); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
 .hjs-guide-btns { display: flex; align-items: center; gap: 12px; }
 .hjs-set-foot { display: flex; justify-content: center; padding-top: 2px; }
 .hjs-help { padding: 0 22px calc(20px + env(safe-area-inset-bottom, 0px)); }
@@ -7348,3 +7346,13 @@ body.hjs-open .toast { z-index: 540; }
   font-size: .78rem; font-weight: 700; letter-spacing: .06em;
 }
 .bard-stage-btn .bss-ico { font-size: .9rem; }
+
+/* 校准结果的判定延迟框：手机上也是居中的小卡片，不做成底部抽屉 */
+@media (max-width: 760px) {
+  .hjs-guide .hjs-guide-adjust { width: calc(100% - 8px); border-radius: var(--radius); border-bottom: 1px solid var(--s-line-hi); animation: hjsRise .28s ease-out; }
+}
+
+/* 第一次进站：只弹花街介绍，关掉后再显示页面（main.js 的 hj-intro-only） */
+html.hj-intro-only .site-header,
+html.hj-intro-only main,
+html.hj-intro-only footer { visibility: hidden; }

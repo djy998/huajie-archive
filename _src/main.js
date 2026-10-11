@@ -1174,6 +1174,10 @@ function closeInfoModal() {
   stopTabVideos($("infoBox"));
   $("infoOverlay").hidden = true;
   firstBootInfoOpen = false;
+  if (document.documentElement.classList.contains("hj-intro-only")) {
+    document.documentElement.classList.remove("hj-intro-only");
+    playPageEnterStagger();
+  }
   setTimeout(maybeShowSitePopup, 0);
 }
 
@@ -4120,6 +4124,8 @@ function initOfflineCache() {
 
 function initApp() {
   const booting = document.documentElement.classList.contains("boot-pending");
+  /* 第一次进站：点了开屏的莫古力后只弹花街介绍，标题、磁贴、按钮等先藏着，关掉介绍再出来 */
+  if (booting) document.documentElement.classList.add("hj-intro-only");
   try { runOneTimeReset(); } catch (e) { console.error(e); }
   /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
   [
@@ -4135,8 +4141,12 @@ function initApp() {
 
   /* 进站后弹出花街介绍（直接进入购票页时除外）。回访时没有开屏，boot.js 的遮罩等天空与首页卡片底图解码好（有上限）再撤 */
   HJ.boot.appReady(() => {
-    playPageEnterStagger();
-    if (!$("view-ticket").hidden || maintenanceActive()) return;
+    const intro = $("view-ticket").hidden && !maintenanceActive();
+    if (!(booting && intro)) {
+      document.documentElement.classList.remove("hj-intro-only");
+      playPageEnterStagger();
+    }
+    if (!intro) return;
     firstBootInfoOpen = true;
     openInfoModal();
   }, booting ? [HJ.boot.warm(INFO_BG_SOFT, true), siteStateLoading]
