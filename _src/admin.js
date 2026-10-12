@@ -394,7 +394,8 @@ const ADMIN_PANEL_REFRESH = {
   venueAdminPanel: () => refreshVenueAdmin(),
   popupAdminPanel: () => refreshPopupAdmin(),
   huayuAdminPanel: () => refreshHuayuAdmin(),
-  puzzleAdminPanel: () => refreshPuzzleAdmin(),
+  puzzleAdminPanel: () => { refreshPuzzleAdmin(); refreshPlays("puzzle"); },
+  stageAdminPanel: () => refreshPlays("stage"),
   surveyAdminPanel: () => {
     if (typeof window.mountSurvey === "function") return refreshSurveyAdmin();
     $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
@@ -3442,6 +3443,156 @@ function initPuzzleAdmin() {
   });
 }
 
+/* ==== 游玩记录：花街拼图通关、舞台演奏演完一首（网页自动发送，玩家名称选填） ==== */
+const PLAY_ADMIN_ERRORS = { unknown_action: "Worker 还没有更新，暂时用不了（见更新说明）" };
+const PZ_PLAY_MODES = { casual: "休闲", timed: "限时", overtime: "限时（超时后拼完）", contest: "大赛" };
+const STAGE_DIFF_NAMES = { easy: "仙人刺", normal: "魔界花", hard: "泰坦" };
+const STAGE_JUDGE_NAMES = { normal: "正常", loose: "宽松", hover: "放水" };
+const STAGE_MODE_NAMES = { show: "演出", learn: "学习", auto: "自动演奏" };
+const playAdmin = { puzzle: [], stage: [], perfOpen: new Set() };   // perfOpen：展开了性能测试记录的演奏记录编号
+const playIds = { puzzle: ["pzPlay", "pzPlayBody", 10], stage: ["stPlay", "stPlayBody", 13] };
+const csvSafe = (v) => (/^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v));   // 防止表格软件把 ID 当公式
+const playerText = (p) => p || "（未填写）";
+
+async function refreshPlays(game) {
+  const [pre] = playIds[game];
+  $(`${pre}Summary`).textContent = "加载中…";
+  const data = await callWorker({ action: "play_admin_list", password: internalAdminPassword, game });
+  if (!data || !data.ok) {
+    $(`${pre}Summary`).textContent = adminErr(data, "读取失败", PLAY_ADMIN_ERRORS);
+    return;
+  }
+  playAdmin[game] = data.items || [];
+  renderPlays(game);
+}
+
+/* 筛选：玩家名称关键字；舞台另可按模式筛 */
+function playsShown(game) {
+  const [pre] = playIds[game];
+  const q = ($(`${pre}Search`).value || "").trim().toLowerCase();
+  const mode = game === "stage" ? $("stPlayMode").value : "";
+  return playAdmin[game].filter((r) => (!q || `${r.player} ${r.title || ""} ${r.song || ""}`.toLowerCase().includes(q))
+    && (!mode || r.mode === mode));
+}
+
+/* 性能测试记录摘要 → 几行文字 */
+function stagePerfLines(f) {
+  if (!f) return [];
+  const yes = (v) => (v ? "开" : "关");
+  return [
+    f.lat !== undefined && `输出延迟 ${f.lat} ms`,
+    f.hz ? `刷新率 ${f.hz} Hz` : "刷新率未测出",
+    f.frames !== undefined && `${f.frames} 帧，掉帧 ${f.drop || 0}（${f.frames ? ((100 * (f.drop || 0)) / f.frames).toFixed(1) : 0}%），最长一帧 ${f.maxFrame || 0} ms`,
+    f.busy !== undefined && `主线程每帧 ${f.busy} ms（最多 ${f.busyMax || 0} ms）`,
+    f.longs ? `长任务 ${f.longs} 次（最长 ${f.longMax || 0} ms）` : "无长任务",
+    f.tapWait === -1 ? "点按时间戳不可用" : f.tapWait ? `点按排队 ${f.tapWait} ms` : null,
+    `画面 ${f.render === "simple" ? "简单显示" : "正常显示"} · 气泡动画 ${f.anim === "browser" ? "浏览器" : "逐帧"} · 省电 ${({ on: "开启", auto: "自动", off: "关闭" })[f.power] || f.power || ""}${f.lite ? "（已自动切换）" : ""} · 飞花线 ${yes(f.fly)}`,
+    f.delay !== undefined && `判定延迟 ${f.delay > 0 ? "+" : ""}${f.delay} ms`,
+    f.resizes ? `窗口大小变了 ${f.resizes} 次` : null,
+    f.fixes ? `动画对时 ${f.fixes} 次` : null,
+    f.audio && f.audio !== "running" ? `音频 ${f.audio}` : null,
+    (f.screen || f.stage) && `屏幕 ${f.screen || "?"} · 舞台 ${f.stage || "?"}`,
+    f.ua && `浏览器 ${f.ua}`,
+  ].filter(Boolean);
+}
+const stageScoreText = (r) => (r.mode === "show" ? r.score.toLocaleString("en-US") : `${r.hits} / ${r.total}`);
+const stageCountsText = (c) => (c ? `P ${c.perfect} · G ${c.great} · Gd ${c.good} · J ${c.just} · M ${c.miss}` : "");
+
+function renderPlays(game) {
+  const [pre, body, cols] = playIds[game];
+  const list = playsShown(game);
+  const valid = list.filter((r) => !r.voided);
+  const named = new Set(valid.map((r) => r.player).filter(Boolean));
+  $(`${pre}Summary`).textContent = playAdmin[game].length
+    ? `共 ${list.length} 条（有效 ${valid.length} 条，填了名称的玩家 ${named.size} 位）`
+    : "暂无记录";
+  const voidBtn = (r) => `<button type="button" class="pz-rec-void" data-game="${game}" data-id="${r.id}" data-voided="${r.voided ? 1 : 0}">${r.voided ? "恢复" : "作废"}</button>`;
+  const tail = (r) => `<td>${escapeHtml(formatCnSeconds(r.at))}</td>
+    <td title="${escapeHtml(geoTitle(r.geo))}">${escapeHtml(geoText(r.geo) || "—")}</td>
+    <td class="hy-visit-id">${escapeHtml(r.visitor)}</td>`;
+  $(body).innerHTML = list.map((r) => (game === "puzzle"
+    ? `<tr class="${r.voided ? "is-voided" : ""}">
+    <td>${r.id}</td>
+    <td class="pz-rec-player">${escapeHtml(playerText(r.player))}</td>
+    <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
+    <td title="${escapeHtml(r.contestTitle ? `${r.contestTitle} · 第 ${r.contestRev} 届` : r.img ? `相册第 ${r.img} 张` : "")}">${escapeHtml(PZ_PLAY_MODES[r.mode] || r.mode)}</td>
+    <td>${escapeHtml(pzFmtMs(r.elapsed))}</td>
+    <td>${escapeHtml(pzAidsText(r.aids) || "—")}</td>
+    <td class="${r.adj !== r.elapsed ? "pz-rec-adj" : ""}">${escapeHtml(pzFmtMs(r.adj))}</td>
+    ${tail(r)}
+    <td>${voidBtn(r)}</td>
+  </tr>`
+    : `<tr class="${r.voided ? "is-voided" : ""}">
+    <td>${r.id}</td>
+    <td class="pz-rec-player">${escapeHtml(playerText(r.player))}</td>
+    <td class="pz-rec-player" title="${escapeHtml(r.song)}">${escapeHtml(r.title || r.song)}</td>
+    <td>${escapeHtml(STAGE_DIFF_NAMES[r.diff] || r.diff)}${r.mode !== "show" ? `<br><small>${escapeHtml(STAGE_MODE_NAMES[r.mode] || r.mode)}</small>` : ""}</td>
+    <td title="${escapeHtml(stageCountsText(r.counts))}">${escapeHtml(stageScoreText(r))}${r.mode === "show" ? `<br><small>${r.acc}% · 最大COMBO ${r.maxCombo}/${r.total}</small>` : ""}</td>
+    <td>${escapeHtml(r.rank || "—")}</td>
+    <td>${escapeHtml(STAGE_JUDGE_NAMES[r.judge] || r.judge)}</td>
+    <td>${escapeHtml(STAGE_JUDGE_NAMES[r.range] || r.range)}</td>
+    ${tail(r)}
+    <td>${r.perf ? `<button type="button" class="st-perf-btn" data-id="${r.id}" aria-expanded="${playAdmin.perfOpen.has(r.id)}">${playAdmin.perfOpen.has(r.id) ? "收起" : "查看"}</button>` : "—"}</td>
+    <td>${voidBtn(r)}</td>
+  </tr>${r.perf && playAdmin.perfOpen.has(r.id) ? `<tr class="st-perf-row"><td colspan="${cols}"><ul>${stagePerfLines(r.perf).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}${r.ghosts ? `<li>点空 ${r.ghosts} 次</li>` : ""}</ul></td></tr>` : ""}`)).join("") || `<tr><td colspan="${cols + 1}" class="pz-rec-empty">暂无记录</td></tr>`;
+}
+
+function exportPlays(game) {
+  const list = playsShown(game);
+  if (!list.length) return showToast("没有可导出的记录");
+  const end = (r) => [formatCnSeconds(r.at), geoText(r.geo), r.visitor, r.voided ? "已作废" : "有效"];
+  const [head, rows, name] = game === "puzzle"
+    ? [["编号", "玩家ID", "难度", "块数", "模式", "大赛", "相册图", "耗时(秒)", "耗时", "辅助功能", "计入用时(秒)", "计入用时", "登记时间", "IP属地", "访客标识", "状态"],
+      list.map((r) => [r.id, csvSafe(r.player), PZ_ADMIN_DIFFS[r.diff] || r.diff, r.pieces, PZ_PLAY_MODES[r.mode] || r.mode,
+        r.contestTitle ? `${csvSafe(r.contestTitle)}（第 ${r.contestRev} 届）` : "", r.img, (r.elapsed / 1000).toFixed(1), pzFmtMs(r.elapsed),
+        pzAidsText(r.aids) || "未使用", (r.adj / 1000).toFixed(1), pzFmtMs(r.adj), ...end(r)]), "拼图通关记录"]
+    : [["编号", "玩家ID", "曲目", "曲目id", "难度", "模式", "得分", "评价", "准确率%", "最大COMBO", "音数", "弹对(学习/自动)", "PERFECT", "GREAT", "GOOD", "JUST", "MISS", "点空",
+      "判定模式", "范围模式", "登记时间", "IP属地", "访客标识", "状态", "性能测试记录"],
+      list.map((r) => {
+        const c = r.counts || {};
+        return [r.id, csvSafe(r.player), csvSafe(r.title), r.song, STAGE_DIFF_NAMES[r.diff] || r.diff, STAGE_MODE_NAMES[r.mode] || r.mode,
+          r.mode === "show" ? r.score : "", r.rank, r.mode === "show" ? r.acc : "", r.maxCombo, r.total, r.mode === "show" ? "" : r.hits,
+          c.perfect ?? "", c.great ?? "", c.good ?? "", c.just ?? "", c.miss ?? "", r.ghosts,
+          STAGE_JUDGE_NAMES[r.judge] || r.judge, STAGE_JUDGE_NAMES[r.range] || r.range, ...end(r), csvSafe(stagePerfLines(r.perf).join(" | "))];
+      }), "舞台演奏记录"];
+  const csv = [head, ...rows].map((row) => row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const stamp = epochToCnLocal(Date.now()).replace(/[-:]/g, "").replace("T", "-");
+  downloadBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), `${name}_${stamp}.csv`);
+}
+
+function initPlayAdmin() {
+  ["puzzle", "stage"].forEach((game) => {
+    const [pre, body] = playIds[game];
+    $(`${pre}RefreshBtn`).addEventListener("click", () => refreshPlays(game));
+    $(`${pre}ExportBtn`).addEventListener("click", () => exportPlays(game));
+    $(`${pre}Search`).addEventListener("input", () => renderPlays(game));
+    $(body).addEventListener("click", async (e) => {
+      const perf = e.target.closest(".st-perf-btn");
+      if (perf) {
+        const id = Number(perf.dataset.id);
+        if (!playAdmin.perfOpen.delete(id)) playAdmin.perfOpen.add(id);
+        renderPlays(game);
+        return;
+      }
+      const btn = e.target.closest(".pz-rec-void");
+      if (!btn) return;
+      btn.disabled = true;
+      const data = await callWorker({
+        action: "play_admin_void", password: internalAdminPassword, game, id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
+      });
+      if (!data || !data.ok) {
+        btn.disabled = false;
+        showToast(adminErr(data, "操作失败，刷新后再试", PLAY_ADMIN_ERRORS));
+        return;
+      }
+      const i = playAdmin[game].findIndex((r) => r.id === data.item.id);
+      if (i >= 0) playAdmin[game][i] = data.item;
+      renderPlays(game);
+    });
+  });
+  $("stPlayMode").addEventListener("change", () => renderPlays("stage"));
+}
+
 /* ==== 10. 管理面板 ==== */
 const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card" id="lockdownPanel" hidden>
@@ -4081,6 +4232,42 @@ const ADMIN_PANELS_HTML = `
       </table>
     </div>
   </section>
+  <section class="ta-group">
+    <h3 class="ta-group-title">通关记录</h3>
+    <p class="ta-group-hint">访客每次通关（休闲、限时、大赛都算）网页自动发来的成绩，玩家名称为拼图首页选填的「玩家名称」。数据由访客的浏览器算出，仅供参考；大赛排名以上面的参赛记录为准。</p>
+    <div class="pz-rec-tools">
+      <input type="search" class="play-search" id="pzPlaySearch" placeholder="搜索玩家名称" aria-label="搜索玩家名称">
+      <button type="button" id="pzPlayRefreshBtn">刷新</button>
+      <button type="button" id="pzPlayExportBtn">导出 CSV</button>
+    </div>
+    <p class="ta-group-hint" id="pzPlaySummary"></p>
+    <div class="ticket-table-wrap">
+      <table class="ticket-table pz-rec-table">
+        <thead><tr><th>编号</th><th>玩家 ID</th><th>难度</th><th>模式</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+        <tbody id="pzPlayBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<div class="gate-card admin-card pz-admin" id="stageAdminPanel" data-close-only-x="1" hidden>
+  <h2>舞台演奏</h2>
+  <section class="ta-group">
+    <h3 class="ta-group-title">演奏记录</h3>
+    <p class="ta-group-hint">访客在吟游诗人模拟器「舞台演奏」里演完一首（中途结束不算）时网页自动发来的成绩，玩家名称为大厅里选填的「玩家名称」（与花街拼图共用）。学习模式、自动演奏不计分，得分一栏为弹对几个。鼠标停在得分上可以看各档判定数；「性能」里是这一局的性能测试记录摘要。数据由访客的浏览器算出，仅供参考。</p>
+    <div class="pz-rec-tools">
+      <input type="search" class="play-search" id="stPlaySearch" placeholder="搜索玩家名称或曲目" aria-label="搜索玩家名称或曲目">
+      <select id="stPlayMode" aria-label="模式"><option value="">全部模式</option><option value="show">演出</option><option value="learn">学习</option><option value="auto">自动演奏</option></select>
+      <button type="button" id="stPlayRefreshBtn">刷新</button>
+      <button type="button" id="stPlayExportBtn">导出 CSV</button>
+    </div>
+    <p class="ta-group-hint" id="stPlaySummary"></p>
+    <div class="ticket-table-wrap">
+      <table class="ticket-table pz-rec-table st-play-table">
+        <thead><tr><th>编号</th><th>玩家 ID</th><th>曲目</th><th>难度</th><th>得分</th><th>评价</th><th>判定模式</th><th>范围模式</th><th>登记时间</th><th>属地</th><th>访客</th><th>性能</th><th></th></tr></thead>
+        <tbody id="stPlayBody"></tbody>
+      </table>
+    </div>
+  </section>
 </div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
   <h2>发布公告</h2>
@@ -4121,7 +4308,7 @@ mountAdminPanels();
     : () => console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用"),
   typeof window.mountSurvey === "function" ? initSurveyAdmin
     : () => console.error("[活动问卷] survey.js 没有加载成功，管理页的「活动问卷」不可用"),
-  initPostAnnouncement, initPopupAdmin, initHuayuAdmin, initPuzzleAdmin,
+  initPostAnnouncement, initPopupAdmin, initHuayuAdmin, initPuzzleAdmin, initPlayAdmin,
 ].forEach((init) => {
   try { init(); } catch (e) { console.error(e); }
 });

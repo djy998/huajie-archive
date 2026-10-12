@@ -213,6 +213,34 @@ async function callWorker(payload, { load = "auto" } = {}) {
   return trackLoad(req, load === "auto" ? (visitorWaiting() ? "block" : "none") : load);
 }
 
+/* ==== 玩家名称与游玩记录 ====
+   花街拼图、舞台演奏共用一个玩家名称（选填，存在本机 hj_player_name，在哪边改都同步）。
+   拼图通关、演奏完一首时把成绩发给 Worker（reportPlay），连不上就算了，不打扰访客；以后接账号系统时换成账号即可 */
+const PLAYER_NAME_KEY = "hj_player_name";
+const PLAYER_NAME_MAX = 20;
+const cleanPlayerName = (v) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, PLAYER_NAME_MAX);
+function playerName() {
+  return cleanPlayerName(storage.get(PLAYER_NAME_KEY) ?? storage.get("hj_puzzle_player") ?? "");   // 以前大赛登记填过的游戏 ID 也认
+}
+function setPlayerName(v) {
+  const name = cleanPlayerName(v);
+  storage.set(PLAYER_NAME_KEY, name);
+  document.querySelectorAll("input[data-player-name]").forEach((el) => { if (el !== document.activeElement) el.value = name; });
+  return name;
+}
+/* 让一个输入框读写玩家名称 */
+function bindPlayerName(input) {
+  if (!input || input.dataset.playerName === "1") return;
+  input.dataset.playerName = "1";
+  input.maxLength = PLAYER_NAME_MAX;
+  input.value = playerName();
+  input.addEventListener("input", () => setPlayerName(input.value));
+  input.addEventListener("change", () => { input.value = setPlayerName(input.value); });
+}
+function reportPlay(action, data) {
+  return callWorker({ action, player: playerName(), ...data }, { load: "none" }).catch(() => null);
+}
+
 /* 按需加载的脚本；失败后允许重试。都是访客点了要用才加载，默认全屏提示；后台预取传 { load: "corner" } 或 "none" */
 const lateScripts = {};
 function loadLateScript(file, ready, { load = "block" } = {}) {

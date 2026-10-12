@@ -351,6 +351,8 @@
       <label><input type="radio" name="pzMode" value="casual"><span class="pz-seg-name">休闲</span><small class="pz-seg-sub">正计时</small></label>
       <label><input type="radio" name="pzMode" value="timed"><span class="pz-seg-name">限时</span><small class="pz-seg-sub" id="pzTimedSub"></small></label>
     </div>
+    <label class="pz-label" for="pzNameInput">玩家名称</label>
+    <input type="text" class="pz-player pz-name" id="pzNameInput" maxlength="20" placeholder="选填，通关后会和成绩一起登记" autocomplete="off" spellcheck="false">
     <p class="alarm-hint pz-setup-hint" id="pzSetupHint"></p>
     <div class="pz-btn-row"><button type="button" class="pz-primary" id="pzStartBtn">开始拼图</button></div>
     <div class="pz-last" id="pzLastBox" hidden></div>
@@ -447,6 +449,7 @@
     ["pzDiffSeg", "pzModeSeg"].forEach((id) => $(id).addEventListener("change", syncSetup));
     syncSetup();
 
+    bindPlayerName($("pzNameInput"));
     $("pzStartBtn").addEventListener("click", () => startNew());
     $("pzContestBtn").addEventListener("click", startContest);
     $("pzSubmitBtn").addEventListener("click", () => lastRecord && submitFromResult(lastRecord));
@@ -543,6 +546,7 @@
         ? `大赛 · ${save.contest.title} · ${d.name} · 已用 ${fmtClock(save.elapsed)} · 完成 ${prog}%`
         : `${d.name} · ${modeLabel(save)} · ${time} · 完成 ${prog}%`;
     }
+    if (document.activeElement !== $("pzNameInput")) $("pzNameInput").value = playerName();
     renderContest();
     renderLast();
     renderRecords();
@@ -636,7 +640,7 @@
     });
     const input = $("pzLastPlayer");
     if (!input) return;
-    input.value = storage.get(STORE_PLAYER) || "";
+    input.value = playerName();
     $("pzLastSubmitBtn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
@@ -703,6 +707,7 @@
     }
     Object.assign(rec, { submitted: true, no: Number(data.no), player: data.player || player });
     storage.set(STORE_PLAYER, player);
+    setPlayerName(player);
     saveLast(rec);
     return { ok: true };
   }
@@ -1507,6 +1512,11 @@
     Object.assign(rec, addRecord(rec));
     storage.set(STORE_LAST, JSON.stringify(rec));
     lastRecord = rec;
+    reportPlay("puzzle_play", {
+      diff: rec.diff, mode: rec.contest ? "contest" : rec.overtime ? "overtime" : rec.mode, pieces: rec.pieces, ms: rec.ms, adj: rec.adj,
+      aids: rec.aids || [], limitMs: rec.limitMs || 0, img: rec.img ?? null,
+      contest: rec.contest ? { rev: rec.contest.rev, title: rec.contest.title } : null,
+    });
     setTimeout(() => showResult(rec), prefersReducedMotion() ? 200 : 1400);
   }
 
@@ -1545,7 +1555,7 @@
     $("pzCodeText").textContent = "";
     $("pzSubmitBtn").disabled = false;
     setMsg($("pzSubmitMsg"), "");
-    $("pzPlayerInput").value = storage.get(STORE_PLAYER) || "";
+    $("pzPlayerInput").value = playerName();
     card("pzResultCard");
     if (rec.submitted) generateCode(rec);
   }

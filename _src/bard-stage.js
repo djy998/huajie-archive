@@ -503,7 +503,8 @@
       if (!document.hidden) return;
       if (S.view === "play" && S.playing && !S.paused) pause();
       stopPreview();
-      if (S.guide) guidePause("页面已切至后台，校准已暂停");
+      if (S.guide && S.guide.step === "r2") { r2Clear(); guideSay("r1done", "页面已切至后台，这一轮重新开始"); }   // 第二轮不等人：切回来重来
+      else if (S.guide) guidePause("页面已切至后台，校准已暂停");
     });
     S.built = true;
   }
@@ -530,7 +531,7 @@
     renderLobby();
     if (!S.data) loadData().then(() => { if (S.view === "lobby" && !r.hidden) renderLobby(); });
     requestAnimationFrame(() => { const go = $id("hjsGo"); if (go) go.focus({ preventScroll: true }); });
-    if (getRaw(K.guide, "") !== "1") openGuide("intro", "first");   // 第一次来：先看教程、校准延迟（大厅先不显示）
+    if (getRaw(K.guide, "") !== "1") openGuide("intro", "first");   // 第一次来：先看教程（开场白、两轮试弹）、校准延迟（大厅先不显示）
   }
 
   function close(fromPop) {
@@ -658,6 +659,13 @@
           h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })),
         heroRank ? h("span", { class: `hjs-song-rank hjs-hero-rank${heroRank === "Impeccable" ? " is-max" : ""}`, title: `${diffMeta().label}难度最高评级`, text: heroRank }) : null)));
 
+    /* 玩家名称（选填，与花街拼图共用）：演奏完一首时和成绩一起登记。大厅重画时正在输入的话接着输 */
+    const typing = document.activeElement && document.activeElement.id === "hjsName" ? document.activeElement.selectionStart : null;
+    const nameIn = h("input", { type: "text", class: "hjs-pname-in", id: "hjsName", maxlength: "20", placeholder: "选填，演奏完会和成绩一起登记", autocomplete: "off", spellcheck: "false" });
+    if (typeof bindPlayerName === "function") bindPlayerName(nameIn);
+    const nameField = h("label", { class: "hjs-line hjs-pname" }, h("span", { class: "hjs-line-l hjs-pname-l", text: "玩家名称" }), nameIn);
+    if (typing !== null) requestAnimationFrame(() => { try { nameIn.focus({ preventScroll: true }); nameIn.setSelectionRange(typing, typing); } catch (e) {} });
+
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
     const best = bestOf(s);
     const cnt = Array.isArray(s.cnt) ? s.cnt : [];                       // 仙人刺 / 魔界花 / 泰坦各要弹几个音
@@ -677,6 +685,7 @@
           h("button", { type: "button", class: "hjs-btn", text: "打开声音", onclick: () => { vol().set(0.55); renderLobby(); } }))
         : null,
       best && scored() ? h("p", { class: "hjs-best", text: `本机纪录（${diffMeta().label} · ${judgeLabel()}判定 · ${rangeLabel()}范围）· ${fmtNum(best.score)} 分 · ${best.rank}` }) : null,
+      nameField,
       h("button", { type: "button", class: "hjs-go", id: "hjsGo", onclick: () => startSong() },
         h("span", { class: "hjs-go-ico", html: ICON.play }), h("span", { text: isAuto() ? "自动演奏" : S.learn ? "开始练习" : "开始演奏" }))));
   }
@@ -1038,11 +1047,27 @@
 
   /* ==== 教程与延迟校准 ====
      第一次打开舞台演奏时先出教程：大厅先不显示（后台照常加载曲库、谱面和音色），直接是演奏画面。
-     教程：依次出 3 个气泡（白字为音名），外圈收到与气泡重合时点击（电脑也可把指针放在气泡上按任意键），弹中出琴声、气泡消散。
-     随后是延迟校准（设置里的「校准」也走这里）：气泡都在正中，出现时外圈可见，随即快速淡出；在游戏同一个音频钟上连响 7 下「嗒」，
+     开场白（试音提醒）→ 第一轮：2 个气泡，外圈收到与气泡重合后一直等着，点中出琴声、气泡消散（同学习模式）
+     → 第二轮：3 个气泡按节奏接连出现，不等人，弹中 2 个以上算通过，否则再来一轮 → 延迟校准。
+     延迟校准（设置里的「校准」也走这里）：气泡出现时外圈可见，随即快速淡出；在游戏同一个音频钟上连响 7 下「嗒」，
      第 7 下时点击，外圈按点击那一刻应在的位置重新显出，气泡像演奏时一样消散。先示范一个（不用点），再测 6 个，每个换一种颜色，
      取 6 次偏差的平均值作为判定延迟；连续 2 个没点就暂停 */
-  const TUT = { notes: [72, 76, 79], colors: [1, 2, 3], pos: [[28, 56], [50, 44], [72, 56]], approach: 1.6, early: 0.72 };
+  /* approach：教程气泡的收缩时间 = 正常难度（魔界花）的 1 / 0.79，收缩速度为它的 0.79 倍，友好一点；early：收到这么多以前点不算 */
+  const TUT = {
+    approach: (DIFFS.find((d) => d.id === "normal") || DIFFS[1]).approach / 0.79, early: 0.72,
+    r1: { notes: [72, 76], colors: [1, 2], pos: [[34, 54], [66, 48]] },
+    /* 第二轮：第 i 个在开始后 lead + i × gap 秒到判定点；半窗 win 内点中算弹中（分档同仙人刺），晚过 win 判漏；弹中 pass 个以上通过 */
+    r2: { notes: [72, 76, 79], colors: [1, 2, 3], pos: [[28, 56], [50, 44], [72, 56]], lead: 2.2, gap: 0.85, win: 0.45, tiers: [0.18, 0.3], pass: 2 },
+  };
+  const GUIDE_TEXT = {
+    welcome: "欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！",
+    play: "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键",
+    r1done: "很棒，接下来我们一口气来一次！",
+    r2fail: "也许有点紧张？我们再试一次！",
+    r2done: "非常棒！接下来我们来校准一下演奏设备——",
+    cal: "调整过程中，气泡的外圈将会隐藏，在气泡出现后，会连续响起「嗒」声，请在听到第七个「嗒」声时按下气泡",
+  };
+  const CAL_STEPS = ["ready", "demo", "ready2", "cal", "idle", "done"];
   const CAL = { lead: 0.8, gap: 0.32, beats: 7, rounds: 6, win: 0.25, wait: 0.45, show: 0.5, fade: 0.35, hold: 0.28, pause: 0.55, idle: 2 };
   const calTarget = () => CAL.lead + (CAL.beats - 1) * CAL.gap;   // 第 7 下（听到的时刻，从气泡出现算起）
   function openGuide(step, from) {
@@ -1050,14 +1075,14 @@
     stopPreview();
     const stage = h("div", { class: "hjs-guide-stage", onpointerdown: guidePointer, onpointermove: (e) => { if (S.guide) S.guide.ptr = { x: e.clientX, y: e.clientY }; } });
     const box = h("div", { class: "hjs-guide", role: "dialog", "aria-modal": "true", "aria-label": "教程与延迟校准", tabindex: "-1" },
-      h("div", { class: "hjs-guide-head" }, h("p", { class: "hjs-guide-title" }), h("p", { class: "hjs-guide-tip" })),
+      h("div", { class: "hjs-guide-head" }, h("p", { class: "hjs-guide-title" }), h("p", { class: "hjs-guide-tip" }), h("div", { class: "hjs-guide-go" })),
       stage,
       h("div", { class: "hjs-guide-foot" }, h("p", { class: "hjs-guide-msg", "aria-live": "polite" }), h("div", { class: "hjs-cal-dots", "aria-hidden": "true" }), h("div", { class: "hjs-guide-btns" })));
     S.root.append(box);
     S.root.classList.add("is-guide");
-    S.guide = { from, step, box, stage, offs: [], miss: 0, msg: "", cur: null, clock: null, acts: [], timer: setInterval(guideStep, 40), raf: 0, ptr: null, i: 0 };
+    S.guide = { from, step, box, stage, offs: [], miss: 0, msg: "", cur: null, clock: null, acts: [], timer: setInterval(guideStep, 40), raf: 0, ptr: null, i: 0, r2: null };
     guidePreload();
-    if (step === "intro") introBubble(0); else calStart();
+    if (step === "intro") guideSay("welcome"); else calStart();
     guideLoop();
     requestAnimationFrame(() => { try { box.focus({ preventScroll: true }); } catch (e) {} });
   }
@@ -1065,7 +1090,7 @@
   function guidePreload() {
     const b = bard();
     b.unlock?.();
-    try { b.warm?.(instId(), TUT.notes); b.warm?.(TICK.inst, [TICK.midi]); } catch (e) {}
+    try { b.warm?.(instId(), [...new Set([...TUT.r1.notes, ...TUT.r2.notes])]); b.warm?.(TICK.inst, [TICK.midi]); } catch (e) {}
     loadData().then(() => { if (S.song) loadChart(S.song); });
     if (S.fly) ["fly-flower.webp", "fly-stars.webp"].forEach((n) => { try { const img = flyImage(n); img.decode?.().catch(() => {}); } catch (e) {} });
   }
@@ -1081,6 +1106,14 @@
     if (!quiet && S.sheet === "settings") renderSheet();
     if (!quiet && !S.sheet && S.view === "lobby") requestAnimationFrame(() => { const go = $id("hjsGo"); if (go) go.focus({ preventScroll: true }); });
   }
+  /* 教程里的过场：上方换一段话，话下面一个「确认」 */
+  function guideSay(step, msg = "") {
+    const g = S.guide;
+    if (!g) return;
+    g.step = step;
+    g.msg = msg;
+    renderGuide();
+  }
   function renderGuide() {
     const g = S.guide;
     if (!g) return;
@@ -1088,11 +1121,16 @@
     const first = g.from === "first";
     const btn = (text, onclick, cls = "hjs-btn") => h("button", { type: "button", class: cls, text, onclick });
     const T = {
-      intro: ["教程", "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键"],
-      ready: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
-      demo: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
-      ready2: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
-      cal: ["延迟校准", "每个气泡出现后会连响 7 下「嗒」，请在第 7 下时点击气泡，电脑也可按任意键"],
+      welcome: ["舞台演奏", GUIDE_TEXT.welcome],
+      r1: ["舞台演奏", GUIDE_TEXT.play],
+      r1done: ["舞台演奏", GUIDE_TEXT.r1done],
+      r2: ["舞台演奏", GUIDE_TEXT.play],
+      r2fail: ["舞台演奏", GUIDE_TEXT.r2fail],
+      r2done: ["舞台演奏", GUIDE_TEXT.r2done],
+      ready: ["延迟校准", `${GUIDE_TEXT.cal}，接下来看一下示范。`],
+      demo: ["延迟校准", GUIDE_TEXT.cal],
+      ready2: ["延迟校准", GUIDE_TEXT.cal],
+      cal: ["延迟校准", GUIDE_TEXT.cal],
       idle: ["延迟校准", "校准已暂停"],
       done: ["校准完成", g.result || ""],
     }[g.step];
@@ -1100,19 +1138,27 @@
     q(".hjs-guide-tip").textContent = T[1];
     q(".hjs-guide-msg").textContent = g.msg || "";
     const dots = q(".hjs-cal-dots");
-    dots.hidden = g.step === "intro";
+    dots.hidden = !CAL_STEPS.includes(g.step);
     dots.replaceChildren(...Array.from({ length: CAL.rounds }, (_, i) => h("i", { class: i < g.offs.length ? "is-on" : "" })));
-    const quit = btn(first ? "跳过" : "取消", () => closeGuide());
+    /* 话下面的按钮：过场的「确认」、示范后的「开始」 */
+    const main = (text, fn) => [btn(text, fn, "hjs-btn is-main")];
+    const go = {
+      welcome: main("确认", () => r1Start()),
+      r1done: main("确认", () => r2Start()),
+      r2fail: main("确认", () => r2Start()),
+      r2done: main("确认", () => calStart()),
+      ready: main("确认", () => calGo("demo")),
+      ready2: main("开始", () => calGo("cal")),
+    }[g.step] || [];
+    const goBox = q(".hjs-guide-go");
+    goBox.replaceChildren(...go);
+    goBox.hidden = !go.length;
+    const quit = btn(first ? "跳过" : "结束校准", () => closeGuide());
     q(".hjs-guide-btns").replaceChildren(...{
-      intro: [btn("跳过", () => closeGuide())],
-      ready: [btn("确认", () => calGo("demo"), "hjs-btn is-main"), quit],
-      demo: [quit],
-      ready2: [btn("开始", () => calGo("cal"), "hjs-btn is-main"), quit],
-      cal: [quit],
       idle: [btn("继续校准", () => calStart(true), "hjs-btn"), quit],
       done: [btn("重新校准", () => calStart(), "hjs-btn"), btn(first ? "开始演奏" : "完成", () => closeGuide(), "hjs-btn is-main")],
-    }[g.step]);
-    if (g.step === "ready" || g.step === "ready2") requestAnimationFrame(() => { const b = g.box.querySelector(".is-main"); if (b) b.focus({ preventScroll: true }); });
+    }[g.step] || [quit]);
+    if (go.length) requestAnimationFrame(() => { const b = goBox.querySelector(".is-main"); if (b) b.focus({ preventScroll: true }); });
     /* 结果：弹出判定延迟的设置框，可再按 ±5 ms 手动微调（同设置里的判定延迟） */
     g.stage.querySelector(".hjs-guide-adjust")?.remove();
     if (g.step === "done") {
@@ -1158,12 +1204,18 @@
     el.classList.add("is-pop");
     setTimeout(() => el.remove(), ms);
   }
+  /* 点在哪个气泡上：离核心中心不超过 0.7 个直径 */
+  function bubbleNear(el, x, y) {
+    const r = el._core.getBoundingClientRect();
+    return r.width ? Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) <= r.width * 0.7 : true;
+  }
   function guideLoop() {
     const g = S.guide;
     if (!g) return;
     const c = g.cur;
-    if (c && !c.done) {
-      if (g.step === "intro") {
+    if (g.step === "r2" && g.r2) r2Frame();
+    else if (c && !c.done) {
+      if (g.step === "r1") {
         const k = Math.min(1, (performance.now() - c.t0) / 1000 / TUT.approach);
         c.k = k;
         paintBubble(c.el, k, 0.3 + k * 0.7);
@@ -1177,24 +1229,29 @@
     g.raf = requestAnimationFrame(guideLoop);
   }
 
-  /* ---- 教程：3 个气泡 ---- */
-  function introBubble(i) {
+  /* ---- 第一轮：2 个气泡，到点后一直等着 ---- */
+  function r1Start() {
     const g = S.guide;
     if (!g) return;
-    g.step = "intro";
+    bard().unlock?.();                                  // 在这次点击里叫醒音频
+    r1Bubble(0);
+  }
+  function r1Bubble(i) {
+    const g = S.guide;
+    if (!g) return;
+    g.step = "r1";
     g.i = i;
-    const m = TUT.notes[i];
-    const [x, y] = TUT.pos[i];
-    g.cur = { el: guideBubble(BAND_COLORS[TUT.colors[i]], midiName(m), x, y), m, t0: performance.now(), k: 0, x, y };
+    g.msg = "";
+    const m = TUT.r1.notes[i];
+    const [x, y] = TUT.r1.pos[i];
+    g.cur = { el: guideBubble(BAND_COLORS[TUT.r1.colors[i]], midiName(m), x, y), m, t0: performance.now(), k: 0, x, y };
     renderGuide();
   }
-  function introTap(x, y, byKey) {
+  function r1Tap(x, y, byKey) {
     const g = S.guide;
     const c = g && g.cur;
-    if (!c || c.done || g.step !== "intro") return;
-    const r = c.el._core.getBoundingClientRect();
-    const near = r.width ? Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)) <= r.width * 0.7 : true;
-    if (!near) {
+    if (!c || c.done || g.step !== "r1") return;
+    if (!bubbleNear(c.el, x, y)) {
       if (byKey) { g.msg = "请先把鼠标移到气泡上，再按任意键"; renderGuide(); }
       return;
     }
@@ -1208,9 +1265,90 @@
     const next = g.i + 1;
     setTimeout(() => {
       if (S.guide !== g) return;
-      if (next < TUT.notes.length) introBubble(next);
-      else { g.cur = null; g.msg = "很好！接下来校准判定延迟"; renderGuide(); setTimeout(() => { if (S.guide === g) calStart(); }, 900); }
+      if (next < TUT.r1.notes.length) r1Bubble(next);
+      else { g.cur = null; guideSay("r1done"); }
     }, 380);
+  }
+
+  /* ---- 第二轮：3 个气泡接连出现，不等人 ---- */
+  function r2Start() {
+    const g = S.guide;
+    if (!g) return;
+    bard().unlock?.();
+    r2Clear();
+    const R = TUT.r2;
+    g.r2 = { t0: performance.now(), hits: 0, miss: 0, left: R.notes.length, items: R.notes.map((m, i) => ({ m, i, T: R.lead + i * R.gap, el: null, done: false })) };
+    guideSay("r2");
+  }
+  function r2Clear() {
+    const g = S.guide;
+    if (!g || !g.r2) return;
+    g.r2.items.forEach((it) => { if (it.el) it.el.remove(); });
+    g.r2 = null;
+  }
+  const r2Now = (g) => (performance.now() - g.r2.t0) / 1000;
+  function r2Frame() {
+    const g = S.guide;
+    const R = TUT.r2;
+    const t = r2Now(g);
+    g.r2.items.forEach((it) => {
+      if (it.done) return;
+      const local = t - (it.T - TUT.approach);
+      if (local < 0) return;
+      if (!it.el) {
+        const [x, y] = R.pos[it.i];
+        it.el = guideBubble(BAND_COLORS[R.colors[it.i]], midiName(it.m), x, y);
+        it.el.classList.add("is-in");
+      }
+      const k = local / TUT.approach;
+      paintBubble(it.el, k, 0.3 + Math.min(1, k) * 0.7);
+      if (t > it.T + R.win) r2Judge(it, null);
+    });
+  }
+  function r2Tap(x, y, byKey) {
+    const g = S.guide;
+    if (!g || g.step !== "r2" || !g.r2) return;
+    const live = g.r2.items.filter((it) => it.el && !it.done && bubbleNear(it.el, x, y));
+    if (!live.length) {
+      if (byKey) { g.msg = "请先把鼠标移到气泡上，再按任意键"; renderGuide(); }
+      return;
+    }
+    const t = r2Now(g);
+    const it = live.reduce((a, b) => (Math.abs(b.T - t) < Math.abs(a.T - t) ? b : a));
+    const d = t - it.T;
+    if (d < -TUT.r2.win) { g.msg = "早了，等外圈与气泡重合时再点"; renderGuide(); return; }
+    r2Judge(it, d);
+  }
+  /* d = null 为漏掉 */
+  function r2Judge(it, d) {
+    const g = S.guide;
+    const R = TUT.r2;
+    it.done = true;
+    g.r2.left -= 1;
+    if (d === null) {
+      g.r2.miss += 1;
+      it.el.classList.add("is-miss");
+      const el = it.el;
+      setTimeout(() => el.remove(), 340);
+      g.msg = "MISS";
+    } else {
+      g.r2.hits += 1;
+      bard().playMidi?.(it.m, 0.8, instId(), 0, 0);
+      paintBubble(it.el, 1, 1);
+      popBubble(it.el);
+      const a = Math.abs(d);
+      g.msg = a <= R.tiers[0] ? "PERFECT" : a <= R.tiers[1] ? "GREAT" : "GOOD";
+    }
+    it.el = null;
+    renderGuide();
+    if (g.r2.left > 0) return;
+    const pass = g.r2.hits >= R.pass;
+    const r2 = g.r2;
+    setTimeout(() => {
+      if (S.guide !== g || g.r2 !== r2) return;
+      r2Clear();
+      guideSay(pass ? "r2done" : "r2fail");
+    }, 700);
   }
 
   /* ---- 延迟校准：示范 1 个 + 6 个 ---- */
@@ -1359,7 +1497,8 @@
   function guidePointer(e) {
     const g = S.guide;
     if (!g || (e.button !== undefined && e.button > 0)) return;
-    if (g.step === "intro") { e.preventDefault(); introTap(e.clientX, e.clientY, false); }
+    if (g.step === "r1") { e.preventDefault(); r1Tap(e.clientX, e.clientY, false); }
+    else if (g.step === "r2") { e.preventDefault(); r2Tap(e.clientX, e.clientY, false); }
     else if (g.step === "cal") { e.preventDefault(); calTap(e); }
   }
   function guideKey(e) {
@@ -1369,11 +1508,11 @@
     const onBtn = e.target && e.target.tagName === "BUTTON" && (e.key === "Enter" || e.key === " ");
     if (g.step === "cal") { e.preventDefault(); calTap(e); return; }
     if (g.step === "demo") { e.preventDefault(); return; }
-    if (g.step === "intro") {
+    if (g.step === "r1" || g.step === "r2") {
       if (onBtn && !g.ptr) return;
       e.preventDefault();
       if (!g.ptr) { g.msg = "请先把鼠标移到气泡上，再按任意键"; renderGuide(); return; }
-      introTap(g.ptr.x, g.ptr.y, true);
+      (g.step === "r1" ? r1Tap : r2Tap)(g.ptr.x, g.ptr.y, true);
     }
   }
 
@@ -2720,11 +2859,41 @@
         timingNote(),
         resGrid());
     }
+    reportStage(pct);
     card.append(h("div", { class: "hjs-res-btns" },
       h("button", { type: "button", class: "hjs-btn is-main", text: "再来一次", onclick: () => startSong() }),
       h("button", { type: "button", class: "hjs-btn", text: "下一首", onclick: () => { nextSong(); startSong(); } }),
       h("button", { type: "button", class: "hjs-btn", text: "结束演奏", onclick: backToLobby })));
     modal(card);
+  }
+  /* 演奏完一首：把成绩和性能测试记录的摘要发给 Worker（管理页「演奏记录」），连不上就算了 */
+  function reportStage(pct) {
+    if (typeof reportPlay !== "function" || !S.song) return;
+    const dg = S.diag || {};
+    const w = (dg.waits || []).slice().sort((a, b) => a - b);
+    const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : 0);
+    const g = S.g || {};
+    const perf = {
+      lat: Math.round((S.clock ? S.clock.lat : 0) * 1000),
+      hz: dg.base ? Math.round(1000 / dg.base) : 0,
+      frames: dg.n || 0, drop: dg.drop || 0, slow: dg.frames ? Math.round((100 * dg.slow) / dg.frames) : 0, maxFrame: Math.round(dg.max || 0),
+      busy: dg.busyN ? r1(dg.busy / dg.busyN) : 0, busyMax: Math.round(dg.busyMax || 0),
+      longs: dg.longs || 0, longMax: Math.round(dg.longMax || 0), resizes: dg.resizes || 0, fixes: dg.fixes || 0,
+      tapWait: dg.tsBad ? -1 : w.length ? Math.round(w[Math.floor(w.length / 2)] * 1000) : 0,
+      lite: !!dg.lite, render: S.render, anim: CAN_ANIM && S.anim === "browser" ? "browser" : "frame", power: S.power, fly: !!S.fly,
+      delay: S.delayMs, audio: bard().audioState ? bard().audioState() : "",
+      screen: `${screen.width}x${screen.height}@${window.devicePixelRatio}`, stage: `${Math.round(g.w || 0)}x${Math.round(g.h || 0)}`,
+      ua: navigator.userAgent.slice(0, 300),
+    };
+    const isScored = scored();
+    reportPlay("stage_play", {
+      song: S.song.id, title: S.song.t, diff: S.diff, judge: S.judge, range: S.range,
+      mode: S.learn ? "learn" : isAuto() ? "auto" : "show",
+      score: isScored ? S.score : 0, rank: isScored ? rankOf(S.score) : "", acc: isScored ? +pct.toFixed(1) : 0,
+      maxCombo: S.maxCombo, total: S.notes.length, hits: S.learn || isAuto() ? S.learnHits : 0,
+      counts: S.counts ? { perfect: S.counts.perfect, great: S.counts.great, good: S.counts.good, just: S.counts.just, miss: S.counts.miss } : null,
+      ghosts: S.ghosts || 0, perf,
+    });
   }
   /* 结算里的手感诊断：平均早晚、点空几下 */
   function timingNote() {
@@ -2866,7 +3035,7 @@
         bg: S.bgList, score: S.score, combo: S.combo, maxCombo: S.maxCombo, judge: S.judge, render: S.render, counts: S.counts, delayMs: S.delayMs, g: S.g,
         cap: capOf(), fly: S.fly, flyPos: S.fl && S.fl.placed ? { x: S.fl.x, y: S.fl.y, pts: S.fl.curve.length, line: S.fl.line, stars: S.fl.live.length, draws: S.fl.draws } : null,
         resuming: S.resuming, spb: S.spb, ghostWhy: S.ghostWhy,
-        cat: S.cat, tags: S.tags, preview: S.preview.id, guide: S.guide && { step: S.guide.step, offs: S.guide.offs.slice(), target: S.guide.target, clock: S.guide.clock }, clock: S.clock && { run: S.clock.run, base: S.clock.base },
+        cat: S.cat, tags: S.tags, preview: S.preview.id, guide: S.guide && { step: S.guide.step, offs: S.guide.offs.slice(), target: S.guide.target, clock: S.guide.clock, cur: S.guide.cur, r2: S.guide.r2 }, clock: S.clock && { run: S.clock.run, base: S.clock.base },
         startT: S.startT, endT: S.endT, pos: S.clock ? clockRaw(S.clock) : 0,
       };
     },

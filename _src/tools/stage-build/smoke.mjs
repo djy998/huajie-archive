@@ -1,7 +1,7 @@
 /* 舞台演奏的运行时冒烟测试：用 jsdom 直接跑 _src/bard-stage.js 本体（不是重写一份逻辑），音频时钟由测试手动推进
    覆盖：大厅 → 选曲窗口（搜索 / 分类 / 星级 / 试听）→ 设置窗口（点击范围、画面、判定模式）→ 电脑点气泡演奏（鼠标指着按键、
    中文输入法、漏音不出声、补音、预备拍、声像居中）→ 手机点气泡（旁边一点也算）→ 学习模式停在这一拍 → 暂停 / 继续 → 结算与纪录
-   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 延迟校准 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻combo与 FULL COMBO
+   → 示范旋律 → 谱面下载失败 → 音频叫不醒时点一下开始 → 新手教程（开场白、两轮试弹）与延迟校准 → 演奏记录发送 → 返回键 → 判定模式（正常 / 宽松 / 放水）→ 常驻combo与 FULL COMBO
    → 点击范围（正常 / 宽松 / 放水）→ 双放水自动演奏 → 纪录按判定模式与点击范围分开 → 飞花线
    → 百万分制（判定分折扣、combo得分分档、宽松 / 放水的得分上限、评级、旧纪录换算）→ 隐藏曲目与曲库密码
    用法：cd _src && npm i --no-save jsdom && node tools/stage-build/smoke.mjs   （期望最后一行：全部通过） */
@@ -70,10 +70,12 @@ function makePage({ coarse = false, width = 1280, height = 800, chartFails = fal
     remove: (k) => mem.delete(k),
     json: (k) => { try { return JSON.parse(mem.get(k) || "null"); } catch (e) { return null; } },
   };
-  const P = { mem, toasts: [], midi: [], unlocks: 0, now: 1000, audioT: 5, running, lat, frames: [], fetched: [], calls: [] };
+  const P = { mem, toasts: [], midi: [], unlocks: 0, now: 1000, audioT: 5, running, lat, frames: [], fetched: [], calls: [], reports: [] };
   /* main.js 的 callWorker：只在「隐藏曲目」场景里接 stage_unlock */
   win.callWorker = async (payload) => { P.calls.push(payload); return worker ? worker(payload) : null; };
   win.showToast = (m) => P.toasts.push(m);
+  /* main.js 的 reportPlay：演奏完一首时发给 Worker 的成绩 */
+  win.reportPlay = (action, data) => { P.reports.push({ action, ...data }); return Promise.resolve(null); };
   win.bgm = { playing: true, pause() { this.playing = false; }, play() { this.playing = true; } };
   win.siteVolume = { level: 0.6, get muted() { return this.level <= 0; }, set(v) { this.level = v; } };
   /* 假的模拟器音源：clock 就是测试手里的音频时间 */
@@ -330,6 +332,10 @@ async function main() {
     const rec = best[`${fin.song}:easy:normal:normal`];
     check("本机纪录按难度、判定模式、点击范围分开写入（最高分 + 评级）", rec && rec.score === fin.score && rec.rank === rankWant && Object.keys(best).length === 1, Object.keys(best).join());
     check("不再写旧纪录 hj_stage_best2", !P.mem.get("hj_stage_best2"));
+    const rp = P.reports[P.reports.length - 1];
+    check("演奏完一首：成绩发给 Worker（stage_play）", P.reports.length === 1 && rp.action === "stage_play" && rp.song === fin.song && rp.score === fin.score && rp.rank === rankWant
+      && rp.diff === "easy" && rp.judge === "normal" && rp.range === "normal" && rp.mode === "show" && rp.total === notes.length && rp.counts.miss === 1, JSON.stringify(rp && { ...rp, perf: undefined }));
+    check("一起发送性能测试记录摘要", rp.perf && rp.perf.hz === 60 && Number.isFinite(rp.perf.lat) && typeof rp.perf.ua === "string", JSON.stringify(rp.perf));
     check("结算分别显示难度、判定模式、点击范围", ["难度仙人刺", "判定正常", "范围正常"].every((x) => P.$(".hjs-res-tags").textContent.includes(x)), P.$(".hjs-res-tags")?.textContent);
     check("结算里是「结束演奏」，没有「回大厅」", !!P.btn("结束演奏", P.$("#hjsModal")) && !P.btn("回大厅", P.$("#hjsModal")));
     P.click(P.btn("结束演奏", P.$("#hjsModal")));
@@ -454,27 +460,60 @@ async function main() {
     check("点了以后开始演奏", P.st().playing && P.st().clock.run);
   }
 
-  /* 8. 第一次来：教程（3 个气泡）→ 延迟校准（示范 1 个 + 6 个，每个连响 7 下「嗒」，第 7 下时点）；每次都晚约 40 ms → +40 */
+  /* 8. 第一次来：开场白 → 第一轮 2 个气泡（等人）→ 第二轮 3 个（不等人，弹中 2 个以上通过，否则再来）
+     → 延迟校准（示范 1 个 + 6 个，每个连响 7 下「嗒」，第 7 下时点）；每次都晚约 40 ms → +40 */
   {
     const P = makePage({ lat: 0.05, fresh: true });
     await openStage(P);
     const G = () => P.st().guide;
-    check("第一次打开舞台：出教程，大厅藏起来", G()?.step === "intro" && P.$("#hjStage").classList.contains("is-guide") && /^教程/.test(P.$(".hjs-guide-title").textContent) && /在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键/.test(P.$(".hjs-guide").textContent));
+    const tip = () => P.$(".hjs-guide-tip").textContent;
+    check("第一次打开舞台：出开场白，大厅藏起来", G()?.step === "welcome" && P.$("#hjStage").classList.contains("is-guide") && P.$(".hjs-guide-title").textContent === "舞台演奏"
+      && /欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！/.test(tip()) && !P.$(".hjs-guide-note"));
+    check("开场白下面是「确认」，底下是「跳过」", !!P.btn("确认", P.$(".hjs-guide-go")) && !!P.btn("跳过", P.$(".hjs-guide-foot")));
     check("教程时后台加载曲库", P.fetched.some((u) => /songs\.json/.test(u)));
+    P.click(P.btn("确认"));
+    check("点确认：第一轮，提示怎么点", G()?.step === "r1" && /在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键/.test(tip()) && P.$(".hjs-guide-go").hidden);
     const tapNote = () => P.$(".hjs-guide-stage").dispatchEvent(new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
     check("教程气泡有白色音名", P.$(".hjs-guide-note .hjs-name")?.textContent === "C5", P.$(".hjs-guide-note .hjs-name")?.textContent);
     tapNote();
     check("外圈还没收到就点：提示早了", /早了/.test(P.$(".hjs-guide-msg").textContent));
-    const played = [];
-    for (let i = 0; i < 3; i++) {
-      P.now += 1700; P.advance(0.02);
+    P.now += 1500; P.advance(0.02);
+    check("收缩速度为魔界花的 0.79 倍：1.5 秒时还没收到", !G().cur.wait);
+    let played = [];
+    for (let i = 0; i < 2; i++) {
+      P.now += 5000; P.advance(0.02);          // 到点后一直等着
+      check(`第一轮第 ${i + 1} 个：到点后停着等`, G().cur && G().cur.wait && P.$(".hjs-guide-note.is-wait"));
       tapNote();
       played.push(P.midi.length && P.midi[P.midi.length - 1].midi);
       await sleep(420);
     }
-    check("教程 3 个气泡，点中各出一声琴声", played.join() === "72,76,79", played.join());
-    await sleep(950);
-    check("教程后进入延迟校准，先等「确认」", G()?.step === "ready" && !!P.btn("确认") && !P.$(".hjs-guide-note:not(.is-pop)"), G()?.step);
+    check("第一轮 2 个气泡，点中各出一声琴声", played.join() === "72,76", played.join());
+    check("第一轮完：很棒，接下来一口气", G()?.step === "r1done" && tip() === "很棒，接下来我们一口气来一次！" && !!P.btn("确认", P.$(".hjs-guide-go")));
+    /* 第二轮：按时间推进，hit = 要点的序号 */
+    const round2 = async (hit) => {
+      P.click(P.btn("确认"));
+      check("第二轮开始", G()?.step === "r2");
+      const R = G().r2;
+      const t0 = R.t0;
+      for (let i = 0; i < 3; i++) {
+        const T = R.items[i].T;
+        while ((P.now - t0) / 1000 < T + 0.02) P.advance(1 / 60);
+        if (hit.includes(i)) tapNote();
+      }
+      P.advance(1);
+      await sleep(800);
+    };
+    played = P.midi.length;
+    await round2([0]);
+    check("第二轮只弹中 1 个：也许有点紧张，再来", G()?.step === "r2fail" && tip() === "也许有点紧张？我们再试一次！" && P.midi.length === played + 1, G()?.step);
+    check("漏掉的气泡清掉了", !P.$(".hjs-guide-note:not(.is-pop):not(.is-miss)"));
+    played = P.midi.length;
+    await round2([0, 1]);
+    check("第二轮弹中 2 个：通过", G()?.step === "r2done" && tip() === "非常棒！接下来我们来校准一下演奏设备——", G()?.step);
+    check("第二轮弹中的出琴声", P.midi.slice(played).map((m) => m.midi).join() === "72,76", P.midi.slice(played).map((m) => m.midi).join());
+    P.click(P.btn("确认"));
+    check("校准说明换成新的话", G()?.step === "ready" && tip() === "调整过程中，气泡的外圈将会隐藏，在气泡出现后，会连续响起「嗒」声，请在听到第七个「嗒」声时按下气泡，接下来看一下示范。");
+    check("进入延迟校准，先等「确认」", G()?.step === "ready" && !!P.btn("确认") && !P.$(".hjs-guide-note:not(.is-pop):not(.is-miss)"), G()?.step);
     P.click(P.btn("确认"));
     check("点确认：按钮消失，开始示范", G()?.step === "demo" && !P.btn("确认"));
     const T = 0.8 + 0.32 * 6;
@@ -530,6 +569,7 @@ async function main() {
     P.click(P.btn("设置"));
     P.click(P.btn("校准"));
     check("设置里点校准：直接是演奏画面，先等确认", G()?.step === "ready" && P.$("#hjStage").classList.contains("is-guide"));
+    check("设置里的校准：「取消」改为「结束校准」", !!P.btn("结束校准") && !P.btn("取消") && !P.btn("跳过"));
     P.click(P.btn("确认"));
     for (let i = 0; i < 80 && G().step === "demo"; i++) { P.advance(0.1); await sleep(45); }
     P.click(P.btn("开始"));
@@ -551,7 +591,8 @@ async function main() {
     P.click(P.btn("开始"));
     for (let i = 0; i < 200 && G()?.step !== "idle"; i++) { P.advance(0.1); await sleep(20); }
     check("连续 2 个没点：校准暂停", G()?.step === "idle" && /连续 2 个/.test(P.$(".hjs-guide-msg").textContent) && !!P.btn("继续校准"), G()?.step);
-    P.click(P.btn("取消"));
+    P.click(P.btn("结束校准"));
+    check("点结束校准：关掉", !G());
   }
 
   /* 8c. 性能优化：省电渲染只在正常显示时列出，飞花线轨迹只在简单显示且开着飞花线时列出；性能测试记录默认不显示 */
@@ -844,6 +885,7 @@ async function main() {
     check("结算：难度、判定放水、范围放水、模式自动演奏", ["难度泰坦", "判定放水", "范围放水", "模式自动演奏"].every((x) => tags.includes(x)), tags);
     check("结算写明不计分、不记纪录，评级为「Complete」", /不计分、不记录/.test(P.$("#hjsModal").textContent) && P.$(".hjs-res-rank")?.textContent === "Complete");
     check("自动演奏不写本机纪录", !P.mem.get("hj_stage_best3") && !P.mem.get("hj_stage_best2"));
+    check("自动演奏也发记录，模式为 auto、不带分数", P.reports.length === 1 && P.reports[0].mode === "auto" && P.reports[0].score === 0 && P.reports[0].hits === ns.length, JSON.stringify(P.reports.map((r) => [r.mode, r.score, r.hits])));
   }
 
   /* 20. 飞花线：萤火虫大小的花沿曲线匀速掠过每个气泡，在气泡该判定的那一刻正好经过它；全部画在一张 canvas 上 */
