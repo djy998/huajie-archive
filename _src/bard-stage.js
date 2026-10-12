@@ -659,11 +659,11 @@
           h("span", { class: "hjs-btn-ico", html: ICON.list }), h("span", { text: "更换曲目" })),
         heroRank ? h("span", { class: `hjs-song-rank hjs-hero-rank${heroRank === "Impeccable" ? " is-max" : ""}`, title: `${diffMeta().label}难度最高评级`, text: heroRank }) : null)));
 
-    /* 玩家名称（选填，与花街拼图共用）：演奏完一首时和成绩一起登记。大厅重画时正在输入的话接着输 */
+    /* 演奏者（选填，即花街拼图的玩家名称，两边共用）：演奏完一首时和成绩一起登记，结算里写出来。大厅重画时正在输入的话接着输 */
     const typing = document.activeElement && document.activeElement.id === "hjsName" ? document.activeElement.selectionStart : null;
-    const nameIn = h("input", { type: "text", class: "hjs-pname-in", id: "hjsName", maxlength: "20", placeholder: "选填，演奏完会和成绩一起登记", autocomplete: "off", spellcheck: "false" });
+    const nameIn = h("input", { type: "text", class: "hjs-pname-in", id: "hjsName", maxlength: "20", autocomplete: "off", spellcheck: "false" });
     if (typeof bindPlayerName === "function") bindPlayerName(nameIn);
-    const nameField = h("label", { class: "hjs-line hjs-pname" }, h("span", { class: "hjs-line-l hjs-pname-l", text: "玩家名称" }), nameIn);
+    const nameField = h("label", { class: "hjs-line hjs-pname" }, h("span", { class: "hjs-line-l hjs-pname-l", text: "演奏者" }), nameIn);
     if (typing !== null) requestAnimationFrame(() => { try { nameIn.focus({ preventScroll: true }); nameIn.setSelectionRange(typing, typing); } catch (e) {} });
 
     loadChart(s);                                       // 先把谱面下好，开始、试听时不用等
@@ -1065,7 +1065,7 @@
     r1done: "很棒，接下来我们一口气来一次！",
     r2fail: "也许有点紧张？我们再试一次！",
     r2done: "非常棒！接下来我们来校准一下演奏设备——",
-    cal: "调整过程中，气泡的外圈将会隐藏，在气泡出现后，会连续响起「嗒」声，请在听到第七个「嗒」声时按下气泡",
+    cal: "调整过程中，气泡的外圈将会隐藏\n在气泡出现后，会连续响起「嗒」声\n请在听到第七个「嗒」声时按下气泡",
   };
   const CAL_STEPS = ["ready", "demo", "ready2", "cal", "idle", "done"];
   const CAL = { lead: 0.8, gap: 0.32, beats: 7, rounds: 6, win: 0.25, wait: 0.45, show: 0.5, fade: 0.35, hold: 0.28, pause: 0.55, idle: 2 };
@@ -1135,7 +1135,7 @@
       done: ["校准完成", g.result || ""],
     }[g.step];
     q(".hjs-guide-title").textContent = T[0];
-    q(".hjs-guide-tip").textContent = T[1];
+    q(".hjs-guide-tip").replaceChildren(...tipNodes(T[1]));
     q(".hjs-guide-msg").textContent = g.msg || "";
     const dots = q(".hjs-cal-dots");
     dots.hidden = !CAL_STEPS.includes(g.step);
@@ -1179,6 +1179,32 @@
     }
   }
 
+  /* 上方的话：\n 处换行；每行按逗号、句号等切成几段（各自是一个行内块），窄屏放不下时只在标点后换行，不会把半句话拆到下一行 */
+  function tipNodes(text) {
+    const out = [];
+    String(text).split("\n").forEach((line, i) => {
+      if (i) out.push(h("br"));
+      (line.match(/[^，。！？；：、]+[，。！？；：、]*|[，。！？；：、]+/g) || []).forEach((seg) => out.push(h("span", { class: "hjs-tip-seg", text: seg })));
+    });
+    return out;
+  }
+  /* 判定字：同演奏时（PERFECT / GREAT / GOOD / MISS，偏早偏晚写在下面），不显示 COMBO */
+  function guidePop(label, cls, off) {
+    const g = S.guide;
+    if (!g) return;
+    if (!g.judge || !g.judge.isConnected) { g.judge = h("div", { class: "hjs-judge hjs-guide-judge", "aria-live": "polite" }); g.stage.append(g.judge); }
+    const ms = Number.isFinite(off) ? Math.round(off * 1000) : 0;
+    const note = Math.abs(ms) >= 20 && cls !== "is-perfect" ? `${ms > 0 ? "晚" : "早"} ${Math.abs(ms)} ms` : "";
+    g.judge.replaceChildren(h("div", { class: `hjs-pop ${cls}` }, h("b", { text: label }),
+      note ? h("em", { class: ms > 0 ? "is-late" : "is-early", text: note }) : null));
+  }
+  /* 偏差 d（秒，正 = 晚）→ 判定档；分档同仙人刺 */
+  function guideTier(d) {
+    const a = Math.abs(d);
+    const [p, gr] = TUT.r2.tiers;
+    return a <= p ? ["PERFECT", "is-perfect"] : a <= gr ? ["GREAT", "is-great"] : ["GOOD", "is-good"];
+  }
+
   /* 一个气泡（同演奏时的四层，只是放在教程的舞台上，位置按百分比） */
   function guideBubble(color, name, x = 50, y = 50) {
     const g = S.guide;
@@ -1219,6 +1245,7 @@
         const k = Math.min(1, (performance.now() - c.t0) / 1000 / TUT.approach);
         c.k = k;
         paintBubble(c.el, k, 0.3 + k * 0.7);
+        c.el.classList.toggle("is-next", (1 - k) * TUT.approach <= NEXT_LEAD);   // 快到点时外圈加粗，同演奏时
         if (k >= 1 && !c.wait) { c.wait = true; c.el.classList.add("is-wait"); }
       } else if ((g.step === "demo" || g.step === "cal") && g.clock) {
         const t = clockPos(g.clock) - g.clock.lat;
@@ -1259,8 +1286,10 @@
     c.done = true;
     bard().playMidi?.(c.m, 0.8, instId(), 0, 0);
     paintBubble(c.el, 1, 1);
-    c.el.classList.remove("is-wait");
+    c.el.classList.remove("is-wait", "is-next");
     popBubble(c.el);
+    const d = Math.min(0, (performance.now() - c.t0) / 1000 - TUT.approach);   // 等着的时候点 = 正好
+    guidePop(...guideTier(d), d);
     g.msg = "";
     const next = g.i + 1;
     setTimeout(() => {
@@ -1291,6 +1320,7 @@
     const g = S.guide;
     const R = TUT.r2;
     const t = r2Now(g);
+    const next = g.r2.items.find((it) => !it.done);
     g.r2.items.forEach((it) => {
       if (it.done) return;
       const local = t - (it.T - TUT.approach);
@@ -1302,6 +1332,7 @@
       }
       const k = local / TUT.approach;
       paintBubble(it.el, k, 0.3 + Math.min(1, k) * 0.7);
+      it.el.classList.toggle("is-next", it === next && it.T - t <= NEXT_LEAD);   // 下一个该弹的、快到点时外圈加粗
       if (t > it.T + R.win) r2Judge(it, null);
     });
   }
@@ -1327,18 +1358,20 @@
     g.r2.left -= 1;
     if (d === null) {
       g.r2.miss += 1;
+      it.el.classList.remove("is-next");
       it.el.classList.add("is-miss");
       const el = it.el;
       setTimeout(() => el.remove(), 340);
-      g.msg = "MISS";
+      guidePop("MISS", "is-miss");
     } else {
       g.r2.hits += 1;
       bard().playMidi?.(it.m, 0.8, instId(), 0, 0);
       paintBubble(it.el, 1, 1);
+      it.el.classList.remove("is-next");
       popBubble(it.el);
-      const a = Math.abs(d);
-      g.msg = a <= R.tiers[0] ? "PERFECT" : a <= R.tiers[1] ? "GREAT" : "GOOD";
+      guidePop(...guideTier(d), d);
     }
+    g.msg = "";
     it.el = null;
     renderGuide();
     if (g.r2.left > 0) return;
@@ -2836,7 +2869,9 @@
     const total = S.notes.length;
     const pct = accPct();
     const tag = (k, v) => h("span", { class: "hjs-res-tag" }, h("small", { text: k }), h("b", { text: v }));
+    const who = typeof playerName === "function" ? playerName() : "";
     const card = h("div", { class: "hjs-card hjs-res" }, h("h3", { class: "hjs-res-title", text: "演出结束" }), h("p", { class: "hjs-res-song", text: S.song.t }),
+      h("p", { class: "hjs-res-sub hjs-res-who", text: `演奏者：${who || "未填写"}` }),
       h("div", { class: "hjs-res-tags" }, tag("难度", diffMeta().label), tag("判定", judgeLabel()), tag("范围", rangeLabel()),
         S.learn ? tag("模式", "学习") : isAuto() ? tag("模式", "自动演奏") : null));
     if (!scored()) {

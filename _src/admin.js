@@ -3404,6 +3404,15 @@ function exportPuzzleRecords() {
 }
 
 function initPuzzleAdmin() {
+  $("pzAdminTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-pz-tab]");
+    if (!btn) return;
+    $("pzAdminTabs").querySelectorAll("[data-pz-tab]").forEach((b) => {
+      b.classList.toggle("is-active", b === btn);
+      b.setAttribute("aria-selected", String(b === btn));
+    });
+    document.querySelectorAll("#puzzleAdminPanel [data-pz-pane]").forEach((p) => { p.hidden = p.dataset.pzPane !== btn.dataset.pzTab; });
+  });
   $("pzAdminResumeBtn").addEventListener("click", (e) => {
     const on = !puzzleAdmin.s?.resume;
     savePuzzleAdmin({ resume: on }, on ? "中断继续已开启" : "中断继续已关闭", e.currentTarget);
@@ -3533,8 +3542,32 @@ function renderPlays(game) {
     <td>${escapeHtml(STAGE_JUDGE_NAMES[r.range] || r.range)}</td>
     ${tail(r)}
     <td>${r.perf ? `<button type="button" class="st-perf-btn" data-id="${r.id}" aria-expanded="${playAdmin.perfOpen.has(r.id)}">${playAdmin.perfOpen.has(r.id) ? "收起" : "查看"}</button>` : "—"}</td>
-    <td>${voidBtn(r)}</td>
+    <td><div class="st-play-acts"><button type="button" class="st-txt-btn" data-id="${r.id}">导出 txt</button>${voidBtn(r)}</div></td>
   </tr>${r.perf && playAdmin.perfOpen.has(r.id) ? `<tr class="st-perf-row"><td colspan="${cols}"><ul>${stagePerfLines(r.perf).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}${r.ghosts ? `<li>点空 ${r.ghosts} 次</li>` : ""}</ul></td></tr>` : ""}`)).join("") || `<tr><td colspan="${cols + 1}" class="pz-rec-empty">暂无记录</td></tr>`;
+}
+
+/* 一条演奏记录 → 纯文本（数据都在已读到的列表里，在本机生成，不另外请求） */
+function stagePlayText(r) {
+  const c = r.counts;
+  const L = [
+    `花舞之街 · 舞台演奏 演奏记录 No.${r.id}`,
+    `演奏者：${r.player || "未填写"}`,
+    `曲目：${r.title || r.song}（${r.song}）`,
+    `难度：${STAGE_DIFF_NAMES[r.diff] || r.diff}　模式：${STAGE_MODE_NAMES[r.mode] || r.mode}　判定模式：${STAGE_JUDGE_NAMES[r.judge] || r.judge}　范围模式：${STAGE_JUDGE_NAMES[r.range] || r.range}`,
+    r.mode === "show" ? `得分：${r.score.toLocaleString("en-US")}　评价：${r.rank || "—"}　准确率：${r.acc}%　最大COMBO：${r.maxCombo} / ${r.total}`
+      : `弹对：${r.hits} / ${r.total}（不计分）`,
+    c ? `PERFECT ${c.perfect}　GREAT ${c.great}　GOOD ${c.good}　JUST ${c.just}　MISS ${c.miss}　点空 ${r.ghosts}` : `点空 ${r.ghosts}`,
+    `登记时间：${formatCnSeconds(r.at)}　IP属地：${geoTitle(r.geo) || "—"}　访客标识：${r.visitor}　状态：${r.voided ? "已作废" : "有效"}`,
+    "",
+    "【性能测试记录摘要】",
+    ...(r.perf ? stagePerfLines(r.perf) : ["（这条记录没有性能数据）"]),
+  ];
+  return L.join("\r\n");
+}
+function exportStagePlayTxt(r) {
+  const safeName = String(r.title || r.song).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40);
+  const stamp = epochToCnLocal(r.at).replace(/[-:]/g, "").replace("T", "-");
+  downloadBlob(new Blob(["\ufeff" + stagePlayText(r)], { type: "text/plain;charset=utf-8" }), `演奏记录_No${r.id}_${safeName}_${stamp}.txt`);
 }
 
 function exportPlays(game) {
@@ -3567,6 +3600,12 @@ function initPlayAdmin() {
     $(`${pre}ExportBtn`).addEventListener("click", () => exportPlays(game));
     $(`${pre}Search`).addEventListener("input", () => renderPlays(game));
     $(body).addEventListener("click", async (e) => {
+      const txt = e.target.closest(".st-txt-btn");
+      if (txt) {
+        const r = playAdmin.stage.find((x) => x.id === Number(txt.dataset.id));
+        if (r) exportStagePlayTxt(r);
+        return;
+      }
       const perf = e.target.closest(".st-perf-btn");
       if (perf) {
         const id = Number(perf.dataset.id);
@@ -4127,133 +4166,141 @@ const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card pz-admin" id="puzzleAdminPanel" data-close-only-x="1" hidden>
   <h2>花街拼图</h2>
   <p class="hint" id="pzAdminStatus">加载中…</p>
-  <section class="ta-group">
-    <h3 class="ta-group-title">中断继续</h3>
-    <div class="ticket-admin-row">
-      <span class="ticket-admin-key">中断后继续</span>
-      <button type="button" class="ticket-switch" id="pzAdminResumeBtn" aria-pressed="false">—</button>
-    </div>
-    <p class="ta-group-hint">开启后，访客关掉拼图、刷新或切走页面，再打开时可以从中断处继续（进度存在访客自己的浏览器里）。关闭时关掉拼图即放弃本局。默认关闭。</p>
-  </section>
-  <section class="ta-group">
-    <h3 class="ta-group-title">大赛拼图</h3>
-    <div class="ticket-admin-row">
-      <span class="ticket-admin-key">大赛</span>
-      <button type="button" class="ticket-switch" id="pzAdminToggleBtn" aria-pressed="false">—</button>
-    </div>
-    <p class="ta-group-hint">开启后在设定时段内，拼图首页出现大赛入口。大赛用下面的图片和难度、正计时；通关后访客填写游戏 ID 登记成绩，并自动生成一代通关码。更换图片或难度算新一届，记录分开显示。开启时会一并保存下面的设置。</p>
-    <p class="ta-group-hint" id="pzAdminContestStatus"></p>
-    <label class="pz-admin-field"><span>大赛名称</span><input type="text" id="pzAdminTitle" maxlength="30" placeholder="如：中秋花街拼图大赛"></label>
-    <div class="starlight-fields">
-      <label class="starlight-field">
-        <span>开始（本地时间）</span>
-        <input type="datetime-local" id="pzAdminStart">
-      </label>
-      <span class="starlight-sep" aria-hidden="true">—</span>
-      <label class="starlight-field">
-        <span>结束（本地时间）</span>
-        <input type="datetime-local" id="pzAdminEnd">
-      </label>
-    </div>
-    <span class="pz-admin-label">难度</span>
-    <div class="alarm-seg pz-admin-seg" id="pzAdminDiffSeg">
-      <label class="is-active"><input type="radio" name="pzAdminDiff" value="easy" checked><span>鱼信 36块</span></label>
-      <label><input type="radio" name="pzAdminDiff" value="normal"><span>鱼丽 60块</span></label>
-      <label><input type="radio" name="pzAdminDiff" value="hard"><span>光风院霁月 128块</span></label>
-    </div>
-    <span class="pz-admin-label">大赛中可以使用</span>
-    <div class="pz-admin-tools">
-      <label class="audience-opt"><input type="checkbox" id="pzAdminToolPreview" checked><span>显示原图</span></label>
-      <label class="audience-opt"><input type="checkbox" id="pzAdminToolEdges" checked><span>仅显示边框图块</span></label>
-      <label class="audience-opt"><input type="checkbox" id="pzAdminToolGrid" checked><span>网格提示</span></label>
-    </div>
-    <span class="pz-admin-label">暂停 / 切到后台时</span>
-    <div class="alarm-seg pz-admin-seg" id="pzAdminPauseSeg">
-      <label class="is-active"><input type="radio" name="pzAdminPause" value="stop" checked><span>停止计时</span></label>
-      <label><input type="radio" name="pzAdminPause" value="run"><span>继续计时</span></label>
-    </div>
-    <p class="ta-group-hint pz-admin-sub">继续计时：从开局起按服务器时间算，暂停、切后台、关掉后再继续都不停表。</p>
-    <label class="pz-admin-field pz-admin-num"><span>每个浏览器最多参加几次（0 为不限）</span>
-      <input type="number" id="pzAdminMaxEntries" min="0" max="99" step="1" inputmode="numeric" value="0"></label>
-    <p class="ta-group-hint pz-admin-sub">每点一次「参加大赛」算一次（继续上次中断的那局不算），次数记在访客自己的浏览器里，换浏览器或清除网站数据后会重新计。按届分开计。</p>
-    <span class="pz-admin-label">图片</span>
-    <div class="pz-admin-image">
-      <img id="pzAdminImagePreview" alt="大赛图片" hidden>
-      <p class="ta-group-hint" id="pzAdminImageNone">还没有上传图片</p>
-      <p class="ta-group-hint pz-admin-note" id="pzAdminImageNote"></p>
-    </div>
-    <div class="popup-admin-btns">
-      <input type="file" id="pzAdminFile" accept="image/*" hidden>
-      <button type="button" id="pzAdminPickBtn">选择图片并裁剪</button>
-    </div>
-    <div class="pz-crop-box" id="pzCropBox" hidden>
-      <div class="alarm-seg pz-admin-seg" id="pzCropRatioSeg">
-        <label class="is-active"><input type="radio" name="pzCropRatio" value="16:9" checked><span>16:9</span></label>
-        <label><input type="radio" name="pzCropRatio" value="4:3"><span>4:3</span></label>
-        <label><input type="radio" name="pzCropRatio" value="3:2"><span>3:2</span></label>
-        <label><input type="radio" name="pzCropRatio" value="1:1"><span>1:1</span></label>
-        <label><input type="radio" name="pzCropRatio" value="3:4"><span>3:4</span></label>
+  <div class="tabs ticket-admin-tabs" id="pzAdminTabs" role="tablist" aria-label="花街拼图">
+    <button type="button" class="tab-btn is-active" role="tab" data-pz-tab="settings" aria-selected="true">拼图设置</button>
+    <button type="button" class="tab-btn" role="tab" data-pz-tab="contest" aria-selected="false">大赛拼图</button>
+  </div>
+  <div class="ta-pane" data-pz-pane="settings">
+    <section class="ta-group">
+      <h3 class="ta-group-title">中断继续</h3>
+      <div class="ticket-admin-row">
+        <span class="ticket-admin-key">中断后继续</span>
+        <button type="button" class="ticket-switch" id="pzAdminResumeBtn" aria-pressed="false">—</button>
       </div>
-      <div class="pz-crop-stage">
-        <img id="pzCropImg" alt="" draggable="false">
-        <div class="pz-crop-rect" id="pzCropRect">
-          <span class="pz-crop-handle" data-h="nw"></span><span class="pz-crop-handle" data-h="ne"></span>
-          <span class="pz-crop-handle" data-h="sw"></span><span class="pz-crop-handle" data-h="se"></span>
+      <p class="ta-group-hint">开启后，访客关掉拼图、刷新或切走页面，再打开时可以从中断处继续（进度存在访客自己的浏览器里）。关闭时关掉拼图即放弃本局。默认关闭。</p>
+    </section>
+    <section class="ta-group">
+      <h3 class="ta-group-title">通关记录</h3>
+      <p class="ta-group-hint">访客每次通关（休闲、限时、大赛都算）网页自动发来的成绩，玩家名称为拼图首页选填的「玩家名称」。数据由访客的浏览器算出，仅供参考；大赛排名以「大赛拼图」里的参赛记录为准。</p>
+      <div class="pz-rec-tools">
+        <input type="search" class="play-search" id="pzPlaySearch" placeholder="搜索玩家名称" aria-label="搜索玩家名称">
+        <button type="button" id="pzPlayRefreshBtn">刷新</button>
+        <button type="button" id="pzPlayExportBtn">导出 CSV</button>
+      </div>
+      <p class="ta-group-hint" id="pzPlaySummary"></p>
+      <div class="ticket-table-wrap">
+        <table class="ticket-table pz-rec-table">
+          <thead><tr><th>编号</th><th>玩家 ID</th><th>难度</th><th>模式</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+          <tbody id="pzPlayBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <div class="ta-pane" data-pz-pane="contest" hidden>
+    <section class="ta-group">
+      <h3 class="ta-group-title">大赛拼图</h3>
+      <div class="ticket-admin-row">
+        <span class="ticket-admin-key">大赛</span>
+        <button type="button" class="ticket-switch" id="pzAdminToggleBtn" aria-pressed="false">—</button>
+      </div>
+      <p class="ta-group-hint">开启后在设定时段内，拼图首页出现大赛入口。大赛用下面的图片和难度、正计时；通关后访客填写游戏 ID 登记成绩，并自动生成一代通关码。更换图片或难度算新一届，记录分开显示。开启时会一并保存下面的设置。</p>
+      <p class="ta-group-hint" id="pzAdminContestStatus"></p>
+      <label class="pz-admin-field"><span>大赛名称</span><input type="text" id="pzAdminTitle" maxlength="30" placeholder="如：中秋花街拼图大赛"></label>
+      <div class="starlight-fields">
+        <label class="starlight-field">
+          <span>开始（本地时间）</span>
+          <input type="datetime-local" id="pzAdminStart">
+        </label>
+        <span class="starlight-sep" aria-hidden="true">—</span>
+        <label class="starlight-field">
+          <span>结束（本地时间）</span>
+          <input type="datetime-local" id="pzAdminEnd">
+        </label>
+      </div>
+      <span class="pz-admin-label">难度</span>
+      <div class="alarm-seg pz-admin-seg" id="pzAdminDiffSeg">
+        <label class="is-active"><input type="radio" name="pzAdminDiff" value="easy" checked><span>鱼信 36块</span></label>
+        <label><input type="radio" name="pzAdminDiff" value="normal"><span>鱼丽 60块</span></label>
+        <label><input type="radio" name="pzAdminDiff" value="hard"><span>光风院霁月 128块</span></label>
+      </div>
+      <span class="pz-admin-label">大赛中可以使用</span>
+      <div class="pz-admin-tools">
+        <label class="audience-opt"><input type="checkbox" id="pzAdminToolPreview" checked><span>显示原图</span></label>
+        <label class="audience-opt"><input type="checkbox" id="pzAdminToolEdges" checked><span>仅显示边框图块</span></label>
+        <label class="audience-opt"><input type="checkbox" id="pzAdminToolGrid" checked><span>网格提示</span></label>
+      </div>
+      <span class="pz-admin-label">暂停 / 切到后台时</span>
+      <div class="alarm-seg pz-admin-seg" id="pzAdminPauseSeg">
+        <label class="is-active"><input type="radio" name="pzAdminPause" value="stop" checked><span>停止计时</span></label>
+        <label><input type="radio" name="pzAdminPause" value="run"><span>继续计时</span></label>
+      </div>
+      <p class="ta-group-hint pz-admin-sub">继续计时：从开局起按服务器时间算，暂停、切后台、关掉后再继续都不停表。</p>
+      <label class="pz-admin-field pz-admin-num"><span>每个浏览器最多参加几次（0 为不限）</span>
+        <input type="number" id="pzAdminMaxEntries" min="0" max="99" step="1" inputmode="numeric" value="0"></label>
+      <p class="ta-group-hint pz-admin-sub">每点一次「参加大赛」算一次（继续上次中断的那局不算），次数记在访客自己的浏览器里，换浏览器或清除网站数据后会重新计。按届分开计。</p>
+      <span class="pz-admin-label">图片</span>
+      <div class="pz-admin-image">
+        <img id="pzAdminImagePreview" alt="大赛图片" hidden>
+        <p class="ta-group-hint" id="pzAdminImageNone">还没有上传图片</p>
+        <p class="ta-group-hint pz-admin-note" id="pzAdminImageNote"></p>
+      </div>
+      <div class="popup-admin-btns">
+        <input type="file" id="pzAdminFile" accept="image/*" hidden>
+        <button type="button" id="pzAdminPickBtn">选择图片并裁剪</button>
+      </div>
+      <div class="pz-crop-box" id="pzCropBox" hidden>
+        <div class="alarm-seg pz-admin-seg" id="pzCropRatioSeg">
+          <label class="is-active"><input type="radio" name="pzCropRatio" value="16:9" checked><span>16:9</span></label>
+          <label><input type="radio" name="pzCropRatio" value="4:3"><span>4:3</span></label>
+          <label><input type="radio" name="pzCropRatio" value="3:2"><span>3:2</span></label>
+          <label><input type="radio" name="pzCropRatio" value="1:1"><span>1:1</span></label>
+          <label><input type="radio" name="pzCropRatio" value="3:4"><span>3:4</span></label>
+        </div>
+        <div class="pz-crop-stage">
+          <img id="pzCropImg" alt="" draggable="false">
+          <div class="pz-crop-rect" id="pzCropRect">
+            <span class="pz-crop-handle" data-h="nw"></span><span class="pz-crop-handle" data-h="ne"></span>
+            <span class="pz-crop-handle" data-h="sw"></span><span class="pz-crop-handle" data-h="se"></span>
+          </div>
+        </div>
+        <p class="ta-group-hint pz-crop-info" id="pzCropInfo"></p>
+        <p class="ta-group-hint">拖动选框移动位置，拖四角调整大小；推荐 16:9，和相册图片一致</p>
+        <div class="popup-admin-btns">
+          <button type="button" id="pzCropOkBtn">裁剪并上传</button>
+          <button type="button" id="pzCropCancelBtn">取消</button>
         </div>
       </div>
-      <p class="ta-group-hint pz-crop-info" id="pzCropInfo"></p>
-      <p class="ta-group-hint">拖动选框移动位置，拖四角调整大小；推荐 16:9，和相册图片一致</p>
+      <p class="form-msg" id="pzAdminImageMsg" hidden></p>
       <div class="popup-admin-btns">
-        <button type="button" id="pzCropOkBtn">裁剪并上传</button>
-        <button type="button" id="pzCropCancelBtn">取消</button>
+        <button type="button" id="pzAdminSaveBtn">保存设置</button>
       </div>
-    </div>
-    <p class="form-msg" id="pzAdminImageMsg" hidden></p>
-    <div class="popup-admin-btns">
-      <button type="button" id="pzAdminSaveBtn">保存设置</button>
-    </div>
-    <p class="form-msg" id="pzAdminMsg" hidden></p>
-  </section>
-  <section class="ta-group">
-    <h3 class="ta-group-title">参赛记录</h3>
-    <p class="ta-group-hint">耗时为拼图计时（设为停止计时时，暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。「辅助」为本局用过的原图、边框块、网格提示。「计入」= 耗时 + 辅助加时（仅显示边框图块 +10%、至少 1 分钟；网格提示 +25%、至少 2 分钟；两项相乘），按耗时排序时按它排名次。IP 属地与访客标识不含 IP 本身。</p>
-    <div class="pz-rec-tools">
-      <select id="pzRecRound" aria-label="届"><option value="cur">本届</option></select>
-      <select id="pzRecSort" aria-label="排序"><option value="time">按耗时</option><option value="at">按登记时间</option></select>
-      <label class="audience-opt"><input type="checkbox" id="pzRecBest"><span>每人最好成绩</span></label>
-      <button type="button" id="pzRecRefreshBtn">刷新</button>
-      <button type="button" id="pzRecExportBtn">导出 CSV</button>
-    </div>
-    <p class="ta-group-hint" id="pzRecSummary"></p>
-    <div class="ticket-table-wrap">
-      <table class="ticket-table pz-rec-table">
-        <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
-        <tbody id="pzRecBody"></tbody>
-      </table>
-    </div>
-  </section>
-  <section class="ta-group">
-    <h3 class="ta-group-title">通关记录</h3>
-    <p class="ta-group-hint">访客每次通关（休闲、限时、大赛都算）网页自动发来的成绩，玩家名称为拼图首页选填的「玩家名称」。数据由访客的浏览器算出，仅供参考；大赛排名以上面的参赛记录为准。</p>
-    <div class="pz-rec-tools">
-      <input type="search" class="play-search" id="pzPlaySearch" placeholder="搜索玩家名称" aria-label="搜索玩家名称">
-      <button type="button" id="pzPlayRefreshBtn">刷新</button>
-      <button type="button" id="pzPlayExportBtn">导出 CSV</button>
-    </div>
-    <p class="ta-group-hint" id="pzPlaySummary"></p>
-    <div class="ticket-table-wrap">
-      <table class="ticket-table pz-rec-table">
-        <thead><tr><th>编号</th><th>玩家 ID</th><th>难度</th><th>模式</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
-        <tbody id="pzPlayBody"></tbody>
-      </table>
-    </div>
-  </section>
+      <p class="form-msg" id="pzAdminMsg" hidden></p>
+    </section>
+    <section class="ta-group">
+      <h3 class="ta-group-title">参赛记录</h3>
+      <p class="ta-group-hint">耗时为拼图计时（设为停止计时时，暂停、切后台不计）；鼠标停在耗时上可以看开局到登记的服务器时长，相差很大的可以留意。「辅助」为本局用过的原图、边框块、网格提示。「计入」= 耗时 + 辅助加时（仅显示边框图块 +10%、至少 1 分钟；网格提示 +25%、至少 2 分钟；两项相乘），按耗时排序时按它排名次。IP 属地与访客标识不含 IP 本身。</p>
+      <div class="pz-rec-tools">
+        <select id="pzRecRound" aria-label="届"><option value="cur">本届</option></select>
+        <select id="pzRecSort" aria-label="排序"><option value="time">按耗时</option><option value="at">按登记时间</option></select>
+        <label class="audience-opt"><input type="checkbox" id="pzRecBest"><span>每人最好成绩</span></label>
+        <button type="button" id="pzRecRefreshBtn">刷新</button>
+        <button type="button" id="pzRecExportBtn">导出 CSV</button>
+      </div>
+      <p class="ta-group-hint" id="pzRecSummary"></p>
+      <div class="ticket-table-wrap">
+        <table class="ticket-table pz-rec-table">
+          <thead><tr><th>名次</th><th>登记号</th><th>玩家 ID</th><th>难度</th><th>耗时</th><th>辅助</th><th>计入</th><th>登记时间</th><th>属地</th><th>访客</th><th></th></tr></thead>
+          <tbody id="pzRecBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 </div>
 <div class="gate-card admin-card pz-admin" id="stageAdminPanel" data-close-only-x="1" hidden>
   <h2>舞台演奏</h2>
   <section class="ta-group">
     <h3 class="ta-group-title">演奏记录</h3>
-    <p class="ta-group-hint">访客在吟游诗人模拟器「舞台演奏」里演完一首（中途结束不算）时网页自动发来的成绩，玩家名称为大厅里选填的「玩家名称」（与花街拼图共用）。学习模式、自动演奏不计分，得分一栏为弹对几个。鼠标停在得分上可以看各档判定数；「性能」里是这一局的性能测试记录摘要。数据由访客的浏览器算出，仅供参考。</p>
+    <p class="ta-group-hint">访客在吟游诗人模拟器「舞台演奏」里演完一首（中途结束不算）时网页自动发来的成绩，演奏者为大厅里选填的「演奏者」（即花街拼图的玩家名称，两边共用）。学习模式、自动演奏不计分，得分一栏为弹对几个。鼠标停在得分上可以看各档判定数；「性能」里是这一局的性能测试记录摘要；每条都可以导出成 txt（在管理页本机生成，不另外读取数据）。数据由访客的浏览器算出，仅供参考。</p>
     <div class="pz-rec-tools">
       <input type="search" class="play-search" id="stPlaySearch" placeholder="搜索玩家名称或曲目" aria-label="搜索玩家名称或曲目">
       <select id="stPlayMode" aria-label="模式"><option value="">全部模式</option><option value="show">演出</option><option value="learn">学习</option><option value="auto">自动演奏</option></select>
@@ -4263,7 +4310,7 @@ const ADMIN_PANELS_HTML = `
     <p class="ta-group-hint" id="stPlaySummary"></p>
     <div class="ticket-table-wrap">
       <table class="ticket-table pz-rec-table st-play-table">
-        <thead><tr><th>编号</th><th>玩家 ID</th><th>曲目</th><th>难度</th><th>得分</th><th>评价</th><th>判定模式</th><th>范围模式</th><th>登记时间</th><th>属地</th><th>访客</th><th>性能</th><th></th></tr></thead>
+        <thead><tr><th>编号</th><th>演奏者</th><th>曲目</th><th>难度</th><th>得分</th><th>评价</th><th>判定模式</th><th>范围模式</th><th>登记时间</th><th>属地</th><th>访客</th><th>性能</th><th></th></tr></thead>
         <tbody id="stPlayBody"></tbody>
       </table>
     </div>

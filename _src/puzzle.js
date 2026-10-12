@@ -352,7 +352,7 @@
       <label><input type="radio" name="pzMode" value="timed"><span class="pz-seg-name">限时</span><small class="pz-seg-sub" id="pzTimedSub"></small></label>
     </div>
     <label class="pz-label" for="pzNameInput">玩家名称</label>
-    <input type="text" class="pz-player pz-name" id="pzNameInput" maxlength="20" placeholder="选填，通关后会和成绩一起登记" autocomplete="off" spellcheck="false">
+    <input type="text" class="pz-player pz-name" id="pzNameInput" maxlength="20" autocomplete="off" spellcheck="false">
     <p class="alarm-hint pz-setup-hint" id="pzSetupHint"></p>
     <div class="pz-btn-row"><button type="button" class="pz-primary" id="pzStartBtn">开始拼图</button></div>
     <div class="pz-last" id="pzLastBox" hidden></div>
@@ -1509,6 +1509,7 @@
         eligible: G.mode === "timed" && !G.overtime && CODE_DIFFS.includes(G.diff), code: "",
       };
     rec.adj = adjustedMs(rec.ms, rec.aids);
+    if (!rec.contest) rec.player = playerName();
     Object.assign(rec, addRecord(rec));
     storage.set(STORE_LAST, JSON.stringify(rec));
     lastRecord = rec;
@@ -1532,6 +1533,7 @@
       ...(rec.mode === "timed" ? [["剩余", fmtClock(rec.limitMs - rec.ms, true)]] : []),
       ["辅助功能", aidsText(rec.aids)],
       ...recordRows(rec),
+      ["玩家", rec.player || playerName() || "未填写"],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
@@ -1547,6 +1549,7 @@
       ["耗时", fmtClock(rec.ms, true)],
       ["辅助功能", aidsText(rec.aids)],
       ...recordRows(rec),
+      ["玩家", rec.player || playerName() || "未填写"],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
