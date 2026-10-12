@@ -1060,12 +1060,12 @@
     r2: { notes: [72, 76, 79], colors: [1, 2, 3], pos: [[28, 56], [50, 44], [72, 56]], lead: 2.2, gap: 0.85, win: 0.45, tiers: [0.18, 0.3], pass: 2 },
   };
   const GUIDE_TEXT = {
-    welcome: "欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！",
+    welcome: "欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！",
     play: "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键",
     r1done: "很棒，接下来我们一口气来一次！",
     r2fail: "也许有点紧张？我们再试一次！",
     r2done: "非常棒！接下来我们来校准一下演奏设备——",
-    cal: "调整过程中，气泡的外圈将会隐藏\n在气泡出现后，会连续响起「嗒」声\n请在听到第七个「嗒」声时按下气泡",
+    cal: "调整过程中，气泡的外圈将会隐藏。\n在气泡出现后，会连续响起「嗒」声。\n请在听到第七个「嗒」声时按下气泡",
   };
   const CAL_STEPS = ["ready", "demo", "ready2", "cal", "idle", "done"];
   const CAL = { lead: 0.8, gap: 0.32, beats: 7, rounds: 6, win: 0.25, wait: 0.45, show: 0.5, fade: 0.35, hold: 0.28, pause: 0.55, idle: 2 };
@@ -1184,7 +1184,7 @@
     const out = [];
     String(text).split("\n").forEach((line, i) => {
       if (i) out.push(h("br"));
-      (line.match(/[^，。！？；：、]+[，。！？；：、]*|[，。！？；：、]+/g) || []).forEach((seg) => out.push(h("span", { class: "hjs-tip-seg", text: seg })));
+      (line.match(/[^，。！？；：、—]+[，。！？；：、—]*|[，。！？；：、—]+/g) || []).forEach((seg) => out.push(h("span", { class: "hjs-tip-seg", text: seg })));
     });
     return out;
   }

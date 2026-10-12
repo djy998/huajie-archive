@@ -469,7 +469,7 @@ async function main() {
     const G = () => P.st().guide;
     const tip = () => Array.from(P.$(".hjs-guide-tip").childNodes).map((n) => (n.nodeName === "BR" ? "\n" : n.textContent)).join("");
     check("第一次打开舞台：出开场白，大厅藏起来", G()?.step === "welcome" && P.$("#hjStage").classList.contains("is-guide") && P.$(".hjs-guide-title").textContent === "舞台演奏"
-      && /欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！/.test(tip()) && !P.$(".hjs-guide-note"));
+      && /欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！/.test(tip()) && !P.$(".hjs-guide-note"));
     check("开场白下面是「确认」，底下是「跳过」", !!P.btn("确认", P.$(".hjs-guide-go")) && !!P.btn("跳过", P.$(".hjs-guide-foot")));
     check("教程时后台加载曲库", P.fetched.some((u) => /songs\.json/.test(u)));
     P.click(P.btn("确认"));
@@ -518,8 +518,8 @@ async function main() {
     check("第二轮弹中 2 个：通过", G()?.step === "r2done" && tip() === "非常棒！接下来我们来校准一下演奏设备——", G()?.step);
     check("第二轮弹中的出琴声", P.midi.slice(played).map((m) => m.midi).join() === "72,76", P.midi.slice(played).map((m) => m.midi).join());
     P.click(P.btn("确认"));
-    check("校准说明换成新的话（分三行）", G()?.step === "ready" && tip() === "调整过程中，气泡的外圈将会隐藏\n在气泡出现后，会连续响起「嗒」声\n请在听到第七个「嗒」声时按下气泡，接下来看一下示范。", tip());
-    check("说明按标点切段，窄屏只在标点后换行", P.$$(".hjs-guide-tip .hjs-tip-seg").map((x) => x.textContent).join("|") === "调整过程中，|气泡的外圈将会隐藏|在气泡出现后，|会连续响起「嗒」声|请在听到第七个「嗒」声时按下气泡，|接下来看一下示范。");
+    check("校准说明换成新的话（分三行）", G()?.step === "ready" && tip() === "调整过程中，气泡的外圈将会隐藏。\n在气泡出现后，会连续响起「嗒」声。\n请在听到第七个「嗒」声时按下气泡，接下来看一下示范。", tip());
+    check("说明按标点切段，窄屏只在标点后换行", P.$$(".hjs-guide-tip .hjs-tip-seg").map((x) => x.textContent).join("|") === "调整过程中，|气泡的外圈将会隐藏。|在气泡出现后，|会连续响起「嗒」声。|请在听到第七个「嗒」声时按下气泡，|接下来看一下示范。");
     check("进入延迟校准，先等「确认」", G()?.step === "ready" && !!P.btn("确认") && !P.$(".hjs-guide-note:not(.is-pop):not(.is-miss)"), G()?.step);
     P.click(P.btn("确认"));
     check("点确认：按钮消失，开始示范", G()?.step === "demo" && !P.btn("确认"));
