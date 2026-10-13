@@ -171,6 +171,24 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(a.href), 20000);
 }
 
+/* 弹窗卡片可以滚动时 × 停在右上角（style.css 的 sticky 规则）：把卡片的上、右内边距写进 --pad-t / --pad-r，
+   让 × 落在离卡片边 16 / 18 px 的老位置。遮罩一显示就量一次，窗口大小变了再量 */
+function pinCloseButtons() {
+  document.querySelectorAll(".info-overlay:not([hidden]) > * > .info-close").forEach((x) => {
+    const card = x.parentElement;
+    const cs = getComputedStyle(card);
+    card.style.setProperty("--pad-t", cs.paddingTop);
+    card.style.setProperty("--pad-r", cs.paddingRight);
+  });
+}
+function watchCloseButtons() {
+  const overlays = document.querySelectorAll(".info-overlay");
+  if (!overlays.length || typeof MutationObserver === "undefined") return;
+  const mo = new MutationObserver(pinCloseButtons);
+  overlays.forEach((o) => mo.observe(o, { attributes: true, attributeFilter: ["hidden"] }));
+  window.addEventListener("resize", pinCloseButtons, { passive: true });
+}
+
 /* 点遮罩关闭弹窗；带 data-close-only-x 的只能点 × */
 function closeOnBackdrop(overlay, close) {
   overlay.addEventListener("click", (e) => {
@@ -4161,7 +4179,7 @@ function initApp() {
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
     initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
-    initClock, initHashRoute, initSitePopup, loadSiteState,
+    initClock, initHashRoute, initSitePopup, loadSiteState, watchCloseButtons,
   ].forEach((init) => {
     try { init(); } catch (e) { console.error(e); }
   });

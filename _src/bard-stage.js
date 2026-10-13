@@ -509,8 +509,24 @@
     S.built = true;
   }
 
+  /* 毛笔字：舞台里的标题字分散在几份按需下载的字库里（brush-ext-*），没下载完的字会先用别的字体顶上，
+     一个标题里毛笔字、宋体混在一起。打开舞台时先把这些字要齐；教程 / 校准的标题等字到了（最多等 1.5 秒）再显示 */
+  const BRUSH_TEXT = "舞台演奏延迟校准完成今晚设置玩法说明选曲已暂停演出结束";
+  let brushReady = null;
+  function loadBrush() {
+    if (!brushReady) {
+      const fonts = document.fonts;
+      brushReady = fonts && fonts.load
+        ? Promise.race([fonts.load(`400 24px "HJ Brush"`, BRUSH_TEXT).catch(() => {}), new Promise((r) => setTimeout(r, 1500))])
+        : Promise.resolve();
+      brushReady.then(() => { if (!document.fonts || document.fonts.check(`400 24px "HJ Brush"`, BRUSH_TEXT)) return; brushReady = null; });   // 超时没齐：下次打开再要
+    }
+    return brushReady;
+  }
+
   /* ==== 开关 ==== */
   function open() {
+    loadBrush();
     build();
     clearTimeout(S.closeTimer);
     readPrefs();
@@ -1078,8 +1094,11 @@
       h("div", { class: "hjs-guide-head" }, h("p", { class: "hjs-guide-title" }), h("p", { class: "hjs-guide-tip" }), h("div", { class: "hjs-guide-go" })),
       stage,
       h("div", { class: "hjs-guide-foot" }, h("p", { class: "hjs-guide-msg", "aria-live": "polite" }), h("div", { class: "hjs-cal-dots", "aria-hidden": "true" }), h("div", { class: "hjs-guide-btns" })));
+    const title = box.querySelector(".hjs-guide-title");
+    title.style.visibility = "hidden";
     S.root.append(box);
     S.root.classList.add("is-guide");
+    loadBrush().then(() => { title.style.visibility = ""; });
     S.guide = { from, step, box, stage, offs: [], miss: 0, msg: "", cur: null, clock: null, acts: [], timer: setInterval(guideStep, 40), raf: 0, ptr: null, i: 0, r2: null };
     guidePreload();
     if (step === "intro") guideSay("welcome"); else calStart();

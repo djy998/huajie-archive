@@ -1979,6 +1979,11 @@ body.day-mode :is(.info-box, .gate-card, .admin-modal) .tab-btn:not(.is-active, 
 }
 .info-title { font-family: var(--brush); font-size: 2rem; line-height: 1.4; text-align: center; color: var(--lantern-soft); margin-bottom: 18px; }
 .info-tabs { justify-content: center; margin-bottom: 22px; }
+/* 手机：三个页签排成一行、靠左，放不下时按钮自己收窄（字不折行） */
+@media (max-width: 760px) {
+  .info-tabs { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; }
+  .info-tabs .tab-btn { flex: 0 1 auto; min-width: 0; padding: 8px clamp(10px, 3.4vw, 16px); white-space: nowrap; font-size: clamp(.76rem, 3.6vw, .86rem); }
+}
 .info-text p { margin-bottom: 16px; font-size: 1.02rem; line-height: 2; color: var(--text-soft); }
 .info-date { font-size: .8rem; text-align: right; color: var(--text-mute); }
 .gallery-credit { margin: 2px 0 16px; font-size: .86rem; line-height: 2; text-align: center; color: var(--text-mute); }
@@ -7383,3 +7388,37 @@ body.hjs-open .toast { z-index: 540; }
 html.hj-intro-only .site-header,
 html.hj-intro-only main,
 html.hj-intro-only footer { visibility: hidden; }
+
+/* ==== 手机上弹窗卡片的高度与关闭按钮 ====
+   手机浏览器的 100vh 是「地址栏、底栏都收起来」时的高度，比实际看得到的高；卡片按 vh 定高、在遮罩里居中，
+   上下就会被裁掉一截，右上角的 × 点不到。支持 dvh 的浏览器改按当前看得到的高度（dvh）算，并再减去遮罩的上下留白；
+   可以滚动的卡片里，× 跟着卡片一起停在顶部（sticky），往下滚也点得到 */
+@supports (height: 100dvh) {
+  .info-box { max-height: min(82dvh, calc(100dvh - 48px)); }
+  .admin-modal { max-height: min(86dvh, calc(100dvh - 48px)); }
+  .alarm-card, .huayu-card { max-height: min(86dvh, 760px, calc(100dvh - 48px)); }
+  .info-box.guide-box { max-height: min(88dvh, calc(100dvh - 48px)); }
+  .games-card { max-height: min(90dvh, 860px, calc(100dvh - 48px)); }
+  .lightbox-overlay img { max-height: 92dvh; }
+  @media (max-width: 640px) {
+    .admin-modal { max-height: calc(100dvh - 48px); }
+    .info-box.guide-box { max-height: calc(100dvh - 48px); }
+  }
+  @media (max-width: 560px) {
+    .games-card { max-height: calc(100dvh - 24px); }
+  }
+}
+/* 可滚动卡片里的 ×：不再随内容滚走。sticky + float 停在右上角（离卡片边 16 / 18 px，同原来的位置），负的下边距让它不占一行。
+   卡片的内边距各不相同，main.js 的 pinCloseButtons 打开时量好写进 --pad-t / --pad-r */
+:is(.info-box:not(.guide-box), .games-card, .huayu-card, .alarm-card) > .info-close {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  right: auto;
+  z-index: 3;
+  float: right;
+  margin: 0 0 -36px 8px;
+  /* sticky 出不了卡片的内容区（四周是内边距），用位移挪回离卡片边 16 / 18 px 的老位置 */
+  translate: calc(var(--pad-r, 18px) - 18px) calc(16px - var(--pad-t, 16px));
+}
+.admin-modal > .info-close { position: -webkit-sticky; position: sticky; top: 14px; float: right; margin: 14px 14px -50px 0; }
