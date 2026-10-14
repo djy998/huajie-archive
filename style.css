@@ -17,13 +17,18 @@
      ③ 半透明的容器（列表、播报栏、小卡片）→ ::before + mask 精确抠出 1px 边框 */
 
 :root {
-  --lg-edge: linear-gradient(175deg,
+  /* 以整圈框线为准的对称渐变：顶部与底部最亮、中间最柔，过渡跨越大半个栏高，
+     所以圆角处的等值线与弧线是慢慢相交的，不会出现一条斜的「断口」 */
+  --lg-edge: linear-gradient(180deg,
     rgba(255,255,255,.30) 0%,
-    rgba(255,255,255,.235) 4%,
-    rgba(255,255,255,.19) 13%,
-    rgba(255,255,255,.168) 32%,
-    rgba(255,255,255,.172) 68%,
-    rgba(255,255,255,.23) 100%);
+    rgba(255,255,255,.245) 9%,
+    rgba(255,255,255,.205) 22%,
+    rgba(255,255,255,.180) 38%,
+    rgba(255,255,255,.168) 50%,
+    rgba(255,255,255,.180) 62%,
+    rgba(255,255,255,.205) 78%,
+    rgba(255,255,255,.245) 91%,
+    rgba(255,255,255,.30) 100%);
   --lg-edge-hi: linear-gradient(175deg,
     rgba(240,233,255,.64) 0%,
     rgba(185,164,224,.50) 4%,
@@ -31,36 +36,39 @@
     rgba(185,164,224,.32) 32%,
     rgba(185,164,224,.33) 68%,
     rgba(233,224,255,.50) 100%);
-  --lg-edge-err: linear-gradient(175deg,
+  --lg-edge-err: linear-gradient(180deg,
     rgba(255,214,206,.62) 0%,
-    rgba(224,142,132,.52) 4%,
-    rgba(224,142,132,.44) 13%,
-    rgba(224,142,132,.36) 32%,
-    rgba(224,142,132,.37) 68%,
-    rgba(255,200,190,.52) 100%);
-  --lg-edge-gold: linear-gradient(175deg,
+    rgba(233,166,156,.54) 22%,
+    rgba(224,142,132,.42) 50%,
+    rgba(233,166,156,.54) 78%,
+    rgba(255,200,190,.58) 100%);
+  --lg-edge-gold: linear-gradient(180deg,
     rgba(255,225,178,.60) 0%,
-    rgba(240,181,98,.48) 4%,
-    rgba(240,181,98,.40) 13%,
-    rgba(240,181,98,.32) 32%,
-    rgba(240,181,98,.33) 68%,
-    rgba(255,214,153,.48) 100%);
+    rgba(246,199,130,.50) 22%,
+    rgba(240,181,98,.36) 50%,
+    rgba(246,199,130,.50) 78%,
+    rgba(255,214,153,.54) 100%);
   --lg-fill: rgba(36,29,60,.74);   /* 留一点透，背景才折得动；不透明度越低折射越明显、文字对比度越低 */
   /* 立体感：约按钮 --glass-up-shadow 的一半强度 */
   --lg-drop: 0 1px 2px rgba(8,6,18,.16), 0 3px 8px rgba(8,6,18,.10);
   --lg-drop-soft: 0 1px 2px rgba(8,6,18,.12);
   --lg-shade: inset 0 -1px 2px rgba(10,7,22,.18);
   --lg-outer-hi: rgba(255,255,255,.11);
+  --lg-focus-ring: rgba(185,164,224,.30);
+  --lg-ring: 0 0 0 0 rgba(0,0,0,0);   /* 聚焦柔光的占位，:focus 时只改这个变量，不动 box-shadow，避免和上面那条高特异性规则打架 */
   --lg-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E");
 }
 body.day-mode {
-  --lg-edge: linear-gradient(175deg,
+  --lg-edge: linear-gradient(180deg,
     rgba(255,255,255,.92) 0%,
-    rgba(255,252,242,.86) 4%,
-    rgba(214,158,74,.94) 13%,
-    rgba(201,143,58,.97) 32%,
-    rgba(199,141,56,.97) 68%,
-    rgba(234,188,114,.93) 100%);
+    rgba(253,242,220,.86) 9%,
+    rgba(235,198,138,.87) 22%,
+    rgba(214,161,78,.92) 38%,
+    rgba(203,146,60,.95) 50%,
+    rgba(214,161,78,.92) 62%,
+    rgba(235,198,138,.87) 78%,
+    rgba(253,242,220,.86) 91%,
+    rgba(255,255,255,.90) 100%);
   --lg-edge-hi: linear-gradient(175deg,
     rgba(255,255,255,1) 0%,
     rgba(255,250,236,.94) 4%,
@@ -68,25 +76,24 @@ body.day-mode {
     rgba(201,143,58,.97) 32%,
     rgba(194,136,52,.97) 68%,
     rgba(255,240,205,.96) 100%);
-  --lg-edge-err: linear-gradient(175deg,
-    rgba(255,255,255,.92) 0%,
-    rgba(246,214,208,.90) 4%,
-    rgba(206,88,72,.92) 13%,
-    rgba(176,60,44,.94) 32%,
-    rgba(170,52,38,.95) 68%,
-    rgba(255,190,180,.88) 100%);
-  --lg-edge-gold: linear-gradient(175deg,
+  --lg-edge-err: linear-gradient(180deg,
+    rgba(255,255,255,.90) 0%,
+    rgba(244,200,192,.88) 22%,
+    rgba(190,74,58,.94) 50%,
+    rgba(244,200,192,.88) 78%,
+    rgba(255,214,206,.90) 100%);
+  --lg-edge-gold: linear-gradient(180deg,
     rgba(255,255,255,.94) 0%,
-    rgba(250,238,214,.92) 4%,
-    rgba(206,142,46,.92) 13%,
-    rgba(170,112,32,.94) 32%,
-    rgba(166,108,30,.95) 68%,
-    rgba(238,194,120,.92) 100%);
+    rgba(248,228,190,.90) 22%,
+    rgba(186,124,40,.94) 50%,
+    rgba(248,228,190,.90) 78%,
+    rgba(255,246,228,.92) 100%);
   --lg-fill: rgba(246,227,187,.82);
   --lg-drop: 0 1px 2px rgba(96,64,16,.11), 0 3px 8px rgba(96,64,16,.07);
   --lg-drop-soft: 0 1px 2px rgba(96,64,16,.09);
   --lg-shade: inset 0 -1px 2px rgba(120,80,20,.11);
   --lg-outer-hi: rgba(255,255,255,.62);
+  --lg-focus-ring: rgba(201,143,58,.30);
   --lg-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E");
 }
 /* 小游戏助手的下拉框白天原本就是深色底（--ink-2），保持不动，否则浅字会落在浅底上 */
@@ -109,7 +116,7 @@ body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
   background-image: linear-gradient(var(--lg-fill), var(--lg-fill)), var(--lg-edge);
   background-clip: padding-box, border-box;
   background-origin: border-box;
-  box-shadow: var(--lg-drop), var(--lg-shade);
+  box-shadow: var(--lg-drop), var(--lg-shade), var(--lg-ring);
 }
 /* —— ① 下拉框：保留各自的箭头层，插在最上面 —— */
 :is(body, body.day-mode)
@@ -120,12 +127,19 @@ body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
   background-position: right 13px center, 0 0, 0 0;
   background-clip: border-box, padding-box, border-box;
   background-origin: border-box, border-box, border-box;
-  box-shadow: var(--lg-drop), var(--lg-shade);
+  box-shadow: var(--lg-drop), var(--lg-shade), var(--lg-ring);
 }
-/* —— ② 文本域：底色半透明，改描边会渗进去，所以保留原边框，只在外侧顶部补一条高光 —— */
+/* —— ② 文本域：改成和输入框完全同一套做法（不透明填充 + 渐变描边）。
+     之前保留半透明底、改用四条边框各自上色，圆角处同样会出现那条斜的「断口」，
+     所以把填充也交给 --lg-fill，两边保持一致。 —— */
 :is(body, body.day-mode)
   :is(.gate-card, .about-form, .alarm-card) textarea {
-  box-shadow: 0 -1px 0 var(--lg-outer-hi), var(--lg-drop), var(--lg-shade);
+  border: 1px solid transparent;
+  background-color: transparent;
+  background-image: linear-gradient(var(--lg-fill), var(--lg-fill)), var(--lg-edge);
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
+  box-shadow: var(--lg-drop), var(--lg-shade), var(--lg-ring);
 }
 /* —— 折射：底色已经透出一点背景，这里再把背景在上下边缘「折」进来，做出泡泡感 ——
    位移贴图与滤镜定义在 index.html 里的 <svg id="lg-map">，id 为 lgf。
@@ -146,14 +160,13 @@ body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
   backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
 }
 
-/* —— 聚焦：同一套明暗关系换成主题色，原来 border-color 的变色改由描边承担 —— */
+/* —— 聚焦：不换边框渐变。CSS 渐变不能过渡，一换就会「啪」地跳一下，很突兀。
+     改成在栏外面加一圈柔光，边框本身始终不变。 —— */
 :is(body, body.day-mode)
   :is(.gate-card, .about-form, .alarm-card)
   :is(input, select, textarea):focus {
-  border-color: transparent;
-  --lg-edge: var(--lg-edge-hi);
+  --lg-ring: 0 0 0 3px var(--lg-focus-ring);
 }
-:is(body, body.day-mode) :is(.gate-card, .about-form) textarea:focus { border-color: transparent; }
 /* —— 校验失败 / 输入错误：换成暖红描边 —— */
 :is(body, body.day-mode) .ticket-card .th-name.is-invalid,
 :is(body, body.day-mode) .games-card input.is-wrong,
@@ -168,14 +181,13 @@ body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
       .tas-item, .huayu-result, .gm-bomb-stage) {
   position: relative;
   border-color: transparent;
-  box-shadow: var(--lg-drop-soft);
 }
 :is(body, body.day-mode)
   :is(.about-list, .gm-say, .gm-macro, .alarm-item, .gm-spy-card, .gm-spy-p,
       .tas-item, .huayu-result, .gm-bomb-stage)::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -1px;   /* 关键：absolute 的 inset:0 是相对 padding box，会内缩 1px 与边框错开，所以向外扩 1px 对齐到 border box */
   z-index: 1;
   border-radius: inherit;
   padding: 1px;
@@ -187,7 +199,9 @@ body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
   pointer-events: none;
 }
 /* 平票候选本来就有 2px 外圈，叠加时要把它留住 */
-:is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent), var(--lg-drop-soft); }
+:is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent); }
+/* .gm-bomb-stage 有 overflow:hidden，伪元素向外扩会被裁掉，所以它保持 inset:0（差 1px 看不出来） */
+:is(body, body.day-mode) .gm-bomb-stage::before { inset: 0; }
 /* 卧底卡的金色描边；炸弹进入紧张时刻时的红光描边 */
 :is(body, body.day-mode) :is(.gm-spy-card.is-spy, .gm-spy-p.is-spy) { --lg-edge: var(--lg-edge-gold); }
 :is(body, body.day-mode) .gm-bomb-stage.is-tense {
