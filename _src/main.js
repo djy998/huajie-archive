@@ -2059,9 +2059,9 @@ const LINK_CURSOR_FRAMES = 12;
 const LINK_CURSOR_STEP_MS = 100;
 const linkCursorFrame = (k) => {
   const n = String(k).padStart(2, "0");
-  return `-webkit-image-set(url("assets/site/cursor/link-${n}.png") 1x, url("assets/site/cursor/link-${n}@2x.png") 2x) 16 16, pointer`;
+  return `-webkit-image-set(url("assets/site/cursor/petal-${n}.png") 1x, url("assets/site/cursor/petal-${n}@2x.png") 2x) 16 16, pointer`;
 };
-const isLinkCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/link-");
+const isLinkCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/petal-");
 
 function initLinkCursor() {
   if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
