@@ -2052,7 +2052,7 @@ function initClickBurst() {
   });
 }
 
-/* 樱花光标：加载遮罩的 var(--cursor-busy)、花街拼图和舞台演奏里的链接光标（樱花准星第 1 帧，见 style.css）。
+/* 樱花光标：加载遮罩的 var(--cursor-busy)（樱花准星第 1 帧，见 style.css）。
    鼠标停在这类元素上时只给它自己逐帧换 cursor，不触发整页样式重算；
    元素换成其他光标时自动停下 */
 const BUSY_CURSOR_FRAMES = 12;
