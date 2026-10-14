@@ -2052,6 +2052,47 @@ function initClickBurst() {
   });
 }
 
+/* 链接光标：可点击元素用 var(--cursor-link)（樱花准星第 1 帧，见 style.css）。
+   鼠标停在这类元素上时只给它自己逐帧换 cursor，不触发整页样式重算；
+   元素变成禁用、拖动等其他光标时自动停下 */
+const LINK_CURSOR_FRAMES = 12;
+const LINK_CURSOR_STEP_MS = 100;
+const linkCursorFrame = (k) => {
+  const n = String(k).padStart(2, "0");
+  return `-webkit-image-set(url("assets/site/cursor/link-${n}.png") 1x, url("assets/site/cursor/link-${n}@2x.png") 2x) 16 16, pointer`;
+};
+const isLinkCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/link-");
+
+function initLinkCursor() {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+  let el = null, prev = "", frame = 0, timer = 0;
+  const stop = () => {
+    clearInterval(timer);
+    timer = 0;
+    if (el) el.style.cursor = prev;
+    el = null;
+  };
+  const tick = () => {
+    el.style.cursor = prev;
+    if (!el.isConnected || !isLinkCursor(el)) return stop();
+    frame = (frame + 1) % LINK_CURSOR_FRAMES;
+    el.style.cursor = linkCursorFrame(frame);
+  };
+  document.addEventListener("pointerover", (e) => {
+    const t = e.target;
+    if (t === el) return;
+    stop();
+    if (e.pointerType !== "mouse" || !fxEnabled || reduced.matches || !(t instanceof Element) || !isLinkCursor(t)) return;
+    el = t;
+    prev = t.style.cursor;
+    frame = 0;
+    timer = setInterval(tick, LINK_CURSOR_STEP_MS);
+  }, { passive: true });
+  document.addEventListener("pointerout", (e) => { if (!e.relatedTarget) stop(); }, { passive: true });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+}
+
 /* ==== 10. 头部工具：音量、更多、日历、时间条 ==== */
 const MUSIC_VOLUME = 0.55;
 const MUSIC_FADE_MS = 700;
@@ -4178,7 +4219,7 @@ function initApp() {
     initLoadIndicators, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
-    initClickBurst, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
+    initClickBurst, initLinkCursor, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
     initClock, initHashRoute, initSitePopup, loadSiteState, watchCloseButtons,
   ].forEach((init) => {
     try { init(); } catch (e) { console.error(e); }
