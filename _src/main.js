@@ -2059,7 +2059,7 @@ const BUSY_CURSOR_FRAMES = 12;
 const BUSY_CURSOR_STEP_MS = 100;
 const busyCursorFrame = (k) => {
   const n = String(k).padStart(2, "0");
-  return `-webkit-image-set(url("assets/site/cursor/sakura-${n}.png") 1x, url("assets/site/cursor/sakura-${n}@2x.png") 2x) 22 22, progress`;
+  return `-webkit-image-set(url("assets/site/cursor/sakura-${n}.png") 1x, url("assets/site/cursor/sakura-${n}@2x.png") 2x) 15 15, progress`;
 };
 const isBusyCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/sakura-");
 
