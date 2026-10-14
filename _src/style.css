@@ -7422,3 +7422,203 @@ html.hj-intro-only footer { visibility: hidden; }
   translate: calc(var(--pad-r, 18px) - 18px) calc(16px - var(--pad-t, 16px));
 }
 .admin-modal > .info-close { position: -webkit-sticky; position: sticky; top: 14px; float: right; margin: 14px 14px -50px 0; }
+
+
+/* ==== 31. 扁平栏的液态玻璃描边 ==== */
+/* 只动那 1px 边框 + 一圈很轻的立体感。底色、内边距、字号、文字颜色一律不动，所以栏内文字的
+   对比度与清晰度完全不受影响 —— 这是本次改动的前提。
+   边框：把原来的实色边换成「跟随圆角」的渐变边 —— 顶部一小段冷白高光、很快过渡到主体色、
+   底部再回一点亮（玻璃下缘的环境反射）。渐变几乎垂直，左右两侧落在同一亮度档，比原来的
+   --line 略亮一档，让侧边也看得出玻璃边。
+   立体感：只用「外投影 + 一条柔和的内侧底部阴影」。刻意不再加内侧顶部高光与左右微光 ——
+   边框顶部本身已是高光，再叠一层会在浅色底上糊成 2px 的浅带；左右两条 inset 在圆弧处又会
+   和边框错开，看着不重合。现在整栏只有「边框」与「投影」两层，层次干净。
+   强度约按钮（--glass-up-shadow）的一半，所以栏是「浮起来一点点」，仍明显低于按钮。
+   三种实现：
+     ① 底色不透明的输入框、下拉框 → background-clip 双层（padding-box 铺底色、border-box 铺描边）
+     ② 底色半透明的文本域       → 保留原边框，只在外侧顶部补一条高光（不会渗到底色上）
+     ③ 半透明的容器（列表、播报栏、小卡片）→ ::before + mask 精确抠出 1px 边框 */
+
+:root {
+  --lg-edge: linear-gradient(175deg,
+    rgba(255,255,255,.30) 0%,
+    rgba(255,255,255,.235) 4%,
+    rgba(255,255,255,.19) 13%,
+    rgba(255,255,255,.168) 32%,
+    rgba(255,255,255,.172) 68%,
+    rgba(255,255,255,.23) 100%);
+  --lg-edge-hi: linear-gradient(175deg,
+    rgba(240,233,255,.64) 0%,
+    rgba(185,164,224,.50) 4%,
+    rgba(185,164,224,.40) 13%,
+    rgba(185,164,224,.32) 32%,
+    rgba(185,164,224,.33) 68%,
+    rgba(233,224,255,.50) 100%);
+  --lg-edge-err: linear-gradient(175deg,
+    rgba(255,214,206,.62) 0%,
+    rgba(224,142,132,.52) 4%,
+    rgba(224,142,132,.44) 13%,
+    rgba(224,142,132,.36) 32%,
+    rgba(224,142,132,.37) 68%,
+    rgba(255,200,190,.52) 100%);
+  --lg-edge-gold: linear-gradient(175deg,
+    rgba(255,225,178,.60) 0%,
+    rgba(240,181,98,.48) 4%,
+    rgba(240,181,98,.40) 13%,
+    rgba(240,181,98,.32) 32%,
+    rgba(240,181,98,.33) 68%,
+    rgba(255,214,153,.48) 100%);
+  --lg-fill: rgba(36,29,60,.74);   /* 留一点透，背景才折得动；不透明度越低折射越明显、文字对比度越低 */
+  /* 立体感：约按钮 --glass-up-shadow 的一半强度 */
+  --lg-drop: 0 1px 2px rgba(8,6,18,.16), 0 3px 8px rgba(8,6,18,.10);
+  --lg-drop-soft: 0 1px 2px rgba(8,6,18,.12);
+  --lg-shade: inset 0 -1px 2px rgba(10,7,22,.18);
+  --lg-outer-hi: rgba(255,255,255,.11);
+  --lg-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E");
+}
+body.day-mode {
+  --lg-edge: linear-gradient(175deg,
+    rgba(255,255,255,.92) 0%,
+    rgba(255,252,242,.86) 4%,
+    rgba(214,158,74,.94) 13%,
+    rgba(201,143,58,.97) 32%,
+    rgba(199,141,56,.97) 68%,
+    rgba(234,188,114,.93) 100%);
+  --lg-edge-hi: linear-gradient(175deg,
+    rgba(255,255,255,1) 0%,
+    rgba(255,250,236,.94) 4%,
+    rgba(240,181,98,.95) 13%,
+    rgba(201,143,58,.97) 32%,
+    rgba(194,136,52,.97) 68%,
+    rgba(255,240,205,.96) 100%);
+  --lg-edge-err: linear-gradient(175deg,
+    rgba(255,255,255,.92) 0%,
+    rgba(246,214,208,.90) 4%,
+    rgba(206,88,72,.92) 13%,
+    rgba(176,60,44,.94) 32%,
+    rgba(170,52,38,.95) 68%,
+    rgba(255,190,180,.88) 100%);
+  --lg-edge-gold: linear-gradient(175deg,
+    rgba(255,255,255,.94) 0%,
+    rgba(250,238,214,.92) 4%,
+    rgba(206,142,46,.92) 13%,
+    rgba(170,112,32,.94) 32%,
+    rgba(166,108,30,.95) 68%,
+    rgba(238,194,120,.92) 100%);
+  --lg-fill: rgba(246,227,187,.82);
+  --lg-drop: 0 1px 2px rgba(96,64,16,.11), 0 3px 8px rgba(96,64,16,.07);
+  --lg-drop-soft: 0 1px 2px rgba(96,64,16,.09);
+  --lg-shade: inset 0 -1px 2px rgba(120,80,20,.11);
+  --lg-outer-hi: rgba(255,255,255,.62);
+  --lg-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E");
+}
+/* 小游戏助手的下拉框白天原本就是深色底（--ink-2），保持不动，否则浅字会落在浅底上 */
+body.day-mode .games-card select { --lg-fill: rgba(36,29,60,.74); }
+
+/* 输入框与下拉框的底色由下面那层渐变提供（它才是 --lg-fill 那个可调不透明度的层）。
+   原样式用的是实色 background-color，它在最底层会把整块填成不透明、折射完全透不出来，
+   所以这里让开；textarea 不在此列 —— 它保留原来的半透明 background-color 来充当填充。 */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card)
+  :is(input, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) {
+  background-color: transparent;
+}
+
+/* —— ① 输入框（含数字、日期时间、密码）—— */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card)
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]) {
+  border: 1px solid transparent;
+  background-image: linear-gradient(var(--lg-fill), var(--lg-fill)), var(--lg-edge);
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
+  box-shadow: var(--lg-drop), var(--lg-shade);
+}
+/* —— ① 下拉框：保留各自的箭头层，插在最上面 —— */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card) select {
+  border: 1px solid transparent;
+  background-image: var(--lg-arrow), linear-gradient(var(--lg-fill), var(--lg-fill)), var(--lg-edge);
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-position: right 13px center, 0 0, 0 0;
+  background-clip: border-box, padding-box, border-box;
+  background-origin: border-box, border-box, border-box;
+  box-shadow: var(--lg-drop), var(--lg-shade);
+}
+/* —— ② 文本域：底色半透明，改描边会渗进去，所以保留原边框，只在外侧顶部补一条高光 —— */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card) textarea {
+  box-shadow: 0 -1px 0 var(--lg-outer-hi), var(--lg-drop), var(--lg-shade);
+}
+/* —— 折射：底色已经透出一点背景，这里再把背景在上下边缘「折」进来，做出泡泡感 ——
+   位移贴图与滤镜定义在 index.html 里的 <svg id="lg-map">，id 为 lgf。
+   贴图用 objectBoundingBox 拉伸，所以任何尺寸的栏都能用同一个滤镜，不需要 JS。
+   斜切宽度取 9%（只在最外一圈折，中间不动，压在下面的文字保持清晰）；
+   模糊 1.5px 让玻璃有点磨砂。Firefox 不支持 backdrop-filter 引用 SVG 滤镜，
+   那边会退化成「半透明、无模糊无折射」，底色与文字都不受影响。 */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card)
+  :is(input, select, textarea) {
+  -webkit-backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
+  backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
+}
+:is(body, body.day-mode)
+  :is(.about-list, .gm-say, .gm-macro, .alarm-item, .gm-spy-card, .gm-spy-p,
+      .tas-item, .huayu-result, .gm-bomb-stage) {
+  -webkit-backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
+  backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
+}
+
+/* —— 聚焦：同一套明暗关系换成主题色，原来 border-color 的变色改由描边承担 —— */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card)
+  :is(input, select, textarea):focus {
+  border-color: transparent;
+  --lg-edge: var(--lg-edge-hi);
+}
+:is(body, body.day-mode) :is(.gate-card, .about-form) textarea:focus { border-color: transparent; }
+/* —— 校验失败 / 输入错误：换成暖红描边 —— */
+:is(body, body.day-mode) .ticket-card .th-name.is-invalid,
+:is(body, body.day-mode) .games-card input.is-wrong,
+:is(body, body.day-mode) .survey-card .survey-q.is-error input[type="text"] {
+  --lg-edge: var(--lg-edge-err);
+}
+:is(body, body.day-mode) .survey-card .survey-q.is-error input[type="text"] { border-color: transparent; }
+
+/* —— ③ 半透明底的容器（列表 / 播报栏 / 规则宏 / 闹钟条目 / 卧底小卡片 / 统计块 / 花语结果 / 炸弹舞台）—— */
+:is(body, body.day-mode)
+  :is(.about-list, .gm-say, .gm-macro, .alarm-item, .gm-spy-card, .gm-spy-p,
+      .tas-item, .huayu-result, .gm-bomb-stage) {
+  position: relative;
+  border-color: transparent;
+  box-shadow: var(--lg-drop-soft);
+}
+:is(body, body.day-mode)
+  :is(.about-list, .gm-say, .gm-macro, .alarm-item, .gm-spy-card, .gm-spy-p,
+      .tas-item, .huayu-result, .gm-bomb-stage)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--lg-edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* 平票候选本来就有 2px 外圈，叠加时要把它留住 */
+:is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent), var(--lg-drop-soft); }
+/* 卧底卡的金色描边；炸弹进入紧张时刻时的红光描边 */
+:is(body, body.day-mode) :is(.gm-spy-card.is-spy, .gm-spy-p.is-spy) { --lg-edge: var(--lg-edge-gold); }
+:is(body, body.day-mode) .gm-bomb-stage.is-tense {
+  --lg-edge: linear-gradient(175deg,
+    rgba(255,190,170,.68) 0%,
+    rgba(255,120,100,.52) 4%,
+    rgba(255,90,70,.46) 13%,
+    rgba(255,70,50,.38) 32%,
+    rgba(255,90,70,.42) 68%,
+    rgba(255,190,170,.60) 100%);
+}
