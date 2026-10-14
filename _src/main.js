@@ -2052,18 +2052,18 @@ function initClickBurst() {
   });
 }
 
-/* 链接光标：可点击元素用 var(--cursor-link)（樱花准星第 1 帧，见 style.css）。
+/* 樱花光标：加载遮罩的 var(--cursor-busy)、花街拼图和舞台演奏里的链接光标（樱花准星第 1 帧，见 style.css）。
    鼠标停在这类元素上时只给它自己逐帧换 cursor，不触发整页样式重算；
-   元素变成禁用、拖动等其他光标时自动停下 */
-const LINK_CURSOR_FRAMES = 12;
-const LINK_CURSOR_STEP_MS = 100;
-const linkCursorFrame = (k) => {
+   元素换成其他光标时自动停下 */
+const BUSY_CURSOR_FRAMES = 12;
+const BUSY_CURSOR_STEP_MS = 100;
+const busyCursorFrame = (k) => {
   const n = String(k).padStart(2, "0");
-  return `-webkit-image-set(url("assets/site/cursor/sakura-${n}.png") 1x, url("assets/site/cursor/sakura-${n}@2x.png") 2x) 22 22, pointer`;
+  return `-webkit-image-set(url("assets/site/cursor/sakura-${n}.png") 1x, url("assets/site/cursor/sakura-${n}@2x.png") 2x) 22 22, progress`;
 };
-const isLinkCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/sakura-");
+const isBusyCursor = (el) => getComputedStyle(el).cursor.includes("/cursor/sakura-");
 
-function initLinkCursor() {
+function initBusyCursor() {
   if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   let el = null, prev = "", frame = 0, timer = 0;
@@ -2075,19 +2075,19 @@ function initLinkCursor() {
   };
   const tick = () => {
     el.style.cursor = prev;
-    if (!el.isConnected || !isLinkCursor(el)) return stop();
-    frame = (frame + 1) % LINK_CURSOR_FRAMES;
-    el.style.cursor = linkCursorFrame(frame);
+    if (!el.isConnected || !isBusyCursor(el)) return stop();
+    frame = (frame + 1) % BUSY_CURSOR_FRAMES;
+    el.style.cursor = busyCursorFrame(frame);
   };
   document.addEventListener("pointerover", (e) => {
     const t = e.target;
     if (t === el) return;
     stop();
-    if (e.pointerType !== "mouse" || !fxEnabled || reduced.matches || !(t instanceof Element) || !isLinkCursor(t)) return;
+    if (e.pointerType !== "mouse" || !fxEnabled || reduced.matches || !(t instanceof Element) || !isBusyCursor(t)) return;
     el = t;
     prev = t.style.cursor;
     frame = 0;
-    timer = setInterval(tick, LINK_CURSOR_STEP_MS);
+    timer = setInterval(tick, BUSY_CURSOR_STEP_MS);
   }, { passive: true });
   document.addEventListener("pointerout", (e) => { if (!e.relatedTarget) stop(); }, { passive: true });
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
@@ -4219,7 +4219,7 @@ function initApp() {
     initLoadIndicators, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
     initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
-    initClickBurst, initLinkCursor, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
+    initClickBurst, initBusyCursor, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
     initClock, initHashRoute, initSitePopup, loadSiteState, watchCloseButtons,
   ].forEach((init) => {
     try { init(); } catch (e) { console.error(e); }
