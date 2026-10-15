@@ -602,6 +602,46 @@ async function main() {
     await openStage(P);
     check("再打开不出教程", !P.$(".hjs-guide"));
   }
+  /* 8c. 第一次的教程：「跳过」旁边有「退出」。试弹中退出 → 舞台关掉、不记看过，再开还是开场白；
+     试弹完、到了延迟校准时退出 → 记看过，再开直接是大厅（不再校准）；设置里「回看演奏教学」在「恢复默认设置」上面，点了重看开场白 */
+  {
+    const P = makePage({ fresh: true });
+    await openStage(P);
+    const G = () => P.st().guide;
+    const foot = () => P.$(".hjs-guide-foot");
+    check("第一次的教程：「跳过」旁边有「退出」", !!P.btn("跳过", foot()) && !!P.btn("退出", foot()));
+    P.click(P.btn("确认"));
+    P.click(P.btn("退出", foot()));
+    await sleep(300);
+    check("试弹中退出：舞台关掉，不记「看过了」", P.$("#hjStage").hidden && !P.mem.get("hj_stage_guide"), `${P.$("#hjStage").hidden} ${P.mem.get("hj_stage_guide")}`);
+    await openStage(P);
+    check("再打开：还是从开场白开始", G()?.step === "welcome");
+    /* 一路弹到校准 */
+    const tapNote = () => P.$(".hjs-guide-stage").dispatchEvent(new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+    P.click(P.btn("确认"));
+    for (let i = 0; i < 2; i++) { P.now += 6500; P.advance(0.02); tapNote(); await sleep(420); }
+    P.click(P.btn("确认"));
+    const R = G().r2;
+    for (let i = 0; i < 3; i++) { while ((P.now - R.t0) / 1000 < R.items[i].T + 0.02) P.advance(1 / 60); tapNote(); }
+    P.advance(1);
+    await sleep(800);
+    P.click(P.btn("确认"));
+    check("到了延迟校准，仍有「退出」", G()?.step === "ready" && !!P.btn("退出", foot()), G()?.step);
+    P.click(P.btn("退出", foot()));
+    await sleep(300);
+    check("校准时退出：舞台关掉，记「看过了」", P.$("#hjStage").hidden && P.mem.get("hj_stage_guide") === "1");
+    await openStage(P);
+    check("再打开：直接是大厅，不再校准", !G() && !P.$(".hjs-guide"));
+    P.click(P.btn("设置"));
+    const foot2 = P.$(".hjs-set-foot");
+    const names = foot2 ? Array.from(foot2.querySelectorAll("button")).map((b) => b.textContent) : [];
+    check("设置：「回看演奏教学」在「恢复默认设置」上面", names.join("|") === "回看演奏教学|恢复默认设置", names.join("|"));
+    P.click(P.btn("回看演奏教学"));
+    check("点回看演奏教学：从开场白重看，没有「退出」，结束键叫「结束教学」", G()?.step === "welcome" && !P.btn("退出", foot()) && !!P.btn("结束教学", foot()));
+    P.click(P.btn("结束教学", foot()));
+    check("结束回看：教程关掉，仍记看过", !G() && P.mem.get("hj_stage_guide") === "1");
+  }
+
   /* 8b. 设置里的校准也走同一套（先示范）；按键也算，太早有提示；Esc 取消；连续 2 个没点就暂停 */
   {
     const P = makePage();

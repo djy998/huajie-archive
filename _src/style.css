@@ -1451,13 +1451,35 @@ body.day-mode .tab-btn.is-active {
 .area-block { margin-bottom: 26px; }
 .area-block h4 { font-size: .94rem; font-weight: 600; color: var(--wisteria-soft); margin-bottom: 12px; }
 .shop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+/* 活动店家：直接放在页面背景（天空）上的一条条液态玻璃栏，和上面的标签按钮（.tab-btn）、页头圆按钮同一套磨砂玻璃；
+   动画「完整」时边缘再加真折射（main.js「9b」） */
 .shop-item {
   display: grid; grid-template-columns: 85px 1fr auto; align-items: start;
   gap: 14px;
   padding: 14px 18px;
   border-radius: var(--radius-sm);
   font-size: .85rem;
-  background: var(--panel);
+  background:
+    linear-gradient(170deg, rgba(255,255,255,.13) 0, rgba(255,255,255,.04) 22px, rgba(255,255,255,.03) 100%),
+    rgba(42,35,68,.36);
+  border: 1px solid rgba(233,224,255,.2);
+  box-shadow:
+    0 4px 14px rgba(8,6,18,.22),
+    inset 0 1px 0 rgba(255,255,255,.18),
+    inset 0 -6px 10px -6px rgba(10,8,22,.22);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  --lq-rest: blur(6px) saturate(1.2) brightness(1.04);
+}
+body.day-mode .shop-item {
+  background:
+    linear-gradient(170deg, rgba(255,255,255,.2) 0, rgba(255,255,255,.06) 22px, rgba(255,255,255,.05) 100%),
+    rgba(74,48,20,.18);
+  border-color: var(--pill-edge);
+  box-shadow:
+    0 4px 14px rgba(96,64,16,.16),
+    inset 0 1px 0 rgba(255,255,255,.3),
+    inset 0 -6px 10px -6px rgba(40,26,8,.2);
 }
 .shop-item .num { color: var(--text-mute); font-size: .78rem; padding-top: 2px; overflow-wrap: anywhere; }
 .shop-item .name { color: var(--cream); font-weight: 600; margin-bottom: 3px; }
@@ -2965,8 +2987,9 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
   box-shadow: 0 6px 16px rgba(8,6,18,.28), inset 0 1px 0 rgba(255,255,255,.14);
 }
 .verify-job-fallback { font-size: .82rem; color: var(--text-mute); }
-.verify-options { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
-.verify-host button.verify-opt:not(#_) { min-width: 104px; padding: 9px 18px; font-size: .88rem; font-weight: 600; }
+/* 狒科生 6 个选项：电脑 3 列 × 2 行，手机 2 列 × 3 行 */
+.verify-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 400px; margin: 0 auto; }
+.verify-host button.verify-opt:not(#_) { min-width: 0; padding: 9px 8px; font-size: .88rem; font-weight: 600; white-space: nowrap; }
 
 .verify-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; }
 .verify-host input.verify-input {
@@ -3240,7 +3263,7 @@ body.day-mode .vc-rules { color: var(--day-cream); }
   .verify-tabs-label { flex: 1 1 100%; text-align: center; margin-right: 0; }
   .verify-host button.verify-tab:not(#_) { padding: 6px 11px; font-size: .76rem; }
   .verify-options { gap: 6px; }
-  .verify-host button.verify-opt:not(#_) { flex: 1 1 100%; }
+  .verify-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .verify-host input.verify-input { max-width: none; }
   .verify-host button.verify-switch-btn:not(#_) { padding: 8px 16px; font-size: .78rem; }
 }
@@ -7527,7 +7550,7 @@ body.hjs-open .toast { z-index: 540; }
 .hjs-guide-foot { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 96px; }
 .hjs-guide-msg { margin: 0; min-height: 1.4em; font-size: .86rem; color: var(--s-gold); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
 .hjs-guide-btns { display: flex; align-items: center; gap: 12px; }
-.hjs-set-foot { display: flex; justify-content: center; padding-top: 2px; }
+.hjs-set-foot { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 2px; }   /* 「回看演奏教学」在「恢复默认设置」上面 */
 .hjs-help { padding: 0 22px calc(20px + env(safe-area-inset-bottom, 0px)); }
 .hjs-help ol { display: flex; flex-direction: column; gap: 10px; margin: 0; padding-left: 1.3em; font-size: .86rem; line-height: 1.7; color: var(--s-soft); }
 .hjs-help li::marker { color: var(--s-gold); font-weight: 700; }
@@ -7681,7 +7704,7 @@ html.hj-intro-only footer { visibility: hidden; }
   --lq-pane-edge-hi: rgba(200,182,242,.5);
   --lq-pane-edge-gold: rgba(246,198,126,.48);
   --lq-pane-edge-err: rgba(236,158,146,.58);
-  --lq-pane-sheen: linear-gradient(180deg, rgba(232,222,255,.05) 0%, rgba(232,222,255,.02) 100%);
+  --lq-pane-sheen: linear-gradient(180deg, rgba(232,222,255,.065) 0, rgba(232,222,255,.025) 24px);   /* 短渐变再接平的：不出色带 */
   /* 立体感：上缘一道细高光（偏移阴影，到圆角自然收细，不会「边比角厚」）、下缘一点内阴影当厚度，外面比输入栏略重一点的投影 */
   --lq-pane-lift: 0 1px 2px rgba(8,6,18,.2), 0 4px 12px rgba(8,6,18,.16);
   --lq-pane-glow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 -1px 0 rgba(255,255,255,.035), inset 0 -7px 10px -8px rgba(6,4,16,.4), inset 0 0 14px rgba(232,222,255,.05);
@@ -7692,7 +7715,8 @@ html.hj-intro-only footer { visibility: hidden; }
     rgba(255,255,255,.18) 45%,
     rgba(255,255,255,.16) 85%,
     rgba(255,255,255,.17) 100%);
-  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 40%, rgba(6,4,16,.08) 100%);
+  /* 只在顶边下面 28px 内一道很短的高光，往下是平的：整段高度上的淡渐变只有几级颜色可用，深色底上会显出一条条色带 */
+  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.06) 0, rgba(255,255,255,.02) 12px, rgba(255,255,255,0) 28px);
   --lq-area-hi: inset 0 1px 0 rgba(255,255,255,.12);
 }
 body.day-mode {
@@ -7735,7 +7759,7 @@ body.day-mode {
   --lq-pane-edge-hi: rgba(184,126,44,.88);
   --lq-pane-edge-gold: rgba(190,130,48,.85);
   --lq-pane-edge-err: rgba(190,78,60,.8);
-  --lq-pane-sheen: linear-gradient(180deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.1) 100%);
+  --lq-pane-sheen: linear-gradient(180deg, rgba(255,255,255,.28) 0, rgba(255,255,255,.12) 24px);
   --lq-pane-lift: 0 1px 2px rgba(96,64,16,.13), 0 4px 12px rgba(96,64,16,.11);
   --lq-pane-glow: inset 0 1px 0 rgba(255,255,255,.8), inset 0 -1px 0 rgba(255,255,255,.3), inset 0 -7px 10px -8px rgba(120,80,20,.18), inset 0 0 14px rgba(255,255,255,.3);
   --lq-edge-convex: linear-gradient(180deg,
@@ -7744,7 +7768,7 @@ body.day-mode {
     rgba(222,174,100,.9) 40%,
     rgba(203,146,60,.93) 80%,
     rgba(210,156,72,.92) 100%);
-  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 42%, rgba(140,92,24,.07) 100%);
+  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.34) 0, rgba(255,255,255,.12) 12px, rgba(255,255,255,0) 30px);
   --lq-area-hi: inset 0 1px 0 rgba(255,255,255,.7);
 }
 
@@ -7824,7 +7848,7 @@ body.day-mode {
    新加扁平框时把类名加进下面「描边与投影」「光泽」两份名单（底色本身是渐变的只加第一份）。
    有滚动条的框（如 .ta-guide-preview）也能加，这里只是还没放进来 */
 :is(body, body.day-mode) :is(
-  .about-list, .about-share-text, .fb-item, .empty-note, .shop-item,
+  .about-list, .about-share-text, .fb-item, .empty-note,
   .ticket-stock, .ticket-result-list, .ticket-lookup-item, .tas-item, .guide-price, .guide-way,
   .alarm-item, .venue-edit, .survey-draft-note, .survey-q.is-card, .sv-overview, .sv-stat, .sv-texts li,
   .ta-group, .ta-round, .huayu-result, .st-perf-row ul,
@@ -7838,7 +7862,7 @@ body.day-mode {
 }
 /* 光泽：叠在原来的底色上（只换 background-image，状态底色照旧） */
 :is(body, body.day-mode) :is(
-  .about-list, .about-share-text, .fb-item, .empty-note, .shop-item,
+  .about-list, .about-share-text, .fb-item, .empty-note,
   .ticket-stock, .ticket-result-list, .ticket-lookup-item, .tas-item, .guide-price, .guide-way,
   .alarm-item, .venue-edit, .survey-draft-note, .survey-q.is-card, .sv-overview, .sv-stat, .sv-texts li,
   .ta-group, .ta-round, .huayu-result, .st-perf-row ul,
