@@ -4065,7 +4065,7 @@ const ADMIN_PANELS_HTML = `
   <p class="popup-admin-count" id="popupBodyCount">0 / 3000</p>
 
   <div class="announcement-image-field">
-    <input type="file" id="popupImageInput" accept="image/*" hidden>
+    <input type="file" id="popupImageInput" accept="image/*" aria-label="选择弹窗配图" hidden>
     <button type="button" id="popupImagePickBtn" class="pill-btn-outline">配图（限 50MB）</button>
     <span class="form-msg" id="popupImageStatus" hidden></span>
     <div class="announcement-image-preview" id="popupImagePreview" hidden>
@@ -4110,7 +4110,7 @@ const ADMIN_PANELS_HTML = `
     <h3 class="ta-group-title">站点密钥</h3>
     <p class="ta-group-hint">访客写的花语、这里选「站点密钥」写的花语都用它加密。<br>换了密钥以后，以前的花语仍能用旧密钥解开（最多保留 5 个）。</p>
     <div class="hy-key-row">
-      <input type="password" id="huayuKeyInput" maxlength="128" autocomplete="off" spellcheck="false" placeholder="站点密钥">
+      <input type="password" id="huayuKeyInput" maxlength="128" autocomplete="off" spellcheck="false" placeholder="站点密钥" aria-label="花语站点密钥">
       <button type="button" id="huayuKeySaveBtn">保存</button>
     </div>
     <div class="hy-key-tools">
@@ -4127,7 +4127,7 @@ const ADMIN_PANELS_HTML = `
   <section class="ta-group">
     <h3 class="ta-group-title">转换</h3>
     <p class="ta-group-hint">不受访客端开关限制。自定义密钥生成的花语需输入密钥才能解读。</p>
-    <textarea id="huayuAdminInput" maxlength="400000" spellcheck="false" placeholder="明文或花语"></textarea>
+    <textarea id="huayuAdminInput" maxlength="400000" spellcheck="false" placeholder="明文或花语" aria-label="要加密的明文或要解读的花语"></textarea>
     <p class="popup-admin-count" id="huayuAdminCount"></p>
     <div class="alarm-seg" id="huayuAdminAlgoSeg">
       <label><input type="radio" name="huayuAdminAlgo" value="1"><span>加密用一代</span></label>
@@ -4137,7 +4137,7 @@ const ADMIN_PANELS_HTML = `
       <label class="is-active"><input type="radio" name="huayuAdminKey" value="site" checked><span>站点密钥</span></label>
       <label><input type="radio" name="huayuAdminKey" value="custom"><span>自定义密钥</span></label>
     </div>
-    <input type="text" id="huayuAdminCustomKey" class="hy-custom-key" maxlength="128" autocomplete="off" spellcheck="false" placeholder="自定义密钥" hidden>
+    <input type="text" id="huayuAdminCustomKey" class="hy-custom-key" maxlength="128" autocomplete="off" spellcheck="false" placeholder="自定义密钥" aria-label="自定义密钥" hidden>
     <div class="popup-admin-btns">
       <button type="button" id="huayuAdminSealBtn">加密</button>
       <button type="button" id="huayuAdminOpenBtn">解密</button>
@@ -4245,7 +4245,7 @@ const ADMIN_PANELS_HTML = `
         <p class="ta-group-hint pz-admin-note" id="pzAdminImageNote"></p>
       </div>
       <div class="popup-admin-btns">
-        <input type="file" id="pzAdminFile" accept="image/*" hidden>
+        <input type="file" id="pzAdminFile" accept="image/*" aria-label="选择拼图图片" hidden>
         <button type="button" id="pzAdminPickBtn">选择图片并裁剪</button>
       </div>
       <div class="pz-crop-box" id="pzCropBox" hidden>
@@ -4318,7 +4318,7 @@ const ADMIN_PANELS_HTML = `
 </div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
   <h2>发布公告</h2>
-  <textarea id="announcementText" placeholder="公告内容"></textarea>
+  <textarea id="announcementText" placeholder="公告内容" aria-label="公告内容"></textarea>
   <div class="announce-audience">
     <label class="audience-opt" for="announceShowA">
       <input type="checkbox" id="announceShowA" checked><span>给 A 显示</span>
@@ -4328,7 +4328,7 @@ const ADMIN_PANELS_HTML = `
     </label>
   </div>
   <div class="announcement-image-field">
-    <input type="file" id="announcementImageInput" accept="image/*" hidden>
+    <input type="file" id="announcementImageInput" accept="image/*" aria-label="选择公告配图" hidden>
     <button type="button" id="announcementImagePickBtn" class="pill-btn-outline">配图</button>
     <span class="form-msg" id="announcementImageStatus" hidden></span>
     <div class="announcement-image-preview" id="announcementImagePreview" hidden>

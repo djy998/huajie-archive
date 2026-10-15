@@ -342,6 +342,8 @@ body.day-mode .site-header .tagline { color: #5b4326; }
   .site-header .tagline .tl-gap { display: none; }
 }
 
+/* 页头工具按钮外面包的导航区（index.html），本身不占位置 */
+.hb-nav { display: contents; }
 .daynight-toggle {
   position: absolute; top: 18px; right: 18px;
   width: 44px; height: 44px;
@@ -2978,7 +2980,20 @@ body.day-mode .verify-host { --verify-ink: var(--day-gold); }
 .verify-switch { margin-top: 14px; text-align: center; }
 .verify-host button.verify-switch-btn:not(#_) { padding: 8px 20px; font-size: .82rem; font-weight: 600; }
 
-.verify-job { display: flex; justify-content: center; margin: 2px 0 12px; }
+.verify-job { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 2px 0 12px; }
+/* 狒科生 6 选 3：已选几个 / 选中的选项 */
+.verify-pick-note { margin: -4px 0 10px; font-size: .78rem; color: var(--text-mute); text-align: center; }
+.verify-pick-note b { color: var(--lantern-soft); font-weight: 600; }
+body.day-mode .verify-pick-note { color: var(--day-lilac); }
+body.day-mode .verify-pick-note b { color: var(--day-gold); }
+:is(body, body.day-mode) .verify-host button.verify-opt.is-on:not(#_) {
+  color: var(--accent-ink);
+  background:
+    linear-gradient(168deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,.03) 76%, rgba(0,0,0,.08) 100%),
+    var(--accent);
+  border-color: rgba(255,255,255,.42);
+  box-shadow: 0 4px 12px rgba(8,6,18,.22), inset 0 1px 0 rgba(255,255,255,.4), inset 0 -5px 10px rgba(70,42,8,.14);
+}
 .verify-job-icon {
   width: 72px; height: 72px;
   border-radius: 18px;

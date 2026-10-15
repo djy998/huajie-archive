@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261016a">
-  <link rel="preload" as="style" href="style.css?v=20261016a">
+  <link rel="preload" as="script" href="boot.js?v=20261016c">
+  <link rel="preload" as="style" href="style.css?v=20261016c">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261016a"></script>
+<script src="boot.js?v=20261016c"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -260,6 +260,8 @@
 <div id="fxClickLayer" aria-hidden="true"></div>
 
 <header class="site-header">
+  <!-- 页头工具：读屏软件里是一个导航区；display: contents，不影响按钮各自的定位 -->
+  <nav class="hb-nav" aria-label="页头工具">
   <button class="daynight-toggle more-toggle hb-slot-1" id="moreToggle" type="button"
           aria-haspopup="true" aria-expanded="false" aria-label="更多" title="更多">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -282,6 +284,7 @@
       <svg class="ico ico-vol-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
     </span>
   </button>
+  </nav>
 
   <div class="vol-panel" id="volPanel" hidden>
     <div class="vol-track" id="volTrack" tabindex="0" role="slider"
@@ -291,7 +294,7 @@
     </div>
   </div>
 
-  <div class="more-panel" id="morePanel" aria-label="更多"></div>
+  <nav class="more-panel" id="morePanel" aria-label="更多功能"></nav>
 
   <div class="cal-widget" id="calWidget" hidden>
     <div class="cal-head" title="拖动移动，双击复位">
@@ -528,8 +531,8 @@
     <div class="gate-card ticket-card" id="ticketLookupCard" hidden>
       <h2 class="ticket-h-sm">查询我的登记</h2>
       <p class="hint">填写登记时的联系方式和第一位持票人 id，待定则填「待定」</p>
-      <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式">
-      <input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id">
+      <input type="text" id="ticketLookupContact" maxlength="40" placeholder="联系方式" aria-label="购票时填的联系方式">
+      <input type="text" id="ticketLookupName" maxlength="30" placeholder="第一位持票人 id" aria-label="第一位持票人的游戏 id">
       <div class="ticket-submit-row"><button type="button" id="ticketLookupBtn">查询</button></div>
       <p class="form-msg" id="ticketLookupMsg" hidden></p>
       <div id="ticketLookupList"></div>
@@ -734,7 +737,7 @@
           <label class="audience-opt about-check" for="feedbackWantContact">
             <input type="checkbox" id="feedbackWantContact"><span>留下联系方式</span>
           </label>
-          <input type="text" id="feedbackContact" maxlength="60" placeholder="QQ、游戏 id@服务器或邮箱等" hidden>
+          <input type="text" id="feedbackContact" maxlength="60" placeholder="QQ、游戏 id@服务器或邮箱等" aria-label="联系方式" hidden>
         </div>
         <div class="verify-host about-verify" id="feedbackVerify"></div>
         <div class="about-submit-row">
@@ -960,11 +963,11 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261016a"></script>
-<script src="config.js?v=20261016a"></script>
-<script src="main.js?v=20261016a"></script>
-<script src="ticket.js?v=20261016a"></script>
-<script src="venue.js?v=20261016a"></script>
-<script src="survey.js?v=20261016a"></script>
+<script src="verify.js?v=20261016c"></script>
+<script src="config.js?v=20261016c"></script>
+<script src="main.js?v=20261016c"></script>
+<script src="ticket.js?v=20261016c"></script>
+<script src="venue.js?v=20261016c"></script>
+<script src="survey.js?v=20261016c"></script>
 </body>
 </html>

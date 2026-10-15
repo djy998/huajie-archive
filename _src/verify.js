@@ -340,6 +340,7 @@
         this.submitAnswer(el.dataset.value);
         return;
       }
+      if (act === "pick") { this.pickJob(el); return; }
       if (act === "rules") {
         const box = this.body.querySelector(".vc-rules");
         if (box) {
@@ -571,20 +572,36 @@
       if (input) input.focus({ preventScroll: true });
     }
 
-    /* 狒科生：图标由 Worker 以 data URL 下发，不暴露职业名 */
+    /* 狒科生：Worker 一次下发几个职业图标（data URL，不暴露职业名）和 6 个选项，选中的个数凑够图标数就交卷，
+       要和图标对应的职业完全一致才通过（6 选 3）。旧版 Worker 只下发一个 iconData，也照样能用 */
     tplFf14(t) {
-      const icon = t.iconData;
-      const img = icon
-        ? '<img class="verify-job-icon" src="' + icon + '" alt="职业图标" width="72" height="72" loading="eager">'
+      const icons = t.icons || (t.iconData ? [t.iconData] : []);
+      const imgs = icons.length
+        ? icons.map((src, i) => '<img class="verify-job-icon" src="' + src + '" alt="职业图标 ' + (i + 1) + '" width="72" height="72" loading="eager">').join("")
         : '<span class="verify-job-fallback">图标加载失败，点「换一题」再试</span>';
+      const pick = t.pick || icons.length || 1;
       const options = (t.options || []).map((name) =>
-        '<button type="button" class="verify-opt" data-act="opt" data-value="' + name + '">' + name + "</button>"
+        '<button type="button" class="verify-opt" data-act="pick" data-value="' + name + '" aria-pressed="false">' + name + "</button>"
       ).join("");
       return ''
-        + '<div class="verify-job">' + img + "</div>"
-        + '<p class="verify-q">请选出这个图标对应的职业：</p>'
+        + '<p class="verify-q">' + (pick > 1 ? "请选择下方图标对应的全部职业。" : "请选出下方图标对应的职业：") + "</p>"
+        + '<div class="verify-job">' + imgs + "</div>"
+        + (pick > 1 ? '<p class="verify-pick-note">已选 <b class="verify-pick-n">0</b> / ' + pick + "，选够 " + pick + " 个自动判定，再点一次可取消</p>" : "")
         + '<div class="verify-options">' + options + "</div>"
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一题</button></div>';
+    }
+
+    /* 狒科生：点选项切换选中；选够了就交卷（答案用 | 连起来） */
+    pickJob(el) {
+      if (this.busy || this.proof || !this.task) return;
+      const on = !el.classList.contains("is-on");
+      el.classList.toggle("is-on", on);
+      el.setAttribute("aria-pressed", on ? "true" : "false");
+      const chosen = [...this.body.querySelectorAll(".verify-opt.is-on")].map((b) => b.dataset.value);
+      const n = this.body.querySelector(".verify-pick-n");
+      if (n) n.textContent = String(chosen.length);
+      const need = this.task.pick || (this.task.icons ? this.task.icons.length : 1);
+      if (chosen.length >= need) this.submitAnswer(chosen.join("|"));
     }
 
     /* 文科生：飞花令 */
@@ -708,6 +725,9 @@
         }
         this.setTip(errText(data), true);
         this.body.querySelectorAll(".vc-arrow.is-picked").forEach((b) => b.classList.remove("is-picked"));
+        this.body.querySelectorAll(".verify-opt.is-on").forEach((b) => { b.classList.remove("is-on"); b.setAttribute("aria-pressed", "false"); });
+        const n = this.body.querySelector(".verify-pick-n");
+        if (n) n.textContent = "0";
         return;
       }
 
