@@ -7864,6 +7864,17 @@ body.day-mode {
 :is(body, body.day-mode) .gm-kw-big { box-shadow: var(--lq-pane-lift), var(--lq-pane-glow), inset 0 0 0 4px rgba(240,181,98,.06); }
 body.day-mode .gm-kw-big { box-shadow: var(--lq-pane-lift), var(--lq-pane-glow), inset 0 0 0 4px rgba(138,90,28,.08); }
 
+/* ---- ③ 动画「完整」时的真折射 ----
+   main.js「9b. 液态玻璃折射」按每个框的尺寸生成滤镜，给框加 .lq-refract 和 --lq-refract: url(#lqr…)；
+   只折贴边 10 像素、最多吸进 6 像素，中间不动。「轻量」「关闭」时没有这条，回到上面的静态玻璃。
+   :not(#_) 是为了压过文本域那条只磨砂的规则。折射后面接的模糊、饱和度在 --lq-rest：框和选项几乎不模糊（字下面的背景要清楚），
+   页头圆按钮原来是 9px 的毛玻璃，这里减到 4px，不然折出来的背景又被糊平了 */
+body.fx-hover-enabled .lq-refract:not(#_) {
+  -webkit-backdrop-filter: var(--lq-refract) var(--lq-rest, blur(.6px) saturate(1.15) brightness(1.06));
+  backdrop-filter: var(--lq-refract) var(--lq-rest, blur(.6px) saturate(1.15) brightness(1.06));
+}
+:is(.daynight-toggle, .more-item) { --lq-rest: blur(4px) saturate(1.25) brightness(1.05); }
+
 
 /* ==== 忙碌光标与关闭按钮的叉 ==== */
 /* 加载遮罩用樱花光标；悬停时由 main.js 的 initBusyCursor 逐帧播放。

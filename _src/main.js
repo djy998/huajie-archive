@@ -1977,6 +1977,7 @@ function syncFxToggle() {
   document.body.classList.toggle("fx-lite", fxLevel === "lite");
   document.body.classList.toggle("fx-off", fxLevel === "off");
   applyFx();
+  lqSync();
   if (fxEnabled) return;
   document.querySelectorAll(".fx-page-enter, .fx-fade-only").forEach((el) => {
     el.classList.remove("fx-page-enter", "fx-fade-only");
@@ -2091,6 +2092,167 @@ function initBusyCursor() {
   }, { passive: true });
   document.addEventListener("pointerout", (e) => { if (!e.relatedTarget) stop(); }, { passive: true });
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+}
+
+/* ==== 9b. 液态玻璃折射（动画「完整」时） ====
+   卡片里的扁平框和文本域（名单同 style.css 第 31 节②），以及页头的圆按钮（昼夜、动画、音量……和「更多」里的）、问卷 / 场地登记的选项，在静态玻璃之上再加真折射：照 liquid-glass-button 演示的做法，
+   按每个框的实际尺寸、圆角生成一张位移贴图（SVG feDisplacementMap），只在贴边 LQ.bevel 像素内把背后的画面往里「吸」，
+   最多 LQ.push 像素，中间不动，所以框再大也只是边缘一圈在折，字和中间的背景都清楚。
+   以前 index.html 里那个公用滤镜 #lgf 是按框的比例拉伸的，框一大折射带就跟着变宽，整块发虚；输入框（一行高）仍用它。
+   只在动画「完整」（body.fx-hover-enabled）时开；「轻量」「关闭」和 Firefox（backdrop-filter 不认 SVG 滤镜）用静态玻璃。
+   同尺寸的框共用一个滤镜；框的尺寸由 ResizeObserver 盯着（弹窗打开、内容展开都会触发），新出现的框由 MutationObserver 找出来。
+   舞台演奏盖住页面时（body.hjs-covered）不扫描，演奏时每帧都在改 DOM */
+const LQ_TARGETS = [
+  ".about-list", ".about-share-text", ".fb-item", ".empty-note", ".shop-item",
+  ".ticket-stock", ".ticket-result-list", ".ticket-lookup-item", ".tas-item", ".guide-price", ".guide-way",
+  ".alarm-item", ".venue-edit", ".survey-draft-note", ".survey-q.is-card", ".sv-overview", ".sv-stat", ".sv-texts li",
+  ".ta-group", ".ta-round", ".huayu-result", ".st-perf-row ul",
+  ".pz-resume", ".pz-contest", ".pz-rec-list li", ".pz-code",
+  ".gm-macro", ".gm-say", ".gm-hint", ".gm-answer", ".gm-spy-card", ".gm-spy-p", ".gm-chip", ".gm-kw-big", ".gm-bomb-stage",
+  ".vc-rules",
+  ".gate-card textarea", ".about-form textarea", ".alarm-card textarea",
+  /* 按钮与选项 */
+  ".daynight-toggle", ".more-item", ".venue-choice", ".survey-scale-opt span",
+].join(", ");
+const LQ = { bevel: 10, push: 6, mapMax: 320, cacheMax: 160, scanDelay: 160 };
+const LQ_NS = "http://www.w3.org/2000/svg";
+const lq = { on: false, svg: null, seq: 0, maps: new Map(), els: new Map(), ro: null, mo: null, timer: 0, queue: new Set(), raf: 0 };
+
+const lqSupported = () => !/Firefox\/\d/i.test(navigator.userAgent)
+  && !!(window.CSS && CSS.supports && (CSS.supports("backdrop-filter", "blur(1px)") || CSS.supports("-webkit-backdrop-filter", "blur(1px)")));
+
+/* 圆角矩形的有向距离：里面为负 */
+function lqSdf(px, py, hw, hh, r) {
+  const qx = Math.abs(px) - hw + r, qy = Math.abs(py) - hh + r;
+  return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - r;
+}
+
+/* 位移贴图：R / G 通道 = 水平 / 竖直位移（128 不动）。位移方向是朝框里的法线，大小 push × (1 − smoothstep(深度 / bevel)) */
+function lqMap(W, H, R) {
+  const mw = Math.max(8, Math.min(LQ.mapMax, W)), mh = Math.max(8, Math.min(LQ.mapMax, H));
+  const hw = W / 2, hh = H / 2, e = 0.5;
+  const bevel = Math.min(LQ.bevel, Math.min(W, H) / 2 - 1);   // 小按钮：折射带最多占到半径
+  const img = new ImageData(mw, mh);
+  const d = img.data;
+  for (let j = 0; j < mh; j++) {
+    for (let i = 0; i < mw; i++) {
+      const x = ((i + 0.5) / mw - 0.5) * W, y = ((j + 0.5) / mh - 0.5) * H;
+      const o = (j * mw + i) * 4;
+      let dx = 0, dy = 0;
+      const depth = -lqSdf(x, y, hw, hh, R);
+      if (depth > 0 && depth < bevel) {
+        const t = depth / bevel;
+        const k = 1 - t * t * (3 - 2 * t);
+        const gx = lqSdf(x + e, y, hw, hh, R) - lqSdf(x - e, y, hw, hh, R);
+        const gy = lqSdf(x, y + e, hw, hh, R) - lqSdf(x, y - e, hw, hh, R);
+        const len = Math.hypot(gx, gy) || 1;
+        dx = (-gx / len) * LQ.push * k;   // 法线朝里：从框里面一点的地方取画面
+        dy = (-gy / len) * LQ.push * k;
+      }
+      d[o] = Math.round((0.5 + dx / (2 * LQ.push)) * 255);
+      d[o + 1] = Math.round((0.5 + dy / (2 * LQ.push)) * 255);
+      d[o + 2] = 128;
+      d[o + 3] = 255;
+    }
+  }
+  const c = document.createElement("canvas");
+  c.width = mw;
+  c.height = mh;
+  c.getContext("2d").putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+function lqFilter(W, H, R) {
+  const key = `${W}x${H}r${R}`;
+  if (lq.maps.has(key)) return lq.maps.get(key);
+  if (!lq.svg) {
+    lq.svg = document.createElementNS(LQ_NS, "svg");
+    lq.svg.setAttribute("aria-hidden", "true");
+    lq.svg.setAttribute("focusable", "false");
+    lq.svg.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none";
+    document.body.appendChild(lq.svg);
+  }
+  const id = `lqr${++lq.seq}`;
+  const f = document.createElementNS(LQ_NS, "filter");
+  [["id", id], ["filterUnits", "userSpaceOnUse"], ["color-interpolation-filters", "sRGB"], ["x", 0], ["y", 0], ["width", W], ["height", H]]
+    .forEach(([k, v]) => f.setAttribute(k, String(v)));
+  const im = document.createElementNS(LQ_NS, "feImage");
+  [["x", 0], ["y", 0], ["width", W], ["height", H], ["preserveAspectRatio", "none"], ["result", "m"]].forEach(([k, v]) => im.setAttribute(k, String(v)));
+  im.setAttribute("href", lqMap(W, H, R));
+  const dm = document.createElementNS(LQ_NS, "feDisplacementMap");
+  [["in", "SourceGraphic"], ["in2", "m"], ["scale", 2 * LQ.push], ["xChannelSelector", "R"], ["yChannelSelector", "G"]].forEach(([k, v]) => dm.setAttribute(k, String(v)));
+  f.append(im, dm);
+  lq.svg.appendChild(f);
+  const rec = { id, el: f };
+  lq.maps.set(key, rec);
+  return rec;
+}
+
+/* 用不到的滤镜清掉（框关掉、尺寸变了以后旧尺寸的那张） */
+function lqPrune() {
+  if (lq.maps.size <= LQ.cacheMax) return;
+  const used = new Set();
+  lq.els.forEach((key, el) => { if (el.isConnected) used.add(key); else { lq.els.delete(el); lq.ro?.unobserve(el); } });
+  lq.maps.forEach((rec, key) => { if (!used.has(key)) { rec.el.remove(); lq.maps.delete(key); } });
+}
+
+/* 尺寸用 offsetWidth / offsetHeight（不受弹窗缩放动画影响） */
+function lqApply(el) {
+  if (!el.isConnected) { lq.els.delete(el); lq.ro?.unobserve(el); return; }
+  const W = el.offsetWidth, H = el.offsetHeight;
+  if (W < 16 || H < 16) return;
+  const R = Math.round(Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, W / 2, H / 2));
+  const key = `${W}x${H}r${R}`;
+  if (lq.els.get(el) === key && el.classList.contains("lq-refract")) return;
+  const { id } = lqFilter(W, H, R);
+  el.style.setProperty("--lq-refract", `url(#${id})`);
+  el.classList.add("lq-refract");
+  lq.els.set(el, key);
+  lqPrune();
+}
+
+function lqFlush() {
+  lq.raf = 0;
+  const list = [...lq.queue];
+  lq.queue.clear();
+  list.forEach(lqApply);
+}
+
+function lqScan() {
+  lq.timer = 0;
+  if (!lq.on || document.body.classList.contains("hjs-covered")) return;
+  document.querySelectorAll(LQ_TARGETS).forEach((el) => {
+    if (lq.els.has(el)) return;
+    lq.els.set(el, "");
+    lq.ro.observe(el);
+  });
+}
+const lqScanSoon = () => { if (lq.on && !lq.timer) lq.timer = setTimeout(lqScan, LQ.scanDelay); };
+
+/* 动画档位变了就跟着开关（syncFxToggle 里调用） */
+function lqSync() {
+  const want = fxLevel === "full" && lqSupported();
+  if (want === lq.on) return;
+  lq.on = want;
+  if (want) {
+    lq.ro = new ResizeObserver((entries) => {
+      entries.forEach((en) => lq.queue.add(en.target));
+      if (!lq.raf) lq.raf = requestAnimationFrame(lqFlush);
+    });
+    lq.mo = new MutationObserver(lqScanSoon);
+    lq.mo.observe(document.body, { childList: true, subtree: true });
+    lqScan();
+    return;
+  }
+  lq.ro?.disconnect();
+  lq.mo?.disconnect();
+  lq.ro = lq.mo = null;
+  clearTimeout(lq.timer);
+  lq.timer = 0;
+  lq.els.forEach((_, el) => { el.classList.remove("lq-refract"); el.style.removeProperty("--lq-refract"); });
+  lq.els.clear();
+  lq.maps.forEach((rec) => rec.el.remove());
+  lq.maps.clear();
 }
 
 /* ==== 10. 头部工具：音量、更多、日历、时间条 ==== */
