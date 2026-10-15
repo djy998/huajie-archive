@@ -78,7 +78,7 @@
 - **身份**：
   - 密码 A、B、C 和查看密码分别对应 `a`、`b`、`c`（管理员）、`v`（只读）。查看密码在管理页改过后存在 D1（加盐哈希），以它为准。
   - 管理员密码 15 分钟内输错 3 次，封锁 15 分钟。
-- **人机验证**：手动验证的题面都不以文字下发：狒科生的职业图标、理科生（仙人微彩）的盘面都是图片（data URL；盘面由 Worker 的 `cactpotImage` 用笔画字形把 1~9 画在 3 × 3 格的正中，只撒几粒淡点，前端 `verify.js` 的 `paintCactpot` 染成深红、铺在九个圆上），文科生的令字在前端画到 canvas 上；答案只在加密的题目 id 里（AES-GCM），判卷在服务端。仙人微彩：1、2、3 必在同一条线上（和为 6，报酬 10000 金碟币，唯一最高），八个箭头是选项，答案是线的编号（`r0~r2` 行、`c0~c2` 列、`d0` 左上到右下、`d1` 右上到左下）；答错一次 Worker 作废这题，前端换盘面并提示「请重新作答」。以前的理科生是算术题（`math`，`mathTask` / `mathImage` / `tplMath`），前端不再提供，Worker 与前端代码都留着备用。`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`cactpot`（理科生）、`math`（旧版理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
+- **人机验证**：手动验证的题面都不以文字下发：狒科生的职业图标、理科生（仙人微彩）的盘面都是图片（data URL；盘面由 Worker 的 `cactpotImage` 用笔画字形把 1~9 画在 3 × 3 格的正中，只撒几粒淡点，前端 `verify.js` 的 `paintCactpot` 染成深红、铺在九个圆上），文科生的令字在前端画到 canvas 上；答案只在加密的题目 id 里（AES-GCM），判卷在服务端。仙人微彩：1、2、3 必在同一条线上（和为 6，报酬 10000 金碟币，唯一最高），八个箭头是选项，答案是线的编号（`r0~r2` 行、`c0~c2` 列、`d0` 左上到右下、`d1` 右上到左下）；答错一次 Worker 作废这题，前端换盘面并提示「请重新作答」。以前的理科生是算术题（`math`，`mathTask` / `mathImage` / `tplMath`）：Worker 已关闭这个接口（`VERIFY_MODES_OFF`）——不出题、不判卷、它发的凭证也不认，防止有人绕过前端用脚本解算术题；代码留着备用。狒科生是 6 选 1（`FF14_OPTIONS`），选错一次换题。`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`cactpot`（理科生）、`math`（旧版理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
 - **IP 属地**：`requestGeo` 从 Cloudflare 的 `request.cf` 取出「国家|地区|城市」。数据库不保存 IP 本身。访客标识（`client_key`）是带密钥的 IP 哈希，只用于限流和防重复。
 - **表结构**：
   - `SCHEMA_SQL` 只用 `CREATE … IF NOT EXISTS`。给已有表加列写在 `ADDED_COLUMNS`。

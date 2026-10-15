@@ -1038,6 +1038,9 @@
       .sort((x, y) => ORDER.indexOf(x.querySelector("h4").textContent) - ORDER.indexOf(y.querySelector("h4").textContent))
       .forEach((sec) => body.append(sec));
     body.append(h("div", { class: "hjs-set-foot" }, h("button", {
+      type: "button", class: "hjs-btn hjs-replay-btn", text: "回看演奏教学",
+      onclick: () => openGuide("intro", "replay"),
+    }), h("button", {
       type: "button", class: "hjs-btn", text: "恢复默认设置",
       onclick: () => {
         [K.inst, K.demo, K.delay, K.judge, K.render, K.range, K.fly, K.anim, K.power, K.line, K.perf].forEach((k) => storage.remove(k));
@@ -1118,7 +1121,8 @@
     loadData().then(() => { if (S.song) loadChart(S.song); });
     if (S.fly) ["fly-flower.webp", "fly-stars.webp"].forEach((n) => { try { const img = flyImage(n); img.decode?.().catch(() => {}); } catch (e) {} });
   }
-  function closeGuide(quiet) {
+  /* undone：不记「教程看过了」（第一次的教程中途点「退出」时），下次打开舞台还从开场白开始 */
+  function closeGuide(quiet, undone) {
     const g = S.guide;
     if (!g) return;
     clearInterval(g.timer);
@@ -1126,9 +1130,18 @@
     g.box.remove();
     S.guide = null;
     S.root.classList.remove("is-guide");
-    setRaw(K.guide, "1");
+    if (!undone) setRaw(K.guide, "1");
     if (!quiet && S.sheet === "settings") renderSheet();
     if (!quiet && !S.sheet && S.view === "lobby") requestAnimationFrame(() => { const go = $id("hjsGo"); if (go) go.focus({ preventScroll: true }); });
+  }
+  /* 教程里的「退出」：关掉舞台回到网页。还没试弹完就退出的，不记「看过了」，下次打开舞台还是从开场白开始；
+     已经到了延迟校准（或刚试弹完、正要校准）时退出，算看过了，下次直接进大厅，不再校准 */
+  function guideExit() {
+    const g = S.guide;
+    if (!g) return;
+    const pastRounds = g.step === "r2done" || CAL_STEPS.includes(g.step);
+    closeGuide(true, !pastRounds);
+    close();
   }
   /* 教程里的过场：上方换一段话，话下面一个「确认」 */
   function guideSay(step, msg = "") {
@@ -1177,11 +1190,13 @@
     const goBox = q(".hjs-guide-go");
     goBox.replaceChildren(...go);
     goBox.hidden = !go.length;
-    const quit = btn(first ? "跳过" : "结束校准", () => closeGuide());
+    const quit = btn(first ? "跳过" : CAL_STEPS.includes(g.step) ? "结束校准" : "结束教学", () => closeGuide());
+    /* 第一次的教程：「跳过」旁边一个「退出」，直接关掉舞台回到网页（guideExit） */
+    const exit = first ? [btn("退出", guideExit)] : [];
     q(".hjs-guide-btns").replaceChildren(...{
-      idle: [btn("继续校准", () => calStart(true), "hjs-btn"), quit],
-      done: [btn("重新校准", () => calStart(), "hjs-btn"), btn(first ? "开始演奏" : "完成", () => closeGuide(), "hjs-btn is-main")],
-    }[g.step] || [quit]);
+      idle: [btn("继续校准", () => calStart(true), "hjs-btn"), quit, ...exit],
+      done: [btn("重新校准", () => calStart(), "hjs-btn"), ...exit, btn(first ? "开始演奏" : "完成", () => closeGuide(), "hjs-btn is-main")],
+    }[g.step] || [quit, ...exit]);
     if (go.length) requestAnimationFrame(() => { const b = goBox.querySelector(".is-main"); if (b) b.focus({ preventScroll: true }); });
     /* 结果：弹出判定延迟的设置框，可再按 ±5 ms 手动微调（同设置里的判定延迟） */
     g.stage.querySelector(".hjs-guide-adjust")?.remove();

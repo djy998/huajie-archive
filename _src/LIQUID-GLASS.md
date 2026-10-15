@@ -37,6 +37,7 @@
 - 填充：`--lq-fill`（夜 `rgba(36,29,60,.74)`、白天 `rgba(246,227,187,.82)`），留一点透明，背景才折得动。
 - 描边：`background-clip` 双层——`padding-box` 铺填充、`border-box` 铺描边渐变，边框本身是透明的 1px。下拉框在最上面再叠一层箭头（`--lq-arrow`）。
 - 折射：`backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1)`。`#lgf` 是 `index.html` 开头 `<svg id="lg-map">` 里的滤镜：一张 8 × 64 的位移贴图（`feImage`）按 `objectBoundingBox` 拉伸，`feDisplacementMap` 只在上下缘把背景往里「折」，中间不动，所以任何尺寸的栏都能用同一个滤镜，不需要 JS。
+- 文本域里面那层光泽（`--lq-area-sheen`）只在顶边下面 28px 内，往下是平的：整段高度上的淡渐变在深色底上只有几级颜色可用，会显出一条条色带。扁平框的光泽（`--lq-pane-sheen`）同理，24px 后就是平的。
 - 文本域例外：不用折射，只留 `blur(1.5px) saturate(1.1)`；描边用 `--lq-edge-convex`（顶边最亮、往下渐暗，底边不回亮），里面叠 `--lq-area-sheen`（上亮下暗）和上缘一道细高光 `--lq-area-hi`。文本域有好几行高，折射按栏高等比放大，上下缘会被拉出很宽的亮带、中间偏暗，看着像往里凹；改成「光从上面来」以后是凸起的玻璃。
 - 兼容：Firefox 不支持 `backdrop-filter` 引用 SVG 滤镜，退化成「半透明、无模糊无折射」，底色与文字不受影响。
 
@@ -56,7 +57,7 @@
 在 `style.css` 第 31 节②：
 
 - 网站说明：`.about-list`（介绍框）、`.about-share-text`（分享文字）、`.fb-item`（反馈列表）
-- 通用：`.empty-note`（空状态）、`.shop-item`（活动详情的店家一览）
+- 通用：`.empty-note`（空状态）。活动详情的店家一览（`.shop-item`）不在卡片里、直接放在天空背景上，单独做成和标签按钮（`.tab-btn`）一样的磨砂玻璃栏，不用淡玻璃
 - 购票：`.ticket-stock`、`.ticket-result-list`、`.ticket-lookup-item`、`.tas-item`；购票须知 `.guide-price`、`.guide-way`
 - 闹铃：`.alarm-item`
 - 场地登记：`.venue-edit`
