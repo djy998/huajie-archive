@@ -1063,7 +1063,7 @@
 
   /* ==== 教程与延迟校准 ====
      第一次打开舞台演奏时先出教程：大厅先不显示（后台照常加载曲库、谱面和音色），直接是演奏画面。
-     开场白（试音提醒）→ 第一轮：2 个气泡，外圈收到与气泡重合后一直等着，点中出琴声、气泡消散（同学习模式）
+     开场白 → 第一轮（上方是试音提醒 + 怎么点）：2 个气泡，外圈收到与气泡重合后一直等着，点中出琴声、气泡消散（同学习模式）
      → 第二轮：3 个气泡按节奏接连出现，不等人，弹中 2 个以上算通过，否则再来一轮 → 延迟校准。
      延迟校准（设置里的「校准」也走这里）：气泡出现时外圈可见，随即快速淡出；在游戏同一个音频钟上连响 7 下「嗒」，
      第 7 下时点击，外圈按点击那一刻应在的位置重新显出，气泡像演奏时一样消散。先示范一个（不用点），再测 6 个，每个换一种颜色，
@@ -1075,14 +1075,19 @@
     /* 第二轮：第 i 个在开始后 lead + i × gap 秒到判定点；半窗 win 内点中算弹中（分档同仙人刺），晚过 win 判漏；弹中 pass 个以上通过 */
     r2: { notes: [72, 76, 79], colors: [1, 2, 3], pos: [[28, 56], [50, 44], [72, 56]], lead: 2.2, gap: 0.85, win: 0.45, tiers: [0.18, 0.3], pass: 2 },
   };
+  /* soundcheck（试音提醒）放在第一轮的玩法提示上面，点了开场白的「确认」之后才出现；
+     玩法提示的后半句 playKey（键盘也能弹）手机上不显示 */
   const GUIDE_TEXT = {
-    welcome: "欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！",
-    play: "在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键",
+    welcome: "欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！",
+    soundcheck: "开场前来做个试音吧，请检查声音是否开启。\n我们来回顾一下演奏方法！",
+    play: "在外圈与气泡重合时点击",
+    playKey: "，或者鼠标挪到气泡上按下键盘任意键",
     r1done: "很棒，接下来我们一口气来一次！",
     r2fail: "也许有点紧张？我们再试一次！",
     r2done: "非常棒！接下来我们来校准一下演奏设备——",
     cal: "调整过程中，气泡的外圈将会隐藏。\n在气泡出现后，会连续响起「嗒」声。\n请在听到第七个「嗒」声时按下气泡",
   };
+  const guidePlayText = () => GUIDE_TEXT.play + (matchMedia("(pointer: coarse)").matches ? "" : GUIDE_TEXT.playKey);
   const CAL_STEPS = ["ready", "demo", "ready2", "cal", "idle", "done"];
   const CAL = { lead: 0.8, gap: 0.32, beats: 7, rounds: 6, win: 0.25, wait: 0.45, show: 0.5, fade: 0.35, hold: 0.28, pause: 0.55, idle: 2 };
   const calTarget = () => CAL.lead + (CAL.beats - 1) * CAL.gap;   // 第 7 下（听到的时刻，从气泡出现算起）
@@ -1141,9 +1146,9 @@
     const btn = (text, onclick, cls = "hjs-btn") => h("button", { type: "button", class: cls, text, onclick });
     const T = {
       welcome: ["舞台演奏", GUIDE_TEXT.welcome],
-      r1: ["舞台演奏", GUIDE_TEXT.play],
+      r1: ["舞台演奏", `${GUIDE_TEXT.soundcheck}\n${guidePlayText()}`],
       r1done: ["舞台演奏", GUIDE_TEXT.r1done],
-      r2: ["舞台演奏", GUIDE_TEXT.play],
+      r2: ["舞台演奏", guidePlayText()],
       r2fail: ["舞台演奏", GUIDE_TEXT.r2fail],
       r2done: ["舞台演奏", GUIDE_TEXT.r2done],
       ready: ["延迟校准", `${GUIDE_TEXT.cal}，接下来看一下示范。`],
@@ -2475,28 +2480,24 @@
 
   const tierOf = (d, dm) => (d <= dm.win[0] ? 0 : d <= dm.win[1] ? 1 : 2);
 
-  /* 一次点按算给哪个音：先到先得 —— 判定窗里最早还没弹的那个。不然气泡挨得近、点得稍晚一点时，
-     这一下会被算给下一个音，后面每一下都跟着错一个（多出 GOOD 和 MISS）。只有两种情况跳过最早那个：
-     · 点在后面某个气泡正中（0.45 个气泡以内），离最早那个却有 1.3 个气泡以上 —— 就是想点后面那个
-     · 最早那个已经晚过 GREAT 窗，后面那个时间更准、位置也不比它远 —— 前一个留给判漏
+  /* 一次点按算给哪个音：点击范围里同时有好几个气泡时，先算给「最先消失」的那个 —— 判定窗里最早到点、还没弹的音
+     （所有音的判定窗一样宽，最早到点的就最早被判漏、最先消失）。
+     以前手指正点在后面某个气泡上（0.6 个气泡以内）、或最早那个已经晚过 GREAT 窗时，会把这一下让给后面那个，
+     最早那个留着判漏；泰坦难度气泡收得快、挨得近，常常是「明明点到了快消失的那个，结果它还是 MISS」。现在一律先保住快消失的。
+     只留一种例外：手指落在后面某个气泡正中（0.45 个气泡以内），而最早那个远在 1.3 个气泡以外、只是刚好还在点击范围的边上
+     —— 这时显然是想点后面那个，不该被远处那个抢走。
      cands：[{ n, d }]，按时间先后，d 为离点按处多少个气泡（放水范围为 0） */
-  function pickNote(cands, t, dm) {
+  function pickNote(cands) {
     if (!cands.length) return null;
-    /* 手指正点在气泡上（离圆心不到 0.6 个气泡直径）就算这个，哪怕旁边还有更早的音：
-       密集段里气泡挨得近，按「最早的那个」算，点 B 会被算到旁边的 A 上，下一下再点 A 就扑空成了点偏。
-       压在一起的几个里取最早的（先到的叠在上面，看到的就是它） */
-    const on = cands.find((c) => c.d <= 0.6);
-    if (on) return on.n;
     const first = cands[0];
     for (let i = 1; i < cands.length; i++) {
       const c = cands[i];
       if (c.d <= 0.45 && first.d >= 1.3 && c.d + 0.5 <= first.d) return c.n;
-      if (first.n.t - t < -dm.win[1] && Math.abs(c.n.t - t) < Math.abs(first.n.t - t) && c.d <= first.d + 0.3) return c.n;
     }
     return first.n;
   }
 
-  /* 点气泡：判定窗内、离点按处判定半径（TAP_RANGES 的 r 个气泡直径）以内的音，时间越准、离得越近越优先；
+  /* 点气泡：判定窗内、离点按处判定半径（TAP_RANGES 的 r 个气泡直径）以内的音，最先消失（最早到点）的优先（pickNote）；
      一个都没有时，下一个该弹的音在 next 个气泡直径以内也算。放水范围不看位置 */
   function tapAt(x, y, e) {
     const g = S.g;
@@ -2520,7 +2521,7 @@
       const d = free ? 0 : Math.hypot(n.x - x, n.y - y);
       if (d <= R) cands.push({ n, d: d / g.size });
     }
-    let best = pickNote(cands, t, dm);
+    let best = pickNote(cands);
     if (!best && !free) {
       for (let i = S.next; i < S.notes.length; i++) {
         const n = S.notes[i];

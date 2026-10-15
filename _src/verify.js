@@ -10,12 +10,14 @@
   const MANUAL_KEEP_MS = 6 * 3600 * 1000;
   const K_MANUAL_AT = "hj_captcha_manual_at";
   const K_MANUAL_MODE = "hj_captcha_mode";
-  const MANUAL_MODES = ["ff14", "poem", "math"];
+  /* 理科生现在是仙人微彩（cactpot）；math 为以前的算术题，模板与画法留着备用，不再出现在选项里 */
+  const MANUAL_MODES = ["ff14", "poem", "cactpot"];
 
   const MODES = [
     { id: "cf", label: "自动验证", title: "自动验证" },
     { id: "ff14", label: "狒科生", title: "狒科生：看图标选职业" },
     { id: "poem", label: "文科生", title: "文科生：飞花令" },
+    { id: "cactpot", label: "理科生", title: "理科生：仙人微彩" },
     { id: "math", label: "理科生", title: "理科生：算术题" },
   ];
 
@@ -109,7 +111,7 @@
     ctx.globalAlpha = 1;
   }
 
-  /* 理科生的题面由 Worker 画成图片下发（接口里没有算式文字）：图按 2 倍尺寸画、只有透明度，这里缩一半并染成当前主题的字色 */
+  /* 旧版理科生（算术题，暂不使用）的题面由 Worker 画成图片下发（接口里没有算式文字）：图按 2 倍尺寸画、只有透明度，这里缩一半并染成当前主题的字色 */
   function paintImage(canvas, src) {
     if (!canvas || !src) return;
     const img = new Image();
@@ -134,6 +136,62 @@
     img.src = src;
   }
 
+  /* ==== 理科生：仙人微彩 ====
+     盘面由 Worker 画成一张 3 × 3 格的图（每格正中一个数字，只有透明度），这里按原尺寸放进 canvas，
+     由 CSS 拉伸铺满九个圆，染成游戏里刮开后的深红字。八个箭头是选项，答案（线的编号）只在加密的题目 id 里 */
+  const CACTPOT_INK = "#7a1d17";
+  const CACTPOT_ARROWS = [
+    { line: "d0", dir: "dr", label: "左上到右下的对角线", col: 1, row: 1 },
+    { line: "c0", dir: "down", label: "第一列", col: 2, row: 1 },
+    { line: "c1", dir: "down", label: "第二列", col: 3, row: 1 },
+    { line: "c2", dir: "down", label: "第三列", col: 4, row: 1 },
+    { line: "d1", dir: "dl", label: "右上到左下的对角线", col: 5, row: 1 },
+    { line: "r0", dir: "right", label: "第一行", col: 1, row: 2 },
+    { line: "r1", dir: "right", label: "第二行", col: 1, row: 3 },
+    { line: "r2", dir: "right", label: "第三行", col: 1, row: 4 },
+  ];
+  /* 每格在哪几条线上（悬停箭头时点亮这条线上的三个圆） */
+  const CACTPOT_CELL_LINES = Array.from({ length: 9 }, (_, i) => {
+    const r = Math.floor(i / 3), c = i % 3;
+    return ["r" + r, "c" + c].concat(r === c ? ["d0"] : [], r + c === 2 ? ["d1"] : []).join(" ");
+  });
+  /* 报酬一览：照搬游戏里的表（合计 → 获得金碟币） */
+  const CACTPOT_PAYOUT = [
+    [6, "10,000"], [7, "36"], [8, "720"], [9, "360"], [10, "80"], [11, "252"], [12, "108"], [13, "72"], [14, "54"], [15, "180"],
+    [16, "72"], [17, "180"], [18, "119"], [19, "36"], [20, "306"], [21, "1,080"], [22, "144"], [23, "1,800"], [24, "3,600"],
+  ];
+  const CACTPOT_RULES = "仙人微彩是金碟游乐场的一种有奖竞猜类游戏，九宫格内随机分布1~9，选择一行/一列/对角线，根据线上三个数字的总和对应报酬，给予相应的结算。";
+
+  function paintCactpot(canvas, src) {
+    if (!canvas || !src) return;
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext && canvas.getContext("2d");
+      if (!ctx || !canvas.isConnected) return;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = CACTPOT_INK;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = "source-over";
+    };
+    img.src = src;
+  }
+
+  function cactpotPayoutHtml() {
+    const rows = [];
+    for (let i = 0; i < 10; i++) {
+      const a = CACTPOT_PAYOUT[i], b = CACTPOT_PAYOUT[i + 10];
+      rows.push("<tr><td class=\"vc-sum\">" + a[0] + "</td><td class=\"vc-mgp\">" + a[1] + "</td>"
+        + (b ? "<td class=\"vc-sum\">" + b[0] + "</td><td class=\"vc-mgp\">" + b[1] + "</td>" : "<td></td><td></td>") + "</tr>");
+    }
+    return '<table class="vc-pay"><caption>报酬一览</caption>'
+      + "<thead><tr><th>合计</th><th>获得金碟币</th><th>合计</th><th>获得金碟币</th></tr></thead>"
+      + "<tbody>" + rows.join("") + "</tbody></table>";
+  }
+
   const isManualMode = (mode) => MANUAL_MODES.indexOf(mode) >= 0;
   const hintNoteHtml = (hint, lead) => '<p class="verify-hint-note">' + lead + "（点字可以填进输入框）"
     + (hint.len ? "，答案共 " + hint.len + " 个字" : "") + "：</p>";
@@ -152,6 +210,7 @@
   }
   function defaultManualMode() {
     const saved = store.get(K_MANUAL_MODE);
+    if (saved === "math") return "cactpot";             // 以前选过理科生（算术题）的，接着用理科生
     return isManualMode(saved) ? saved : "ff14";
   }
 
@@ -219,6 +278,12 @@
       host.append(this.tabs, this.tipEl, this.body, this.switchEl);
 
       host.addEventListener("click", (e) => this.onClick(e));
+      /* 仙人微彩：指着（或键盘移到）哪个箭头，就点亮那条线上的三个圆 */
+      const lineOf = (e) => { const a = e.target.closest && e.target.closest(".vc-arrow"); return a && host.contains(a) ? a.dataset.value : ""; };
+      host.addEventListener("pointerover", (e) => this.lightLine(lineOf(e)));
+      host.addEventListener("pointerout", (e) => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest(".vc-arrow")) this.lightLine(""); });
+      host.addEventListener("focusin", (e) => this.lightLine(lineOf(e)));
+      host.addEventListener("focusout", () => this.lightLine(""));
       host.addEventListener("keydown", (e) => {
         if (e.key !== "Enter") return;
         const input = e.target.closest(".verify-input");
@@ -242,7 +307,22 @@
       }
       if (act === "manual") { this.useManual(""); return; }
       if (act === "auto") { forgetManual(); this.setMode("cf"); return; }
-      if (act === "opt") { this.submitAnswer(el.dataset.value); return; }
+      if (act === "opt") {
+        if (el.classList.contains("vc-arrow")) {
+          if (this.busy || this.proof) return;
+          this.body.querySelectorAll(".vc-arrow").forEach((b) => b.classList.toggle("is-picked", b === el));
+        }
+        this.submitAnswer(el.dataset.value);
+        return;
+      }
+      if (act === "rules") {
+        const box = this.body.querySelector(".vc-rules");
+        if (box) {
+          box.hidden = !box.hidden;
+          el.setAttribute("aria-expanded", box.hidden ? "false" : "true");
+        }
+        return;
+      }
       if (act === "submit") {
         const input = this.body.querySelector(".verify-input");
         this.submitAnswer(input ? input.value : "");
@@ -411,8 +491,8 @@
 
       if (!data || !data.ok) {
         if (data && data.error === "no_icon" && mode === "ff14") {
-          rememberManual("math");
-          this.setMode("math", "图标加载失败，已切换验证方式");
+          rememberManual("cactpot");
+          this.setMode("cactpot", "图标加载失败，已切换验证方式");
           return;
         }
         this.setTip(errText(data), true);
@@ -428,6 +508,7 @@
       const t = this.task;
       if (this.mode === "ff14") this.body.innerHTML = this.tplFf14(t);
       else if (this.mode === "poem") this.body.innerHTML = this.tplPoem(t);
+      else if (this.mode === "cactpot") this.body.innerHTML = this.tplCactpot(t);
       else this.body.innerHTML = this.tplMath(t);
       this.paintTask();
       this.watchTheme();
@@ -440,6 +521,7 @@
       const cv = this.body.querySelector(".verify-canvas");
       if (!cv) return;
       if (this.mode === "poem") paintChallenge(cv, t.keyword, { size: 26, pad: 3, hFactor: 1.2 });
+      else if (this.mode === "cactpot") paintCactpot(cv, t.image);
       else if (this.mode === "math") {
         if (t.image) paintImage(cv, t.image);
         else if (t.question) paintChallenge(cv, t.question + " = ?", { size: 32, pad: 12 });
@@ -505,7 +587,40 @@
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一题</button></div>';
     }
 
-    /* 理科生：算术题 */
+    /* 理科生：仙人微彩。左边棋盘（上面 5 个、左边 3 个箭头 + 九个圆），右边报酬一览；
+       窄屏时报酬一览排到棋盘下面 */
+    tplCactpot() {
+      const arrows = CACTPOT_ARROWS.map((a) =>
+        '<button type="button" class="vc-arrow is-' + a.dir + '" data-act="opt" data-value="' + a.line + '"'
+        + ' style="grid-area:' + a.row + " / " + a.col + '" aria-label="选择' + a.label + '"></button>'
+      ).join("");
+      const cells = CACTPOT_CELL_LINES.map((lines) => '<i class="vc-cell" data-lines="' + lines + '"></i>').join("");
+      return ''
+        + '<p class="verify-q">请根据仙人微彩规则，点击选择报酬最高的那条线。'
+        +   '<button type="button" class="vc-help" data-act="rules" aria-expanded="false" aria-label="仙人微彩规则说明">?</button></p>'
+        + '<p class="vc-rules" hidden>' + CACTPOT_RULES + "</p>"
+        + '<div class="vc-game">'
+        +   '<p class="vc-title">仙人微彩</p>'
+        +   '<div class="vc-main">'
+        +     '<div class="vc-board">' + arrows
+        +       '<div class="vc-cells">' + cells
+        +         '<canvas class="verify-canvas vc-canvas" role="img" aria-label="仙人微彩盘面"></canvas>'
+        +       "</div>"
+        +     "</div>"
+        +     cactpotPayoutHtml()
+        +   "</div>"
+        + "</div>"
+        + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换盘面</button></div>';
+    }
+
+    lightLine(line) {
+      if (this.mode !== "cactpot") return;
+      this.body.querySelectorAll(".vc-cell").forEach((c) => {
+        c.classList.toggle("is-lit", !!line && (" " + c.dataset.lines + " ").indexOf(" " + line + " ") >= 0);
+      });
+    }
+
+    /* 旧版理科生：算术题（暂不使用，保留备用） */
     tplMath(t) {
       return ''
         + '<p class="verify-q">请计算：</p>'
@@ -551,7 +666,7 @@
 
       this.busy = true;
       const session = this.session;
-      this.setTip(this.mode === "ff14" ? "" : "验证中…");
+      this.setTip(this.mode === "ff14" || this.mode === "cactpot" ? "" : "验证中…");
       const data = await this.o.post({ action: "verify_answer", id: this.task.id, answer: answer });
       this.busy = false;
       if (session !== this.session) return;
@@ -567,6 +682,7 @@
           return;
         }
         this.setTip(errText(data), true);
+        this.body.querySelectorAll(".vc-arrow.is-picked").forEach((b) => b.classList.remove("is-picked"));
         return;
       }
 

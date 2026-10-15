@@ -394,6 +394,29 @@ async function main() {
     check("演奏中 ✕（结束演奏）回大厅", P.st().view === "lobby" && !P.st().clock.run);
   }
 
+  /* 3b. 最先消失的优先（泰坦，正常点击范围）：最早那个已经晚过 GREAT 窗（0.19 秒），后面那个就在旁边、时间更准，
+     点在两个中间偏后（离后面那个不到 0.6 个气泡）—— 仍算给快消失的最早那个，不让它判漏 */
+  {
+    const P = makePage({ prefs: { hj_stage_diff: "hard" } });
+    await openStage(P);
+    await go(P);
+    const st = P.st();
+    const ns = st.notes;
+    const k = ns.findIndex((a, i) => i > 0 && ns[i + 1] && ns[i + 1].t - a.t > 0.24 && ns[i + 1].t - a.t < 0.42
+      && Math.hypot(ns[i + 1].x - a.x, ns[i + 1].y - a.y) < st.g.size * 1.45);
+    if (k > 0) {
+      ns.slice(0, k).forEach((n) => { P.until(n.t); P.pointer(n.x, n.y); });   // 前面的都准时弹掉
+      const a = ns[k], b = ns[k + 1];
+      P.until(a.t + 0.22);
+      P.pointer(a.x + (b.x - a.x) * 0.6, a.y + (b.y - a.y) * 0.6);
+      check("点击范围里有两个气泡：算给最先消失的那个（晚了也不让它判漏）", P.st().judged[a.idx] >= 1 && P.st().judged[a.idx] <= 2 && P.st().judged[b.idx] === -1,
+        `${P.st().judged[a.idx]}/${P.st().judged[b.idx]}`);
+    } else {
+      console.log("  （跳过：这首曲子的泰坦谱面里没有合适的相邻两个音）");
+    }
+    P.click(P.btn("结束演奏"));
+  }
+
   /* 4. 学习模式：停在这一拍；输出延迟也算进去 */
   {
     const P = makePage({ prefs: { hj_stage_learn: "1" }, lat: 0.08 });
@@ -461,6 +484,17 @@ async function main() {
     check("点了以后开始演奏", P.st().playing && P.st().clock.run);
   }
 
+  /* 8a. 手机第一次来：第一轮的提示有试音提醒，但不提键盘 */
+  {
+    const P = makePage({ coarse: true, width: 390, height: 844, fresh: true });
+    await openStage(P);
+    const tip = () => Array.from(P.$(".hjs-guide-tip").childNodes).map((n) => (n.nodeName === "BR" ? "\n" : n.textContent)).join("");
+    P.click(P.btn("确认"));
+    check("手机：第一轮提示有试音提醒、只说点击，不提键盘", P.st().guide?.step === "r1"
+      && /^开场前来做个试音吧，请检查声音是否开启。\n我们来回顾一下演奏方法！\n在外圈与气泡重合时点击$/.test(tip()), tip());
+    P.click(P.btn("跳过"));
+  }
+
   /* 8. 第一次来：开场白 → 第一轮 2 个气泡（等人）→ 第二轮 3 个（不等人，弹中 2 个以上通过，否则再来）
      → 延迟校准（示范 1 个 + 6 个，每个连响 7 下「嗒」，第 7 下时点）；每次都晚约 40 ms → +40 */
   {
@@ -469,11 +503,12 @@ async function main() {
     const G = () => P.st().guide;
     const tip = () => Array.from(P.$(".hjs-guide-tip").childNodes).map((n) => (n.nodeName === "BR" ? "\n" : n.textContent)).join("");
     check("第一次打开舞台：出开场白，大厅藏起来", G()?.step === "welcome" && P.$("#hjStage").classList.contains("is-guide") && P.$(".hjs-guide-title").textContent === "舞台演奏"
-      && /欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！\n开场前来做个试音吧，请检查声音是否开启。我们来回顾一下演奏方法！/.test(tip()) && !P.$(".hjs-guide-note"));
+      && /欢迎！这里是梦羽宝境高脚孤丘22区薰风花语町——\n60号房三色堇剧院的地下层剧场！\n你在舞台上，演奏马上就要开始！$/.test(tip()) && !/试音/.test(tip()) && !P.$(".hjs-guide-note"));
     check("开场白下面是「确认」，底下是「跳过」", !!P.btn("确认", P.$(".hjs-guide-go")) && !!P.btn("跳过", P.$(".hjs-guide-foot")));
     check("教程时后台加载曲库", P.fetched.some((u) => /songs\.json/.test(u)));
     P.click(P.btn("确认"));
-    check("点确认：第一轮，提示怎么点", G()?.step === "r1" && /在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键/.test(tip()) && P.$(".hjs-guide-go").hidden);
+    check("点确认：第一轮，上方是试音提醒（两行），下面一行提示怎么点", G()?.step === "r1"
+      && /^开场前来做个试音吧，请检查声音是否开启。\n我们来回顾一下演奏方法！\n在外圈与气泡重合时点击，或者鼠标挪到气泡上按下键盘任意键$/.test(tip()) && P.$(".hjs-guide-go").hidden, tip());
     const tapNote = () => P.$(".hjs-guide-stage").dispatchEvent(new P.win.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
     check("教程气泡有白色音名", P.$(".hjs-guide-note .hjs-name")?.textContent === "C5", P.$(".hjs-guide-note .hjs-name")?.textContent);
     tapNote();

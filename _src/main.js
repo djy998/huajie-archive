@@ -1478,7 +1478,7 @@ function resetLightboxTransform() {
 function applyLightboxTransform() {
   const img = $("lightboxImg");
   img.style.transform = `translate(${lbState.tx}px, ${lbState.ty}px) scale(${lbState.scale})`;
-  if (!lbState.dragging) img.style.cursor = lightboxMode === "gallery" || lbLong ? "default" : lbState.scale > 1 ? "zoom-out" : "zoom-in";
+  if (!lbState.dragging) img.style.cursor = lightboxMode === "gallery" || lbLong ? "default" : lbState.scale > 1 ? "var(--cursor-zoom-out)" : "var(--cursor-zoom-in)";
 }
 
 function setLightboxLong(long) {

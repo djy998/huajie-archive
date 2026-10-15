@@ -12,7 +12,7 @@ function adminErr(data, fallback, map = {}) {
 }
 
 /* 提交记录的 IP 属地（Worker 存「国家|地区|城市」）与验证方式 */
-const VERIFY_MODE_NAMES = { cf: "自动验证", ff14: "狒科生", poem: "文科生", math: "理科生", manual: "手动验证", off: "验证已关闭" };
+const VERIFY_MODE_NAMES = { cf: "自动验证", ff14: "狒科生", poem: "文科生", cactpot: "理科生", math: "理科生（算术）", manual: "手动验证", off: "验证已关闭" };
 const CN_REGIONS = {
   Beijing: "北京", Tianjin: "天津", Hebei: "河北", Shanxi: "山西", "Inner Mongolia": "内蒙古", Liaoning: "辽宁",
   Jilin: "吉林", Heilongjiang: "黑龙江", Shanghai: "上海", Jiangsu: "江苏", Zhejiang: "浙江", Anhui: "安徽",
@@ -695,7 +695,7 @@ const isTicketViewer = () => ticketAdmin.role === "viewer";
 const ticketAdminPassword = () => internalAdminPassword || internalViewPassword;
 const cnHm = (ms) => (ms ? formatCnTime(ms).slice(11) : "");
 const cnMdHm = (ms) => (ms ? `${Number(formatCnTime(ms).slice(5, 7))}/${Number(formatCnTime(ms).slice(8, 10))} ${cnHm(ms)}` : "");
-const VERIFY_MODE_TEXT = { cf: "自动验证", ff14: "狒科生", poem: "文科生", math: "理科生", off: "验证关闭时提交", manual: "手动验证" };
+const VERIFY_MODE_TEXT = { cf: "自动验证", ff14: "狒科生", poem: "文科生", cactpot: "理科生", math: "理科生（算术）", off: "验证关闭时提交", manual: "手动验证" };
 
 function fmtDuration(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -1415,7 +1415,7 @@ function ticketVerifyBars(live) {
   if (!live.length) return `<p class="fb-empty">暂无订单</p>`;
   const count = {};
   live.forEach((o) => { const k = o.verifyMode || ""; count[k] = (count[k] || 0) + 1; });
-  const order = ["cf", "ff14", "poem", "math", "manual", "off", ""];
+  const order = ["cf", "ff14", "poem", "cactpot", "math", "manual", "off", ""];
   const items = order.filter((k) => count[k]).map((k) => ({ label: k ? VERIFY_MODE_TEXT[k] : "未记录", n: count[k] }));
   return `<p class="ta-footnote">按订单计，共 ${live.length} 单</p>${taBarsHtml(items, live.length)}`;
 }
