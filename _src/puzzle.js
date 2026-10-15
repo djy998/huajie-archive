@@ -694,7 +694,7 @@
   async function submitContest(rec, rawPlayer) {
     const player = String(rawPlayer || "").trim();
     if (!player || player.length > 20) return { ok: false, msg: SUBMIT_ERRORS.bad_player };
-    const data = await callWorker({ action: "puzzle_contest_submit", token: rec.contest.token, player, elapsed: rec.ms, aids: rec.aids || [] });
+    const data = await callWorker({ action: "puzzle_contest_submit", token: rec.contest.token, player, elapsed: rec.ms, aids: rec.aids || [], ...(window.HJAccount?.auth?.() || {}) });
     if (!data) return { ok: false, msg: "连接失败，检查网络后再点一次" };
     if (!data.ok) {
       const msg = SUBMIT_ERRORS[data.error] || "登记失败，稍后再试";

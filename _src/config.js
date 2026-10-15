@@ -7,6 +7,17 @@ const GROUP_QQ = "453278026";
 const INFO_COPY_TAIL = "若你懂麦穗，便懂希望；若你懂苍穹，便懂年华。有人说桂花树代表叹息，其实它只是在掌心酝酿清风。你我走过山间，芦苇呆呆飘荡，屋檐也勇敢了起来。有人说雏菊代表一生，其实它只是在巷口找寻清风。";   // 复制花街介绍时附在末尾
 const SHARE_TEXT = "ff14莫古力区梦羽花街网站试运行中！https://swayingsussurrusstreet.dpdns.org/";
 
+/* 网站说明 · 致谢：name 为游戏 id，what 为帮了什么忙。
+   「多场活动长期合作的店家和老师们」下面自动列出管理页「用户管理」里勾了「列入致谢」的注册用户（显示游戏 id，没填用用户名） */
+const SITE_THANKS = [
+  { name: "阿兹萨@梦羽宝境", what: "相册提供、功能测试、宣传视频制作" },
+  { name: "北雾南黛@梦羽宝境", what: "宣传视频制作" },
+  { name: "星空之钥@梦羽宝境", what: "活动资料提供" },
+  { name: "吃不饱i@龙巢神殿", what: "美术指导" },
+  { name: "一般通过魔女@红玉海", what: "长期活动支持（谢谢肥师傅！）" },
+];
+const SITE_THANKS_PARTNERS = "多场活动长期合作的店家和老师们";
+
 /* 直达链接；#ti、#survey 同时写在 boot.js */
 const TICKET_HASH = "#ti";
 const SURVEY_HASH = "#survey";

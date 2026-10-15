@@ -53,8 +53,9 @@ const gate = createFormGate($("xxxCaptcha"));        // 放验证组件的容器
 // 提交时：
 const tip = gate.missing();                          // 还没验证就返回提示语，并打开验证
 if (tip) return setMsg(msg, tip);
-const data = await callWorker({ action: "submit_xxx", ...fields, ...gate.proof() });
+const data = await callWorker({ action: "submit_xxx", ...fields, ...gate.proof(), ...(window.HJAccount?.auth?.() || {}) });
 gate.afterSubmit(data);                              // 成功后收起验证，失败时自动刷新
+if (data?.ok) window.HJAccount?.record?.("类型", { id: data.id });   // 要出现在「个人数据」里的话（account.js 的 TYPES 里登记类型）
 ```
 
 **Worker**
@@ -63,7 +64,7 @@ gate.afterSubmit(data);                              // 成功后收起验证，
 2. 在 `handlers` 里写处理函数。可以照抄 `submit_feedback`：
    - 先校验和清洗输入（`cleanText`、`cleanLine`）；
    - 再调用 `const verifyMode = await verifyHumanMode(ctx); if (!verifyMode) return fail("captcha");`；
-   - 写库时一并存入 `verify_mode` 和 `requestGeo(ctx.request)`。
+   - 写库时一并存入 `verify_mode`、`requestGeo(ctx.request)` 和 `await accountId(ctx)`（登录着就是账户编号，表里加 `user_id` 列）。
 3. 新表：在 `SCHEMA_SQL` 加 `CREATE TABLE IF NOT EXISTS …`。给旧表加列：写进 `ADDED_COLUMNS`。两种情况都要把 `SCHEMA_VERSION` 加 1。
 4. 把 `WORKER_VERSION` 改成当天日期，部署后用 `/api/ping` 确认。
 
@@ -75,6 +76,7 @@ gate.afterSubmit(data);                              // 成功后收起验证，
 2. 在 `admin.js` 的 `ADMIN_PANELS_HTML` 里加 `<div class="gate-card admin-card" id="xxxPanel" hidden>…</div>`。
 3. 写 `initXxxAdmin()` 并加进文件末尾的初始化列表。面板每次打开都要刷新的话，在 `ADMIN_PANEL_REFRESH` 登记。
 4. Worker 里对应的处理函数第一行写 `if (!(await isAdmin(ctx))) return denied();`，同时加进 `RATE_LIMITS`。
+5. 管理页调接口时身份写 `...adminAuth()`（账户登录令牌 + 内部码通行证），不要再写 `password`。
 
 ## 引用外部资源
 

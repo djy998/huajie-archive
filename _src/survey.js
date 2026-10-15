@@ -536,7 +536,7 @@ async function submitSurvey(e) {
   const btn = $("surveySubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_survey", survey: SURVEY.id, answers: res.answers, ...surveyGate.proof() });
+  const data = await callWorker({ action: "submit_survey", survey: SURVEY.id, answers: res.answers, ...surveyGate.proof(), ...(window.HJAccount?.auth?.() || {}) });
   surveyState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交问卷";
@@ -547,6 +547,7 @@ async function submitSurvey(e) {
   } else if (data.ok) {
     const done = { id: Number(data.id) || 0, at: Date.now() };
     storage.set(SURVEY_DONE_KEY, JSON.stringify(done));
+    window.HJAccount?.record?.("survey", { survey: SURVEY.id, id: done.id });
     clearTimeout(surveyState.draftTimer);
     surveyState.draftTimer = 0;
     storage.remove(SURVEY_DRAFT_KEY);

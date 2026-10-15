@@ -321,6 +321,7 @@ async function openVenueView() {
     venueGate.close();
   }
   setVenueMode(siteLockdown ? "blocked" : "form", STATIC_MODE_MSG);
+  window.HJAccount?.fillVenue?.();   // 登录着：角色 id、联系方式自动填上（空着的才填）
   /* 再确认一次分享功能开关：管理员刚关掉的话这里挡住 */
   const locked = await isLockedDown({ load: "none" });   // 表单已经显示，后台再确认
   if (!$("view-venue").hidden && $("venueResult").hidden) setVenueMode(locked ? "blocked" : "form", STATIC_MODE_MSG);
@@ -344,7 +345,7 @@ async function submitVenue(e) {
   const btn = $("venueSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_venue", ...form.payload, ...venueGate.proof() });
+  const data = await callWorker({ action: "submit_venue", ...form.payload, ...venueGate.proof(), ...(window.HJAccount?.auth?.() || {}) });
   venueSubmitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
@@ -364,6 +365,7 @@ async function submitVenue(e) {
 }
 
 function showVenueResult(p, data) {
+  window.HJAccount?.record?.("venue", { id: data.id, date: p.date, rows: venueSummaryRows(p) });
   $("venueResultTitle").textContent = `登记成功 · 编号 ${data.id}`;
   $("venueResultNote").textContent = "我们会尽快与您联系。预约多个日期请再登记一份，已填内容会保留。";
   $("venueResultList").innerHTML = venueSummaryRows(p).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");

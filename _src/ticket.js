@@ -334,7 +334,7 @@ async function openTicketView() {
   if (!$("ticketResult").hidden) clearTicketForm();   // 登记成功后再进来：空白表单
 
   setTicketMode("blocked", "正在读取购票状态…");
-  const st = await callWorker({ action: "get_ticket_status" });
+  const st = await callWorker({ action: "get_ticket_status", ...(window.HJAccount?.auth?.() || {}) });
   if (seq !== ticketViewSeq || $("view-ticket").hidden) return;
   if (!st || !st.ok) {
     ticketState.showReset = ticketState.showSchedule = false;
@@ -356,6 +356,7 @@ async function openTicketView() {
     return;
   }
   setTicketMode("form");
+  window.HJAccount?.fillTicket?.();   // 登录着：联系方式、第一位持票人自动填上（空着的才填）
   startTicketIdle();
   ticketGate.open();
   /* 拿着链接直接进来、这次还没看过须知的先弹一次（从首页入口进来的已经看过） */
@@ -422,7 +423,8 @@ async function submitTicket(e) {
   btn.disabled = true;
   btn.textContent = "提交中…";
   const proof = ticketGate.proof();
-  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof });
+  /* 登录着就带上账户（只为本人在别的设备上看得到这张单；排队、限购、冷却、人机验证和没登录时完全一样） */
+  const data = await callWorker({ action: "submit_ticket", ...form.payload, ...proof, ...(window.HJAccount?.auth?.() || {}) });
   ticketState.submitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
@@ -474,6 +476,10 @@ function showTicketResult(p, data) {
   ];
   if (ticketState.messageOn && p.message) rows.push(["留言", `${p.message}（${p.anonymous ? "匿名" : "实名"}）`]);
   ticketResult = { rows, dayLabel, note };
+  window.HJAccount?.record?.("ticket", {
+    day: data.day, seq: data.seq, qty: p.qty, contact: p.contact, holders: p.holders,
+    message: ticketState.messageOn ? p.message || "" : "", anonymous: p.anonymous !== false,
+  });
   $("ticketResultTitle").textContent = `登记成功 · ${dayLabel}`;
   $("ticketResultNote").textContent = note;
   $("ticketResultNote").classList.toggle("is-warn", warn.length > 0);

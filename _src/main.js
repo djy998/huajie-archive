@@ -5,7 +5,6 @@ const STORE = {
   fxLevel: "hj_fx_level",
   volume: "hj_volume",
   captchaOkAt: "hj_captcha_ok_at",
-  pwFails: "hj_pw_fail_count",
   starlight: "hj_starlight",
   calOpen: "hj_cal_open",
   calZoom: "hj_cal_zoom",
@@ -256,7 +255,10 @@ function bindPlayerName(input) {
   input.addEventListener("change", () => { input.value = setPlayerName(input.value); });
 }
 function reportPlay(action, data) {
-  return callWorker({ action, player: playerName(), ...data }, { load: "none" }).catch(() => null);
+  const auth = window.HJAccount?.auth?.() || {};   // 登录着就记到账户上（本人在别的设备也看得到），并随后同步一次纪录
+  return callWorker({ action, player: playerName(), ...data, ...auth }, { load: "none" })
+    .then((res) => { window.HJAccount?.syncSoon?.(); return res; })
+    .catch(() => null);
 }
 
 /* 按需加载的脚本；失败后允许重试。都是访客点了要用才加载，默认全屏提示；后台预取传 { load: "corner" } 或 "none" */
@@ -490,7 +492,12 @@ function routeFromHash() {
   routedPath = location.pathname;
   if (onStandalonePage()) STANDALONE.open();
   else if (ROUTES[hash]) ROUTES[hash]();
-  else if (hash.startsWith("#event-")) {
+  else if (hash.startsWith("#reset=")) {
+    /* 管理页生成的重置密码链接：令牌不留在地址栏和历史记录里 */
+    history.replaceState(null, "", location.pathname + location.search);
+    showView("view-home");
+    window.HJAccount?.openReset?.(hash.slice("#reset=".length));
+  } else if (hash.startsWith("#event-")) {
     const ev = ARCHIVE_EVENTS.find((e) => e.id === hash.slice("#event-".length));
     if (ev) openDetail(ev);
     else goHome();
@@ -515,7 +522,7 @@ function initHashRoute() {
 
 function openInternalView() {
   showView("view-internal");
-  if (HJ.adminReady) return;
+  if (HJ.adminReady) { window.internalAutoEnter?.(); return; }   // 后来才登录的：有内部权限就直接进
   const btn = $("internalSubmit");
   const msg = $("internalMsg");
   btn.disabled = true;
@@ -1255,7 +1262,7 @@ function initInfo() {
   $("copyGroupBtn").addEventListener("click", () => copyText(GROUP_QQ, "群号已复制", "群号：" + GROUP_QQ));
 }
 
-/* 网站说明：关于网站 / 反馈与建议 / 分享网站 --------------------------------------------- */
+/* 网站说明：关于网站 / 反馈与建议 / 分享网站 / 致谢 / 个人数据 / 登录与注册（后三个的内容在 account.js） ------------ */
 const FEEDBACK_CATEGORIES = { bug: "bug反馈", experience: "体验反馈", feature: "功能建议", join: "加入花街", other: "其他" };
 const FEEDBACK_HINTS = {
   "": "说说遇到的问题或想法吧",
@@ -1281,10 +1288,10 @@ let feedbackGate = null;
 function switchAboutTab(tab) {
   aboutTab = tab;
   markTabs(document.querySelectorAll("#siteAboutOverlay [data-about-tab]"), (b) => b.dataset.aboutTab === tab);
-  $("aboutPanelAbout").hidden = tab !== "about";
-  $("aboutPanelFeedback").hidden = tab !== "feedback";
-  $("aboutPanelShare").hidden = tab !== "share";
+  document.querySelectorAll("#siteAboutOverlay [data-about-panel]").forEach((p) => { p.hidden = p.dataset.aboutPanel !== tab; });
   feedbackGate.open();
+  if (tab === "feedback") window.HJAccount?.fillFeedback?.();
+  window.HJAccount?.onAboutTab?.(tab);
 }
 
 function openSiteAbout(tab = "about") {
@@ -1335,7 +1342,7 @@ async function submitFeedback(e) {
   const btn = $("feedbackSubmitBtn");
   btn.disabled = true;
   btn.textContent = "提交中…";
-  const data = await callWorker({ action: "submit_feedback", category, content, wantContact, contact, ...feedbackGate.proof() });
+  const data = await callWorker({ action: "submit_feedback", category, content, wantContact, contact, ...feedbackGate.proof(), ...(window.HJAccount?.auth?.() || {}) });
   feedbackSubmitting = false;
   btn.disabled = false;
   btn.textContent = "提交";
@@ -1344,6 +1351,8 @@ async function submitFeedback(e) {
     setMsg(msg, !data ? "网络连接失败" : FEEDBACK_ERRORS[data.error] || "提交失败，请稍后再试");
     return;
   }
+  /* 记进「个人数据」；回执用来以后查看站长的回复 */
+  if (data.id) window.HJAccount?.record?.("feedback", { id: data.id, category, content, contact: wantContact ? contact : "", receipt: data.receipt || "" });
   $("feedbackForm").reset();
   $("feedbackCount").textContent = "0";
   $("feedbackContentHint").textContent = FEEDBACK_HINTS[""];
@@ -1385,6 +1394,7 @@ function initSiteAbout() {
     $("feedbackForm").hidden = false;
     setMsg($("feedbackMsg"), "");
     feedbackGate.open();
+    window.HJAccount?.fillFeedback?.();
   });
   $("shareSiteBtn").addEventListener("click", () => copyText(SHARE_TEXT, "分享内容已复制", SHARE_TEXT));
 }
@@ -2114,7 +2124,7 @@ const LQ_TARGETS = [
   /* 按钮与选项 */
   ".daynight-toggle", ".more-item", ".venue-choice", ".survey-scale-opt span",
 ].join(", ");
-const LQ = { bevel: 10, push: 6, mapMax: 320, cacheMax: 160, scanDelay: 160 };
+const LQ = { bevel: 15, push: 10, mapMax: 320, cacheMax: 160, scanDelay: 160 };
 const LQ_NS = "http://www.w3.org/2000/svg";
 const lq = { on: false, svg: null, seq: 0, maps: new Map(), els: new Map(), ro: null, mo: null, timer: 0, queue: new Set(), raf: 0 };
 
@@ -4242,12 +4252,13 @@ function loadSiteState() {
 
 async function readSiteState() {
   const sentAt = Date.now();
-  const data = await callWorker({ action: "get_site_state" }, { load: "corner" });
+  const data = await callWorker({ action: "get_site_state", ...(window.HJAccount?.auth?.() || {}) }, { load: "corner" });
   if (!data || !data.ok) {
     applyStarlight(storage.json(STORE.starlight));
     return;
   }
   syncServerClock(Number(data.now), sentAt, Date.now());
+  window.HJAccount?.applySite?.(data);   // 带了登录令牌时顺带确认登录还有效
   siteLockdown = !!data.lockdown;
   /* 旧版 Worker 的站点状态里没有 maintenance 时单独查询 */
   if ("maintenance" in data) applyMaintenance(!!data.maintenance);
@@ -4273,6 +4284,7 @@ const MODALS = [
   { overlay: "puzzleOverlay", closeBtn: "puzzleClose", close: closePuzzle },
   { overlay: "gamesOverlay", closeBtn: "gamesClose", close: closeGames },
   { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: closeSitePopup },
+  { overlay: "acctTipOverlay", closeBtn: "acctTipClose", close: () => window.HJAccount?.closeTip?.() },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
 ];
 const CLOSE_PRESS_MS = 160;
@@ -4297,7 +4309,7 @@ function initA11y() {
   const byId = (id) => MODALS.find((m) => m.overlay === id);
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    const top = [byId("lightboxOverlay"), byId("sitePopupOverlay"), ...MODALS].find(modalOpen);
+    const top = [byId("lightboxOverlay"), byId("sitePopupOverlay"), byId("acctTipOverlay"), ...MODALS].find(modalOpen);
     if (top && !$(top.overlay).dataset.closeOnlyX) top.close();
   });
 
@@ -4379,7 +4391,7 @@ function initApp() {
   /* 各部分互不影响：某个脚本没加载成功时其余功能照常 */
   [
     initLoadIndicators, initResizedFallback, initDayNight, initCardBackdrops, initHomeVideo, initDetailTabs, initTabVideos, initNav,
-    initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, initLightbox, initCaptcha,
+    initMasonryResize, initLikes, initFxToggle, initInfo, initSiteAbout, () => window.HJAccount?.init(), initLightbox, initCaptcha,
     () => initTicket(), () => initVenue(),
     initClickBurst, initBusyCursor, initA11y, initVolume, initHeaderPanels, initCalWidget, initAlarm, initHuayu, initPuzzle, initGames, initPickers,
     initClock, initHashRoute, initSitePopup, loadSiteState, watchCloseButtons,

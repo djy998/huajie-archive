@@ -13,6 +13,7 @@
 | `boot.js` | 启动：样式表、动画档位、开屏、回访遮罩、`window.HJ` |
 | `style.css` | 样式 |
 | `main.js` | 主程序：路由、首页与活动详情、特效、时间条、点赞、闹铃、日历、公告、花语弹窗、离线缓存 |
+| `account.js` | 账户与个人数据：网站说明的「致谢」「个人数据」「登录与注册」，登录状态、自动填表、本机提交记录、跨设备同步 |
 | `ticket.js` / `venue.js` / `survey.js` | 购票、场地使用登记、活动问卷 |
 | `verify.js` | 人机验证：Turnstile 与三种手动验证（狒科生、文科生、理科生 = 仙人微彩；素材在 `assets/site/cactpot/`） |
 | `admin.js` | 内部入口与管理页，进入 `#internal` 时加载 |
@@ -27,7 +28,7 @@
 | `package.json`、`package-lock.json`、`.nvmrc` | 锁定构建用的 esbuild 与 Node 版本 |
 | `tools/` | 缩略图、标题字体子集；`tools/stage-build/` 为舞台演奏的曲库（MIDI 与曲目表）、谱面生成器、体检与冒烟测试 |
 
-脚本顺序：boot → verify → config → main → ticket → venue → survey；admin、huayu、puzzle、bard（及 bard-stage）、games（及 games-poems）、`assets/lib/exceljs.min.js` 按需加载。
+脚本顺序：boot → verify → config → main → account → ticket → venue → survey；admin、huayu、puzzle、bard（及 bard-stage）、games（及 games-poems）、`assets/lib/exceljs.min.js` 按需加载。
 字体自托管于 `assets/fonts/`，标题字为 `assets/site/brush.woff2`（现有标题用字，开屏预加载）与 `brush-ext-*.woff2`（常用字切片，用到才下载）；艾欧泽亚文字字体在 `assets/fonts/eorzean/`，用 class `eorzean`（Augmented Neo-Eorzean）、`eorzean-classic`（Eorzea）、`hingashi`（Hingashi Extended）调用，未使用时不会下载。
 
 后端为 Cloudflare Worker（不在本仓库），挂在本站 `/api/*`，数据在 D1，图片在 R2。
@@ -162,6 +163,25 @@
 
 - 「购票情况」查看页（查看密码登录）可在管理页「购票管理 → 只读端」手动开关，也可设定时开放 / 关闭（`ticket_viewer_open_at` / `_close_at`，同购票的定时开关：到点后第一个请求执行并清除；手动开放清掉定时开放，手动关闭清掉定时关闭）。关着时登录提示带上定时开放时间。
 - 查看密码只在 Cloudflare 改（Worker 密钥 `PASSWORD_VIEW`）。
+
+## 账户
+
+- 账户只有用户名、密码、注册码（决定权限），游戏 id（角色名 + 服务器，规则同购票持票人）、联系方式选填。不收邮箱手机号，不发验证码。
+- **注册码与内部码都只放在 Cloudflare 的 Worker 变量和机密里**：`PASSWORD_VISITOR`（普通用户，如 huajie-visitor）、`PASSWORD_A` / `B`（公告 A / B）、`PASSWORD_VIEW`（查看购票情况）、`PASSWORD_C`（管理员）。注册时填哪个，账户就是对应权限；后四个同时是内部码：已有账户在内部入口填一次就加上这个权限（管理员不会被降级）。注册之后管理页「用户管理」可以随时调整权限。
+- **站长账户 djy998**：密码就是 Worker 密钥 `ADMIN_PASSWORD`（`ADMIN_USERNAME` 可改用户名，默认 djy998），库里只存这个密码的指纹，网站上不能改密码、重置、停用、删除、改权限；在 Cloudflare 改了密码，所有设备的登录随即失效。
+- **内部码规则**（每个账户在「用户管理」里设）：首次填写（默认，填过一次或用内部的注册码注册的，之后登录就能进内部入口）/ 每 x 天填一次 / 每次进入都填（站长账户默认）。填对内部码 Worker 发一张通行证（`ticket`），绑在这次登录上：每次进入的只放在网页内存里（刷新就要重填，最长 12 小时），每 x 天的存本机 `hj_internal_ticket`。管理员账户要填管理员的内部码。
+- **登录、注册都要过人机验证**（网站说明、内部入口两边都是）。同一来源对同一账户 15 分钟输错 6 次封 15 分钟；用户名不存在和密码错回同一个错误。
+- **密码**：浏览器里先 PBKDF2-SHA256 12 万次（盐 `hj-account:v1:` + 小写用户名，`account.js` 的 `ACCOUNT_KDF`，改了旧密码全部对不上，不要动），Worker 收到的是派生值，再加随机盐 PBKDF2 一次存下。站长账户浏览器那边只做 1 万次（Worker 回 `kdf` 告诉网页；免费版每次请求只有 10 毫秒 CPU，12 万次算不完）。
+- **登录令牌**存在本机 `hj_account`，30 天没用失效、用一次续一次；一个账户最多同时登录 20 台设备。「我的账户」里能看登录设备、让别的设备退出、改密码（其他设备随即退出）、导出数据、注销账户。
+- **忘记密码**：管理员在「用户管理」点「重置密码」生成链接（`网址/#reset=令牌`，72 小时、只能用一次）发给对方，打开后设新密码并直接登录。
+- **账户没有任何特权**：购票、问卷、反馈和没登录时完全一样（照样人机验证、限购、冷却；登录后冷却还会按账户算，只会更严）。登录时提交的表单、游玩记录带上 `user_id`，只为本人在别的设备上看得到。
+- **自动填表**：购票（联系方式、第一位持票人）、场地登记（角色 id、联系方式）、反馈（联系方式栏，勾了「留下联系方式」才发出）；只填空着的栏。问卷的联系方式不自动填（问卷是匿名的）。拼图 / 舞台演奏的玩家名称没填时用游戏 id。
+- **跨设备同步**（`account.js` 的 `SYNC`）：拼图纪录、舞台演奏纪录（合并取最好的）、玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手的设置、问卷已交（新的盖旧的）。跟设备有关的不同步：动画档位、音量、判定延迟、舞台的画面 / 性能选项。登录时、每 5 分钟（本机有改动时）、切到后台、拼图通关 / 演奏完一首后同步。Worker 表 `user_data`，每个账户最多 80 个键、共 400 KB。
+- **反馈回复**：管理页「反馈建议箱」每条可以回复 / 修改 / 撤回。提交反馈时 Worker 发一张回执（库里存哈希），存在本机的「个人数据」里；不登录的访客凭回执、登录的凭账户看回复。有新回复时页脚「网站说明」那行和「个人数据」标签亮小红点，打开看过即已读（管理页显示对方读没读）。账户功能上线以前的反馈没有回执，回复了对方也看不到。
+- **致谢**：内容在 `config.js` 的 `SITE_THANKS`；「多场活动长期合作的店家和老师们」下面自动列出「用户管理」里勾了「列入致谢」的账户（显示游戏 id，没填用用户名，可加备注）。
+- **个人数据**：本机提交记录 `hj_my_records`（购票、问卷、场地登记、反馈，最多 200 条），登录时再合并账户里的。「清除缓存」只删离线缓存里的图片、字体（`hj-media`）；「清除数据」先同步、退出登录，再清空本机全部数据和缓存、注销离线缓存并刷新。
+- **管理页「用户管理」**：账户列表（权限、内部码规则、重置密码、全部下线、列入致谢、停用 / 启用、删除）、注册码与内部码一览（只显示设没设）、设置（允许只用旧版密码进内部入口，过渡期用，都改用账户后建议关掉）。不能改自己的权限、停用或删除自己；至少留一个能用的管理员。
+- Worker 接口：`account_register` / `_login` / `_logout` / `_me` / `_profile` / `_password` / `_code` / `_sessions` / `_session_revoke` / `_delete` / `_sync` / `_records` / `_export`、`password_reset_check` / `password_reset`、`feedback_replies` / `feedback_mark_read`、`get_thanks`、`feedback_admin_reply`、`user_admin_list` / `_set` / `_delete` / `_reset` / `_revoke` / `_settings`；`get_site_state` 带了 `session` 时多回 `account`。表 `users`、`user_sessions`、`user_data`、`password_resets`。
 
 ## 全站开关
 

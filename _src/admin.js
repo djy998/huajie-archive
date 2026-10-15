@@ -1,7 +1,7 @@
 /* 花舞之街 · 管理页，进入 #internal 时加载 */
 
 /* ==== 1. 内部入口与公告板 ==== */
-/* 密码由 Worker 校验：A / B 仅公告，C 为管理员，查看密码进入只读页 */
+/* 用账户登录（account.js）：权限 A / B 只看公告，C 为管理员，查看（v）进入只读页；权限来自注册码或内部码，Worker 校验 */
 function adminErr(data, fallback, map = {}) {
   if (!data) return "连接失败，检查一下网络后再试";
   if (map[data.error]) return map[data.error];
@@ -49,75 +49,183 @@ function submitMetaHtml(item) {
   return text ? `<span class="submit-meta" title="${escapeHtml(geoTitle(item.geo))}">${escapeHtml(text)}</span>` : "";
 }
 
-let internalAdminPassword = null;
+let internalAdmin = false;   // 用管理员账户进了内部入口
+let internalRole = "";       // 进来时账户的权限：之后退出登录或权限变了就回到闸门
 let editingAnnouncementId = null;
 let pendingAnnouncementImageUrl = null;
 
-/* 密码累计错误每满 5 次需人机验证 */
-const PW_FAIL_CAPTCHA_EVERY = 5;
-const getPwFailCount = () => Number(storage.get(STORE.pwFails)) || 0;
-function setPwFailCount(n) {
-  if (n > 0) storage.set(STORE.pwFails, n);
-  else storage.remove(STORE.pwFails);
-}
+/* 管理接口的身份：账户的登录令牌（account.js），加上填内部码换来的通行证（账户的内部码规则不是「首次填写」时要带）。
+   Worker 也还认旧版密码，只是页面上不再有只填密码的入口 */
+const INTERNAL_TICKET_STORE = "hj_internal_ticket";   // 「每 x 天」的通行证存在本机 { user, ticket, exp }；「每次进入」的只放在内存里，刷新就没了
+let internalTicket = null;
+const adminAuth = () => ({ ...(window.HJAccount?.auth?.() || {}), ...(internalTicket ? { ticket: internalTicket } : {}) });
+const codePolicy = (user) => (user && user.codePolicy) || { mode: "once", days: 7 };
+const needsCode = (user) => codePolicy(user).mode !== "once";
 
+/* Worker 回来的通行证：每 x 天的存本机，每次进入的只留在内存 */
+function keepTicket(user, data) {
+  if (!data || !data.ticket) return;
+  internalTicket = data.ticket;
+  if (codePolicy(user).mode === "days") storage.set(INTERNAL_TICKET_STORE, JSON.stringify({ user: user.username, ticket: data.ticket, exp: data.ticketExp }));
+  else storage.remove(INTERNAL_TICKET_STORE);
+}
+function dropTicket() {
+  internalTicket = null;
+  storage.remove(INTERNAL_TICKET_STORE);
+}
+/* 本机存着的「每 x 天」通行证：同一个账户、没过期才用 */
+function loadStoredTicket(user) {
+  const t = storage.json(INTERNAL_TICKET_STORE);
+  if (!t) return;
+  if (user && t.user === user.username && Number(t.exp) > Date.now() && codePolicy(user).mode === "days") internalTicket = t.ticket;
+  else storage.remove(INTERNAL_TICKET_STORE);
+}
+let internalGate = null;   // 登录要过人机验证；已经登录着、只填内部码时不用
+
+/* 内部入口：用户名 + 密码 + 内部码（选填）。已经在网站说明里登录的，只显示当前账户，内部码填一次就行。
+   账户有内部权限（公告 A / B、查看、管理员）就进对应的页面 */
 function initInternal() {
-  $("internalSubmit").addEventListener("click", checkInternalPassword);
-  $("internalPassword").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") checkInternalPassword();
+  internalGate = createFormGate($("internalVerify"), {
+    shouldOpen: () => !$("view-internal").hidden && !$("internalGate").hidden && !window.HJAccount?.user?.(),
+    onPass: () => setMsg($("internalMsg"), ""),
   });
+  $("internalSubmit").addEventListener("click", internalEnter);
+  ["internalUser", "internalPassword", "internalCode"].forEach((id) => $(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) internalEnter();
+  }));
   $("internalPasswordShow").addEventListener("change", (e) => {
-    $("internalPassword").type = e.target.checked ? "text" : "password";
+    $("internalPassword").type = $("internalCode").type = e.target.checked ? "text" : "password";
   });
+  $("internalRegLink").addEventListener("click", () => openSiteAbout("account"));
+  $("internalLogoutBtn").addEventListener("click", () => window.HJAccount?.logout?.());
+  window.HJAccount?.onChange?.(onInternalAccountChange);
+  paintInternalGate();
+  internalAutoEnter();
 }
 
-async function checkInternalPassword() {
-  const input = $("internalPassword");
+const internalInside = () => $("internalGate").hidden;
+
+/* 闸门：登录着只显示当前账户（不用再填用户名密码）；进去以后顶上一行「当前账户 · 退出登录」 */
+function paintInternalGate() {
+  const A = window.HJAccount;
+  const user = A?.user?.();
+  const role = user ? A.ROLE_NAMES[user.role] || "" : "";
+  $("internalWho").hidden = !user;
+  if (user) $("internalWho").innerHTML = `当前账户：<b>${escapeHtml(user.username)}</b>（${escapeHtml(role)}）`;
+  $("internalCreds").hidden = !!user;
+  const cp = codePolicy(user);
+  $("internalCode").placeholder = !user || !A.isInternal(user) ? "内部码（选填，填写一次即可）"
+    : cp.mode === "always" ? "内部码（这个账户每次进入都要填写）"
+    : cp.mode === "days" ? (internalTicket ? `内部码（每 ${cp.days} 天填一次，这次不用填）` : `内部码（这个账户每 ${cp.days} 天要填一次）`)
+    : "内部码（已有内部权限，不用再填）";
+  $("internalRegLink").parentElement.hidden = !!user;
+  $("internalAccountBar").hidden = !user || !internalInside();
+  $("internalAccountText").textContent = user ? `当前账户：${user.username}（${role}）` : "";
+  if (!internalInside()) internalGate?.open();
+}
+
+/* 登录着、有内部权限：打开内部入口就直接进（main.js 的 openInternalView 也会调） */
+function internalAutoEnter() {
+  const A = window.HJAccount;
+  const user = A?.user?.();
+  if (!user || !A.isInternal(user) || user.mustChange || internalInside()) return;
+  if (needsCode(user) && !internalTicket) loadStoredTicket(user);
+  paintInternalGate();
+  if (!needsCode(user) || internalTicket) enterInternalBoard({ quiet: true });
+}
+
+/* 退出登录、换了账户、权限变了：页面整个重新载入回到闸门（各管理面板挪来挪去过，重载最干净） */
+function onInternalAccountChange(user) {
+  if (!user) dropTicket();
+  if (internalInside() && (!user || user.role !== internalRole)) {
+    location.reload();
+    return;
+  }
+  paintInternalGate();
+}
+
+async function internalEnter() {
+  const A = window.HJAccount;
   const msg = $("internalMsg");
   const btn = $("internalSubmit");
-
-  if (!WORKER_URL) {
-    setMsg(msg, "数据库还没配置好，暂时无法验证密码。");
-    return;
-  }
+  if (!A) { setMsg(msg, "账户脚本 account.js 没有加载成功，刷新页面再试"); return; }
+  const code = $("internalCode").value.trim();
+  let user = A.user();
   btn.disabled = true;
-  setMsg(msg, "验证中…");
-  const data = await callWorker({ action: "get_announcements", password: input.value });
-  btn.disabled = false;
-
-  if (!data) {
-    setMsg(msg, "连接失败，检查一下网络后再试");
-    return;
-  }
-  if (data.error === "viewer_closed") {
-    setMsg(msg, viewerClosedText(data.openAt));
-    return;
-  }
-  if (!data.ok) {
-    const fails = getPwFailCount() + 1;
-    setPwFailCount(fails);
-    if (fails % PW_FAIL_CAPTCHA_EVERY === 0) {
-      setMsg(msg, "密码错误次数过多，请完成人机验证");
-      openCaptcha("internal");
-    } else {
-      setMsg(msg, "密码错误");
+  try {
+    if (!user) {
+      const name = $("internalUser").value.trim();
+      const pw = $("internalPassword").value;
+      if (!name || !pw) { setMsg(msg, "请填写用户名和密码"); return; }
+      const need = internalGate.missing();
+      if (need) { setMsg(msg, need); return; }
+      setMsg(msg, "登录中…");
+      const data = await A.login(name, pw, { internalCode: code, proof: internalGate.proof() });
+      if (!data.ok) {
+        if (data.error !== "locked" && data.error !== "no_crypto") internalGate.sync(true);   // 验证凭证用掉了，换一题
+        setMsg(msg, A.errorText(data));
+        return;
+      }
+      $("internalPassword").value = "";
+      user = data.user;
+      keepTicket(user, data);
+    } else if (code) {
+      setMsg(msg, "核对内部码…");
+      const data = await callWorker({ action: "account_code", ...adminAuth(), code });
+      if (!data || !data.ok) { setMsg(msg, A.errorText(data)); return; }
+      keepTicket(data.user, data);
+      A.applyUser(data.user);
+      user = data.user;
+    } else if (A.isInternal(user) && needsCode(user) && !internalTicket) {
+      setMsg(msg, codePolicy(user).mode === "always" ? "这个账户每次进入内部入口都要填写内部码" : `这个账户每 ${codePolicy(user).days} 天要填一次内部码`);
+      $("internalCode").focus();
+      return;
     }
+    $("internalCode").value = "";
+    if (user.mustChange) {
+      setMsg(msg, "这个账户还在用初始密码，请先在「网站说明 → 我的账户」里修改密码");
+      openSiteAbout("account");
+      return;
+    }
+    if (!A.isInternal(user)) {
+      setMsg(msg, "这个账户还没有内部权限，请填写内部码");
+      $("internalCode").focus();
+      return;
+    }
+    setMsg(msg, "");
+    await enterInternalBoard();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function enterInternalBoard({ quiet = false } = {}) {
+  const msg = $("internalMsg");
+  const data = await callWorker({ action: "get_announcements", ...adminAuth() }, { load: quiet ? "corner" : "block" });
+  if (!data) { setMsg(msg, "连接失败，检查一下网络后再试"); return; }
+  if (data.error === "viewer_closed") { setMsg(msg, viewerClosedText(data.openAt)); return; }
+  if (data.error === "code_required") {
+    dropTicket();
+    paintInternalGate();
+    setMsg(msg, data.policy && data.policy.mode === "days" ? `这个账户每 ${data.policy.days} 天要填一次内部码，请填写内部码` : "这个账户进入内部入口要填写内部码");
+    $("internalCode").focus();
     return;
   }
-
-  setPwFailCount(0);
+  if (!data.ok) { if (!quiet) setMsg(msg, "这个账户现在进不了内部入口，请重新登录"); return; }
+  internalRole = window.HJAccount?.user?.()?.role || "";
   setMsg(msg, "");
   $("internalGate").hidden = true;
+  internalGate?.close();
+  paintInternalGate();
   if (data.isViewer) {
-    enterTicketViewer(input.value, data.perms);
+    enterTicketViewer(data.perms);
     return;
   }
   $("internalBoard").hidden = false;
   renderAnnouncements(data.items, data.isAdmin);
-
   $("adminPills").hidden = !data.isAdmin;
   if (data.isAdmin) {
-    internalAdminPassword = input.value;
+    internalAdmin = true;
     startAdminNewWatch();
   }
 }
@@ -176,7 +284,7 @@ function renderAnnouncements(items, isAdmin) {
 }
 
 async function refreshAnnouncements() {
-  const data = await callWorker({ action: "get_announcements", password: internalAdminPassword });
+  const data = await callWorker({ action: "get_announcements", ...adminAuth() });
   if (data && data.ok) renderAnnouncements(data.items, data.isAdmin);
 }
 
@@ -250,7 +358,7 @@ function bindImageUpload(prefix, maxDim, onChange, text = IMAGE_UPLOAD_TEXT) {
     try {
       const { base64, contentType } = await compressImage(file, maxDim);
       setMsg(status, "上传中…");
-      const data = await callWorker({ action: "upload_announcement_image", password: internalAdminPassword, image: base64, content_type: contentType });
+      const data = await callWorker({ action: "upload_announcement_image", ...adminAuth(), image: base64, content_type: contentType });
       if (!data?.ok) throw new Error(data?.error || "upload failed");
       setMsg(status, "");
       onChange(new URL(`image/${data.key}`, workerBase()).href);
@@ -292,7 +400,7 @@ function cancelEditAnnouncement() {
 
 async function deleteAnnouncement(id) {
   if (!confirm("确定要删除这条公告吗？删除后无法恢复。")) return;
-  const data = await callWorker({ action: "delete_announcement", password: internalAdminPassword, id });
+  const data = await callWorker({ action: "delete_announcement", ...adminAuth(), id });
   if (!data || !data.ok) {
     showToast("删除失败，请重试");
     return;
@@ -317,7 +425,7 @@ async function submitAnnouncement() {
   btn.disabled = true;
   const data = await callWorker({
     action: isEditing ? "edit_announcement" : "post_announcement",
-    password: internalAdminPassword,
+    ...adminAuth(),
     id: editingAnnouncementId,
     content: text.value,
     show_a: $("announceShowA").checked,
@@ -343,11 +451,9 @@ function initPostAnnouncement() {
 }
 
 /* ==== 2. 只读页与管理弹窗 ==== */
-let internalViewPassword = null;
 let ticketViewTimer = 0;
 
-function enterTicketViewer(password, perms) {
-  internalViewPassword = password;
+function enterTicketViewer(perms) {
   ticketAdmin.role = "viewer";
   ticketAdmin.perms = perms || { stats: true, survey: false, pickup: false };
   ticketAdmin.tab = "orders";
@@ -396,6 +502,7 @@ const ADMIN_PANEL_REFRESH = {
   huayuAdminPanel: () => refreshHuayuAdmin(),
   puzzleAdminPanel: () => { refreshPuzzleAdmin(); refreshPlays("puzzle"); },
   stageAdminPanel: () => refreshPlays("stage"),
+  userAdminPanel: () => refreshUserAdmin(),
   surveyAdminPanel: () => {
     if (typeof window.mountSurvey === "function") return refreshSurveyAdmin();
     $("surveyAdminStatus").textContent = "问卷脚本 survey.js 没有加载成功（没上传或被缓存挡住），刷新页面再试";
@@ -428,7 +535,7 @@ function setAdminNewDot(panelId, on) {
 /* 各面板读到列表后调用：面板开着就记为看过，否则和看过的编号比 */
 function noteAdminItems(panelId, items) {
   const def = ADMIN_NEW[panelId];
-  if (!def || !internalAdminPassword) return;
+  if (!def || !internalAdmin) return;
   const latest = items.reduce((m, i) => (def.counts && !def.counts(i) ? m : Math.max(m, Number(i.id) || 0)), 0);
   const seen = storage.json(ADMIN_SEEN_STORE) || {};
   const key = def.key();
@@ -444,7 +551,7 @@ function noteAdminItems(panelId, items) {
 }
 
 function checkAdminNew() {
-  if (!internalAdminPassword || document.hidden || $("view-internal").hidden) return;
+  if (!internalAdmin || document.hidden || $("view-internal").hidden) return;
   adminNew.checkedAt = Date.now();
   for (const [panelId, def] of Object.entries(ADMIN_NEW)) {
     if (adminPanelShowing(panelId) || (def.ready && !def.ready())) continue;
@@ -523,7 +630,7 @@ function initLockdownToggle() {
     btn.disabled = true;
     const data = await callWorker({
       action: "set_lockdown",
-      password: internalAdminPassword,
+      ...adminAuth(),
       value: btn.dataset.current !== "1",
     });
     btn.disabled = false;
@@ -576,7 +683,7 @@ function initMaintToggle() {
     }
     delete btn.dataset.armed;
     btn.disabled = true;
-    const data = await callWorker({ action: "set_maintenance", password: internalAdminPassword, value: closing });
+    const data = await callWorker({ action: "set_maintenance", ...adminAuth(), value: closing });
     btn.disabled = false;
     if (!data || !data.ok) {
       setMsg(msg, adminErr(data, MAINT_FALLBACK, MAINT_ERRORS));
@@ -613,7 +720,7 @@ function initCaptchaSwitch() {
     btn.disabled = true;
     const data = await callWorker({
       action: "set_captcha",
-      password: internalAdminPassword,
+      ...adminAuth(),
       enabled: btn.dataset.current !== "1",
     });
     btn.disabled = false;
@@ -643,7 +750,7 @@ async function saveStarlight(value) {
 
   setMsg(msg, "保存中…");
   buttons.forEach((b) => { b.disabled = true; });
-  const data = await callWorker({ action: "set_starlight", password: internalAdminPassword, value });
+  const data = await callWorker({ action: "set_starlight", ...adminAuth(), value });
   buttons.forEach((b) => { b.disabled = false; });
 
   if (!data || !data.ok) {
@@ -692,7 +799,6 @@ const ticketAdmin = {
 };
 const TA_TABS = ["settings", "orders", "stats"];
 const isTicketViewer = () => ticketAdmin.role === "viewer";
-const ticketAdminPassword = () => internalAdminPassword || internalViewPassword;
 const cnHm = (ms) => (ms ? formatCnTime(ms).slice(11) : "");
 const cnMdHm = (ms) => (ms ? `${Number(formatCnTime(ms).slice(5, 7))}/${Number(formatCnTime(ms).slice(8, 10))} ${cnHm(ms)}` : "");
 const VERIFY_MODE_TEXT = { cf: "自动验证", ff14: "狒科生", poem: "文科生", cactpot: "理科生", math: "理科生（算术）", off: "验证关闭时提交", manual: "手动验证" };
@@ -1123,7 +1229,7 @@ async function saveTicketEdit() {
   setMsg(msg, "");
   $("teSave").disabled = true;
   const data = await callWorker({
-    action: "ticket_admin_edit", password: internalAdminPassword, id: o.id, rev: o.rev,
+    action: "ticket_admin_edit", ...adminAuth(), id: o.id, rev: o.rev,
     contact, holders, day: $("teDay").value, message: $("teMessage").value, anonymous: $("teAnon").checked,
     overLimit: $("teOver").checked, adminNote: $("teNote").value,
   });
@@ -1183,7 +1289,7 @@ async function ticketPartialVoid(index, voided) {
   if (!o) return;
   const h = o.holders[index];
   if (voided && !confirm(`确定作废第 ${o.seq} 号里的「${formatHolder(h)}」这一张吗？\n\n这张的票额会放回这一轮，之后可以再恢复。`)) return;
-  const data = await callWorker({ action: "ticket_admin_void_holder", password: internalAdminPassword, id: o.id, index, voided, rev: o.rev });
+  const data = await callWorker({ action: "ticket_admin_void_holder", ...adminAuth(), id: o.id, index, voided, rev: o.rev });
   if (!data || !data.ok) {
     const ERR = {
       conflict: "订单已被修改，已刷新",
@@ -1204,7 +1310,7 @@ async function ticketPartialVoid(index, voided) {
 async function ticketAdminVoid(id, voided) {
   const msg = $("ticketAdminMsg");
   setMsg(msg, "");
-  const data = await callWorker({ action: "ticket_admin_void", password: internalAdminPassword, id, voided });
+  const data = await callWorker({ action: "ticket_admin_void", ...adminAuth(), id, voided });
   if (!data || !data.ok) {
     if (data && data.error === "not_changed") {
       setMsg(msg, "状态已变化，已刷新");
@@ -1225,7 +1331,7 @@ async function ticketTogglePickup(id, picked, input) {
   const msg = $("ticketAdminMsg");
   setMsg(msg, "");
   input.disabled = true;
-  const data = await callWorker({ action: "ticket_pickup", password: ticketAdminPassword(), id, picked });
+  const data = await callWorker({ action: "ticket_pickup", ...adminAuth(), id, picked });
   input.disabled = false;
   if (data && data.order) ticketAdminApplyOrder(data.order);
   if (!data || !data.ok) {
@@ -1473,7 +1579,7 @@ async function copyTicketUnpicked(mode) {
 let ticketAdminTimer = 0;
 
 async function refreshTicketAdmin() {
-  const data = await callWorker({ action: "ticket_admin_get", password: ticketAdminPassword() });
+  const data = await callWorker({ action: "ticket_admin_get", ...adminAuth() });
   if (data && data.error === "viewer_closed") {
     clearInterval(ticketViewTimer);
     ticketAdmin.orders = [];
@@ -1490,7 +1596,7 @@ async function refreshTicketAdmin() {
   ticketAdmin.status = data.status;
   ticketAdmin.orders = Array.isArray(data.orders) ? data.orders : [];
   ticketAdmin.rounds = Array.isArray(data.rounds) ? data.rounds : [];
-  ticketAdmin.role = data.role === "viewer" || !internalAdminPassword ? "viewer" : "admin";
+  ticketAdmin.role = data.role === "viewer" || !internalAdmin ? "viewer" : "admin";
   ticketAdmin.perms = data.perms || (isTicketViewer() ? { stats: true, survey: false, pickup: false } : { stats: true, survey: true, pickup: true });
   renderTicketAdmin();
   return true;
@@ -1499,7 +1605,7 @@ async function refreshTicketAdmin() {
 async function ticketAdminSet(patch, okMsg) {
   const msg = $("ticketAdminMsg");
   setMsg(msg, "");
-  const data = await callWorker({ action: "ticket_admin_set", password: internalAdminPassword, ...patch });
+  const data = await callWorker({ action: "ticket_admin_set", ...adminAuth(), ...patch });
   if (!data || !data.ok) {
     const TICKET_SET_ERRORS = {
       bad_limit: "票额需为 0 以上的整数",
@@ -1537,7 +1643,7 @@ async function loadTicketLog() {
   const box = $("ticketLogList");
   box.hidden = false;
   box.innerHTML = `<p class="fb-empty">加载中…</p>`;
-  const data = await callWorker({ action: "ticket_log_get", password: internalAdminPassword });
+  const data = await callWorker({ action: "ticket_log_get", ...adminAuth() });
   if (!data || !data.ok) {
     box.innerHTML = `<p class="fb-empty">${escapeHtml(adminErr(data, "读取失败"))}</p>`;
     return;
@@ -2101,7 +2207,7 @@ function initTicketAdmin() {
         return;
       }
     }
-    const data = await callWorker({ action: "ticket_admin_clear", password: internalAdminPassword, confirm: "CLEAR" });
+    const data = await callWorker({ action: "ticket_admin_clear", ...adminAuth(), confirm: "CLEAR" });
     if (!data || !data.ok) {
       setMsg(msg, adminErr(data, "清空失败，请重新登录内部入口后再试"));
       return;
@@ -2113,7 +2219,7 @@ function initTicketAdmin() {
   /* 每分钟自动刷新（编辑中或在设置页时跳过） */
   clearInterval(ticketAdminTimer);
   ticketAdminTimer = setInterval(() => {
-    if (document.hidden || isTicketViewer() || !internalAdminPassword) return;
+    if (document.hidden || isTicketViewer() || !internalAdmin) return;
     const panel = $("ticketAdminPanel");
     if (panel.hidden || $("adminModalOverlay").hidden || ticketAdmin.edit || ticketAdmin.tab === "settings") return;
     runQuietly(refreshTicketAdmin);
@@ -2121,7 +2227,25 @@ function initTicketAdmin() {
 }
 
 /* ==== 5. 反馈建议箱 ==== */
-const feedbackAdmin = { items: [], loaded: false };
+const feedbackAdmin = { items: [], loaded: false, replyingId: null };
+
+/* 一条反馈的回复区：写回复时是文本框，回复过的显示内容与对方读没读 */
+function feedbackReplyHtml(i) {
+  if (feedbackAdmin.replyingId === i.id) {
+    return `<div class="fb-reply-edit">
+      ${i.replyable ? "" : `<p class="fb-reply-warn">这条是账户功能上线以前提交的，提交的人看不到回复，需要的话用联系方式联系。</p>`}
+      <textarea data-fb-reply-text maxlength="1000" placeholder="回复内容：对方在「网站说明 → 个人数据」里看得到，登录了账户的在任何设备上都看得到" aria-label="回复内容">${escapeHtml(i.reply || "")}</textarea>
+      <div class="fb-actions">
+        <button type="button" class="tt-act" data-fb-act="reply-cancel">取消</button>
+        ${i.reply ? `<button type="button" class="tt-act is-void" data-fb-act="reply-clear">撤回回复</button>` : ""}
+        <button type="button" class="tt-act is-restore" data-fb-act="reply-send">发送回复</button>
+      </div>
+    </div>`;
+  }
+  if (!i.reply) return "";
+  return `<div class="fb-reply"><div class="fb-reply-head"><b>已回复</b><span>${escapeHtml(formatCnTime(i.replyAt))} · ${i.replyRead ? "对方已读" : "对方还没看"}</span></div>
+    <p>${escapeHtml(i.reply)}</p></div>`;
+}
 
 function renderFeedbackAdmin() {
   const cat = $("feedbackFilterCat").value;
@@ -2143,11 +2267,14 @@ function renderFeedbackAdmin() {
         <span class="fb-cat fb-cat-${escapeHtml(i.category)}">${escapeHtml(FEEDBACK_CATEGORIES[i.category] || i.category)}</span>
         <span class="fb-time">${escapeHtml(formatCnTime(i.createdAt))}</span>
         ${submitMetaHtml(i)}
+        ${i.username ? `<span class="fb-user">账户 ${escapeHtml(i.username)}</span>` : ""}
         ${i.handled ? `<span class="fb-state">已处理</span>` : ""}
       </div>
       <div class="fb-body">${escapeHtml(i.content)}</div>
       <div class="fb-contact">${i.contact ? `联系方式：<b>${escapeHtml(i.contact)}</b>` : "未留联系方式"}</div>
-      <div class="fb-actions">
+      ${feedbackReplyHtml(i)}
+      <div class="fb-actions"${feedbackAdmin.replyingId === i.id ? " hidden" : ""}>
+        <button type="button" class="tt-act" data-fb-act="reply">${i.reply ? "修改回复" : "回复"}</button>
         ${i.contact ? `<button type="button" class="tt-act is-copy" data-fb-act="copy">复制联系方式</button>` : ""}
         <button type="button" class="tt-act ${i.handled ? "is-reopen" : "is-restore"}" data-fb-act="mark">${i.handled ? "标记为未处理" : "标记已处理"}</button>
         <button type="button" class="tt-act is-void" data-fb-act="delete">删除</button>
@@ -2157,7 +2284,7 @@ function renderFeedbackAdmin() {
 }
 
 async function refreshFeedbackAdmin() {
-  const data = await callWorker({ action: "feedback_admin_list", password: internalAdminPassword });
+  const data = await callWorker({ action: "feedback_admin_list", ...adminAuth() });
   if (!data || !data.ok) {
     $("feedbackAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return false;
@@ -2189,17 +2316,235 @@ function initFeedbackAdmin() {
     setMsg(msg, "");
     const act = btn.dataset.fbAct;
     if (act === "copy") { copyText(item.contact, "联系方式已复制", item.contact); return; }
+    if (act === "reply" || act === "reply-cancel") {
+      feedbackAdmin.replyingId = act === "reply" ? id : null;
+      renderFeedbackAdmin();
+      if (act === "reply") $("feedbackAdminList").querySelector(`[data-fb-id="${id}"] [data-fb-reply-text]`)?.focus();
+      return;
+    }
+    if (act === "reply-send" || act === "reply-clear") {
+      const text = act === "reply-clear" ? "" : btn.closest("[data-fb-id]").querySelector("[data-fb-reply-text]").value.trim();
+      if (act === "reply-send" && !text) { setMsg(msg, "请填写回复内容"); return; }
+      if (act === "reply-clear" && !confirm("撤回这条回复？对方就看不到了。")) return;
+      btn.disabled = true;
+      const data = await callWorker({ action: "feedback_admin_reply", ...adminAuth(), id, reply: text });
+      btn.disabled = false;
+      if (!data || !data.ok) { setMsg(msg, adminErr(data, "回复失败，请稍后再试", { too_long: "回复最多 1000 字" })); return; }
+      Object.assign(item, { reply: data.reply, replyAt: data.replyAt, replyRead: false, handled: data.handled });
+      feedbackAdmin.replyingId = null;
+      renderFeedbackAdmin();
+      showToast(text ? "已回复" : "已撤回回复");
+      return;
+    }
     if (act === "delete" && !confirm("确定删除这条反馈吗？删除后无法恢复。")) return;
     btn.disabled = true;
     const data = act === "mark"
-      ? await callWorker({ action: "feedback_admin_mark", password: internalAdminPassword, id, handled: !item.handled })
-      : await callWorker({ action: "feedback_admin_delete", password: internalAdminPassword, id });
+      ? await callWorker({ action: "feedback_admin_mark", ...adminAuth(), id, handled: !item.handled })
+      : await callWorker({ action: "feedback_admin_delete", ...adminAuth(), id });
     btn.disabled = false;
     if (!data || !data.ok) { setMsg(msg, adminErr(data, "操作失败，请重新登录内部入口后再试")); return; }
     if (act === "mark") item.handled = !!data.handled;
     else feedbackAdmin.items = feedbackAdmin.items.filter((i) => i.id !== id);
     renderFeedbackAdmin();
     showToast(act === "mark" ? (item.handled ? "已标记为已处理" : "已标记为未处理") : "已删除");
+  });
+}
+
+/* ==== 5b. 用户管理 ====
+   账户列表（权限、停用、重置密码、下线、列入致谢、删除）、注册码与内部码一览（都在 Cloudflare 里，这里只显示设没设）、设置。
+   站长账户（密码在 ADMIN_PASSWORD）不能改权限、停用、删除、重置；自己也不能改自己的权限、停用、删除 */
+const userAdmin = { users: [], me: 0, envCodes: {}, envAdmin: "", settings: {}, loaded: false };
+const UA_ROLES = ["u", "a", "b", "v", "c"];
+const UA_CODE_ROWS = [
+  ["u", "PASSWORD_VISITOR", "普通用户的注册码"],
+  ["a", "PASSWORD_A", "公告 A：注册码、内部码"],
+  ["b", "PASSWORD_B", "公告 B：注册码、内部码"],
+  ["v", "PASSWORD_VIEW", "查看（购票情况）：注册码、内部码"],
+  ["c", "PASSWORD_C", "管理员：注册码、内部码"],
+  ["admin", "ADMIN_PASSWORD", "站长账户的登录密码"],
+];
+const UA_ERRORS = {
+  self: "不能改自己的权限、停用或删除自己",
+  env_admin: "站长账户的权限固定为管理员，密码在 Cloudflare 的 ADMIN_PASSWORD 里改",
+  last_admin: "至少要留一个能用的管理员",
+  need_account: "要先用管理员账户登录才能关掉",
+  not_found: "这个账户已经不在了，刷新一下",
+  too_long: "备注最多 40 个字",
+};
+const uaRoleName = (r) => window.HJAccount?.ROLE_NAMES?.[r] || r;
+/* 内部码规则：首次填写 / 每 x 天 / 每次进入 */
+function uaCodeOptions(cp = { mode: "once", days: 7 }) {
+  return [["once", "首次填写"], ["days", cp.mode === "days" ? `每 ${cp.days} 天` : "每 x 天…"], ["always", "每次进入"]]
+    .map(([v, t]) => `<option value="${v}"${v === cp.mode ? " selected" : ""}>${t}</option>`).join("");
+}
+
+function renderUserAdmin() {
+  const q = $("uaSearch").value.trim().toLowerCase();
+  const role = $("uaRoleFilter").value;
+  const users = userAdmin.users;
+  const internal = users.filter((u) => u.role !== "u").length;
+  const off = users.filter((u) => u.disabled).length;
+  $("uaStatus").textContent = users.length ? `共 ${users.length} 个账户 · 有内部权限 ${internal} 个${off ? ` · 已停用 ${off} 个` : ""}` : "还没有账户";
+  const list = users.filter((u) => (!role || u.role === role)
+    && (!q || [u.username, u.charName, u.charServer, u.contact].some((v) => String(v || "").toLowerCase().includes(q))));
+  $("uaBody").innerHTML = list.length ? list.map((u) => {
+    const self = u.id === userAdmin.me;
+    const locked = u.envAdmin || self;
+    const charId = u.charName ? `${u.charName}${u.charServer ? `@${u.charServer}` : ""}` : "";
+    return `<tr data-ua-id="${u.id}"${u.disabled ? ' class="is-void"' : ""}>
+      <td class="ua-name"><b>${escapeHtml(u.username)}</b>${u.envAdmin ? `<span class="ua-tag">站长</span>` : ""}${self ? `<span class="ua-tag">我</span>` : ""}${u.disabled ? `<span class="ua-tag is-off">已停用</span>` : ""}${u.thanks ? `<span class="ua-tag is-thanks" title="${escapeHtml(u.thanksNote)}">致谢</span>` : ""}</td>
+      <td>${escapeHtml(charId || "—")}</td>
+      <td class="ua-contact">${escapeHtml(u.contact || "—")}</td>
+      <td><select data-ua-role aria-label="${escapeHtml(u.username)} 的权限"${locked ? " disabled" : ""}>${UA_ROLES.map((r) => `<option value="${r}"${r === u.role ? " selected" : ""}>${escapeHtml(uaRoleName(r))}</option>`).join("")}</select></td>
+      <td><select data-ua-code aria-label="${escapeHtml(u.username)} 进内部入口时填内部码的规则">${uaCodeOptions(u.codePolicy)}</select></td>
+      <td class="ua-time">注册 ${escapeHtml(formatCnTime(u.createdAt))}<br>最近登录 ${escapeHtml(u.lastLoginAt ? formatCnTime(u.lastLoginAt) : "—")}<br>${u.sessions} 台设备登录中</td>
+      <td class="ua-acts">
+        <button type="button" class="tt-act" data-ua-act="reset"${u.envAdmin ? " disabled" : ""}>重置密码</button>
+        <button type="button" class="tt-act" data-ua-act="revoke"${u.sessions ? "" : " disabled"}>全部下线</button>
+        <button type="button" class="tt-act${u.thanks ? " is-reopen" : ""}" data-ua-act="thanks">${u.thanks ? "取消致谢" : "列入致谢"}</button>
+        <button type="button" class="tt-act ${u.disabled ? "is-restore" : "is-void"}" data-ua-act="disable"${locked ? " disabled" : ""}>${u.disabled ? "启用" : "停用"}</button>
+        <button type="button" class="tt-act is-void" data-ua-act="delete"${locked ? " disabled" : ""}>删除</button>
+      </td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="fb-empty">${users.length ? "没有符合条件的账户" : "还没有账户"}</td></tr>`;
+}
+
+function renderUserAdminCodes() {
+  const c = userAdmin.envCodes || {};
+  $("uaEnvCodes").innerHTML = UA_CODE_ROWS.map(([k, name, what]) =>
+    `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(what)}${k === "admin" && userAdmin.envAdmin ? `（账户 ${escapeHtml(userAdmin.envAdmin)}）` : ""} · <b class="${c[k] ? "ua-on" : "ua-off"}">${c[k] ? "已设置" : "未设置"}</b></dd>`).join("");
+  $("uaLegacyLogin").checked = userAdmin.settings.legacyLogin !== false;
+}
+
+async function refreshUserAdmin() {
+  const data = await callWorker({ action: "user_admin_list", ...adminAuth() });
+  if (!data || !data.ok) { $("uaStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试"); return false; }
+  Object.assign(userAdmin, { users: data.users, me: data.me, envCodes: data.envCodes, envAdmin: data.envAdmin, settings: data.settings, loaded: true });
+  renderUserAdmin();
+  renderUserAdminCodes();
+  return true;
+}
+
+/* 改一个账户：成功后换掉表里这一行 */
+async function setUserAdmin(id, patch, okText) {
+  const msg = $("uaMsg");
+  setMsg(msg, "");
+  const data = await callWorker({ action: "user_admin_set", ...adminAuth(), id, ...patch });
+  if (!data || !data.ok) { setMsg(msg, adminErr(data, "操作失败，请稍后再试", UA_ERRORS)); renderUserAdmin(); return; }
+  userAdmin.users = userAdmin.users.map((u) => (u.id === id ? data.user : u));
+  renderUserAdmin();
+  showToast(okText);
+}
+
+function showResetLink(user, token) {
+  const link = `${new URL("./", document.baseURI).href}#reset=${token}`;
+  $("uaResetName").textContent = user.username;
+  $("uaResetLink").value = link;
+  $("uaResetBox").hidden = false;
+  $("uaResetBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function initUserAdmin() {
+  $("uaRoleFilter").insertAdjacentHTML("beforeend", UA_ROLES.map((r) => `<option value="${r}">${escapeHtml(uaRoleName(r))}</option>`).join(""));
+  $("uaTabs").addEventListener("change", (e) => {
+    syncSegments(e.currentTarget);
+    ["users", "codes", "settings"].forEach((k) => { $(`ua${k[0].toUpperCase()}${k.slice(1)}`).hidden = k !== e.target.value; });
+  });
+  $("uaSearch").addEventListener("input", renderUserAdmin);
+  $("uaRoleFilter").addEventListener("change", renderUserAdmin);
+  $("uaRefreshBtn").addEventListener("click", async (e) => {
+    e.currentTarget.disabled = true;
+    try { if (await refreshUserAdmin()) showToast("已刷新"); } finally { e.currentTarget.disabled = false; }
+  });
+  $("uaResetCopy").addEventListener("click", () => copyText($("uaResetLink").value, "链接已复制", "复制失败，请手动选中复制"));
+  $("uaBody").addEventListener("change", async (e) => {
+    const codeSel = e.target.closest("[data-ua-code]");
+    if (codeSel) {
+      const id = Number(codeSel.closest("[data-ua-id]").dataset.uaId);
+      const user = userAdmin.users.find((u) => u.id === id);
+      if (!user) return;
+      const cp = user.codePolicy || { mode: "once", days: 7 };
+      const mode = codeSel.value;
+      let days = cp.days;
+      if (mode === "days") {
+        const raw = prompt(`「${user.username}」每几天要重新填一次内部码？（1~365）`, String(cp.days || 7));
+        days = Number(raw);
+        if (raw === null || !Number.isInteger(days) || days < 1 || days > 365) {
+          if (raw !== null) showToast("请输入 1~365 的整数");
+          codeSel.innerHTML = uaCodeOptions(cp);
+          return;
+        }
+      }
+      codeSel.disabled = true;
+      await setUserAdmin(id, { codePolicy: { mode, days } }, "内部码规则已修改");
+      return;
+    }
+    const sel = e.target.closest("[data-ua-role]");
+    if (!sel) return;
+    const id = Number(sel.closest("[data-ua-id]").dataset.uaId);
+    const user = userAdmin.users.find((u) => u.id === id);
+    if (!user) return;
+    if (!confirm(`把「${user.username}」的权限改成「${uaRoleName(sel.value)}」？`)) { sel.value = user.role; return; }
+    sel.disabled = true;
+    await setUserAdmin(id, { role: sel.value }, "权限已修改");
+  });
+  $("uaBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-ua-act]");
+    if (!btn) return;
+    const id = Number(btn.closest("[data-ua-id]").dataset.uaId);
+    const user = userAdmin.users.find((u) => u.id === id);
+    if (!user) return;
+    const msg = $("uaMsg");
+    setMsg(msg, "");
+    const act = btn.dataset.uaAct;
+    if (act === "reset") {
+      if (!confirm(`给「${user.username}」生成一个重置密码的链接？之前生成、还没用的链接会作废。`)) return;
+      btn.disabled = true;
+      const data = await callWorker({ action: "user_admin_reset", ...adminAuth(), id });
+      btn.disabled = false;
+      if (!data || !data.ok) { setMsg(msg, adminErr(data, "生成失败，请稍后再试", UA_ERRORS)); return; }
+      showResetLink(user, data.token);
+    } else if (act === "revoke") {
+      if (!confirm(`让「${user.username}」在所有设备上退出登录？`)) return;
+      btn.disabled = true;
+      const data = await callWorker({ action: "user_admin_revoke", ...adminAuth(), id });
+      if (!data || !data.ok) { btn.disabled = false; setMsg(msg, adminErr(data, "操作失败，请稍后再试", UA_ERRORS)); return; }
+      user.sessions = 0;
+      renderUserAdmin();
+      showToast("已全部下线");
+    } else if (act === "thanks") {
+      if (user.thanks) { await setUserAdmin(id, { thanks: false }, "已从致谢里拿掉"); return; }
+      const note = prompt(`「${user.username}」会出现在网站说明「致谢」的「多场活动长期合作的店家和老师们」里，显示游戏 id（没填就显示用户名）。\n要加一句备注吗？（选填，最多 40 字，比如「xx 店店长」）`, user.thanksNote || "");
+      if (note === null) return;
+      await setUserAdmin(id, { thanks: true, thanksNote: note.trim() }, "已列入致谢");
+    } else if (act === "disable") {
+      const off = !user.disabled;
+      if (!confirm(off ? `停用「${user.username}」？停用后不能登录，已登录的设备也会退出。` : `重新启用「${user.username}」？`)) return;
+      await setUserAdmin(id, { disabled: off }, off ? "已停用" : "已启用");
+    } else if (act === "delete") {
+      if (!confirm(`删除账户「${user.username}」？\n账户、同步的数据和登录都会删掉；已经提交的购票、问卷等记录照常有效，只是不再和账户关联。删除后不能恢复。`)) return;
+      btn.disabled = true;
+      const data = await callWorker({ action: "user_admin_delete", ...adminAuth(), id });
+      if (!data || !data.ok) { btn.disabled = false; setMsg(msg, adminErr(data, "删除失败，请稍后再试", UA_ERRORS)); return; }
+      userAdmin.users = userAdmin.users.filter((u) => u.id !== id);
+      renderUserAdmin();
+      showToast("已删除");
+    }
+  });
+  $("uaLegacyLogin").addEventListener("change", async (e) => {
+    const on = e.currentTarget.checked;
+    if (!on && !confirm("关掉之后，只有登录了有内部权限的账户才能进内部入口、用管理功能（只填旧版密码不再管用）。确定关掉？")) {
+      e.currentTarget.checked = true;
+      return;
+    }
+    const data = await callWorker({ action: "user_admin_settings", ...adminAuth(), legacyLogin: on });
+    if (!data || !data.ok) {
+      e.currentTarget.checked = !on;
+      setMsg($("uaMsg"), adminErr(data, "保存失败，请稍后再试", UA_ERRORS));
+      return;
+    }
+    userAdmin.settings = data.settings;
+    showToast(on ? "已允许只用旧版密码" : "已关闭只用旧版密码");
   });
 }
 
@@ -2261,7 +2606,7 @@ function renderVenueAdmin() {
 }
 
 async function refreshVenueAdmin() {
-  const data = await callWorker({ action: "venue_admin_list", password: internalAdminPassword });
+  const data = await callWorker({ action: "venue_admin_list", ...adminAuth() });
   if (!data || !data.ok) {
     $("venueAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return false;
@@ -2308,7 +2653,7 @@ async function saveVenueAdmin(e) {
   btn.disabled = true;
   setMsg(msg, "");
   const data = await callWorker({
-    action: "venue_admin_save", password: internalAdminPassword, ...(id ? { id } : {}), ...form.payload,
+    action: "venue_admin_save", ...adminAuth(), ...(id ? { id } : {}), ...form.payload,
   });
   btn.disabled = false;
   if (!data || !data.ok) {
@@ -2326,7 +2671,7 @@ async function saveVenueAdmin(e) {
 async function venueAdminVoid(item, voided) {
   const msg = $("venueAdminMsg");
   setMsg(msg, "");
-  const data = await callWorker({ action: "venue_admin_void", password: internalAdminPassword, id: item.id, voided });
+  const data = await callWorker({ action: "venue_admin_void", ...adminAuth(), id: item.id, voided });
   if (!data || !data.ok) {
     if (data && data.error === "not_changed") {
       setMsg(msg, "状态已变化，已刷新");
@@ -2534,7 +2879,7 @@ function renderSurveyAdmin() {
 }
 
 async function refreshSurveyAdmin() {
-  const data = await callWorker({ action: "survey_admin_list", password: internalAdminPassword || internalViewPassword, survey: SURVEY.id });
+  const data = await callWorker({ action: "survey_admin_list", ...adminAuth(), survey: SURVEY.id });
   if (!data || !data.ok) {
     $("surveyAdminStatus").textContent = data?.error === "viewer_closed"
       ? "未开放"
@@ -2618,7 +2963,7 @@ async function exportSurveyExcel() {
 async function surveyAdminVoid(item, voided) {
   const msg = $("surveyAdminMsg");
   setMsg(msg, "");
-  const data = await callWorker({ action: "survey_admin_void", password: internalAdminPassword, id: item.id, voided });
+  const data = await callWorker({ action: "survey_admin_void", ...adminAuth(), id: item.id, voided });
   if (!data || !data.ok) {
     if (data && data.error === "not_changed") {
       setMsg(msg, "这份答卷的状态已经变过了，已为你刷新");
@@ -2649,7 +2994,7 @@ function initSurveyAdmin() {
     setMsg($("surveyAdminMsg"), "");
     btn.disabled = true;
     try {
-      const data = await callWorker({ action: "survey_admin_set", password: internalAdminPassword, survey: SURVEY.id, open: next });
+      const data = await callWorker({ action: "survey_admin_set", ...adminAuth(), survey: SURVEY.id, open: next });
       if (!data || !data.ok) {
         setMsg($("surveyAdminMsg"), adminErr(data, "切换失败，请重新登录内部入口后再试"));
         return;
@@ -2740,7 +3085,7 @@ async function refreshPopupAdmin() {
   $("popupAdminStatus").textContent = "加载中…";
   $("popupToggleBtn").disabled = true;
   setMsg($("popupAdminMsg"), "");
-  const data = await callWorker({ action: "popup_admin_get", password: internalAdminPassword });
+  const data = await callWorker({ action: "popup_admin_get", ...adminAuth() });
   if (!data || !data.ok) {
     popupAdmin.saved = null;
     renderPopupAdminStatus();
@@ -2771,7 +3116,7 @@ async function savePopupAdmin(extra = {}) {
   }
   const data = await callWorker({
     action: "popup_admin_save",
-    password: internalAdminPassword,
+    ...adminAuth(),
     title: v.title,
     content: v.body,
     image_url: v.image_url,
@@ -2825,7 +3170,7 @@ function initPopupAdmin() {
       if (await savePopupAdmin({ enabled: true })) showToast("已保存并开启弹窗");
       return;
     }
-    const data = await callWorker({ action: "popup_admin_set", password: internalAdminPassword, enabled: turnOn });
+    const data = await callWorker({ action: "popup_admin_set", ...adminAuth(), enabled: turnOn });
     if (!data || !data.ok) {
       setMsg($("popupAdminMsg"), adminErr(data, "切换失败，请重新登录内部入口后再试", { empty: "请先保存内容" }));
       return;
@@ -2884,7 +3229,7 @@ function renderHuayuAdmin(d) {
 
 async function refreshHuayuVisits() {
   const summary = $("huayuVisitSummary");
-  const data = await callWorker({ action: "huayu_admin_visits", password: internalAdminPassword });
+  const data = await callWorker({ action: "huayu_admin_visits", ...adminAuth() });
   if (!data || !data.ok) {
     summary.textContent = adminErr(data, "读取失败");
     return;
@@ -2903,7 +3248,7 @@ async function refreshHuayuAdmin() {
   $("huayuAdminStatus").textContent = "当前状态：加载中…";
   setMsg($("huayuSettingMsg"), "");
   loadHuayuJs({ load: "none" }).catch(() => {});   // 先在后台取，用到时多半已经好了
-  const data = await callWorker({ action: "huayu_admin_get", password: internalAdminPassword });
+  const data = await callWorker({ action: "huayu_admin_get", ...adminAuth() });
   if (!data || !data.ok) {
     $("huayuAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试");
     return;
@@ -2915,7 +3260,7 @@ async function saveHuayuAdmin(patch, okMsg, btn) {
   const msg = $("huayuSettingMsg");
   setMsg(msg, "");
   if (btn) btn.disabled = true;
-  const data = await callWorker({ action: "huayu_admin_set", password: internalAdminPassword, ...patch });
+  const data = await callWorker({ action: "huayu_admin_set", ...adminAuth(), ...patch });
   if (btn) btn.disabled = false;
   if (!data || !data.ok) {
     setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", HUAYU_ADMIN_ERRORS));
@@ -2975,7 +3320,7 @@ async function huayuAdminConvert(dir, btn) {
   const input = $("huayuAdminInput").value;
   const custom = syncHuayuAdminKeySeg();
   const key = custom ? $("huayuAdminCustomKey").value.trim() : "";
-  const auth = { password: internalAdminPassword };
+  const auth = { ...adminAuth() };
   if (!input.trim()) { setMsg(msg, HUAYU_ADMIN_ERRORS.empty); return; }
   if (custom && !key) { setMsg(msg, "请输入自定义密钥"); $("huayuAdminCustomKey").focus(); return; }
   btn.disabled = true;
@@ -3146,7 +3491,7 @@ function showPzAdminImage() {
 async function refreshPuzzleAdmin() {
   $("pzAdminStatus").textContent = "加载中…";
   setMsg($("pzAdminMsg"), "");
-  const data = await callWorker({ action: "puzzle_admin_get", password: internalAdminPassword });
+  const data = await callWorker({ action: "puzzle_admin_get", ...adminAuth() });
   if (!data || !data.ok) {
     $("pzAdminStatus").textContent = adminErr(data, "读取失败，请重新登录内部入口后再试", PZ_ADMIN_ERRORS);
     return;
@@ -3181,7 +3526,7 @@ async function savePuzzleAdmin(patch, okMsg, btn) {
   }
   if (btn) btn.disabled = true;
   const before = puzzleAdmin.s?.contest.rev;
-  const data = await callWorker({ action: "puzzle_admin_set", password: internalAdminPassword, ...patch });
+  const data = await callWorker({ action: "puzzle_admin_set", ...adminAuth(), ...patch });
   if (btn) btn.disabled = false;
   if (!data || !data.ok) {
     setMsg(msg, adminErr(data, "保存失败，请重新登录内部入口后再试", PZ_ADMIN_ERRORS));
@@ -3314,7 +3659,7 @@ async function uploadPzCrop() {
     if (!blob) throw new Error("encode fail");
     const base64 = (await readAsDataURL(blob)).split(",")[1];
     setMsg(msg, "上传中…");
-    const data = await callWorker({ action: "upload_announcement_image", password: internalAdminPassword, image: base64, content_type: blob.type });
+    const data = await callWorker({ action: "upload_announcement_image", ...adminAuth(), image: base64, content_type: blob.type });
     if (!data?.ok) throw new Error(data?.error || "upload failed");
     puzzleAdmin.image = data.key;
     closePzCrop();
@@ -3330,7 +3675,7 @@ async function uploadPzCrop() {
 /* ---- 参赛记录 ---- */
 async function refreshPuzzleRecords() {
   $("pzRecSummary").textContent = "加载中…";
-  const data = await callWorker({ action: "puzzle_admin_records", password: internalAdminPassword });
+  const data = await callWorker({ action: "puzzle_admin_records", ...adminAuth() });
   if (!data || !data.ok) {
     $("pzRecSummary").textContent = adminErr(data, "读取失败", PZ_ADMIN_ERRORS);
     return;
@@ -3439,7 +3784,7 @@ function initPuzzleAdmin() {
     if (!btn) return;
     btn.disabled = true;
     const data = await callWorker({
-      action: "puzzle_admin_void", password: internalAdminPassword, id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
+      action: "puzzle_admin_void", ...adminAuth(), id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
     });
     if (!data || !data.ok) {
       btn.disabled = false;
@@ -3466,7 +3811,7 @@ const playerText = (p) => p || "（未填写）";
 async function refreshPlays(game) {
   const [pre] = playIds[game];
   $(`${pre}Summary`).textContent = "加载中…";
-  const data = await callWorker({ action: "play_admin_list", password: internalAdminPassword, game });
+  const data = await callWorker({ action: "play_admin_list", ...adminAuth(), game });
   if (!data || !data.ok) {
     $(`${pre}Summary`).textContent = adminErr(data, "读取失败", PLAY_ADMIN_ERRORS);
     return;
@@ -3617,7 +3962,7 @@ function initPlayAdmin() {
       if (!btn) return;
       btn.disabled = true;
       const data = await callWorker({
-        action: "play_admin_void", password: internalAdminPassword, game, id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
+        action: "play_admin_void", ...adminAuth(), game, id: Number(btn.dataset.id), voided: btn.dataset.voided !== "1",
       });
       if (!data || !data.ok) {
         btn.disabled = false;
@@ -4316,6 +4661,46 @@ const ADMIN_PANELS_HTML = `
     </div>
   </section>
 </div>
+<div class="gate-card admin-card ticket-admin user-admin" id="userAdminPanel" hidden>
+  <h2>用户管理</h2>
+  <p class="hint" id="uaStatus">加载中…</p>
+  <div class="alarm-seg ua-tabs" id="uaTabs" role="radiogroup" aria-label="用户管理分页">
+    <label class="is-active"><input type="radio" name="uaTab" value="users" checked><span>用户</span></label>
+    <label><input type="radio" name="uaTab" value="codes"><span>注册码与内部码</span></label>
+    <label><input type="radio" name="uaTab" value="settings"><span>设置</span></label>
+  </div>
+  <section id="uaUsers">
+    <div class="pz-rec-tools">
+      <input type="search" class="play-search" id="uaSearch" placeholder="搜索用户名、游戏 id、联系方式" aria-label="搜索用户名、游戏 id、联系方式">
+      <select id="uaRoleFilter" aria-label="按权限筛选"><option value="">全部权限</option></select>
+      <button type="button" id="uaRefreshBtn">刷新</button>
+    </div>
+    <div class="ua-reset" id="uaResetBox" hidden>
+      <p>把下面的链接发给 <b id="uaResetName"></b>：72 小时内有效，只能用一次，打开后设置新密码。</p>
+      <div class="ua-reset-row">
+        <input type="text" id="uaResetLink" readonly aria-label="重置密码链接">
+        <button type="button" id="uaResetCopy">复制</button>
+      </div>
+    </div>
+    <p class="form-msg" id="uaMsg" hidden></p>
+    <div class="ticket-table-wrap">
+      <table class="ticket-table ua-table">
+        <thead><tr><th>用户名</th><th>游戏 id</th><th>联系方式</th><th>权限</th><th>内部码</th><th>注册 / 登录</th><th>操作</th></tr></thead>
+        <tbody id="uaBody"></tbody>
+      </table>
+    </div>
+    <p class="ta-group-hint">「内部码」一列是这个账户进内部入口时要不要填内部码：首次填写（填过一次、或用内部的注册码注册的，之后登录就能进）、每 x 天填一次、每次进入都要填（站长账户默认）。管理员账户要填管理员的内部码。改了立刻生效。</p>
+    <p class="ta-group-hint">账户没有任何特权：购票、问卷、反馈和没登录时完全一样。网站上看不到任何人的密码；忘了密码就点「重置密码」生成链接发给对方。</p>
+  </section>
+  <section id="uaCodes" hidden>
+    <p class="ta-group-hint">注册码和内部码都放在 Cloudflare 的 Worker 设置里（变量和机密），要改就在那里改，网站上不显示具体的码。注册时填哪个注册码，账户就是对应的权限；已有账户在内部入口填一次内部码，就加上对应的权限。之后在「用户」里可以随时调整。</p>
+    <dl class="about-list ua-envcodes" id="uaEnvCodes"></dl>
+  </section>
+  <section id="uaSettings" hidden>
+    <label class="audience-opt ua-setting"><input type="checkbox" id="uaLegacyLogin"><span>允许只用旧版密码进内部入口、用管理功能</span></label>
+    <p class="ta-group-hint">过渡期用：页面上已经没有只填密码的入口了，这一项只影响还开着旧版页面的人，以及直接调用接口的情况。大家都改用账户以后建议关掉；关掉要先用管理员账户登录。</p>
+  </section>
+</div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>
   <h2>发布公告</h2>
   <textarea id="announcementText" placeholder="公告内容" aria-label="公告内容"></textarea>
@@ -4350,7 +4735,7 @@ function mountAdminPanels() {
 mountAdminPanels();
 [
   initInternal, initAdminPanels, initAdminNewWatch, initLockdownToggle, initMaintToggle, initCaptchaSwitch, initStarlightPanel, initTicketAdmin,
-  initViewerPills, initFeedbackAdmin,
+  initViewerPills, initFeedbackAdmin, initUserAdmin,
   typeof window.buildVenueForm === "function" ? initVenueAdmin
     : () => console.error("[场地预约] venue.js 没有加载成功，管理页的「场地预约」不可用"),
   typeof window.mountSurvey === "function" ? initSurveyAdmin

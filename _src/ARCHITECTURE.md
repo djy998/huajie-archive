@@ -26,7 +26,8 @@
 | 2 | `verify.js` | 人机验证组件，提供 `window.HJVerify` |
 | 3 | `config.js` | 只放内容和常量，不写逻辑 |
 | 4 | `main.js` | 路由、视图、弹窗、时间条、特效、通用工具（`$`、`callWorker`、`escapeHtml`、`createFormGate`…） |
-| 5 | `ticket.js` / `venue.js` / `survey.js` | 各自一个功能，依赖 `main.js` 的工具 |
+| 5 | `account.js` | 账户与个人数据：网站说明的「致谢」「个人数据」「登录与注册」、登录状态、自动填表、本机提交记录、跨设备同步，提供 `window.HJAccount` |
+| 6 | `ticket.js` / `venue.js` / `survey.js` | 各自一个功能，依赖 `main.js` 的工具 |
 
 按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`bard-stage.js`（模拟器里点「来舞台演奏」）、`games.js`（打开小游戏助手）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
 
@@ -76,10 +77,12 @@
   - 请求必须是 `application/json`。浏览器标为跨站（`Sec-Fetch-Site`）的请求直接拒绝。
   - 请求体最大 256 KB（上传公告配图放宽到图片上限 + 64 KB），边读边数，超了返回 413 `too_large`，不解析（`readLimitedBody`）。
 - **处理流程**：`handlers[action]` 分发 → `ensureSchema` → `RATE_LIMITS` 限流 → 执行处理函数。异常统一返回 `server_error`。
-- **身份**：
-  - 密码 A、B、C 和查看密码分别对应 `a`、`b`、`c`（管理员）、`v`（只读）。查看密码在管理页改过后存在 D1（加盐哈希），以它为准。
-  - 管理员密码 15 分钟内输错 3 次，封锁 15 分钟。
-- **人机验证**：手动验证的题面都不以文字下发：狒科生的职业图标、理科生（仙人微彩）的盘面都是图片（data URL；盘面由 Worker 的 `cactpotImage` 用笔画字形把 1~9 画在 3 × 3 格的正中，只撒几粒淡点，前端 `verify.js` 的 `paintCactpot` 染成深红、铺在九个圆上），文科生的令字在前端画到 canvas 上；答案只在加密的题目 id 里（AES-GCM），判卷在服务端。仙人微彩：1、2、3 必在同一条线上（和为 6，报酬 10000 金碟币，唯一最高），八个箭头是选项，答案是线的编号（`r0~r2` 行、`c0~c2` 列、`d0` 左上到右下、`d1` 右上到左下）；答错一次 Worker 作废这题，前端换盘面并提示「请重新作答」。以前的理科生是算术题（`math`，`mathTask` / `mathImage` / `tplMath`）：Worker 已关闭这个接口（`VERIFY_MODES_OFF`）——不出题、不判卷、它发的凭证也不认，防止有人绕过前端用脚本解算术题；代码留着备用。狒科生一次出 3 个职业图标、6 个选项，要把 3 个全部选中才通过（`FF14_PICK` / `FF14_OPTIONS`，6 选 3 共 20 种组合，答案用 | 连起来、顺序不限），选错一次换题；前端选够 3 个自动交卷。`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`cactpot`（理科生）、`math`（旧版理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
+- **身份**（详见 README「账户」）：
+  - 用账户登录：请求带 `session`（登录令牌，库里只存它的 SHA-256），`authenticate` 按账户的权限认 `a`、`b`、`c`（管理员）、`v`（只读）；普通账户 `u` 没有内部权限。
+  - 账户的内部码规则不是「首次填写」时，管理接口还要带 `ticket`（填内部码换来的通行证，绑在这次登录上，按规则过期）。
+  - 旧版密码（PASSWORD_A / B / C / VIEW 直接当 `password`）仍然认，管理页「用户管理 → 设置」可以关掉。管理员密码 15 分钟内输错 3 次封锁 15 分钟，内部码输错同样计数。
+  - 密码在浏览器里先做 PBKDF2（12 万次）才发出，Worker 再加盐 PBKDF2 一次存下；站长账户 djy998 的密码就是 Worker 密钥 ADMIN_PASSWORD（浏览器那边只做 1 万次，免费版 CPU 不够算 12 万次）。
+- **人机验证**：手动验证的题面都不以文字下发：狒科生的职业图标、理科生（仙人微彩）的盘面都是图片（data URL；盘面由 Worker 的 `cactpotImage` 用笔画字形把 1~9 画在 3 × 3 格的正中，只撒几粒淡点，前端 `verify.js` 的 `paintCactpot` 染成深红、铺在九个圆上），文科生的令字在前端画到 canvas 上；答案只在加密的题目 id 里（AES-GCM），判卷在服务端。仙人微彩：1、2、3 必在同一条线上（和为 6，报酬 10000 金碟币，唯一最高），八个箭头是选项，答案是线的编号（`r0~r2` 行、`c0~c2` 列、`d0` 左上到右下、`d1` 右上到左下）；答错一次 Worker 作废这题，前端换盘面并提示「请重新作答」。以前的理科生是算术题（`math`，`mathTask` / `mathImage` / `tplMath`）：Worker 已关闭这个接口（`VERIFY_MODES_OFF`）——不出题、不判卷、它发的凭证也不认，防止有人绕过前端用脚本解算术题；代码留着备用。狒科生一次出 3 个职业图标、6 个选项，要把 3 个全部选中才通过（`FF14_PICK` / `FF14_OPTIONS`，6 选 3 共 20 种组合，答案用 | 连起来、顺序不限），选错一次换题；前端选够 3 个自动交卷，图标下面只有一句「点击选中项可取消。」。防「换题攒表」：选项分组固定（`FF14_GROUPS`，3 个图标出自同一组，选项永远是这一组的 6 个名字，换多少次题交集都缩不到 1 个）；每题把图标重新取样一次（`iconVariant`：微小缩放、旋转、错位，颜色不动、不加噪点），字节每题都不一样，脚本没法靠「同一张图」把不同题里的图标对上号；出题后 1.2 秒内交卷按答错算（`FF14_MIN_MS`）。Worker 先取 `jobicon/s/`（128 px，解码快），没有再取 `jobicon/` 原图。`verifyHumanMode` 返回验证方式并写进记录：`cf`（自动验证，Turnstile）、`ff14`（狒科生）、`poem`（文科生）、`cactpot`（理科生）、`math`（旧版理科生）、`off`（站点关闭了验证）。管理页显示的中文名在 `admin.js` 的 `VERIFY_MODE_NAMES`。
 - **IP 属地**：`requestGeo` 从 Cloudflare 的 `request.cf` 取出「国家|地区|城市」。数据库不保存 IP 本身。访客标识（`client_key`）是带密钥的 IP 哈希，只用于限流和防重复。
 - **表结构**：
   - `SCHEMA_SQL` 只用 `CREATE … IF NOT EXISTS`。给已有表加列写在 `ADDED_COLUMNS`。

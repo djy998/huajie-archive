@@ -10,7 +10,7 @@ const NAV_TIMEOUT = 3500;
 const RECHECK_MS = 6 * 3600 * 1000;
 
 const SHELL = [new Request("./", { cache: "reload" }), `style.css?v=${VERSION}`,
-  ...["boot", "verify", "config", "main", "ticket", "venue", "survey"].map((n) => `${n}.js?v=${VERSION}`)];
+  ...["boot", "verify", "config", "main", "account", "ticket", "venue", "survey"].map((n) => `${n}.js?v=${VERSION}`)];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(

@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261016c">
-  <link rel="preload" as="style" href="style.css?v=20261016c">
+  <link rel="preload" as="script" href="boot.js?v=20261017a">
+  <link rel="preload" as="style" href="style.css?v=20261017a">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261016c"></script>
+<script src="boot.js?v=20261017a"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -569,15 +569,29 @@
     <div class="gate-card" id="internalGate">
       <h2>内部入口</h2>
       <p class="hint">仅限内部使用</p>
-      <label for="internalPassword" class="visually-hidden">密码</label>
-      <div class="password-field">
-        <input type="password" id="internalPassword" placeholder="输入密码" autocomplete="current-password" maxlength="64">
+      <p class="internal-who" id="internalWho" hidden></p>
+      <div class="internal-creds" id="internalCreds">
+        <label for="internalUser" class="visually-hidden">用户名</label>
+        <input type="text" id="internalUser" placeholder="用户名" autocomplete="username" maxlength="16" spellcheck="false" autocapitalize="off">
+        <label for="internalPassword" class="visually-hidden">密码</label>
+        <div class="password-field">
+          <input type="password" id="internalPassword" placeholder="密码" autocomplete="current-password" maxlength="64">
+        </div>
       </div>
+      <label for="internalCode" class="visually-hidden">内部码</label>
+      <input type="password" id="internalCode" placeholder="内部码（选填，填写一次即可）" autocomplete="off" maxlength="64">
       <label class="password-show-label">
         <input type="checkbox" id="internalPasswordShow"> 显示密码
       </label>
+      <div class="verify-host internal-verify" id="internalVerify"></div>
       <button type="button" id="internalSubmit">进入</button>
       <p class="form-msg" id="internalMsg" hidden></p>
+      <p class="internal-reg">还没有账户？<button type="button" class="about-inline-link" id="internalRegLink">去注册</button></p>
+    </div>
+
+    <div class="internal-account" id="internalAccountBar" hidden>
+      <span id="internalAccountText"></span>
+      <button type="button" class="about-inline-link" id="internalLogoutBtn">退出登录</button>
     </div>
 
     <div id="internalBoard" hidden>
@@ -594,6 +608,7 @@
         <button type="button" class="tab-btn" data-admin-panel="huayuAdminPanel">花语加密</button>
         <button type="button" class="tab-btn" data-admin-panel="puzzleAdminPanel">花街拼图</button>
         <button type="button" class="tab-btn" data-admin-panel="stageAdminPanel">舞台演奏</button>
+        <button type="button" class="tab-btn" data-admin-panel="userAdminPanel">用户管理</button>
       </div>
       <div id="adminPanelStash" hidden></div>
       <h2 class="section-title">公告板</h2>
@@ -613,7 +628,7 @@
 
 <footer>
   <a href="#" class="footer-link" id="siteAboutLink" role="button" aria-haspopup="dialog">
-    <span class="footer-line">花街档案 · 玩家个人站 · 内容以活动群公告为准</span>
+    <span class="footer-line">花街档案 · 玩家个人站 · 内容以活动群公告为准<span class="footer-dot" id="footerReplyDot" title="反馈有新回复" hidden></span></span>
     <span class="footer-copy">© 2026 花舞之街 · 薰风花语町 · Swaying &amp; Sussurrus Street</span>
     <span class="footer-copy">网站所引用的FFXIV相关资料与图像：Copyright (C) 2010 - 2026 SQUARE ENIX CO., LTD. All Rights Reserved.</span>
   </a>
@@ -676,9 +691,12 @@
       <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-about-tab="about">关于网站</button>
       <button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="feedback">反馈与建议</button>
       <button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="share">分享网站</button>
+      <button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="thanks">致谢</button>
+      <button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="data">个人数据<span class="about-tab-dot" id="aboutDataDot" title="有新回复" hidden></span></button>
+      <button type="button" class="tab-btn" role="tab" aria-selected="false" data-about-tab="account" id="aboutAccountTab">登录与注册</button>
     </div>
 
-    <div class="tab-panel about-panel" id="aboutPanelAbout">
+    <div class="tab-panel about-panel" id="aboutPanelAbout" data-about-panel="about">
       <div class="about-text">
         <p class="about-lead">听说了吗，拯救艾欧泽亚的大英雄回来了，一定又是一场宏伟精彩的冒险！<br>大英雄在新大陆不仅守护了笑容与犎牛，还带回来了当地独特的雷转质科技。</p>
         <p class="about-sub">网站个人爱发电产物，孩子不懂事建着玩的。</p>
@@ -714,7 +732,7 @@
       </div>
     </div>
 
-    <div class="tab-panel about-panel" id="aboutPanelFeedback" hidden>
+    <div class="tab-panel about-panel" id="aboutPanelFeedback" data-about-panel="feedback" hidden>
       <form class="about-form" id="feedbackForm" novalidate autocomplete="off">
         <div class="about-field">
           <label class="about-label is-required" for="feedbackCategory">类别</label>
@@ -752,13 +770,26 @@
       </div>
     </div>
 
-    <div class="tab-panel about-panel" id="aboutPanelShare" hidden>
+    <div class="tab-panel about-panel" id="aboutPanelShare" data-about-panel="share" hidden>
       <p class="about-hint about-center">把下面这段话发给朋友，一起来花街逛逛吧~</p>
       <p class="about-share-text" id="aboutShareText"></p>
       <div class="group-btn-row">
         <button type="button" class="share-site-btn" id="shareSiteBtn">分享网站</button>
       </div>
     </div>
+
+    <!-- 致谢、个人数据、登录与注册：内容由 account.js 画 -->
+    <div class="tab-panel about-panel" id="aboutPanelThanks" data-about-panel="thanks" hidden></div>
+    <div class="tab-panel about-panel" id="aboutPanelData" data-about-panel="data" hidden></div>
+    <div class="tab-panel about-panel" id="aboutPanelAccount" data-about-panel="account" hidden></div>
+  </div>
+</div>
+
+<!-- 账户的小提示卡：「没有注册码？」「忘记密码？」 -->
+<div class="info-overlay" id="acctTipOverlay" role="alertdialog" aria-modal="true" aria-labelledby="acctTipText" hidden>
+  <div class="gate-card ticket-notice acct-tip">
+    <p id="acctTipText"></p>
+    <button type="button" id="acctTipClose">知道了</button>
   </div>
 </div>
 
@@ -963,11 +994,12 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261016c"></script>
-<script src="config.js?v=20261016c"></script>
-<script src="main.js?v=20261016c"></script>
-<script src="ticket.js?v=20261016c"></script>
-<script src="venue.js?v=20261016c"></script>
-<script src="survey.js?v=20261016c"></script>
+<script src="verify.js?v=20261017a"></script>
+<script src="config.js?v=20261017a"></script>
+<script src="main.js?v=20261017a"></script>
+<script src="account.js?v=20261017a"></script>
+<script src="ticket.js?v=20261017a"></script>
+<script src="venue.js?v=20261017a"></script>
+<script src="survey.js?v=20261017a"></script>
 </body>
 </html>

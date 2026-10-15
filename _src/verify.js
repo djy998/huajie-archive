@@ -572,8 +572,8 @@
       if (input) input.focus({ preventScroll: true });
     }
 
-    /* 狒科生：Worker 一次下发几个职业图标（data URL，不暴露职业名）和 6 个选项，选中的个数凑够图标数就交卷，
-       要和图标对应的职业完全一致才通过（6 选 3）。旧版 Worker 只下发一个 iconData，也照样能用 */
+    /* 狒科生：Worker 一次下发几个职业图标（data URL，不暴露职业名，每题都重新取样、字节都不一样）和图标所在那一组的 6 个选项，
+       选中的个数凑够图标数就交卷，要和图标对应的职业完全一致才通过（6 选 3）。旧版 Worker 只下发一个 iconData，也照样能用 */
     tplFf14(t) {
       const icons = t.icons || (t.iconData ? [t.iconData] : []);
       const imgs = icons.length
@@ -586,7 +586,7 @@
       return ''
         + '<p class="verify-q">' + (pick > 1 ? "请选择下方图标对应的全部职业。" : "请选出下方图标对应的职业：") + "</p>"
         + '<div class="verify-job">' + imgs + "</div>"
-        + (pick > 1 ? '<p class="verify-pick-note">已选 <b class="verify-pick-n">0</b> / ' + pick + "，选够 " + pick + " 个自动判定，再点一次可取消</p>" : "")
+        + (pick > 1 ? '<p class="verify-pick-note">点击选中项可取消。</p>' : "")
         + '<div class="verify-options">' + options + "</div>"
         + '<div class="verify-actions"><button type="button" class="verify-mini" data-act="refresh">换一题</button></div>';
     }
@@ -598,8 +598,6 @@
       el.classList.toggle("is-on", on);
       el.setAttribute("aria-pressed", on ? "true" : "false");
       const chosen = [...this.body.querySelectorAll(".verify-opt.is-on")].map((b) => b.dataset.value);
-      const n = this.body.querySelector(".verify-pick-n");
-      if (n) n.textContent = String(chosen.length);
       const need = this.task.pick || (this.task.icons ? this.task.icons.length : 1);
       if (chosen.length >= need) this.submitAnswer(chosen.join("|"));
     }
@@ -726,8 +724,6 @@
         this.setTip(errText(data), true);
         this.body.querySelectorAll(".vc-arrow.is-picked").forEach((b) => b.classList.remove("is-picked"));
         this.body.querySelectorAll(".verify-opt.is-on").forEach((b) => { b.classList.remove("is-on"); b.setAttribute("aria-pressed", "false"); });
-        const n = this.body.querySelector(".verify-pick-n");
-        if (n) n.textContent = "0";
         return;
       }
 
