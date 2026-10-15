@@ -36,6 +36,7 @@
 - 填充：`--lq-fill`（夜 `rgba(36,29,60,.74)`、白天 `rgba(246,227,187,.82)`），留一点透明，背景才折得动。
 - 描边：`background-clip` 双层——`padding-box` 铺填充、`border-box` 铺描边渐变，边框本身是透明的 1px。下拉框在最上面再叠一层箭头（`--lq-arrow`）。
 - 折射：`backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1)`。`#lgf` 是 `index.html` 开头 `<svg id="lg-map">` 里的滤镜：一张 8 × 64 的位移贴图（`feImage`）按 `objectBoundingBox` 拉伸，`feDisplacementMap` 只在上下缘把背景往里「折」，中间不动，所以任何尺寸的栏都能用同一个滤镜，不需要 JS。
+- 文本域例外：不用折射，只留 `blur(1.5px) saturate(1.1)`；描边用 `--lq-edge-convex`（顶边最亮、往下渐暗，底边不回亮），里面叠 `--lq-area-sheen`（上亮下暗）和上缘一道细高光 `--lq-area-hi`。文本域有好几行高，折射按栏高等比放大，上下缘会被拉出很宽的亮带、中间偏暗，看着像往里凹；改成「光从上面来」以后是凸起的玻璃。
 - 兼容：Firefox 不支持 `backdrop-filter` 引用 SVG 滤镜，退化成「半透明、无模糊无折射」，底色与文字不受影响。
 
 ## ② 扁平框：淡玻璃
@@ -43,7 +44,7 @@
 - 不改原来的底色（`background-color`），只加：
   - **光泽**：`background-image: var(--lq-pane-sheen)`，很淡、只是上面比下面稍亮一点。夜晚是薰衣草白（.05 → .02），白天是白色（.24 → .10）。底色本身就是渐变的框（`.pz-contest`、`.gm-kw-big`、`.gm-bomb-stage`）不加这层，保留自己的底色。
   - **描边**：1px 的真边框，整圈同一个颜色（夜晚白色 .20，白天淡金 .72；状态色 `--lq-pane-edge-gold` / `-hi` / `-err` 也都是纯色）。浏览器画圆角边框时四边和四角的抗锯齿一致，粗细看起来一样。以前用 `::before` + `mask` 抠出一圈渐变描边，上下缘发白、四角变暗，后来又贴着它加了一道 1px 的内线，直边上两条并成 2px、圆角处两条弧线对不齐，看起来「边比角厚」，所以改成了现在这样。
-  - **投影 + 透光**：`box-shadow: var(--lq-drop), var(--lq-pane-glow)`；`--lq-pane-glow` 只是一层向内 14px 的均匀柔光（夜 .05、白天 .30），四边四角一样厚，不再有贴边的细线、只在上缘的光带或只在下缘的内阴影。
+  - **投影 + 立体感**：`box-shadow: var(--lq-pane-lift), var(--lq-pane-glow)`。`--lq-pane-lift` 是比输入栏略重的两层投影；`--lq-pane-glow` 有四层：上缘一道细高光 `inset 0 1px 0`（偏移出来的，到圆角自然收细，所以不会「边比角厚」）、下缘一道很淡的反光 `inset 0 -1px 0`、下缘里面一点内阴影当厚度 `inset 0 -7px 10px -8px`、整圈均匀的柔光 `inset 0 0 14px`。不要再加用 spread 撑出来的整圈细线（`inset 0 0 0 1px`）：它和边框在直边上并成 2px、在圆角处又对不齐，看着就是边比角厚。
 - **不用 `backdrop-filter`**：以前这类框也套了 `url(#lgf) blur(1.5px)`。滤镜的位移按框的尺寸等比放大，大框的背景被拉扯得很厉害，再加上模糊，整块看起来都是虚的；滚动时每帧还要重算。现在去掉以后，框里的字和框外一样清楚。
 - **状态描边**：在元素上设 `--lq-pane-edge`（金色 / 强调 / 出错）；边框颜色用 `var(--lq-pane-edge, var(--lq-pane-edge-base))`。每个框自己先把 `--lq-pane-edge` 设成 `initial`，状态色只给自己，不会传给里面嵌套的框。
 - **卧底的保密**：「遮住」身份时（`.gm-spy-players.is-hidden`），卧底玩家卡的描边改回普通的，避免金边露馅（以前的版本这里会漏）。

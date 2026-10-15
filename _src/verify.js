@@ -140,6 +140,8 @@
      盘面由 Worker 画成一张 3 × 3 格的图（每格正中一个数字，只有透明度），这里按原尺寸放进 canvas，
      由 CSS 拉伸铺满九个圆，染成游戏里刮开后的深红字。八个箭头是选项，答案（线的编号）只在加密的题目 id 里 */
   const CACTPOT_INK = "#7a1d17";
+  const CACTPOT_INK_RGB = [122, 29, 23];
+  const CACTPOT_DOT = [194, 170, 80];   // 同圆圈素材（cell.webp）的金边
   const CACTPOT_ARROWS = [
     { line: "d0", dir: "dr", label: "左上到右下的对角线", col: 1, row: 1 },
     { line: "c0", dir: "down", label: "第一列", col: 2, row: 1 },
@@ -168,14 +170,37 @@
     img.onload = () => {
       const ctx = canvas.getContext && canvas.getContext("2d");
       if (!ctx || !canvas.isConnected) return;
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0);
-      ctx.globalCompositeOperation = "source-in";
-      ctx.fillStyle = CACTPOT_INK;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = "source-over";
+      /* 数字染深红；干扰的淡点染成圆圈边框的金色。淡点又小又淡（最亮不到一半），数字笔画中心是实心的：
+         某个像素附近 2 像素内最亮的点不到一半，就算淡点 */
+      let px;
+      try { px = ctx.getImageData(0, 0, w, h); } catch (e) { px = null; }
+      if (!px) {
+        ctx.globalCompositeOperation = "source-in";
+        ctx.fillStyle = CACTPOT_INK;
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = "source-over";
+        return;
+      }
+      const d = px.data, A = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) A[i] = d[i * 4 + 3];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          if (!A[i]) continue;
+          let peak = 0;
+          for (let yy = Math.max(0, y - 2); yy <= Math.min(h - 1, y + 2) && peak < 128; yy++) {
+            for (let xx = Math.max(0, x - 2); xx <= Math.min(w - 1, x + 2); xx++) if (A[yy * w + xx] > peak) peak = A[yy * w + xx];
+          }
+          const c = peak < 128 ? CACTPOT_DOT : CACTPOT_INK_RGB;
+          d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2];
+        }
+      }
+      ctx.putImageData(px, 0, 0);
     };
     img.src = src;
   }

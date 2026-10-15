@@ -7682,7 +7682,18 @@ html.hj-intro-only footer { visibility: hidden; }
   --lq-pane-edge-gold: rgba(246,198,126,.48);
   --lq-pane-edge-err: rgba(236,158,146,.58);
   --lq-pane-sheen: linear-gradient(180deg, rgba(232,222,255,.05) 0%, rgba(232,222,255,.02) 100%);
-  --lq-pane-glow: inset 0 0 14px rgba(232,222,255,.05);
+  /* 立体感：上缘一道细高光（偏移阴影，到圆角自然收细，不会「边比角厚」）、下缘一点内阴影当厚度，外面比输入栏略重一点的投影 */
+  --lq-pane-lift: 0 1px 2px rgba(8,6,18,.2), 0 4px 12px rgba(8,6,18,.16);
+  --lq-pane-glow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 -1px 0 rgba(255,255,255,.035), inset 0 -7px 10px -8px rgba(6,4,16,.4), inset 0 0 14px rgba(232,222,255,.05);
+  /* 文本域：光从上面来 —— 顶边最亮、往下渐暗、底边不再回亮；里面上亮下暗一层。不这样的话上下两条亮边夹着暗的中间，看着像往里凹 */
+  --lq-edge-convex: linear-gradient(180deg,
+    rgba(255,255,255,.32) 0%,
+    rgba(255,255,255,.22) 10%,
+    rgba(255,255,255,.18) 45%,
+    rgba(255,255,255,.16) 85%,
+    rgba(255,255,255,.17) 100%);
+  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 40%, rgba(6,4,16,.08) 100%);
+  --lq-area-hi: inset 0 1px 0 rgba(255,255,255,.12);
 }
 body.day-mode {
   --lq-edge: linear-gradient(180deg,
@@ -7725,7 +7736,16 @@ body.day-mode {
   --lq-pane-edge-gold: rgba(190,130,48,.85);
   --lq-pane-edge-err: rgba(190,78,60,.8);
   --lq-pane-sheen: linear-gradient(180deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.1) 100%);
-  --lq-pane-glow: inset 0 0 14px rgba(255,255,255,.3);
+  --lq-pane-lift: 0 1px 2px rgba(96,64,16,.13), 0 4px 12px rgba(96,64,16,.11);
+  --lq-pane-glow: inset 0 1px 0 rgba(255,255,255,.8), inset 0 -1px 0 rgba(255,255,255,.3), inset 0 -7px 10px -8px rgba(120,80,20,.18), inset 0 0 14px rgba(255,255,255,.3);
+  --lq-edge-convex: linear-gradient(180deg,
+    rgba(255,255,255,.94) 0%,
+    rgba(250,234,200,.88) 10%,
+    rgba(222,174,100,.9) 40%,
+    rgba(203,146,60,.93) 80%,
+    rgba(210,156,72,.92) 100%);
+  --lq-area-sheen: linear-gradient(180deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 42%, rgba(140,92,24,.07) 100%);
+  --lq-area-hi: inset 0 1px 0 rgba(255,255,255,.7);
 }
 
 /* ---- ① 输入栏 ---- */
@@ -7757,15 +7777,16 @@ body.day-mode {
   background-origin: border-box, border-box, border-box;
   box-shadow: var(--lq-drop), var(--lq-shade), var(--lq-ring);
 }
-/* 文本域：和输入框同一套做法（四条边框各自上色的话，圆角处会出现斜的「断口」） */
+/* 文本域：和输入框同一套做法（四条边框各自上色的话，圆角处会出现斜的「断口」），但描边、光泽按「光从上面来」画（--lq-edge-convex、--lq-area-sheen），
+   而且不用折射（见下）—— 文本域高，上下两条亮边夹着暗的中间会显得往里凹 */
 :is(body, body.day-mode)
   :is(.gate-card, .about-form, .alarm-card) textarea {
   border: 1px solid transparent;
   background-color: transparent;
-  background-image: linear-gradient(var(--lq-fill), var(--lq-fill)), var(--lq-edge);
-  background-clip: padding-box, border-box;
+  background-image: var(--lq-area-sheen), linear-gradient(var(--lq-fill), var(--lq-fill)), var(--lq-edge-convex);
+  background-clip: padding-box, padding-box, border-box;
   background-origin: border-box;
-  box-shadow: var(--lq-drop), var(--lq-shade), var(--lq-ring);
+  box-shadow: var(--lq-drop), var(--lq-area-hi), var(--lq-shade), var(--lq-ring);
 }
 /* 折射：位移贴图与滤镜在 index.html 的 <svg id="lg-map">（id 为 lgf），贴图按 objectBoundingBox 拉伸，任何尺寸的栏都能用同一个滤镜。
    模糊 1.5px 让玻璃有点磨砂。Firefox 不支持 backdrop-filter 引用 SVG 滤镜，那边退化成「半透明、无模糊无折射」，底色与文字不受影响 */
@@ -7774,6 +7795,12 @@ body.day-mode {
   :is(input, select, textarea) {
   -webkit-backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
   backdrop-filter: url(#lgf) blur(1.5px) contrast(1.2) brightness(1.05) saturate(1.1);
+}
+/* 文本域不折射：位移按栏高等比放大，几行高的文本域上下缘会被拉出很宽的亮带，看着像凹下去；只留轻微磨砂 */
+:is(body, body.day-mode)
+  :is(.gate-card, .about-form, .alarm-card) textarea {
+  -webkit-backdrop-filter: blur(1.5px) saturate(1.1);
+  backdrop-filter: blur(1.5px) saturate(1.1);
 }
 /* 聚焦：不换描边（渐变不能过渡，一换就「啪」地跳一下），只在栏外加一圈淡淡的柔光 */
 :is(body, body.day-mode)
@@ -7807,7 +7834,7 @@ body.day-mode {
   --lq-pane-edge: initial;   /* 状态描边只给自己，不往里面的框传 */
   position: relative;
   border: 1px solid var(--lq-pane-edge, var(--lq-pane-edge-base));
-  box-shadow: var(--lq-drop), var(--lq-pane-glow);
+  box-shadow: var(--lq-pane-lift), var(--lq-pane-glow);
 }
 /* 光泽：叠在原来的底色上（只换 background-image，状态底色照旧） */
 :is(body, body.day-mode) :is(
@@ -7833,9 +7860,9 @@ body.day-mode {
   --lq-pane-edge: rgba(255,92,70,.58);
 }
 /* 原有的外圈 / 内圈要和玻璃的投影叠在一起：平票候选的 2px 外圈、大号令字的内圈 */
-:is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent), var(--lq-drop), var(--lq-pane-glow); }
-:is(body, body.day-mode) .gm-kw-big { box-shadow: var(--lq-drop), var(--lq-pane-glow), inset 0 0 0 4px rgba(240,181,98,.06); }
-body.day-mode .gm-kw-big { box-shadow: var(--lq-drop), var(--lq-pane-glow), inset 0 0 0 4px rgba(138,90,28,.08); }
+:is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent), var(--lq-pane-lift), var(--lq-pane-glow); }
+:is(body, body.day-mode) .gm-kw-big { box-shadow: var(--lq-pane-lift), var(--lq-pane-glow), inset 0 0 0 4px rgba(240,181,98,.06); }
+body.day-mode .gm-kw-big { box-shadow: var(--lq-pane-lift), var(--lq-pane-glow), inset 0 0 0 4px rgba(138,90,28,.08); }
 
 
 /* ==== 忙碌光标与关闭按钮的叉 ==== */
