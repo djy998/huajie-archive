@@ -7631,7 +7631,7 @@ html.hj-intro-only footer { visibility: hidden; }
    ① 输入框、下拉框、文本域（.gate-card / .about-form / .alarm-card 里的）：可调不透明度的填充（--lq-fill）+ 渐变描边，
       再用 backdrop-filter 引用 index.html 里的 SVG 滤镜 #lgf，把背后的画面在上下缘「折」进来一点。栏不高、只有一行字，折射看得出又不糊。
    ② 卡片里的扁平框（网站说明的介绍框、小游戏的平民 / 卧底词卡、闹铃条目、购票须知……名单见下）：「淡玻璃」——
-      原来的底色不动（各种状态色照旧），上面叠一层很淡的光泽（--lq-pane-sheen），描边画在 ::before 上（mask 抠出 1px 边框），
+      原来的底色不动（各种状态色照旧），上面叠一层很淡的光泽（--lq-pane-sheen），描边是 1px 的真边框（整圈同一个颜色），
       外面一层轻投影，里面一圈均匀的透光（--lq-pane-glow）—— 整圈一样厚，四角和四边之间没有明暗断口。不用 backdrop-filter：框大、字多，背景一折一糊整块都发虚（以前的版本就是这样），滚动时也费。
    变量统一 --lq- 开头。不要用 --lg-：那是上面「窗口卡片与首页磁贴」的透光变量（--lg-edge 是一串 box-shadow）；
    以前这里也定义了一个 --lg-edge（渐变），写在后面把前面的盖掉了，首页磁贴的透光描边因此整个失效。 */
@@ -7674,27 +7674,15 @@ html.hj-intro-only footer { visibility: hidden; }
   --lq-focus-ring: rgba(185,164,224,.15);
   --lq-ring: 0 0 0 0 rgba(0,0,0,0);   /* 聚焦柔光的占位：:focus 时只改这个变量，不动 box-shadow 本身 */
   --lq-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E");
-  /* 扁平框（淡玻璃）：整圈一样厚 —— 描边几乎不分上下（只差一点点亮度），里面一圈均匀的透光，
-     不再只在上缘加光带（那样顶边、底边发白，到了四角和左右两边亮度一下子断开，看着不自然） */
-  --lq-pane-edge-base: linear-gradient(180deg,
-    rgba(255,255,255,.24) 0%,
-    rgba(255,255,255,.205) 35%,
-    rgba(255,255,255,.195) 65%,
-    rgba(255,255,255,.22) 100%);
-  --lq-pane-edge-hi: linear-gradient(180deg,
-    rgba(214,196,250,.56) 0%,
-    rgba(196,176,236,.48) 50%,
-    rgba(210,192,248,.52) 100%);
-  --lq-pane-edge-gold: linear-gradient(180deg,
-    rgba(255,214,153,.54) 0%,
-    rgba(244,192,118,.46) 50%,
-    rgba(252,208,146,.50) 100%);
-  --lq-pane-edge-err: linear-gradient(180deg,
-    rgba(250,176,164,.62) 0%,
-    rgba(228,146,134,.54) 50%,
-    rgba(246,170,158,.58) 100%);
+  /* 扁平框（淡玻璃）：整圈一样厚。描边用真正的 1px 边框（--lq-pane-edge-*，是颜色不是渐变）：浏览器画圆角边框时
+     四边和四角的抗锯齿一致，粗细看起来一样；里面只有一层均匀的柔光，不再贴着描边加第二条细线
+     （之前那条细线在直边上和描边并成 2px，到圆角两条弧线又对不齐，就成了「边比角厚」） */
+  --lq-pane-edge-base: rgba(255,255,255,.2);
+  --lq-pane-edge-hi: rgba(200,182,242,.5);
+  --lq-pane-edge-gold: rgba(246,198,126,.48);
+  --lq-pane-edge-err: rgba(236,158,146,.58);
   --lq-pane-sheen: linear-gradient(180deg, rgba(232,222,255,.05) 0%, rgba(232,222,255,.02) 100%);
-  --lq-pane-glow: inset 0 0 0 1px rgba(255,255,255,.035), inset 0 0 12px rgba(232,222,255,.06);
+  --lq-pane-glow: inset 0 0 14px rgba(232,222,255,.05);
 }
 body.day-mode {
   --lq-edge: linear-gradient(180deg,
@@ -7731,28 +7719,14 @@ body.day-mode {
   --lq-shade: inset 0 -1px 2px rgba(120,80,20,.11);
   --lq-focus-ring: rgba(201,143,58,.30);
   --lq-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E");
-  /* 扁平框的金边比输入栏淡一档（输入栏那条金边压在大块框上太重），而且整圈同一个金色，不在上下缘发白 */
-  --lq-pane-edge-base: linear-gradient(180deg,
-    rgba(230,188,120,.74) 0%,
-    rgba(216,166,90,.70) 50%,
-    rgba(226,182,112,.72) 100%);
-  --lq-pane-edge-hi: linear-gradient(180deg,
-    rgba(196,138,54,.90) 0%,
-    rgba(180,122,42,.88) 50%,
-    rgba(192,134,52,.90) 100%);
-  --lq-pane-edge-gold: linear-gradient(180deg,
-    rgba(200,140,58,.86) 0%,
-    rgba(184,124,42,.84) 50%,
-    rgba(196,136,54,.86) 100%);
-  --lq-pane-edge-err: linear-gradient(180deg,
-    rgba(200,90,72,.82) 0%,
-    rgba(186,72,56,.80) 50%,
-    rgba(196,86,68,.82) 100%);
+  /* 扁平框白天：整圈同一个淡金色（比输入栏的金边淡一档） */
+  --lq-pane-edge-base: rgba(218,170,96,.72);
+  --lq-pane-edge-hi: rgba(184,126,44,.88);
+  --lq-pane-edge-gold: rgba(190,130,48,.85);
+  --lq-pane-edge-err: rgba(190,78,60,.8);
   --lq-pane-sheen: linear-gradient(180deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,.1) 100%);
-  --lq-pane-glow: inset 0 0 0 1px rgba(255,255,255,.3), inset 0 0 12px rgba(255,255,255,.32);
+  --lq-pane-glow: inset 0 0 14px rgba(255,255,255,.3);
 }
-/* 小游戏助手的下拉框白天原本就是深色底（--ink-2），保持不动，否则浅字会落在浅底上 */
-body.day-mode .games-card select { --lq-fill: rgba(36,29,60,.74); }
 
 /* ---- ① 输入栏 ---- */
 /* 输入框与下拉框的底色由下面那层渐变提供（它才是 --lq-fill 那个可调不透明度的层）。
@@ -7821,7 +7795,7 @@ body.day-mode .games-card select { --lq-fill: rgba(36,29,60,.74); }
    花语结果、舞台演奏统计、花街拼图（续玩、比赛、记录、口令）、小游戏助手（规则宏、播报、提示、答案、平民 / 卧底词卡、玩家卡、
    范围小签、大号令字、数字炸弹舞台）、人机验证的仙人微彩规则说明。
    新加扁平框时把类名加进下面「描边与投影」「光泽」两份名单（底色本身是渐变的只加第一份）。
-   有滚动条的框（如 .ta-guide-preview）不要加：::before 会跟着内容一起滚走 */
+   有滚动条的框（如 .ta-guide-preview）也能加，这里只是还没放进来 */
 :is(body, body.day-mode) :is(
   .about-list, .about-share-text, .fb-item, .empty-note, .shop-item,
   .ticket-stock, .ticket-result-list, .ticket-lookup-item, .tas-item, .guide-price, .guide-way,
@@ -7832,7 +7806,7 @@ body.day-mode .games-card select { --lq-fill: rgba(36,29,60,.74); }
   .vc-rules) {
   --lq-pane-edge: initial;   /* 状态描边只给自己，不往里面的框传 */
   position: relative;
-  border: 1px solid transparent;
+  border: 1px solid var(--lq-pane-edge, var(--lq-pane-edge-base));
   box-shadow: var(--lq-drop), var(--lq-pane-glow);
 }
 /* 光泽：叠在原来的底色上（只换 background-image，状态底色照旧） */
@@ -7846,30 +7820,6 @@ body.day-mode .games-card select { --lq-fill: rgba(36,29,60,.74); }
   .vc-rules) {
   background-image: var(--lq-pane-sheen);
 }
-/* 描边：::before + mask 精确抠出 1px 边框（跟着圆角走） */
-:is(body, body.day-mode) :is(
-  .about-list, .about-share-text, .fb-item, .empty-note, .shop-item,
-  .ticket-stock, .ticket-result-list, .ticket-lookup-item, .tas-item, .guide-price, .guide-way,
-  .alarm-item, .venue-edit, .survey-draft-note, .survey-q.is-card, .sv-overview, .sv-stat, .sv-texts li,
-  .ta-group, .ta-round, .huayu-result, .st-perf-row ul,
-  .pz-resume, .pz-contest, .pz-rec-list li, .pz-code,
-  .gm-macro, .gm-say, .gm-hint, .gm-answer, .gm-spy-card, .gm-spy-p, .gm-chip, .gm-kw-big, .gm-bomb-stage,
-  .vc-rules)::before {
-  content: "";
-  position: absolute;
-  inset: -1px;   /* absolute 的 inset:0 是相对 padding box，会内缩 1px 与边框错开，所以向外扩 1px 对齐到 border box */
-  z-index: 1;
-  border-radius: inherit;
-  padding: 1px;
-  background: var(--lq-pane-edge, var(--lq-pane-edge-base));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-/* .gm-bomb-stage 有 overflow:hidden，伪元素向外扩会被裁掉，所以它保持 inset:0（差 1px 看不出来） */
-:is(body, body.day-mode) .gm-bomb-stage::before { inset: 0; }
 
 /* 状态描边：强调（购票须知的首个票价、场地登记的编辑框）、金色（问卷总览与卡片统计、卧底词卡 / 卧底玩家、拼图比赛、大号令字）、
    出错（问卷必答题没答、炸弹猜中范围的小签） */
@@ -7880,10 +7830,7 @@ body.day-mode .games-card select { --lq-fill: rgba(36,29,60,.74); }
 :is(body, body.day-mode) .gm-spy-players.is-hidden .gm-spy-p.is-spy:not(.is-out) { --lq-pane-edge: var(--lq-pane-edge-base); }
 /* 炸弹进入紧张时刻：红光描边 */
 :is(body, body.day-mode) .gm-bomb-stage.is-tense {
-  --lq-pane-edge: linear-gradient(180deg,
-    rgba(255,120,96,.60) 0%,
-    rgba(255,84,62,.52) 50%,
-    rgba(255,112,90,.58) 100%);
+  --lq-pane-edge: rgba(255,92,70,.58);
 }
 /* 原有的外圈 / 内圈要和玻璃的投影叠在一起：平票候选的 2px 外圈、大号令字的内圈 */
 :is(body, body.day-mode) .gm-spy-p.is-cand { box-shadow: 0 0 0 2px var(--accent), var(--lq-drop), var(--lq-pane-glow); }

@@ -42,10 +42,10 @@
 
 - 不改原来的底色（`background-color`），只加：
   - **光泽**：`background-image: var(--lq-pane-sheen)`，很淡、只是上面比下面稍亮一点。夜晚是薰衣草白（.05 → .02），白天是白色（.24 → .10）。底色本身就是渐变的框（`.pz-contest`、`.gm-kw-big`、`.gm-bomb-stage`）不加这层，保留自己的底色。
-  - **描边**：整圈几乎同一个亮度（夜晚白 .24 / .20 / .22，白天整圈同一个金色），不像输入栏那样上下缘明显更亮 —— 大块的框上，上下发白、到四角和左右两边一下子变暗，看起来像断开。状态色也各有一套同样平的（`--lq-pane-edge-gold` / `-hi` / `-err`）。画在 `::before` 上，`mask` 抠出 1px 的边框，跟着圆角走；`inset: -1px` 对齐到 border box（absolute 的 `inset: 0` 是相对 padding box 的，会内缩 1px 和边框错开）。框自己的边框改成 1px 透明，原来是虚线、没有边框的也一样，所以大小统一。
-  - **投影 + 透光**：`box-shadow: var(--lq-drop), var(--lq-pane-glow)`；`--lq-pane-glow` 是整圈均匀的厚度：贴着描边里面一道极淡的 1px（夜 .035、白天 .30）+ 向内 12px 的柔光（夜 .06、白天 .32）。四边、四角一样厚，没有只在上缘的光带，也不加只在下缘的内阴影。
+  - **描边**：1px 的真边框，整圈同一个颜色（夜晚白色 .20，白天淡金 .72；状态色 `--lq-pane-edge-gold` / `-hi` / `-err` 也都是纯色）。浏览器画圆角边框时四边和四角的抗锯齿一致，粗细看起来一样。以前用 `::before` + `mask` 抠出一圈渐变描边，上下缘发白、四角变暗，后来又贴着它加了一道 1px 的内线，直边上两条并成 2px、圆角处两条弧线对不齐，看起来「边比角厚」，所以改成了现在这样。
+  - **投影 + 透光**：`box-shadow: var(--lq-drop), var(--lq-pane-glow)`；`--lq-pane-glow` 只是一层向内 14px 的均匀柔光（夜 .05、白天 .30），四边四角一样厚，不再有贴边的细线、只在上缘的光带或只在下缘的内阴影。
 - **不用 `backdrop-filter`**：以前这类框也套了 `url(#lgf) blur(1.5px)`。滤镜的位移按框的尺寸等比放大，大框的背景被拉扯得很厉害，再加上模糊，整块看起来都是虚的；滚动时每帧还要重算。现在去掉以后，框里的字和框外一样清楚。
-- **状态描边**：在元素上设 `--lq-pane-edge`（金色 / 强调 / 出错）；`::before` 用 `var(--lq-pane-edge, var(--lq-pane-edge-base))`。每个框自己先把 `--lq-pane-edge` 设成 `initial`，状态色只给自己，不会传给里面嵌套的框。
+- **状态描边**：在元素上设 `--lq-pane-edge`（金色 / 强调 / 出错）；边框颜色用 `var(--lq-pane-edge, var(--lq-pane-edge-base))`。每个框自己先把 `--lq-pane-edge` 设成 `initial`，状态色只给自己，不会传给里面嵌套的框。
 - **卧底的保密**：「遮住」身份时（`.gm-spy-players.is-hidden`），卧底玩家卡的描边改回普通的，避免金边露馅（以前的版本这里会漏）。
 - **原有外圈**：平票候选的 2px 外圈、大号令字的内圈，和玻璃投影写在同一条 `box-shadow` 里，两者都在。
 
@@ -70,7 +70,7 @@
 
 | 元素 | 原因 |
 | --- | --- |
-| `.ta-guide-preview`、`.ticket-table-wrap` | 有滚动条，`::before` 会跟着内容一起滚走 |
+| `.ta-guide-preview`、`.ticket-table-wrap` | 管理页的预览框和表格外框，暂时没放进名单（现在描边是真边框，加进去也没问题） |
 | `.venue-note` | 左边 3px 的强调竖条是它的样式，套描边会和竖条打架 |
 | `.guide-actions` | 购票须知底部的操作栏，是一条带上边线的底栏，不是框 |
 | `.site-popup-image`、`.info-gallery-grid img` | 图片框 |
@@ -83,8 +83,8 @@
 1. 框本身照常写底色（半透明）和圆角，边框可以不写。
 2. 把类名加进第 31 节②的两份名单：「描边与投影」和「光泽」（底色是渐变的只加第一份）。
 3. 需要状态色时，在状态类上设 `--lq-pane-edge: var(--lq-pane-edge-gold)`（或 `-hi`、`-err`），写在名单后面，选择器前面同样加 `:is(body, body.day-mode)`。
-4. 框有 `overflow: hidden` 时，补一条 `::before { inset: 0; }`（向外扩的 1px 会被裁掉）。
-5. 框原来就有 `::before` 的，先把它挪到 `::after` 或里面的元素上。
+4. 框有 `overflow: hidden`、有滚动条都没关系，描边是边框本身。
+5. 框原来写了 `border-color` 的状态（如选中、出错），改成在状态类上设 `--lq-pane-edge`，不然会被名单里的 `border` 盖掉。
 6. 框有自己的 `box-shadow`（外圈、内圈）时，写成「原来的 + `var(--lq-drop), var(--lq-pane-glow)`」一条，放在名单后面。
 
 ## 变量命名的坑
