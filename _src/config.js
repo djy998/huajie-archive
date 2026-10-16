@@ -8,7 +8,7 @@ const INFO_COPY_TAIL = "若你懂麦穗，便懂希望；若你懂苍穹，便�
 const SHARE_TEXT = "ff14莫古力区梦羽花街网站试运行中！https://swayingsussurrusstreet.dpdns.org/";
 
 /* 网站说明 · 致谢：name 为游戏 id，what 为帮了什么忙。
-   「多场活动长期合作的店家和老师们」下面自动列出管理页「用户管理」里勾了「列入致谢」的注册用户（显示游戏 id，没填用用户名） */
+   最后一行「多场活动长期合作的店家和老师们——」后面接登录着的人自己的 id（account.js 的 renderThanksPanel，每人只看得到自己） */
 const SITE_THANKS = [
   { name: "阿兹萨@梦羽宝境", what: "相册提供、功能测试、宣传视频制作" },
   { name: "北雾南黛@梦羽宝境", what: "宣传视频制作" },

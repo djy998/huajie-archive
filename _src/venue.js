@@ -368,7 +368,7 @@ function showVenueResult(p, data) {
   window.HJAccount?.record?.("venue", { id: data.id, date: p.date, rows: venueSummaryRows(p) });
   $("venueResultTitle").textContent = `登记成功 · 编号 ${data.id}`;
   $("venueResultNote").textContent = "我们会尽快与您联系。预约多个日期请再登记一份，已填内容会保留。";
-  $("venueResultList").innerHTML = venueSummaryRows(p).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+  $("venueResultList").innerHTML = venueSummaryRows(p).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");
   setVenueMode("result");
   $("venueResult").scrollIntoView({ behavior: "smooth", block: "center" });
 }

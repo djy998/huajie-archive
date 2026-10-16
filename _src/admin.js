@@ -119,6 +119,7 @@ function paintInternalGate() {
     : cp.mode === "days" ? (internalTicket ? `内部码（每 ${cp.days} 天填一次，这次不用填）` : `内部码（这个账户每 ${cp.days} 天要填一次）`)
     : "内部码（已有内部权限，不用再填）";
   $("internalRegLink").parentElement.hidden = !!user;
+  $("internalRememberLabel").hidden = $("internalRememberHint").hidden = !!user;   // 已经登录着就不用再选
   $("internalAccountBar").hidden = !user || !internalInside();
   $("internalAccountText").textContent = user ? `当前账户：${user.username}（${role}）` : "";
   if (!internalInside()) internalGate?.open();
@@ -160,7 +161,7 @@ async function internalEnter() {
       const need = internalGate.missing();
       if (need) { setMsg(msg, need); return; }
       setMsg(msg, "登录中…");
-      const data = await A.login(name, pw, { internalCode: code, proof: internalGate.proof() });
+      const data = await A.login(name, pw, { internalCode: code, proof: internalGate.proof(), remember: $("internalRemember").checked });
       if (!data.ok) {
         if (data.error !== "locked" && data.error !== "no_crypto") internalGate.sync(true);   // 验证凭证用掉了，换一题
         setMsg(msg, A.errorText(data));
@@ -1099,8 +1100,8 @@ function renderTicketOrders() {
   $("ticketAdminTbody").innerHTML = rows.length ? rows.map((o) => {
     const d = dup.get(o.id) || { contact: false, holders: [] };
     const holders = o.holders.map((h, i) => (h.voided
-      ? `<span class="tt-h-void"><s>${escapeHtml(formatHolder(h))}</s><small>已作废</small></span>`
-      : `<span class="${d.holders[i] ? "is-dup" : ""}">${escapeHtml(formatHolder(h))}</span>`)).join("<br>");
+      ? `<span class="tt-h-void"><s>${idHtml(formatHolder(h))}</s><small>已作废</small></span>`
+      : `<span class="${d.holders[i] ? "is-dup" : ""}">${idHtml(formatHolder(h))}</span>`)).join("<br>");
     const msgText = [
       o.message ? `${escapeHtml(o.message)}<small>${o.anonymous ? "匿名" : "实名"}</small>` : "",
       !viewer && o.adminNote ? `<small class="tt-note">备注：${escapeHtml(o.adminNote)}</small>` : "",
@@ -1179,7 +1180,7 @@ function openTicketEdit(order) {
 function renderTicketEditHolders() {
   const wrap = $("teHolders");
   wrap.innerHTML = ticketAdmin.editHolders.map((h, i) => (h.voided
-    ? `<div class="te-holder is-void"><span><s>${escapeHtml(formatHolder(h))}</s> 已作废</span></div>`
+    ? `<div class="te-holder is-void"><span><s>${idHtml(formatHolder(h))}</s> 已作废</span></div>`
     : `<div class="te-holder" data-h="${i}">
         <input type="text" class="te-name" maxlength="12" placeholder="角色名" autocomplete="off" spellcheck="false"${h.pending ? " disabled" : ""}>
         <select class="te-server"${h.pending ? " disabled" : ""}>${TICKET_SERVER_OPTIONS}</select>
@@ -1275,7 +1276,7 @@ function renderTicketPartial() {
     <p class="hint">作废后票额放回本轮；恢复时若票额不足则标为超额。</p>
     <div class="ta-partial">${o.holders.map((h, i) => `
       <div class="ta-partial-row${h.voided ? " is-void" : ""}">
-        <span>${i + 1}. ${h.voided ? `<s>${escapeHtml(formatHolder(h))}</s> <small>已作废</small>` : escapeHtml(formatHolder(h))}</span>
+        <span>${i + 1}. ${h.voided ? `<s>${idHtml(formatHolder(h))}</s> <small>已作废</small>` : idHtml(formatHolder(h))}</span>
         ${h.voided
           ? `<button type="button" class="tt-act is-restore" data-pv="${i}" data-pv-void="0">恢复</button>`
           : `<button type="button" class="tt-act is-void" data-pv="${i}" data-pv-void="1"${active <= 1 ? " disabled title=\"至少留一张\"" : ""}>作废这张</button>`}
@@ -1542,7 +1543,7 @@ function ticketUnpickedHtml(live) {
   return `${head}<details class="ta-unpicked"${list.length <= 30 ? " open" : ""}><summary>${list.length <= 30 ? "名单" : `展开 · ${list.length} 单`}</summary><div class="ticket-table-wrap"><table class="ticket-table">
     <thead><tr><th>轮次</th><th>序号</th><th>联系方式</th><th>张数</th><th>持票人</th></tr></thead><tbody>${list.map((o) => `<tr>
       <td>${escapeHtml(ticketRoundLabel(o.day))}</td><td>${o.seq}</td><td>${escapeHtml(o.contact)}</td><td>${o.qty}</td>
-      <td>${ticketActiveHolders(o.holders).map((h) => escapeHtml(formatHolder(h))).join("、")}</td></tr>`).join("")}</tbody></table></div></details>
+      <td>${ticketActiveHolders(o.holders).map((h) => idHtml(formatHolder(h))).join("、")}</td></tr>`).join("")}</tbody></table></div></details>
     <textarea class="ta-copy-fallback" id="ticketUnpickedFallback" readonly hidden></textarea>`;
 }
 
@@ -2351,7 +2352,7 @@ function initFeedbackAdmin() {
 }
 
 /* ==== 5b. 用户管理 ====
-   账户列表（权限、停用、重置密码、下线、列入致谢、删除）、注册码与内部码一览（都在 Cloudflare 里，这里只显示设没设）、设置。
+   账户列表（权限、内部码规则、停用、重置密码、下线、删除）、注册码与内部码一览（都在 Cloudflare 里，这里只显示设没设）、设置。
    站长账户（密码在 ADMIN_PASSWORD）不能改权限、停用、删除、重置；自己也不能改自己的权限、停用、删除 */
 const userAdmin = { users: [], me: 0, envCodes: {}, envAdmin: "", settings: {}, loaded: false };
 const UA_ROLES = ["u", "a", "b", "v", "c"];
@@ -2392,8 +2393,8 @@ function renderUserAdmin() {
     const locked = u.envAdmin || self;
     const charId = u.charName ? `${u.charName}${u.charServer ? `@${u.charServer}` : ""}` : "";
     return `<tr data-ua-id="${u.id}"${u.disabled ? ' class="is-void"' : ""}>
-      <td class="ua-name"><b>${escapeHtml(u.username)}</b>${u.envAdmin ? `<span class="ua-tag">站长</span>` : ""}${self ? `<span class="ua-tag">我</span>` : ""}${u.disabled ? `<span class="ua-tag is-off">已停用</span>` : ""}${u.thanks ? `<span class="ua-tag is-thanks" title="${escapeHtml(u.thanksNote)}">致谢</span>` : ""}</td>
-      <td>${escapeHtml(charId || "—")}</td>
+      <td class="ua-name"><b>${escapeHtml(u.username)}</b>${u.envAdmin ? `<span class="ua-tag">站长</span>` : ""}${self ? `<span class="ua-tag">我</span>` : ""}${u.disabled ? `<span class="ua-tag is-off">已停用</span>` : ""}</td>
+      <td>${idHtml(charId || "—")}</td>
       <td class="ua-contact">${escapeHtml(u.contact || "—")}</td>
       <td><select data-ua-role aria-label="${escapeHtml(u.username)} 的权限"${locked ? " disabled" : ""}>${UA_ROLES.map((r) => `<option value="${r}"${r === u.role ? " selected" : ""}>${escapeHtml(uaRoleName(r))}</option>`).join("")}</select></td>
       <td><select data-ua-code aria-label="${escapeHtml(u.username)} 进内部入口时填内部码的规则">${uaCodeOptions(u.codePolicy)}</select></td>
@@ -2401,7 +2402,6 @@ function renderUserAdmin() {
       <td class="ua-acts">
         <button type="button" class="tt-act" data-ua-act="reset"${u.envAdmin ? " disabled" : ""}>重置密码</button>
         <button type="button" class="tt-act" data-ua-act="revoke"${u.sessions ? "" : " disabled"}>全部下线</button>
-        <button type="button" class="tt-act${u.thanks ? " is-reopen" : ""}" data-ua-act="thanks">${u.thanks ? "取消致谢" : "列入致谢"}</button>
         <button type="button" class="tt-act ${u.disabled ? "is-restore" : "is-void"}" data-ua-act="disable"${locked ? " disabled" : ""}>${u.disabled ? "启用" : "停用"}</button>
         <button type="button" class="tt-act is-void" data-ua-act="delete"${locked ? " disabled" : ""}>删除</button>
       </td>
@@ -2512,11 +2512,6 @@ function initUserAdmin() {
       user.sessions = 0;
       renderUserAdmin();
       showToast("已全部下线");
-    } else if (act === "thanks") {
-      if (user.thanks) { await setUserAdmin(id, { thanks: false }, "已从致谢里拿掉"); return; }
-      const note = prompt(`「${user.username}」会出现在网站说明「致谢」的「多场活动长期合作的店家和老师们」里，显示游戏 id（没填就显示用户名）。\n要加一句备注吗？（选填，最多 40 字，比如「xx 店店长」）`, user.thanksNote || "");
-      if (note === null) return;
-      await setUserAdmin(id, { thanks: true, thanksNote: note.trim() }, "已列入致谢");
     } else if (act === "disable") {
       const off = !user.disabled;
       if (!confirm(off ? `停用「${user.username}」？停用后不能登录，已登录的设备也会退出。` : `重新启用「${user.username}」？`)) return;
@@ -2591,7 +2586,7 @@ function renderVenueAdmin() {
         <span class="fb-cat venue-purpose">${escapeHtml(venuePurposeText(i))}</span>
       </div>
       <div class="venue-places-line">${(i.places || []).map((p) => `<span class="venue-chip">${escapeHtml(venuePlaceLabel(p))}</span>`).join("")}</div>
-      <dl class="venue-kv">${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>
+      <dl class="venue-kv">${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("")}</dl>
       ${i.adminNote ? `<p class="venue-note"><b>管理备注</b>${escapeHtml(i.adminNote)}</p>` : ""}
       <p class="fb-contact">提交于 ${escapeHtml(formatCnTime(i.createdAt))}${i.updatedAt ? ` · 修改于 ${escapeHtml(formatCnTime(i.updatedAt))}` : ""}${submitMetaHtml(i)}</p>
       <div class="fb-actions">
@@ -3722,7 +3717,7 @@ function renderPuzzleRecords() {
   $("pzRecBody").innerHTML = list.map((r) => `<tr class="${r.voided ? "is-voided" : ""}">
     <td>${r.rank || ""}</td>
     <td>No.${r.id}</td>
-    <td class="pz-rec-player">${escapeHtml(r.player)}</td>
+    <td class="pz-rec-player">${idHtml(r.player)}</td>
     <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
     <td title="开局到登记 ${escapeHtml(pzFmtMs(r.serverMs))}">${escapeHtml(pzFmtMs(r.elapsed))}</td>
     <td>${escapeHtml(pzAidsText(r.aids) || "—")}</td>
@@ -3867,7 +3862,7 @@ function renderPlays(game) {
   $(body).innerHTML = list.map((r) => (game === "puzzle"
     ? `<tr class="${r.voided ? "is-voided" : ""}">
     <td>${r.id}</td>
-    <td class="pz-rec-player">${escapeHtml(playerText(r.player))}</td>
+    <td class="pz-rec-player">${idHtml(playerText(r.player))}</td>
     <td>${escapeHtml(PZ_ADMIN_DIFFS[r.diff] || r.diff)}</td>
     <td title="${escapeHtml(r.contestTitle ? `${r.contestTitle} · 第 ${r.contestRev} 届` : r.img ? `相册第 ${r.img} 张` : "")}">${escapeHtml(PZ_PLAY_MODES[r.mode] || r.mode)}</td>
     <td>${escapeHtml(pzFmtMs(r.elapsed))}</td>
@@ -3878,7 +3873,7 @@ function renderPlays(game) {
   </tr>`
     : `<tr class="${r.voided ? "is-voided" : ""}">
     <td>${r.id}</td>
-    <td class="pz-rec-player">${escapeHtml(playerText(r.player))}</td>
+    <td class="pz-rec-player">${idHtml(playerText(r.player))}</td>
     <td class="pz-rec-player" title="${escapeHtml(r.song)}">${escapeHtml(r.title || r.song)}</td>
     <td>${escapeHtml(STAGE_DIFF_NAMES[r.diff] || r.diff)}${r.mode !== "show" ? `<br><small>${escapeHtml(STAGE_MODE_NAMES[r.mode] || r.mode)}</small>` : ""}</td>
     <td title="${escapeHtml(stageCountsText(r.counts))}">${escapeHtml(stageScoreText(r))}${r.mode === "show" ? `<br><small>${r.acc}% · 最大COMBO ${r.maxCombo}/${r.total}</small>` : ""}</td>

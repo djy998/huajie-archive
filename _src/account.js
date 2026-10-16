@@ -4,7 +4,8 @@
    - 密码在这里先做 PBKDF2（ACCOUNT_KDF：12 万次，盐 = "hj-account:v1:" + 归一化用户名）再发给 Worker，Worker 只见得到派生值。
      改 ACCOUNT_KDF 会让所有人的旧密码对不上，不要动；站长账户（密码在 Cloudflare 的 ADMIN_PASSWORD）次数不同，由 Worker 回 kdf 告诉这里。
    - 登录、注册都要过人机验证；账户没有任何特权（购票、问卷、反馈和没登录时完全一样）。
-   - 登录令牌存在本机 hj_account，带在请求的 session 字段里；退出、清除数据时删掉。
+   - 登录令牌存在本机 hj_account，带在请求的 session 字段里：勾了「自动登录」存 localStorage（以后打开网站自动登录，直到退出或清除数据），
+     没勾存 sessionStorage（关掉浏览器就退出，Worker 那边一天没用也失效）。
    - 本机提交记录 hj_my_records：购票、问卷、场地登记、反馈提交成功时记一条，「个人数据」里列出来；登录时再合并账户里其他设备的记录。
    - 同步（SYNC）：纪录类按「取最好的」合并，设置类按改动时间新的为准；跟设备有关的（动画档位、音量、判定延迟、性能选项）不同步 */
 (() => {
@@ -68,24 +69,32 @@
     (!d ? ERRORS.net : d.error === "captcha" ? CAPTCHA_FAILED_MSG : ERRORS[d.error] || fallback);
 
   const st = {
-    token: null, user: null, listeners: new Set(),
+    token: null, user: null, remember: false, listeners: new Set(),
     mode: "login", reset: null,          // 登录与注册：login / register；重置密码 { token, username, checking }
     cloud: null, cloudAt: 0,             // 账户里的记录（account_records）
     replies: new Map(),                  // 本机回执查到的回复：反馈编号 → { reply, replyAt, replyRead }
-    gates: {}, thanks: null, filter: "all",
+    gates: {}, filter: "all",
     syncing: null, syncTimer: 0, syncSoonTimer: 0, syncedAt: 0, syncErr: "",
-    rendered: { account: "", data: false, thanks: false },
+    rendered: { account: "", data: false },
   };
 
   /* ==== 登录状态 ==== */
   function loadState() {
-    const s = storage.json(STORE_ACCT);
-    if (s && typeof s.token === "string" && s.token) {
+    for (const [area, remember] of [[storage, true], [session, false]]) {
+      const s = area.json(STORE_ACCT);
+      if (!s || typeof s.token !== "string" || !s.token) continue;
       st.token = s.token;
       st.user = s.user && typeof s.user === "object" ? s.user : null;
+      st.remember = remember;
+      return;
     }
   }
-  const saveState = () => (st.token ? storage.set(STORE_ACCT, JSON.stringify({ token: st.token, user: st.user })) : storage.remove(STORE_ACCT));
+  function saveState() {
+    const keep = st.remember ? storage : session;
+    (st.remember ? session : storage).remove(STORE_ACCT);
+    if (st.token) keep.set(STORE_ACCT, JSON.stringify({ token: st.token, user: st.user }));
+    else keep.remove(STORE_ACCT);
+  }
   const auth = () => (st.token ? { session: st.token } : {});
   const isInternal = (u = st.user) => !!u && INTERNAL_ROLES.includes(u.role);
   const charIdOf = (u = st.user) => (u && u.charName ? `${u.charName}${u.charServer ? `@${u.charServer}` : ""}` : "");
@@ -95,12 +104,14 @@
     renderAccountPanel();
     paintDots();
     $("aboutAccountTab").textContent = st.token ? "我的账户" : "登录与注册";
+    if (!$("aboutPanelThanks").hidden) renderThanksPanel();
     st.listeners.forEach((fn) => { try { fn(st.user); } catch (e) { console.error(e); } });
   }
 
-  function signIn(data) {
+  function signIn(data, remember = false) {
     st.token = data.session;
     st.user = data.user;
+    st.remember = !!remember;
     st.cloud = null;
     st.reset = null;
     storage.remove(STORE_SYNC);   // 换了账户：同步从头比
@@ -149,18 +160,18 @@
     return b64url(new Uint8Array(bits));
   }
 
-  /* 登录 → Worker 的回应；成功时已经记下登录状态。proof 为人机验证凭证 */
-  async function login(username, password, { internalCode = "", proof = null } = {}) {
+  /* 登录 → Worker 的回应；成功时已经记下登录状态。proof 为人机验证凭证，remember = 勾了「自动登录」 */
+  async function login(username, password, { internalCode = "", proof = null, remember = false } = {}) {
     let iter = ACCOUNT_KDF.iter;
     for (let round = 0; round < 2; round++) {
       let pw;
       try { pw = await derivePw(username, password, iter); } catch (e) { return { ok: false, error: "no_crypto" }; }
       const data = await callWorker({
         action: "account_login", username, pw, ...(iter !== ACCOUNT_KDF.iter ? { kdf: iter } : {}),
-        ...(internalCode ? { internalCode } : {}), ...(proof || {}),
+        ...(internalCode ? { internalCode } : {}), ...(remember ? { remember: true } : {}), ...(proof || {}),
       }, { load: "block" });
       if (data && data.error === "kdf" && Number(data.iter) > 0 && round === 0) { iter = Number(data.iter); continue; }
-      if (data && data.ok) signIn(data);
+      if (data && data.ok) signIn(data, remember);
       return data || { ok: false, error: "net" };
     }
     return { ok: false, error: "kdf" };
@@ -402,26 +413,18 @@
     paintDots();
   }
 
-  /* ==== 网站说明 · 致谢 ==== */
-  async function renderThanksPanel() {
-    const panel = $("aboutPanelThanks");
-    if (!st.rendered.thanks) {
-      st.rendered.thanks = true;
-      panel.innerHTML = `<div class="about-text">
-        <dl class="about-list thanks-list">${SITE_THANKS.map((t) => `<dt>${escapeHtml(t.name)}</dt><dd>${escapeHtml(t.what)}</dd>`).join("")}</dl>
-        <p class="about-sub">${escapeHtml(SITE_THANKS_PARTNERS)}</p>
-        <div class="thanks-partners" id="thanksPartners"><span class="thanks-wait">名单加载中…</span></div>
-        <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
-      </div>`;
-    }
-    if (st.thanks) return;
-    const data = await callWorker({ action: "get_thanks" }, { load: "corner" });
-    const box = $("thanksPartners");
-    if (!data || !data.ok) { box.innerHTML = `<span class="thanks-wait">名单没读到，稍后再打开看看</span>`; return; }
-    st.thanks = data.items;
-    box.innerHTML = data.items.length
-      ? data.items.map((x) => `<span class="thanks-chip">${escapeHtml(x.name)}${x.note ? `<small>${escapeHtml(x.note)}</small>` : ""}</span>`).join("")
-      : `<span class="thanks-wait">名单整理中～</span>`;
+  /* ==== 网站说明 · 致谢 ====
+     名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们——」后面接登录着的人自己的 id（游戏 id，没填用用户名）：
+     每个人只看得到自己，算个小彩蛋。没登录就只有这一句。登录状态变了就重画 */
+  function renderThanksPanel() {
+    const me = st.user ? charIdOf() || st.user.username : "";
+    $("aboutPanelThanks").innerHTML = `<div class="about-text">
+      <dl class="about-list thanks-list">
+        ${SITE_THANKS.map((t) => `<dt>${idHtml(t.name)}</dt><dd>${escapeHtml(t.what)}</dd>`).join("")}
+        <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me ? `——<span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
+      </dl>
+      <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
+    </div>`;
   }
 
   /* ==== 网站说明 · 个人数据 ==== */
@@ -495,7 +498,7 @@
         <span class="mydata-src">${src}</span>
       </div>
       ${x.type === "feedback" ? `<div class="fb-body">${escapeHtml(x.content || "")}</div>` : ""}
-      <dl class="mydata-kv">${itemRows(x).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>
+      <dl class="mydata-kv">${itemRows(x).map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("")}</dl>
       ${reply}
     </div>`;
   }
@@ -532,9 +535,7 @@
   function paintDataList() {
     const items = mergedItems();
     const list = st.filter === "all" ? items : items.filter((x) => x.type === st.filter);
-    $("myDataIntro").textContent = st.token
-      ? `你在这台设备上提交的表单，以及账户「${st.user ? st.user.username : ""}」在其他设备上提交的，都列在这里。`
-      : "你在这台设备上提交过的购票、问卷、场地登记和反馈都记在这里（只存在这台设备的浏览器里）。登录后还能看到在其他设备上提交的。";
+    $("myDataIntro").textContent = "你在这台设备上提交过的购票、问卷、场地登记和反馈都记在这里。";   // 登录着时下面也会列出账户在其他设备上提交的
     $("myDataList").innerHTML = list.length ? list.map(itemHtml).join("")
       : `<p class="fb-empty">${items.length ? "这一类还没有记录" : "还没有记录"}</p>`;
     return items;
@@ -592,6 +593,12 @@
       `<optgroup label="【${escapeHtml(g.dc)}】">${g.servers.map((s) => `<option value="${escapeHtml(s)}"${s === selected ? " selected" : ""}>${escapeHtml(s)}</option>`).join("")}</optgroup>`).join("");
   }
   const pwToggle = `<label class="password-show-label acct-show"><input type="checkbox" data-pw-toggle> 显示密码</label>`;
+  /* 显示密码 + 自动登录 排一行 */
+  const pwOpts = (id) => `<div class="acct-opts">
+    <label class="password-show-label"><input type="checkbox" data-pw-toggle> 显示密码</label>
+    <label class="password-show-label"><input type="checkbox" id="${id}"> 自动登录</label>
+  </div>
+  <p class="acct-remember-hint">请不要在网吧或者公用设备上勾选“自动登录”</p>`;
 
   function guestHtml() {
     return `<div class="acct-wrap">
@@ -604,7 +611,7 @@
           <input type="text" id="acctLoginName" maxlength="16" autocomplete="username" spellcheck="false" autocapitalize="off"></div>
         <div class="about-field"><label class="about-label" for="acctLoginPw">密码</label>
           <input type="password" id="acctLoginPw" maxlength="64" autocomplete="current-password" data-pw></div>
-        ${pwToggle}
+        ${pwOpts("acctLoginRemember")}
         <div class="verify-host about-verify" id="acctLoginVerify"></div>
         <div class="about-submit-row"><button type="submit" class="share-site-btn" id="acctLoginBtn">登录</button></div>
         <p class="form-msg" id="acctLoginMsg" hidden></p>
@@ -619,7 +626,7 @@
           <input type="password" id="acctRegPw" maxlength="64" autocomplete="new-password" data-pw></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegPw2">确认密码</label>
           <input type="password" id="acctRegPw2" maxlength="64" autocomplete="new-password" data-pw></div>
-        ${pwToggle}
+        ${pwOpts("acctRegRemember")}
         <div class="about-field"><label class="about-label is-required" for="acctRegCode">注册码</label>
           <div class="acct-code-row">
             <input type="text" id="acctRegCode" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off">
@@ -648,7 +655,7 @@
         <div class="about-submit-row"><button type="submit" class="share-site-btn" id="acctResetBtn">设置新密码</button></div>
         <p class="form-msg" id="acctResetMsg" hidden></p>
       </form>
-      <div class="about-text acct-promise">
+      <div class="about-text acct-promise" id="acctPromise"${st.mode === "register" && !st.reset ? "" : " hidden"}>
         <dl class="about-list">
           <dt>不注册</dt><dd>网站的全部功能照常使用。注册不会带来任何购票或活动上的优先。</dd>
           <dt>注册后</dt><dd>在不同设备间同步花街拼图、舞台演奏的纪录和偏好设置；自动填写游戏 id 和联系方式；在任何设备上查看自己提交过的购票、问卷、场地登记和反馈，并收到站长的回复。</dd>
@@ -753,6 +760,7 @@
       st.rendered.account = `guest:${st.mode}`;
       $("acctLoginForm").hidden = st.mode !== "login";
       $("acctRegForm").hidden = st.mode !== "register";
+      $("acctPromise").hidden = st.mode !== "register";
       openGates();
       $(st.mode === "login" ? "acctLoginName" : "acctRegName").focus({ preventScroll: true });
     });
@@ -791,7 +799,7 @@
     const btn = $("acctLoginBtn");
     btn.disabled = true;
     setMsg(msg, "登录中…");
-    const data = await login(name, pw, { proof: gate.proof() });
+    const data = await login(name, pw, { proof: gate.proof(), remember: $("acctLoginRemember").checked });
     btn.disabled = false;
     if (!data.ok) {
       if (data.error !== "locked" && data.error !== "no_crypto") gate.sync(true);   // 验证凭证已经用掉了，换一题
@@ -822,7 +830,8 @@
     setMsg(msg, "注册中…");
     let derived;
     try { derived = await derivePw(name, pw); } catch (err) { btn.disabled = false; setMsg(msg, ERRORS.no_crypto); return; }
-    const data = await callWorker({ action: "account_register", username: name, pw: derived, code, charName, charServer, contact, ...gate.proof() }, { load: "block" });
+    const remember = $("acctRegRemember").checked;
+    const data = await callWorker({ action: "account_register", username: name, pw: derived, code, charName, charServer, contact, ...(remember ? { remember } : {}), ...gate.proof() }, { load: "block" });
     btn.disabled = false;
     if (!data || !data.ok) {
       /* 查重名等在人机验证之前，凭证还能用；验证之后的（注册码不对等）凭证已经用掉了，换一题 */
@@ -830,7 +839,7 @@
       setMsg(msg, errorText(data, "注册失败，请稍后再试"));
       return;
     }
-    signIn(data);
+    signIn(data, remember);
     showToast("注册成功，已经登录");
   }
 

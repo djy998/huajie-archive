@@ -483,7 +483,8 @@ function showTicketResult(p, data) {
   $("ticketResultTitle").textContent = `登记成功 · ${dayLabel}`;
   $("ticketResultNote").textContent = note;
   $("ticketResultNote").classList.toggle("is-warn", warn.length > 0);
-  $("ticketResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+  $("ticketResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");
+  worldIcon();   // 先把小花图载好，截图保存时要画
   setTicketMode("result");
   $("ticketResult").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -569,6 +570,23 @@ function drawTicketImage(snap) {
     ctx.fillStyle = color;
     ctx.fillText(str, x, y);
   };
+  /* 左对齐的一行：「角色名@服务器」的 @ 画成小花（图还没载好就照写 @） */
+  const icon = worldIcon();
+  const idText = (str, x, y, font, color, size) => {
+    const parts = String(str).replace(WORLD_AT, "$1\u0001").split("\u0001");
+    if (parts.length < 2 || !icon.complete || !icon.naturalWidth) { text(str, x, y, font, color); return; }
+    ctx.font = `${font} ${S.serif}`;
+    ctx.fillStyle = color;
+    parts.forEach((part, i) => {
+      if (i) {
+        const w = size * (icon.naturalWidth / icon.naturalHeight);
+        ctx.drawImage(icon, x + size * 0.04, y + size * 0.08, w, size);
+        x += w + size * 0.08;
+      }
+      ctx.fillText(part, x, y);
+      x += ctx.measureText(part).width;
+    });
+  };
   let y = S.pad;
   ctx.textAlign = "center";
   text(ticketFullTitle(), S.width / 2, y, "bold 30px", S.gold);
@@ -583,7 +601,7 @@ function drawTicketImage(snap) {
   ctx.textAlign = "left";
   rowLines.forEach(({ k, lines }) => {
     text(k, S.pad, y + 2, "15px", S.mute);
-    lines.forEach((line, i) => text(line, S.pad + labelW + 16, y + i * 28, "17px", S.cream));
+    lines.forEach((line, i) => idText(line, S.pad + labelW + 16, y + i * 28, "17px", S.cream, 17));
     y += lines.length * 28 + 10;
   });
   ctx.textAlign = "right";
@@ -629,7 +647,7 @@ async function lookupTicket() {
   list.innerHTML = data.items.map((o) => `
     <div class="ticket-lookup-item${o.voided ? " is-void" : o.overLimit ? " is-over" : ""}">
       <div class="tli-head">${escapeHtml(ticketRoundLabel(o.day))} · 第 ${o.seq} 号 · ${o.qty} 张${o.voided ? " · 此单已作废，请联系活动群确认" : o.overLimit ? " · 超额登记，待确认" : ""}</div>
-      <div class="tli-body">${o.holders.map((h) => (h.voided ? `<span class="tli-void"><s>${escapeHtml(formatHolder(h))}</s> 已作废</span>` : escapeHtml(formatHolder(h)))).join("、")}</div>
+      <div class="tli-body">${o.holders.map((h) => (h.voided ? `<span class="tli-void"><s>${idHtml(formatHolder(h))}</s> 已作废</span>` : idHtml(formatHolder(h)))).join("、")}</div>
       ${o.dup && !o.voided ? `<div class="tli-note">联系方式或持票人与其他登记重复，待核对</div>` : ""}
     </div>`).join("");
 }

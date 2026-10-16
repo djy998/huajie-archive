@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261017a">
-  <link rel="preload" as="style" href="style.css?v=20261017a">
+  <link rel="preload" as="script" href="boot.js?v=20261017b">
+  <link rel="preload" as="style" href="style.css?v=20261017b">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261017a"></script>
+<script src="boot.js?v=20261017b"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -580,9 +580,11 @@
       </div>
       <label for="internalCode" class="visually-hidden">内部码</label>
       <input type="password" id="internalCode" placeholder="内部码（选填，填写一次即可）" autocomplete="off" maxlength="64">
-      <label class="password-show-label">
-        <input type="checkbox" id="internalPasswordShow"> 显示密码
-      </label>
+      <div class="internal-opts">
+        <label class="password-show-label"><input type="checkbox" id="internalPasswordShow"> 显示密码</label>
+        <label class="password-show-label" id="internalRememberLabel"><input type="checkbox" id="internalRemember"> 自动登录</label>
+      </div>
+      <p class="acct-remember-hint" id="internalRememberHint">请不要在网吧或者公用设备上勾选“自动登录”</p>
       <div class="verify-host internal-verify" id="internalVerify"></div>
       <button type="button" id="internalSubmit">进入</button>
       <p class="form-msg" id="internalMsg" hidden></p>
@@ -994,12 +996,12 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261017a"></script>
-<script src="config.js?v=20261017a"></script>
-<script src="main.js?v=20261017a"></script>
-<script src="account.js?v=20261017a"></script>
-<script src="ticket.js?v=20261017a"></script>
-<script src="venue.js?v=20261017a"></script>
-<script src="survey.js?v=20261017a"></script>
+<script src="verify.js?v=20261017b"></script>
+<script src="config.js?v=20261017b"></script>
+<script src="main.js?v=20261017b"></script>
+<script src="account.js?v=20261017b"></script>
+<script src="ticket.js?v=20261017b"></script>
+<script src="venue.js?v=20261017b"></script>
+<script src="survey.js?v=20261017b"></script>
 </body>
 </html>

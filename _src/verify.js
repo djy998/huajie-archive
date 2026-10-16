@@ -546,7 +546,7 @@
       if (!t) return;
       const cv = this.body.querySelector(".verify-canvas");
       if (!cv) return;
-      if (this.mode === "poem") paintChallenge(cv, t.keyword, { size: 26, pad: 3, hFactor: 1.2 });
+      if (this.mode === "poem") { if (t.image) paintImage(cv, t.image); else paintChallenge(cv, t.keyword, { size: 26, pad: 3, hFactor: 1.2 }); }   // 新 Worker 把令字画成图片下发
       else if (this.mode === "cactpot") paintCactpot(cv, t.image);
       else if (this.mode === "math") {
         if (t.image) paintImage(cv, t.image);
@@ -584,7 +584,7 @@
         '<button type="button" class="verify-opt" data-act="pick" data-value="' + name + '" aria-pressed="false">' + name + "</button>"
       ).join("");
       return ''
-        + '<p class="verify-q">' + (pick > 1 ? "请选择下方图标对应的全部职业。" : "请选出下方图标对应的职业：") + "</p>"
+        + '<p class="verify-q">' + (pick > 1 ? "请选择下方图标对应的全部职业" : "请选出下方图标对应的职业：") + "</p>"
         + '<div class="verify-job">' + imgs + "</div>"
         + (pick > 1 ? '<p class="verify-pick-note">点击选中项可取消。</p>' : "")
         + '<div class="verify-options">' + options + "</div>"

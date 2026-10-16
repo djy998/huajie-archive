@@ -1536,7 +1536,7 @@
       ["玩家", rec.player || playerName() || "未填写"],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
-    $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+    $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");
     $("pzCodeBox").hidden = !rec.eligible;
     card("pzResultCard");
     if (rec.eligible) generateCode(rec);
@@ -1552,7 +1552,7 @@
       ["玩家", rec.player || playerName() || "未填写"],
       ["通关时间", formatCnSeconds(rec.at)],
     ];
-    $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+    $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");
     $("pzSubmitBox").hidden = !!rec.submitted;
     $("pzCodeBox").hidden = !rec.submitted;
     $("pzCodeText").textContent = "";

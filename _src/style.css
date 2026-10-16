@@ -8084,7 +8084,8 @@ body.day-mode .acct-more > summary { color: var(--day-cream); }
 body.day-mode .acct-device { color: var(--day-cream); }
 
 /* 内部入口 */
-#internalGate .password-show-label { margin-bottom: 16px; }
+#internalGate .internal-opts { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 22px; margin: 14px 0 16px; }
+#internalGate .internal-opts .password-show-label { margin: 0; }
 /* 卡片里的文字链接（去注册、退出登录）：不套用 .gate-card button 的圆按钮样式 */
 :is(body, body.day-mode) .gate-card button.about-inline-link:not(#_),
 :is(body, body.day-mode) .internal-account button.about-inline-link:not(#_) {
@@ -8149,3 +8150,17 @@ body.day-mode .ua-off { color: #b0261b; }
   .mydata-kv { grid-template-columns: 1fr; gap: 0; }
   .mydata-kv dd { margin-bottom: 4px; }
 }
+
+/* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @ */
+.hj-at { display: inline-block; width: 1.12em; height: 1em; margin: 0 .06em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.png") center / contain no-repeat; }
+/* 白天：用去掉暗色描边的那张（游戏截图里花的外圈带着暗底，浅色背景上像一圈黑边） */
+body.day-mode .hj-at { background-image: url("assets/site/world-day.png"); }
+.acct-opts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: -8px 0 14px; }
+.acct-opts .password-show-label { margin: 0; }
+.acct-opts { margin-bottom: 4px; }
+.acct-remember-hint { margin: 0 0 14px; font-size: .76rem; color: var(--text-mute); }
+#internalGate .acct-remember-hint { margin: -10px 0 16px; text-align: center; }
+body.day-mode .acct-remember-hint { color: var(--day-lilac); }
+.thanks-list .thanks-wide { grid-column: 1 / -1; white-space: normal; }
+.thanks-me { color: var(--cream); font-weight: 600; }
+body.day-mode .thanks-me { color: var(--day-cream); }
