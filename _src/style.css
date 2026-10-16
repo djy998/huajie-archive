@@ -8177,8 +8177,8 @@ body.day-mode .ua-off { color: #b0261b; }
 }
 
 /* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @。
-   world.png 是游戏自己的图标 88（图集下半张 2 倍图里的 40×40 格子），游戏里就占一个字宽，所以这里是 1em 见方 */
-.hj-at { display: inline-block; width: 1em; height: 1em; margin: 0 .04em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.png") center / contain no-repeat; }
+   world.svg 是游戏自己的图标 88（图集下半张 2 倍图里的 40×40 格子）描成的矢量图，放多大都不糊；这一格游戏里就占一个字宽，所以这里是 1em 见方 */
+.hj-at { display: inline-block; width: 1em; height: 1em; margin: 0 .04em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
 /* 选中时：透明的 @ 不显形；小花保持原色，底下铺选区色接上选区（main.js 给选区里的小花加 is-sel）。复制出来仍是 @ */
 .hj-at::selection { color: transparent; background: transparent; }
 .hj-at.is-sel { background-color: var(--wisteria); }

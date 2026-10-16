@@ -46,7 +46,7 @@ const prefersReducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)"
 const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 
-/* 「角色名@服务器」：显示时把 @ 换成游戏里服务器名前面那朵小花（assets/site/world.png：游戏自己的图标 88，图集 common/font/fonticon_xinput.tex 下半张 2 倍图里的 40×40 格子；游戏里这一格就占一个字宽，样式 .hj-at 是 1em 见方）。
+/* 「角色名@服务器」：显示时把 @ 换成游戏里服务器名前面那朵小花（assets/site/world.svg：游戏自己的图标 88——图集 common/font/fonticon_xinput.tex 下半张 2 倍图里的 40×40 格子——描成的矢量图，放多大都不糊；游戏里这一格就占一个字宽，样式 .hj-at 是 1em 见方）。
    只换「@ 后面紧跟汉字」的（邮箱等不动）；@ 字还在、只是透明，复制出来仍是 @。返回转义好的 HTML，只能放在元素内容里，不能放进属性 */
 const WORLD_AT = /(\S)@(?=[\u3400-\u9fff])/g;
 const idHtml = (text) => escapeHtml(text).replace(WORLD_AT, '$1<span class="hj-at">@</span>');
@@ -55,7 +55,7 @@ let worldIconImg = null;
 function worldIcon() {
   if (!worldIconImg) {
     worldIconImg = new Image();
-    worldIconImg.src = "assets/site/world.png";
+    worldIconImg.src = "assets/site/world.svg";
   }
   return worldIconImg;
 }
