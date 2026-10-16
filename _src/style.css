@@ -91,6 +91,13 @@
   src: url("assets/fonts/eorzean/HingashiExtended.woff2") format("woff2");
   font-display: swap;
 }
+/* 游戏符号（官网 Lodestone 的 FFXIV_Lodestone_SSF，只有 U+E020–E0DB 私用区的 165 个符号，没有字母），用到时才下载 */
+@font-face {
+  font-family: "FFXIV Symbols";
+  src: url("assets/fonts/ffxiv/FFXIV_Lodestone_SSF.woff2") format("woff2");
+  unicode-range: U+E020-E0DB;
+  font-display: swap;
+}
 :root {
   /* 光标：夜晚为星星、白天为叶子（body.day-mode 里换），1x / 2x 两张 PNG 直接写在这里，不另外下载；大小与系统光标相近（普通 / 链接 22 像素，文本 24 像素高，放大镜 24 像素）。
      --cursor-img 普通选择（夜晚 五颗相连的星星、白天 LEAF1）、--cursor-link 链接选择（夜晚 pointer1 大星星、白天 LEAF2，淡色叶片调深了一点免得在浅底上看不清）、
@@ -201,6 +208,7 @@ body.day-mode {
 .eorzean { font-family: var(--eorzean); }
 .eorzean-classic { font-family: "Eorzea", var(--serif); }
 .hingashi { font-family: "Hingashi Extended", var(--serif); }
+.ffxiv-sym { font-family: "FFXIV Symbols", var(--serif); }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; cursor: var(--cursor-img), auto; }
@@ -8156,9 +8164,7 @@ body.day-mode .ua-off { color: #b0261b; }
 }
 
 /* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @ */
-.hj-at { display: inline-block; width: 1.12em; height: 1em; margin: 0 .06em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.png") center / contain no-repeat; }
-/* 白天：用去掉暗色描边的那张（游戏截图里花的外圈带着暗底，浅色背景上像一圈黑边） */
-body.day-mode .hj-at { background-image: url("assets/site/world-day.png"); }
+.hj-at { display: inline-block; width: 1.12em; height: 1em; margin: 0 .06em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
 .acct-opts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: -8px 0 14px; }
 .acct-opts .password-show-label { margin: 0; }
 .acct-opts { margin-bottom: 4px; }

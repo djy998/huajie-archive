@@ -127,7 +127,7 @@ function venueDateLabel(ymd) {
 function buildVenueForm(root, { prefix, admin = false }) {
   const id = (k) => `${prefix}-${k}`;
   const T = VENUE_TEXT;
-  const sub = (text) => (text ? `<p class="ticket-sub">${escapeHtml(text)}</p>` : "");
+  const sub = (text) => (text ? `<p class="ticket-sub">${idHtml(text)}</p>` : "");   // 示例 id 里的 @ 也显示成小花
   const showAttr = (show) => (show ? ` data-show="${show}"` : "");
 
   const radioField = (name, list, show) => `

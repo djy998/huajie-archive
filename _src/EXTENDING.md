@@ -86,6 +86,9 @@ CSP 默认只允许本站。要嵌入新的外部来源（视频、图片、脚�
 
 - 正文和毛笔字的切片字体在 `assets/fonts/`，一般不用动。
 - 艾欧泽亚文字给元素加 class 就能用：`eorzean`、`eorzean-classic`、`hingashi`。
+- 游戏符号给元素加 class `ffxiv-sym`，再写对应的私用区字符就行，例如 `<span class="ffxiv-sym">&#xE05D;</span>` 是服务器名前那朵小花（字体只认 U+E020–E0DB，其他字照常用正文字体）。
+  符号字体是官网 Lodestone 的 `FFXIV_Lodestone_SSF`，内部名虽叫「XIV AXIS Std ATK」，但只有 165 个游戏符号、没有 AXIS 的字母，是下面这条的例外。
+  注意：字体里的小花是平面单色的；id 里的小花仍用 `idHtml` 的矢量图（`assets/site/world.svg`）。
 - 商业字体（Jupiter Pro、AXIS、Eurostar）不要放进网站。
 
 ## 不要做的事
