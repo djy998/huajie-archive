@@ -8,12 +8,21 @@
    - 登录令牌存在本机 hj_account，带在请求的 session 字段里：勾了「自动登录」存 localStorage（以后打开网站自动登录，直到退出或清除数据），
      没勾存 sessionStorage（关掉浏览器就退出，Worker 那边一天没用也失效）。
    - 本机提交记录 hj_my_records：购票、问卷、场地登记、反馈提交成功时记一条，「个人数据」里列出来；登录时再合并账户里其他设备的记录。
+   - 「个人数据」的导出 / 导入：本机所有 hj_ 开头的数据（NOT_PORTABLE 里的除外）存成 / 读回一个 json；每天第一次打开网站时自动备份一份到 hj_backup_daily（只留前一天的），
+     「清除数据」不删它。「我的账户 → 清空与恢复」是账户里同步的数据，备份由 Worker 每天第一次同步前存（user_data_backup）。
    - 同步（SYNC）：纪录类按「取最好的」合并，设置类按改动时间新的为准；跟设备有关的（动画档位、音量、判定延迟、性能选项）不同步 */
 (() => {
   const STORE_ACCT = "hj_account";
   const STORE_RECORDS = "hj_my_records";
   const STORE_SYNC = "hj_sync_meta";          // 同步元数据 { 键: { h: 上次同步后本机值的指纹, s: 账户里这个键的改动时刻 } }
   const STORE_REPLY_CHECK = "hj_reply_check"; // 上次凭本机回执查回复的时刻
+  const STORE_BACKUP = "hj_backup_daily";     // 本机数据的每日备份 { checked: 哪天检查过, day, at, items }：「清除数据」也不删
+  /* 导出、导入、备份不带的：登录状态、同步与回复的记账、内部入口通行证、人机验证状态、开屏与维护标记、备份本身 */
+  const NOT_PORTABLE = new Set([STORE_ACCT, STORE_SYNC, STORE_REPLY_CHECK, STORE_BACKUP, "hj_internal_ticket", "hj_admin_seen",
+    "hj_captcha_ok_at", "hj_captcha_manual_at", "hj_maint", "hj_reset_done", "hj_visited_3"]);
+  const PORTABLE_KEY = /^hj_[A-Za-z0-9_-]{1,80}$/;
+  const EXPORT_KIND = "huajie-local-data";
+  const IMPORT_MAX = 4 * 1024 * 1024;
   const RECORDS_KEEP = 200;
   const ACCOUNT_KDF = { iter: 120000, salt: "hj-account:v1:" };
   const ROLE_NAMES = { u: "普通用户", a: "内部 · 公告 A", b: "内部 · 公告 B", v: "内部 · 查看", c: "管理员" };
@@ -64,6 +73,7 @@
     last_admin: "这是最后一个管理员账户，不能注销",
     too_large: "要同步的数据太多了",
     kdf: "登录失败，请刷新页面后再试",
+    no_backup: "还没有可以恢复的备份",
   };
   const REG_BEFORE_CAPTCHA = ["bad_username", "name_taken", "bad_password", "bad_char_name", "bad_char_server", "bad_contact", "need_code", "rate_limited"];
   const errorText = (d, fallback = "操作失败，请稍后再试") =>
@@ -526,21 +536,137 @@
       <div class="about-text mydata-tools">
         <p class="about-sub">本机数据</p>
         <dl class="about-list">
-          <dt>清除缓存</dt><dd>只删图片、字体等离线缓存，下次用到时重新下载；记录、设置和登录状态都保留。</dd>
-          <dt>清除数据</dt><dd>删除这台设备上本网站的全部数据：上面的本机记录、各种设置、拼图与舞台演奏纪录、登录状态和缓存，然后刷新网站。已同步到账户里的不受影响。</dd>
+          <dt>导出数据</dt><dd>将填写表单记录，花街拼图与舞台演奏成绩，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等下载成json文件以便跨设备导入</dd>
+          <dt>导入数据</dt><dd>将其他设备中的填写表单记录，花街拼图与舞台演奏成绩，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等导入进本设备，导入后会覆盖当前设置和成绩</dd>
+          <dt>清除缓存</dt><dd>仅删除图片、字体等离线缓存以释放空间；记录、设置和登录状态等仍然保存。</dd>
+          <dt>清除数据</dt><dd>删除这台设备上本网站的全部数据：本机记录、拼图成绩、舞台演奏成绩、登录状态和缓存等，个人设置全部恢复默认，点击后立即刷新网站。</dd>
         </dl>
+        <div class="group-btn-row">
+          <button type="button" class="share-site-btn" id="myExportBtn">导出数据</button>
+          <button type="button" class="share-site-btn" id="myImportBtn">导入数据</button>
+          <input type="file" id="myImportFile" accept=".json,application/json" hidden>
+        </div>
         <div class="group-btn-row">
           <button type="button" class="share-site-btn" id="myCacheBtn">清除缓存</button>
           <button type="button" class="share-site-btn is-danger" id="myWipeBtn">清除数据</button>
         </div>
+        <p class="about-sub">恢复数据</p>
+        <p class="about-hint mydata-backup-hint">本站会自动保存前一天的设置和成绩等数据，点击将恢复并覆盖当前网站数据</p>
+        <div class="acct-devices mydata-backup" id="myBackupList"></div>
       </div>`;
     $("myDataFilter").addEventListener("change", (e) => {
       syncSegments(e.currentTarget);
       st.filter = e.target.value;
       paintDataList();
     });
+    $("myExportBtn").addEventListener("click", exportLocal);
+    $("myImportBtn").addEventListener("click", () => $("myImportFile").click());
+    $("myImportFile").addEventListener("change", (e) => {
+      const file = e.currentTarget.files && e.currentTarget.files[0];
+      e.currentTarget.value = "";
+      if (file) importLocal(file);
+    });
     $("myCacheBtn").addEventListener("click", clearMediaCache);
     $("myWipeBtn").addEventListener("click", wipeAllData);
+    $("myBackupList").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-backup]");
+      if (btn) (btn.dataset.backup === "restore" ? restoreLocalBackup : deleteLocalBackup)();
+    });
+  }
+
+  /* ==== 本机数据：导出、导入、每日备份 ==== */
+  /* 本机网站数据里能带走的那部分 { 键: 值 } */
+  function portableItems() {
+    const items = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && PORTABLE_KEY.test(k) && !NOT_PORTABLE.has(k)) items[k] = localStorage.getItem(k);
+      }
+    } catch (e) { /* 隐私模式 */ }
+    return items;
+  }
+  /* 用 items 整份换掉本机的这部分数据（登录状态、备份不动）→ 是否全部写进去了 */
+  function replacePortable(items) {
+    Object.keys(portableItems()).forEach((k) => storage.remove(k));
+    let ok = true;
+    for (const [k, v] of Object.entries(items)) {
+      try { localStorage.setItem(k, v); } catch (e) { ok = false; }
+    }
+    return ok;
+  }
+  /* 导入文件、备份里的 items 只收网站自己的键和字符串值 */
+  function cleanItems(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) if (PORTABLE_KEY.test(k) && !NOT_PORTABLE.has(k) && typeof v === "string") out[k] = v;
+    return out;
+  }
+
+  function exportLocal() {
+    const items = portableItems();
+    if (!Object.keys(items).length) { showToast("这台设备上还没有可以导出的数据"); return; }
+    const data = { kind: EXPORT_KIND, v: 1, exportedAt: Date.now(), items };
+    downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `花街本机数据-${cnDate(0)}.json`);
+  }
+
+  async function importLocal(file) {
+    if (file.size > IMPORT_MAX) { showToast("文件太大了，不像是本站导出的数据"); return; }
+    let data = null;
+    try { data = JSON.parse(await file.text()); } catch (e) { /* 下面统一提示 */ }
+    const items = data && data.kind === EXPORT_KIND ? cleanItems(data.items) : null;
+    if (!items || !Object.keys(items).length) { showToast("读不出数据，请选择本站「导出数据」生成的 json 文件"); return; }
+    if (!confirm("导入后，当前网站的个人设置，游戏成绩与记录等都会被覆盖，是否确定导入？")) return;
+    const ok = replacePortable(items);
+    showToast(ok ? "导入好了，正在刷新网站" : "部分数据没能写入（浏览器存储空间不足），正在刷新网站");
+    setTimeout(() => location.reload(), 900);
+  }
+
+  /* 每天第一次打开网站时存一份（只留一份，即前一天的设置和成绩）。
+     本机没有提交记录、成绩、玩家名称和常用设置时不存（清除数据后网站自己会写回音量、日历缩放等默认值），免得把有用的备份盖掉 */
+  function dailyBackup() {
+    const today = cnDate(0);
+    const old = storage.json(STORE_BACKUP);
+    if (old && old.checked === today) return;
+    const items = portableItems();
+    const worth = Object.keys(items).some((k) => k === STORE_RECORDS || isSyncKey(k));
+    const next = worth ? { checked: today, day: today, at: Date.now(), items } : { ...(old && old.items ? old : {}), checked: today };
+    try { localStorage.setItem(STORE_BACKUP, JSON.stringify(next)); } catch (e) { /* 存不下就算了，不影响网站 */ }
+  }
+  function readBackup() {
+    const b = storage.json(STORE_BACKUP);
+    const items = b && cleanItems(b.items);
+    return items && Object.keys(items).length ? { at: Number(b.at) || 0, items } : null;
+  }
+  function backupRowHtml(b, { what = "设置与成绩", n } = {}) {
+    if (!b) return `<p class="fb-empty">暂无备份：明天第一次打开网站时会自动保存</p>`;
+    return `<div class="fb-item acct-device mydata-backup-item">
+      <div><b>${escapeHtml(formatCnLabel(b.at))}</b><small>自动保存的${what}${n ? ` · ${n} 项` : ""}</small></div>
+      <span class="mydata-backup-btns">
+        <button type="button" class="pill-btn-outline" data-backup="restore">恢复</button>
+        <button type="button" class="pill-btn-outline is-danger" data-backup="delete">删除</button>
+      </span>
+    </div>`;
+  }
+  function paintBackup() {
+    const box = $("myBackupList");
+    if (!box) return;
+    const b = readBackup();
+    box.innerHTML = backupRowHtml(b, { n: b ? Object.keys(b.items).length : 0 });
+  }
+  function restoreLocalBackup() {
+    const b = readBackup();
+    if (!b) { paintBackup(); return; }
+    if (!confirm(`恢复 ${formatCnLabel(b.at)} 自动保存的数据？\n\n当前网站的个人设置，游戏成绩与记录等都会被覆盖，恢复后网站会刷新。`)) return;
+    const ok = replacePortable(b.items);
+    showToast(ok ? "已恢复，正在刷新网站" : "部分数据没能写入（浏览器存储空间不足），正在刷新网站");
+    setTimeout(() => location.reload(), 900);
+  }
+  function deleteLocalBackup() {
+    if (!confirm("删除这份自动保存的数据？删除后就不能用它恢复了。")) return;
+    storage.set(STORE_BACKUP, JSON.stringify({ checked: cnDate(0) }));   // 今天不再自动存，明天照常
+    paintBackup();
+    showToast("备份已删除");
   }
 
   function paintDataList() {
@@ -555,6 +681,7 @@
   async function renderDataPanel() {
     if (!st.rendered.data) { st.rendered.data = true; buildDataPanel(); }
     paintDataList();
+    paintBackup();
     if ($("aboutPanelData").hidden) return;
     await Promise.all([loadCloudRecords(), checkReplies(true)]);
     if ($("aboutPanelData").hidden) return;
@@ -578,16 +705,18 @@
     }
   }
 
-  /* 清除数据：先把还没同步的推上去，再退出登录、清空本机的一切，刷新 */
+  /* 清除数据：先把还没同步的推上去，再退出登录、清空本机的一切（每日备份留着，误删了还能恢复），刷新 */
   async function wipeAllData() {
-    const msg = "清除这台设备上本网站的全部数据？\n\n本机的提交记录、各种设置、拼图与舞台演奏纪录、登录状态都会删除，网站会刷新。"
-      + (st.token ? "\n已同步到账户里的不受影响，之后重新登录就能找回。" : "\n没有登录账户，删掉的找不回来。");
+    const msg = "清除这台设备上本网站的全部数据？\n\n本机记录、拼图成绩、舞台演奏成绩、登录状态和缓存等都会删除，个人设置全部恢复默认，网站会立即刷新。"
+      + (readBackup() ? "\n误删了可以在「个人数据 → 恢复数据」里用自动保存的数据恢复。" : "");
     if (!confirm(msg)) return;
     if (st.token) {
       await syncNow().catch(() => {});
       await callWorker({ action: "account_logout", ...auth() }, { load: "block" });
     }
+    const backup = storage.get(STORE_BACKUP);
     try { localStorage.clear(); } catch (e) {}
+    if (backup) storage.set(STORE_BACKUP, backup);
     try { sessionStorage.clear(); } catch (e) {}
     try { if (window.caches) await Promise.all((await caches.keys()).map((k) => caches.delete(k))); } catch (e) {}
     try {
@@ -726,10 +855,16 @@
         <div class="acct-devices" id="acctDevList"><p class="fb-empty">加载中…</p></div>
         <div class="group-btn-row"><button type="button" class="share-site-btn" id="acctDevOthersBtn">让其他设备都退出</button></div>
       </details>
+      <details class="acct-more" id="acctDataBox">
+        <summary>清空与恢复</summary>
+        <p class="about-hint">清空设置与数据：删除这个账户里同步的花街拼图与舞台演奏成绩、玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等，登录着这个账户的设备也会跟着恢复默认。提交过的购票、问卷、场地登记和反馈不受影响。</p>
+        <div class="group-btn-row"><button type="button" class="share-site-btn is-danger" id="acctClearBtn">清空设置与数据</button></div>
+        <p class="about-label">恢复数据</p>
+        <p class="about-hint">本站会自动保存账户前一天的设置和成绩等数据，点击将恢复并覆盖账户当前的数据</p>
+        <div class="acct-devices mydata-backup" id="acctBackupList"><p class="fb-empty">加载中…</p></div>
+      </details>
       <details class="acct-more" id="acctDangerBox">
-        <summary>导出与注销</summary>
-        <p class="about-hint">导出：把账户资料、在各设备上提交过的记录和同步的数据下载成一个 JSON 文件。</p>
-        <div class="group-btn-row"><button type="button" class="share-site-btn" id="acctExportBtn">导出我的数据</button></div>
+        <summary>注销账户</summary>
         ${env ? `<p class="about-hint">站长账户不能注销。</p>` : `
         <p class="about-hint">注销：删除账户、同步的数据和所有登录。已经提交的购票、问卷、场地登记和反馈照常有效，只是不再和账户关联。注销后不能恢复。</p>
         <form id="acctDelForm" novalidate>
@@ -926,7 +1061,12 @@
       showToast(data && data.ok ? "这台设备已退出" : errorText(data));
       loadDevices();
     });
-    $("acctExportBtn").addEventListener("click", exportData);
+    $("acctDataBox").addEventListener("toggle", (e) => { if (e.currentTarget.open) loadAccountBackup(); });
+    $("acctClearBtn").addEventListener("click", clearAccountData);
+    $("acctBackupList").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-backup]");
+      if (btn) (btn.dataset.backup === "restore" ? restoreAccountBackup : deleteAccountBackup)();
+    });
     $("acctLogoutBtn").addEventListener("click", () => logout());
   }
 
@@ -1001,12 +1141,43 @@
     </div>`).join("") || `<p class="fb-empty">没有登录中的设备</p>`;
   }
 
-  async function exportData() {
-    const data = await callWorker({ action: "account_export", ...auth() }, { load: "block" });
-    if (!data || !data.ok) { showToast(errorText(data, "导出失败")); return; }
-    const { ok: _ok, ...rest } = data;
-    rest.localRecords = readRecords().map(({ receipt: _r, ...r }) => r);
-    downloadBlob(new Blob([JSON.stringify(rest, null, 2)], { type: "application/json" }), `花街账户-${st.user.username}-${cnDate(0)}.json`);
+  /* ==== 我的账户 · 清空与恢复（账户里同步的数据；Worker 每天第一次同步前自动备份一份） ==== */
+  async function loadAccountBackup() {
+    const box = $("acctBackupList");
+    const data = await callWorker({ action: "account_backup", ...auth() }, { load: "corner" });
+    if (!box.isConnected) return;
+    if (!data || !data.ok) { box.innerHTML = `<p class="fb-empty">${escapeHtml(errorText(data, "读取失败"))}</p>`; return; }
+    box.innerHTML = data.backup ? backupRowHtml(data.backup, { what: "账户数据", n: data.backup.n })
+      : `<p class="fb-empty">暂无备份：账户明天第一次同步时会自动保存</p>`;
+  }
+
+  /* 账户数据变了以后：同步一次让本机跟上，再刷新网站，各处设置按新的来 */
+  async function syncThenReload(msg) {
+    await trackLoad(syncNow(), "block").catch(() => {});
+    showToast(msg);
+    setTimeout(() => location.reload(), 900);
+  }
+
+  async function clearAccountData() {
+    if (!confirm(`清空账户「${st.user.username}」里同步的设置与数据？\n\n花街拼图与舞台演奏成绩、玩家名称、各种常用设置都会删除，登录着这个账户的设备同步后也会恢复默认，网站会刷新。\n误删了可以在「恢复数据」里用自动保存的数据恢复。`)) return;
+    await trackLoad(syncNow(), "block").catch(() => {});   // 先把本机还没推上去的推上去，免得清空后又被这台推回来
+    const data = await callWorker({ action: "account_data_clear", ...auth() }, { load: "block" });
+    if (!data || !data.ok) { showToast(errorText(data, "清空失败")); return; }
+    await syncThenReload("账户里的设置与数据已清空，正在刷新网站");
+  }
+
+  async function restoreAccountBackup() {
+    if (!confirm("用自动保存的数据恢复账户？\n\n账户当前同步的设置、游戏成绩等都会被覆盖，登录着这个账户的设备同步后也会跟着变，网站会刷新。")) return;
+    const data = await callWorker({ action: "account_backup_restore", ...auth() }, { load: "block" });
+    if (!data || !data.ok) { showToast(errorText(data, "恢复失败")); loadAccountBackup(); return; }
+    await syncThenReload("账户数据已恢复，正在刷新网站");
+  }
+
+  async function deleteAccountBackup() {
+    if (!confirm("删除账户自动保存的数据？删除后就不能用它恢复了。")) return;
+    const data = await callWorker({ action: "account_backup_delete", ...auth() }, { load: "block" });
+    showToast(data && data.ok ? "备份已删除" : errorText(data, "删除失败"));
+    loadAccountBackup();
   }
 
   /* 小提示卡 */
@@ -1025,12 +1196,16 @@
   }
 
   function init() {
+    dailyBackup();
     renderAccountPanel();
     $("aboutAccountTab").textContent = st.token ? "我的账户" : "登录与注册";
     $("acctTipClose").addEventListener("click", closeTip);
     closeOnBackdrop($("acctTipOverlay"), closeTip);
     paintDots();
-    document.addEventListener("visibilitychange", () => { if (document.hidden && st.token && localDirty()) syncNow(); });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) { dailyBackup(); return; }   // 网页开着过了零点：回来时补存前一天的
+      if (st.token && localDirty()) syncNow();
+    });
     window.addEventListener("pagehide", () => { if (st.token && localDirty()) syncNow(); });
     HJ.late(() => runQuietly(() => checkReplies()));
   }

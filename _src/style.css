@@ -8093,6 +8093,19 @@ body.day-mode .mydata-reply p, body.day-mode .fb-reply p { color: var(--day-crea
   cursor: var(--cursor-link);
 }
 .acct-device .pill-btn-outline:hover { border-color: var(--accent); }
+.acct-device .pill-btn-outline.is-danger { color: #ff9a8c; }
+.acct-device .pill-btn-outline.is-danger:hover { border-color: #ff8a7a; }
+/* 恢复数据：一条备份（淡玻璃框 .fb-item），左边保存时间，右边「恢复」「删除」 */
+.mydata-backup-hint { margin: 0 0 10px; }
+.mydata-backup .fb-empty { padding: 10px; }
+.mydata-backup-item { padding: 10px 12px 10px 16px; }
+.mydata-backup-item > div { min-width: 0; }
+.mydata-backup-btns { display: flex; flex: 0 0 auto; gap: 8px; }
+.mydata-backup-btns .pill-btn-outline { min-height: 38px; padding: 6px 16px; }
+@media (max-width: 420px) {
+  .mydata-backup-item { flex-wrap: wrap; }
+  .mydata-backup-btns { margin-left: auto; }
+}
 .acct-logout-row { margin-top: 18px; }
 .acct-reset-who { text-align: center; font-size: .9rem; }
 .acct-tip { text-align: center; }
@@ -8106,6 +8119,7 @@ body.day-mode .acct-sync-state, body.day-mode .acct-device small { color: var(--
 body.day-mode .acct-more > summary { color: var(--day-cream); }
 body.day-mode .acct-more > summary:hover, body.day-mode .acct-device .pill-btn-outline:hover { border-color: var(--pill-edge-hi); }
 body.day-mode .acct-device { color: var(--day-cream); }
+body.day-mode .acct-device .pill-btn-outline.is-danger { color: #a3261a; }
 
 /* 内部入口 */
 #internalGate .internal-opts { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 22px; margin: 14px 0 16px; }
@@ -8177,11 +8191,13 @@ body.day-mode .ua-off { color: #b0261b; }
 }
 
 /* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @。
-   world.svg 是游戏自己的图标 88（图集下半张 2 倍图里的 40×40 格子）描成的矢量图，放多大都不糊；这一格游戏里就占一个字宽，所以这里是 1em 见方 */
-.hj-at { display: inline-block; width: 1em; height: 1em; margin: 0 .04em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
+   图是 main.js 的 worldSetup 解开打包的路径数据、画成的位图（blob 地址放在 --hj-at-img），不再有 world.svg 文件；这一格游戏里就占一个字宽，所以这里是 1em 见方 */
+.hj-at { display: inline-block; width: 1em; height: 1em; margin: 0 .04em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: var(--hj-at-img, none) center / contain no-repeat; }
 /* 选中时：透明的 @ 不显形；小花保持原色，底下铺选区色接上选区（main.js 给选区里的小花加 is-sel）。复制出来仍是 @ */
 .hj-at::selection { color: transparent; background: transparent; }
 .hj-at.is-sel { background-color: var(--wisteria); }
+/* 写死在页面里的「角色名@服务器」包一层 .hj-id：窄屏换行时整段换，不会断成「阿兹萨@梦羽宝」+「境」 */
+.hj-id { white-space: nowrap; }
 .acct-opts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: -8px 0 14px; }
 .acct-opts .password-show-label { margin: 0; }
 .acct-opts { margin-bottom: 4px; }
