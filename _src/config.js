@@ -17,7 +17,7 @@ const SITE_THANKS = [
   { name: "一般通过魔女@红玉海", what: "长期活动支持（谢谢肥师傅！）" },
   { name: "鼠皇儿@潮风亭", what: "多次海报制作支持" },
   { name: "疏儿@白银乡", what: "多次海报制作支持" },
-  { name: "超苦苦汉堡包@神拳痕", what: "不遗余力地支持" },
+  { name: "超酷酷汉堡包@神拳痕", what: "不遗余力地支持" },
   { name: "Pido黑侠@白银乡", what: "不遗余力地支持" },
 ];
 const SITE_THANKS_PARTNERS = "多场活动长期合作的店家和老师们";

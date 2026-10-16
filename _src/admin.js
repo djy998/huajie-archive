@@ -493,8 +493,7 @@ function initViewerPills() {
 
 /* 管理弹窗：打开时把面板移入弹窗并刷新数据 */
 const ADMIN_PANEL_REFRESH = {
-  lockdownPanel: () => { refreshLockdownStatus(); refreshMaintStatus(); },
-  captchaPanel: () => refreshCaptchaSwitch(),
+  lockdownPanel: () => { refreshLockdownStatus(); refreshMaintStatus(); refreshCaptchaSwitch(); },
   starlightPanel: () => syncStarlightPanel(),
   ticketAdminPanel: () => refreshTicketAdmin(),
   feedbackAdminPanel: () => refreshFeedbackAdmin(),
@@ -604,7 +603,7 @@ function initAdminPanels() {
   closeOnBackdrop($("adminModalOverlay"), closeAdminPanel);
 }
 
-/* ==== 3. 分享功能、人机验证、星芒节 ==== */
+/* ==== 3. 站点功能管理（分享功能、全站访问、人机验证）、星芒节 ==== */
 /* 分享功能：库里存的是 lockdown（1 = 关闭） */
 async function refreshLockdownStatus() {
   const status = $("lockdownStatus");
@@ -2352,7 +2351,7 @@ function initFeedbackAdmin() {
 }
 
 /* ==== 5b. 用户管理 ====
-   账户列表（权限、内部码规则、停用、重置密码、下线、删除）、注册码与内部码一览（都在 Cloudflare 里，这里只显示设没设）、设置。
+   账户列表（用户 id、改用户名、权限、内部码规则、停用、重置密码、下线、删除）。用户 id 是注册时生成的 6 个一代花语花字，不能改、注册码与内部码一览（都在 Cloudflare 里，这里只显示设没设）、设置。
    站长账户（密码在 ADMIN_PASSWORD）不能改权限、停用、删除、重置；自己也不能改自己的权限、停用、删除 */
 const userAdmin = { users: [], me: 0, envCodes: {}, envAdmin: "", settings: {}, loaded: false };
 const UA_ROLES = ["u", "a", "b", "v", "c"];
@@ -2371,6 +2370,9 @@ const UA_ERRORS = {
   need_account: "要先用管理员账户登录才能关掉",
   not_found: "这个账户已经不在了，刷新一下",
   too_long: "备注最多 40 个字",
+  bad_username: "用户名为 2~16 位，可用汉字、字母、数字或 _ - ·",
+  name_taken: "这个用户名已经有人用了（不分大小写）",
+  not_changed: "和现在的用户名一样",
 };
 const uaRoleName = (r) => window.HJAccount?.ROLE_NAMES?.[r] || r;
 /* 内部码规则：首次填写 / 每 x 天 / 每次进入 */
@@ -2387,12 +2389,13 @@ function renderUserAdmin() {
   const off = users.filter((u) => u.disabled).length;
   $("uaStatus").textContent = users.length ? `共 ${users.length} 个账户 · 有内部权限 ${internal} 个${off ? ` · 已停用 ${off} 个` : ""}` : "还没有账户";
   const list = users.filter((u) => (!role || u.role === role)
-    && (!q || [u.username, u.charName, u.charServer, u.contact].some((v) => String(v || "").toLowerCase().includes(q))));
+    && (!q || [u.uid, u.username, u.charName, u.charServer, u.contact].some((v) => String(v || "").toLowerCase().includes(q))));
   $("uaBody").innerHTML = list.length ? list.map((u) => {
     const self = u.id === userAdmin.me;
     const locked = u.envAdmin || self;
     const charId = u.charName ? `${u.charName}${u.charServer ? `@${u.charServer}` : ""}` : "";
     return `<tr data-ua-id="${u.id}"${u.disabled ? ' class="is-void"' : ""}>
+      <td class="ua-uid">${escapeHtml(u.uid || "—")}</td>
       <td class="ua-name"><b>${escapeHtml(u.username)}</b>${u.envAdmin ? `<span class="ua-tag">站长</span>` : ""}${self ? `<span class="ua-tag">我</span>` : ""}${u.disabled ? `<span class="ua-tag is-off">已停用</span>` : ""}</td>
       <td>${idHtml(charId || "—")}</td>
       <td class="ua-contact">${escapeHtml(u.contact || "—")}</td>
@@ -2400,13 +2403,14 @@ function renderUserAdmin() {
       <td><select data-ua-code aria-label="${escapeHtml(u.username)} 进内部入口时填内部码的规则">${uaCodeOptions(u.codePolicy)}</select></td>
       <td class="ua-time">注册 ${escapeHtml(formatCnTime(u.createdAt))}<br>最近登录 ${escapeHtml(u.lastLoginAt ? formatCnTime(u.lastLoginAt) : "—")}<br>${u.sessions} 台设备登录中</td>
       <td class="ua-acts">
+        <button type="button" class="tt-act" data-ua-act="rename"${u.envAdmin ? ' disabled title="站长账户的用户名在 Cloudflare 的 ADMIN_USERNAME 里改"' : ""}>改用户名</button>
         <button type="button" class="tt-act" data-ua-act="reset"${u.envAdmin ? " disabled" : ""}>重置密码</button>
         <button type="button" class="tt-act" data-ua-act="revoke"${u.sessions ? "" : " disabled"}>全部下线</button>
         <button type="button" class="tt-act ${u.disabled ? "is-restore" : "is-void"}" data-ua-act="disable"${locked ? " disabled" : ""}>${u.disabled ? "启用" : "停用"}</button>
         <button type="button" class="tt-act is-void" data-ua-act="delete"${locked ? " disabled" : ""}>删除</button>
       </td>
     </tr>`;
-  }).join("") : `<tr><td colspan="7" class="fb-empty">${users.length ? "没有符合条件的账户" : "还没有账户"}</td></tr>`;
+  }).join("") : `<tr><td colspan="8" class="fb-empty">${users.length ? "没有符合条件的账户" : "还没有账户"}</td></tr>`;
 }
 
 function renderUserAdminCodes() {
@@ -2497,6 +2501,15 @@ function initUserAdmin() {
     const msg = $("uaMsg");
     setMsg(msg, "");
     const act = btn.dataset.uaAct;
+    if (act === "rename") {
+      const raw = prompt(`把「${user.username}」改成什么用户名？\n2~16 位，汉字、字母、数字或 _ - ·；登录时区分大小写。\n密码不变，登录着的设备也不会退出。`, user.username);
+      if (raw === null) return;
+      const name = raw.normalize("NFKC").trim();
+      if (!name || name === user.username) return;
+      btn.disabled = true;
+      await setUserAdmin(id, { username: name }, `用户名已改为「${name}」`);
+      return;
+    }
     if (act === "reset") {
       if (!confirm(`给「${user.username}」生成一个重置密码的链接？之前生成、还没用的链接会作废。`)) return;
       btn.disabled = true;
@@ -3975,7 +3988,7 @@ function initPlayAdmin() {
 /* ==== 10. 管理面板 ==== */
 const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card" id="lockdownPanel" hidden>
-  <h2>分享功能与全站开关</h2>
+  <h2>站点功能管理</h2>
   <section class="ta-group">
     <h3 class="ta-group-title">分享功能</h3>
     <div class="ticket-admin-row">
@@ -3996,16 +4009,16 @@ const ADMIN_PANELS_HTML = `
     <p class="ta-group-hint" id="maintStatus">加载中…</p>
     <p class="form-msg" id="maintMsg" hidden></p>
   </section>
-</div>
-<div class="gate-card admin-card" id="captchaPanel" hidden>
-  <h2>人机验证</h2>
-  <div class="ticket-admin-row">
-    <span class="ticket-admin-key">人机验证</span>
-    <button type="button" class="ticket-switch" id="captchaToggleBtn" aria-pressed="false" disabled>—</button>
-  </div>
-  <p class="ta-group-hint">关闭后全站不做人机验证，任何人都能直接提交，仅用于压力测试，用完请尽快开回来。</p>
-  <p class="ta-group-hint" id="captchaStatus">加载中…</p>
-  <p class="form-msg" id="captchaSwitchMsg" hidden></p>
+  <section class="ta-group">
+    <h3 class="ta-group-title">人机验证</h3>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">人机验证</span>
+      <button type="button" class="ticket-switch" id="captchaToggleBtn" aria-pressed="false" disabled>—</button>
+    </div>
+    <p class="ta-group-hint">关闭后全站不做人机验证，任何人都能直接提交，仅用于压力测试，用完请尽快开回来。</p>
+    <p class="ta-group-hint" id="captchaStatus">加载中…</p>
+    <p class="form-msg" id="captchaSwitchMsg" hidden></p>
+  </section>
 </div>
 <div class="gate-card admin-card" id="starlightPanel" hidden>
   <h2>星芒节时间覆盖</h2>
@@ -4666,7 +4679,7 @@ const ADMIN_PANELS_HTML = `
   </div>
   <section id="uaUsers">
     <div class="pz-rec-tools">
-      <input type="search" class="play-search" id="uaSearch" placeholder="搜索用户名、游戏 id、联系方式" aria-label="搜索用户名、游戏 id、联系方式">
+      <input type="search" class="play-search" id="uaSearch" placeholder="搜索用户 id、用户名、游戏 id、联系方式" aria-label="搜索用户 id、用户名、游戏 id、联系方式">
       <select id="uaRoleFilter" aria-label="按权限筛选"><option value="">全部权限</option></select>
       <button type="button" id="uaRefreshBtn">刷新</button>
     </div>
@@ -4680,7 +4693,7 @@ const ADMIN_PANELS_HTML = `
     <p class="form-msg" id="uaMsg" hidden></p>
     <div class="ticket-table-wrap">
       <table class="ticket-table ua-table">
-        <thead><tr><th>用户名</th><th>游戏 id</th><th>联系方式</th><th>权限</th><th>内部码</th><th>注册 / 登录</th><th>操作</th></tr></thead>
+        <thead><tr><th>用户 id</th><th>用户名</th><th>游戏 id</th><th>联系方式</th><th>权限</th><th>内部码</th><th>注册 / 登录</th><th>操作</th></tr></thead>
         <tbody id="uaBody"></tbody>
       </table>
     </div>

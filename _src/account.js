@@ -2,6 +2,7 @@
    依赖 main.js 的工具（$、callWorker、storage、escapeHtml、setMsg、showToast、createFormGate…），对外是 window.HJAccount。
    - 账户只有用户名、密码、注册码（决定权限），游戏 id 和联系方式选填。不收邮箱手机号。
    - 密码在这里先做 PBKDF2（ACCOUNT_KDF：12 万次，盐 = "hj-account:v1:" + 归一化用户名）再发给 Worker，Worker 只见得到派生值。
+     管理员改过用户名、本人还没换密码时，盐里仍是旧名字：Worker 登录时回 kdf { name }，登录后账户信息里的 kdfName 也是它。
      改 ACCOUNT_KDF 会让所有人的旧密码对不上，不要动；站长账户（密码在 Cloudflare 的 ADMIN_PASSWORD）次数不同，由 Worker 回 kdf 告诉这里。
    - 登录、注册都要过人机验证；账户没有任何特权（购票、问卷、反馈和没登录时完全一样）。
    - 登录令牌存在本机 hj_account，带在请求的 session 字段里：勾了「自动登录」存 localStorage（以后打开网站自动登录，直到退出或清除数据），
@@ -136,6 +137,8 @@
   function applyUser(user) {
     if (!user || !st.token) return;
     st.user = { ...st.user, ...user };
+    const hello = document.querySelector(".acct-hello .acct-name");   // 改了游戏 id，欢迎语跟着变
+    if (hello) hello.innerHTML = welcomeHtml(st.user);
     changed();
   }
 
@@ -162,15 +165,19 @@
 
   /* 登录 → Worker 的回应；成功时已经记下登录状态。proof 为人机验证凭证，remember = 勾了「自动登录」 */
   async function login(username, password, { internalCode = "", proof = null, remember = false } = {}) {
-    let iter = ACCOUNT_KDF.iter;
+    let iter = ACCOUNT_KDF.iter, kdfName = "";
     for (let round = 0; round < 2; round++) {
       let pw;
-      try { pw = await derivePw(username, password, iter); } catch (e) { return { ok: false, error: "no_crypto" }; }
+      try { pw = await derivePw(kdfName || username, password, iter); } catch (e) { return { ok: false, error: "no_crypto" }; }
       const data = await callWorker({
-        action: "account_login", username, pw, ...(iter !== ACCOUNT_KDF.iter ? { kdf: iter } : {}),
+        action: "account_login", username, pw, ...(iter !== ACCOUNT_KDF.iter ? { kdf: iter } : {}), ...(kdfName ? { kdfName } : {}),
         ...(internalCode ? { internalCode } : {}), ...(remember ? { remember: true } : {}), ...(proof || {}),
       }, { load: "block" });
-      if (data && data.error === "kdf" && Number(data.iter) > 0 && round === 0) { iter = Number(data.iter); continue; }
+      if (data && data.error === "kdf" && Number(data.iter) > 0 && round === 0) {
+        iter = Number(data.iter);
+        kdfName = typeof data.name === "string" ? data.name : "";
+        continue;
+      }
       if (data && data.ok) signIn(data, remember);
       return data || { ok: false, error: "net" };
     }
@@ -619,12 +626,12 @@
       </form>
       <form class="about-form acct-form" id="acctRegForm" novalidate${st.mode === "register" && !st.reset ? "" : " hidden"}>
         <div class="about-field"><label class="about-label is-required" for="acctRegName">用户名</label>
-          <p class="about-hint">2~16 位，汉字、字母、数字或 _ - ·，注册后不能修改；登录时不分大小写</p>
+          <p class="about-hint">2~16 位，汉字、字母、数字或 _ - ·，注册后修改需联系管理员；登录时区分大小写</p>
           <input type="text" id="acctRegName" maxlength="16" autocomplete="username" spellcheck="false" autocapitalize="off"></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegPw">密码</label>
           <p class="about-hint">至少 ${PW_MIN} 位</p>
           <input type="password" id="acctRegPw" maxlength="64" autocomplete="new-password" data-pw>
-          <p class="acct-pw-note">密码经过多重加密存储在后端，网站和管理员不知道你的密码。<br>但出于安全起见，依然建议您使用与其他网站不同的密码。</p></div>
+          <p class="acct-pw-note">密码经过多重加密存储在后端，网站和管理员不知道您的密码。<br>但出于安全起见，依然建议您使用与其他网站不同的密码。</p></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegPw2">确认密码</label>
           <input type="password" id="acctRegPw2" maxlength="64" autocomplete="new-password" data-pw></div>
         ${pwOpts("acctRegRemember")}
@@ -634,13 +641,12 @@
             <button type="button" class="acct-nocode" data-acct-tip="nocode">没有注册码？</button>
           </div></div>
         <div class="about-field"><label class="about-label" for="acctRegChar">游戏 id（选填）</label>
-          <p class="about-hint">购票、场地登记会自动帮你填上（照样可以改），拼图、舞台演奏的玩家名称也用它</p>
           <div class="acct-char-row">
             <input type="text" id="acctRegChar" maxlength="12" placeholder="角色名" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="角色名">
             <select id="acctRegServer" aria-label="服务器">${serverOptions()}</select>
           </div></div>
         <div class="about-field"><label class="about-label" for="acctRegContact">联系方式（选填）</label>
-          <input type="text" id="acctRegContact" maxlength="60" placeholder="QQ、邮箱等" autocomplete="off"></div>
+          <input type="text" id="acctRegContact" maxlength="60" autocomplete="off"></div>
         <div class="verify-host about-verify" id="acctRegVerify"></div>
         <div class="about-submit-row"><button type="submit" class="share-site-btn" id="acctRegBtn">注册</button></div>
         <p class="form-msg" id="acctRegMsg" hidden></p>
@@ -666,12 +672,19 @@
     </div>`;
   }
 
+  /* 我的账户顶上的欢迎语：「欢迎 角色名@服务器（用户名），花街一直在这里等你。」@ 显示成小花；没填角色名就只有用户名（不加括号） */
+  function welcomeHtml(u) {
+    const name = escapeHtml(u.username || "");
+    const char = u.charName ? idHtml(u.charServer ? `${u.charName}@${u.charServer}` : u.charName) : "";
+    return `欢迎 ${char ? `<b>${char}</b><span class="acct-uname">（${name}）</span>` : `<b>${name}</b>`}，花街一直在这里等你。`;
+  }
+
   function homeHtml() {
     const u = st.user || {};
     const env = !!u.envAdmin;
     return `<div class="acct-wrap about-form acct-home">
       <div class="acct-hello">
-        <span class="acct-name">${escapeHtml(u.username || "")}</span>
+        <span class="acct-name">${welcomeHtml(u)}</span>
         <span class="acct-role${isInternal(u) ? " is-internal" : ""}">${escapeHtml(ROLE_NAMES[u.role] || ROLE_NAMES.u)}</span>
       </div>
       ${u.mustChange ? `<p class="acct-must">这个账户还在用初始密码，请先在下面「修改密码」里改掉。</p>` : ""}
@@ -682,7 +695,7 @@
           <input type="text" id="acctChar" maxlength="12" placeholder="角色名" value="${escapeHtml(u.charName || "")}" autocomplete="off" spellcheck="false" aria-label="角色名">
           <select id="acctServer" aria-label="服务器">${serverOptions(u.charServer || "")}</select>
         </div>
-        <input type="text" id="acctContact" class="acct-contact" maxlength="60" placeholder="联系方式（QQ、邮箱等）" value="${escapeHtml(u.contact || "")}" autocomplete="off" aria-label="联系方式">
+        <input type="text" id="acctContact" class="acct-contact" maxlength="60" placeholder="联系方式" value="${escapeHtml(u.contact || "")}" autocomplete="off" aria-label="联系方式">
         <div class="about-submit-row"><button type="submit" class="share-site-btn">保存资料</button></div>
         <p class="form-msg" id="acctProfileMsg" hidden></p>
       </form>
@@ -951,7 +964,7 @@
     setMsg(msg, "修改中…");
     let oldPw, newPw;
     try {
-      [oldPw, newPw] = await Promise.all([derivePw(st.user.username, old), derivePw(st.user.username, pw)]);
+      [oldPw, newPw] = await Promise.all([derivePw(st.user.kdfName || st.user.username, old), derivePw(st.user.username, pw)]);
     } catch (err) { setMsg(msg, ERRORS.no_crypto); return; }
     const data = await callWorker({ action: "account_password", ...auth(), oldPw, newPw }, { load: "block" });
     if (!data || !data.ok) { setMsg(msg, errorText(data, "修改失败，请稍后再试")); return; }
@@ -967,7 +980,7 @@
     if (!pw) { setMsg(msg, "请输入密码确认"); return; }
     if (!confirm(`确定注销账户「${st.user.username}」吗？注销后不能恢复。`)) return;
     let derived;
-    try { derived = await derivePw(st.user.username, pw); } catch (err) { setMsg(msg, ERRORS.no_crypto); return; }
+    try { derived = await derivePw(st.user.kdfName || st.user.username, pw); } catch (err) { setMsg(msg, ERRORS.no_crypto); return; }
     const data = await callWorker({ action: "account_delete", ...auth(), pw: derived }, { load: "block" });
     if (!data || !data.ok) { setMsg(msg, errorText(data, "注销失败，请稍后再试")); return; }
     signOutLocal("账户已注销");

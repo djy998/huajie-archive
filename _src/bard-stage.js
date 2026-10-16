@@ -2926,8 +2926,7 @@
         h("div", { class: "hjs-res-big", text: fmtNum(S.score) }),
         h("p", { class: "hjs-res-sub", text: `准确率 ${pct.toFixed(1)}% · 最大COMBO ${S.maxCombo} / ${total}` }),
         h("p", { class: `hjs-res-sub hjs-res-parts${capNote() ? " hjs-res-mult" : ""}`, text: scoreParts() }),
-        timingNote(),
-        resGrid());
+        ...[timingNote(), resGrid()].filter(Boolean));   // 没有可说的时候 timingNote 回 null（0 分时常见），不能直接传给 append
     }
     reportStage(pct);
     card.append(h("div", { class: "hjs-res-btns" },

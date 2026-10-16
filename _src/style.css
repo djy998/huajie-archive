@@ -8040,7 +8040,9 @@ body.day-mode .mydata-reply p, body.day-mode .fb-reply p { color: var(--day-crea
 .acct-promise { margin-top: 22px; }
 .acct-promise .about-list { margin: 0; }
 .acct-hello { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 14px; }
-.acct-name { font-family: var(--brush); font-size: 1.6rem; color: var(--lantern-soft); }
+.acct-name { font-size: 1rem; line-height: 1.7; text-align: center; color: var(--text-soft); overflow-wrap: anywhere; }   /* 欢迎语：普通字体，窄屏自动换行 */
+.acct-name b { color: var(--lantern-soft); font-weight: 600; }
+.acct-name .acct-uname, .acct-name b { white-space: nowrap; }   /* 窄屏换行时角色名、（用户名）各自整段换 */
 .acct-role { padding: 2px 12px; border-radius: 999px; font-size: .78rem; color: var(--text-soft); border: 1px solid var(--line); background: var(--panel-soft); }
 .acct-role.is-internal { color: var(--accent-ink); background: var(--accent); border-color: transparent; font-weight: 600; }
 .acct-must { margin: 0 0 14px; padding: 8px 12px; border-radius: var(--radius-sm); text-align: center; font-size: .86rem; color: #ffd0c8; background: rgba(224,142,132,.18); }
@@ -8074,7 +8076,8 @@ body.day-mode .mydata-reply p, body.day-mode .fb-reply p { color: var(--day-crea
 .acct-reset-who { text-align: center; font-size: .9rem; }
 .acct-tip { text-align: center; }
 body.day-mode .acct-nocode { color: var(--day-lilac); }
-body.day-mode .acct-name { color: var(--day-gold); }
+body.day-mode .acct-name { color: var(--day-cream); }
+body.day-mode .acct-name b { color: var(--day-gold); }
 body.day-mode .acct-role { color: var(--day-lilac); background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .acct-role.is-internal { color: #fff6e0; background: #8a5a1c; }
 body.day-mode .acct-must { color: #8d2216; background: rgba(176,38,27,.1); }
@@ -8117,6 +8120,7 @@ body.day-mode .fb-reply-warn { color: #8a5a1c; }
 .ua-tabs { max-width: 420px; margin: 0 auto 16px; }
 .ua-table td { font-size: .8rem; }
 .ua-table td.ua-name { white-space: nowrap; }
+.ua-table td.ua-uid { white-space: nowrap; letter-spacing: .08em; user-select: all; }   /* 用户 id：6 个花字，点一下整段选中好复制 */
 .ua-table td.ua-contact { word-break: break-all; min-width: 90px; }
 .ua-table td.ua-time { min-width: 150px; color: var(--text-mute); line-height: 1.6; }
 .ua-table select { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink-2); color: var(--cream); font-family: inherit; font-size: .78rem; }
