@@ -8161,6 +8161,8 @@ body.day-mode .hj-at { background-image: url("assets/site/world-day.png"); }
 .acct-remember-hint { margin: 0 0 14px; font-size: .76rem; color: var(--text-mute); }
 #internalGate .acct-remember-hint { margin: -10px 0 16px; text-align: center; }
 body.day-mode .acct-remember-hint { color: var(--day-lilac); }
+.acct-pw-note { margin: 6px 0 0; font-size: .76rem; line-height: 1.7; color: var(--text-mute); }
+body.day-mode .acct-pw-note { color: var(--day-lilac); }
 .thanks-list .thanks-wide { grid-column: 1 / -1; white-space: normal; }
-.thanks-me { display: block; margin-top: 4px; color: var(--cream); font-weight: 600; }   /* 自己的 id 单独一行 */
+.thanks-me { display: block; margin-top: 1.7em; color: var(--cream); font-weight: 600; }   /* 自己的 id 单独一行 */
 body.day-mode .thanks-me { color: var(--day-cream); }

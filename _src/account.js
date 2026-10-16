@@ -414,14 +414,14 @@
   }
 
   /* ==== 网站说明 · 致谢 ====
-     名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们——」后面接登录着的人自己的 id（游戏 id，没填用用户名）：
+     名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们」下面空一行接登录着的人自己的 id（游戏 id，没填用用户名）：
      每个人只看得到自己，算个小彩蛋。没登录就只有这一句。登录状态变了就重画 */
   function renderThanksPanel() {
     const me = st.user ? charIdOf() || st.user.username : "";
     $("aboutPanelThanks").innerHTML = `<div class="about-text">
       <dl class="about-list thanks-list">
         ${SITE_THANKS.map((t) => `<dt>${idHtml(t.name)}</dt><dd>${escapeHtml(t.what)}</dd>`).join("")}
-        <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me ? `——<span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
+        <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me ? `<span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
       </dl>
       <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
     </div>`;
@@ -623,7 +623,8 @@
           <input type="text" id="acctRegName" maxlength="16" autocomplete="username" spellcheck="false" autocapitalize="off"></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegPw">密码</label>
           <p class="about-hint">至少 ${PW_MIN} 位</p>
-          <input type="password" id="acctRegPw" maxlength="64" autocomplete="new-password" data-pw></div>
+          <input type="password" id="acctRegPw" maxlength="64" autocomplete="new-password" data-pw>
+          <p class="acct-pw-note">密码经过多重加密存储在后端，网站和管理员不知道你的密码。<br>但出于安全起见，依然建议您使用与其他网站不同的密码。</p></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegPw2">确认密码</label>
           <input type="password" id="acctRegPw2" maxlength="64" autocomplete="new-password" data-pw></div>
         ${pwOpts("acctRegRemember")}
