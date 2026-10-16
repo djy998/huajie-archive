@@ -579,9 +579,9 @@ function drawTicketImage(snap) {
     ctx.fillStyle = color;
     parts.forEach((part, i) => {
       if (i) {
-        const w = size * (icon.naturalWidth / icon.naturalHeight);
-        ctx.drawImage(icon, x + size * 0.04, y + size * 0.08, w, size);
-        x += w + size * 0.08;
+        const h = size * 1.14, w = h * (icon.naturalWidth / icon.naturalHeight);   // 图里带一圈淡发光，和 .hj-at 一样放大 1.14 倍
+        ctx.drawImage(icon, x + size * 0.025, y + size * 0.01, w, h);
+        x += w + size * 0.05;
       }
       ctx.fillText(part, x, y);
       x += ctx.measureText(part).width;

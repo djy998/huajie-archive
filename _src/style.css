@@ -8164,7 +8164,12 @@ body.day-mode .ua-off { color: #b0261b; }
 }
 
 /* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @ */
-.hj-at { display: inline-block; width: 1.12em; height: 1em; margin: 0 .06em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
+.hj-at { display: inline-block; width: 1.19em; height: 1.14em; margin: -.07em .025em; vertical-align: -.21em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
+/* 选中时：透明的 @ 不显形；小花反色、底下铺选区色（main.js 给选区里的小花加 is-sel）。复制出来仍是 @ */
+.hj-at::selection { color: transparent; background: transparent; }
+.hj-at { position: relative; }
+.hj-at.is-sel { background-image: none; background-color: var(--wisteria); }   /* 选区底色接上，不留缺口 */
+.hj-at.is-sel::before { content: ""; position: absolute; inset: 0; background: url("assets/site/world.svg") center / contain no-repeat; filter: invert(1); }
 .acct-opts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: -8px 0 14px; }
 .acct-opts .password-show-label { margin: 0; }
 .acct-opts { margin-bottom: 4px; }

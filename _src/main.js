@@ -46,7 +46,7 @@ const prefersReducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)"
 const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 
-/* 「角色名@服务器」：显示时把 @ 换成游戏里服务器名前面那朵小花（assets/site/world.svg，由游戏字体 U+E05D 斜体化（skewX 约 19°、再转 -4°、纵向压到 0.885）后渲染的矢量图，放多大都清晰，样式 .hj-at）。
+/* 「角色名@服务器」：显示时把 @ 换成游戏里服务器名前面那朵小花（assets/site/world.svg，由游戏字体 U+E05D 斜体化（skewX 约 17.4°、再转 -7.5°、纵向压到 0.878，按游戏截图拟合）后渲染的矢量图，放多大都清晰，样式 .hj-at）。
    只换「@ 后面紧跟汉字」的（邮箱等不动）；@ 字还在、只是透明，复制出来仍是 @。返回转义好的 HTML，只能放在元素内容里，不能放进属性 */
 const WORLD_AT = /(\S)@(?=[\u3400-\u9fff])/g;
 const idHtml = (text) => escapeHtml(text).replace(WORLD_AT, '$1<span class="hj-at">@</span>');
@@ -59,6 +59,32 @@ function worldIcon() {
   }
   return worldIconImg;
 }
+
+/* 选中文字时小花反色：::selection 管不到背景图，所以监听选区，给落在选区里的 .hj-at 加 is-sel（样式里 filter: invert） */
+let worldAtSelected = [];
+let worldAtSelQueued = false;
+function markSelectedWorldAt() {
+  worldAtSelQueued = false;
+  worldAtSelected.forEach((el) => el.classList.remove("is-sel"));
+  worldAtSelected = [];
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed) return;
+  for (let i = 0; i < sel.rangeCount; i++) {
+    const range = sel.getRangeAt(i);
+    let root = range.commonAncestorContainer;
+    if (root.nodeType !== 1) root = root.parentElement;
+    if (!root) continue;
+    const list = root.classList.contains("hj-at") ? [root] : root.querySelectorAll(".hj-at");
+    list.forEach((el) => {
+      if (range.intersectsNode(el)) { el.classList.add("is-sel"); worldAtSelected.push(el); }
+    });
+  }
+}
+document.addEventListener("selectionchange", () => {
+  if (worldAtSelQueued) return;
+  worldAtSelQueued = true;
+  requestAnimationFrame(markSelectedWorldAt);
+});
 
 /* 已转义文本中的网址转为链接，句尾标点不计入 */
 function linkify(html) {
