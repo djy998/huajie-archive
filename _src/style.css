@@ -8168,5 +8168,8 @@ body.day-mode .acct-remember-hint { color: var(--day-lilac); }
 .acct-pw-note { margin: 6px 0 0; font-size: .76rem; line-height: 1.7; color: var(--text-mute); }
 body.day-mode .acct-pw-note { color: var(--day-lilac); }
 .thanks-list .thanks-wide { grid-column: 1 / -1; white-space: normal; }
-.thanks-me { display: block; margin-top: 1.7em; color: var(--cream); font-weight: 600; }   /* 自己的 id 单独一行 */
+.thanks-and { display: block; font-weight: 400; font-style: italic; color: var(--text-mute); }
+.thanks-list .thanks-mine, .thanks-list .thanks-mine * { color: #c39bff; }   /* 名单里的自己 */
+body.day-mode .thanks-list .thanks-mine, body.day-mode .thanks-list .thanks-mine * { color: #7b3fb0; }
+.thanks-me { display: block; margin-top: 0; color: var(--cream); font-weight: 600; }   /* 自己的 id 单独一行 */
 body.day-mode .thanks-me { color: var(--day-cream); }

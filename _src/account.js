@@ -421,14 +421,18 @@
   }
 
   /* ==== 网站说明 · 致谢 ====
-     名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们」下面空一行接登录着的人自己的 id（游戏 id，没填用用户名）：
+     名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们」下面一行 and、再一行接登录着的人自己的 id（游戏 id，没填用用户名）：
      每个人只看得到自己，算个小彩蛋。没登录就只有这一句。登录状态变了就重画 */
   function renderThanksPanel() {
     const me = st.user ? charIdOf() || st.user.username : "";
+    /* 自己就在名单里（角色名相同；填了服务器时服务器也要相同）：那一行变紫，下面不再单独列 */
+    const cn = st.user && st.user.charName, cs = st.user && st.user.charServer;
+    const mine = (t) => !!cn && (([n, sv]) => n === cn && (!cs || !sv || sv === cs))(t.name.split("@"));
+    const listed = SITE_THANKS.some(mine);
     $("aboutPanelThanks").innerHTML = `<div class="about-text">
       <dl class="about-list thanks-list">
-        ${SITE_THANKS.map((t) => `<dt>${idHtml(t.name)}</dt><dd>${escapeHtml(t.what)}</dd>`).join("")}
-        <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me ? `<span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
+        ${SITE_THANKS.map((t) => `<dt${mine(t) ? ' class="thanks-mine"' : ""}>${idHtml(t.name)}</dt><dd${mine(t) ? ' class="thanks-mine"' : ""}>${escapeHtml(t.what)}</dd>`).join("")}
+        <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me && !listed ? `<span class="thanks-and">and</span><span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
       </dl>
       <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
     </div>`;
@@ -625,6 +629,11 @@
         <p class="acct-links"><button type="button" class="about-inline-link" data-acct-tip="forgot">忘记密码？</button></p>
       </form>
       <form class="about-form acct-form" id="acctRegForm" novalidate${st.mode === "register" && !st.reset ? "" : " hidden"}>
+        <div class="about-field"><label class="about-label is-required" for="acctRegCode">注册码</label>
+          <div class="acct-code-row">
+            <input type="text" id="acctRegCode" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off">
+            <button type="button" class="acct-nocode" data-acct-tip="nocode">没有注册码？</button>
+          </div></div>
         <div class="about-field"><label class="about-label is-required" for="acctRegName">用户名</label>
           <p class="about-hint">2~16 位，汉字、字母、数字或 _ - ·，注册后修改需联系管理员；登录时区分大小写</p>
           <input type="text" id="acctRegName" maxlength="16" autocomplete="username" spellcheck="false" autocapitalize="off"></div>
@@ -635,11 +644,6 @@
         <div class="about-field"><label class="about-label is-required" for="acctRegPw2">确认密码</label>
           <input type="password" id="acctRegPw2" maxlength="64" autocomplete="new-password" data-pw></div>
         ${pwOpts("acctRegRemember")}
-        <div class="about-field"><label class="about-label is-required" for="acctRegCode">注册码</label>
-          <div class="acct-code-row">
-            <input type="text" id="acctRegCode" maxlength="64" autocomplete="off" spellcheck="false" autocapitalize="off">
-            <button type="button" class="acct-nocode" data-acct-tip="nocode">没有注册码？</button>
-          </div></div>
         <div class="about-field"><label class="about-label" for="acctRegChar">游戏 id（选填）</label>
           <div class="acct-char-row">
             <input type="text" id="acctRegChar" maxlength="12" placeholder="角色名" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="角色名">
@@ -664,7 +668,7 @@
       </form>
       <div class="about-text acct-promise" id="acctPromise"${st.mode === "register" && !st.reset ? "" : " hidden"}>
         <dl class="about-list">
-          <dt>不注册</dt><dd>网站的全部功能照常使用。注册不会带来任何购票或活动上的优先。</dd>
+          <dt>不注册</dt><dd>原则上无需注册即可使用网站全部功能并参与活动。</dd>
           <dt>注册后</dt><dd>在不同设备间同步花街拼图、舞台演奏的纪录和偏好设置；自动填写游戏 id 和联系方式；在任何设备上查看自己提交过的购票、问卷、场地登记和反馈，并收到站长的回复。</dd>
           <dt>隐私</dt><dd>不收集邮箱和手机号。密码在你的浏览器里加密后才发出，网站和站长都看不到你的密码。</dd>
         </dl>
@@ -690,7 +694,6 @@
       ${u.mustChange ? `<p class="acct-must">这个账户还在用初始密码，请先在下面「修改密码」里改掉。</p>` : ""}
       <form id="acctProfileForm" novalidate>
         <p class="about-label">我的资料</p>
-        <p class="about-hint">购票、场地登记、反馈会自动填上这些（照样可以改），拼图、舞台演奏的玩家名称也用游戏 id。都可以不填。</p>
         <div class="acct-char-row">
           <input type="text" id="acctChar" maxlength="12" placeholder="角色名" value="${escapeHtml(u.charName || "")}" autocomplete="off" spellcheck="false" aria-label="角色名">
           <select id="acctServer" aria-label="服务器">${serverOptions(u.charServer || "")}</select>
@@ -713,7 +716,7 @@
           <input type="password" id="acctPwNew" maxlength="64" placeholder="新密码（至少 ${PW_MIN} 位）" autocomplete="new-password" data-pw aria-label="新密码">
           <input type="password" id="acctPwNew2" maxlength="64" placeholder="再输一次新密码" autocomplete="new-password" data-pw aria-label="确认新密码">
           ${pwToggle}
-          <p class="about-hint">改完之后，其他设备上的登录会全部退出。</p>
+          <p class="about-hint">修改后，其他设备上的登录会全部退出。</p>
           <div class="about-submit-row"><button type="submit" class="share-site-btn">修改密码</button></div>
           <p class="form-msg" id="acctPwMsg" hidden></p>
         </form>`}
