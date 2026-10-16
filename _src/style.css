@@ -8162,5 +8162,5 @@ body.day-mode .hj-at { background-image: url("assets/site/world-day.png"); }
 #internalGate .acct-remember-hint { margin: -10px 0 16px; text-align: center; }
 body.day-mode .acct-remember-hint { color: var(--day-lilac); }
 .thanks-list .thanks-wide { grid-column: 1 / -1; white-space: normal; }
-.thanks-me { color: var(--cream); font-weight: 600; }
+.thanks-me { display: block; margin-top: 4px; color: var(--cream); font-weight: 600; }   /* 自己的 id 单独一行 */
 body.day-mode .thanks-me { color: var(--day-cream); }
