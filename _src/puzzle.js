@@ -1533,7 +1533,7 @@
       ...(rec.mode === "timed" ? [["剩余", fmtClock(rec.limitMs - rec.ms, true)]] : []),
       ["辅助功能", aidsText(rec.aids)],
       ...recordRows(rec),
-      ["玩家", rec.player || playerName() || "未填写"],
+      ...((rec.player || playerName()) ? [["玩家", rec.player || playerName()]] : []),   // 没填玩家名称就不显示这一行
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");
@@ -1549,7 +1549,7 @@
       ["耗时", fmtClock(rec.ms, true)],
       ["辅助功能", aidsText(rec.aids)],
       ...recordRows(rec),
-      ["玩家", rec.player || playerName() || "未填写"],
+      ...((rec.player || playerName()) ? [["玩家", rec.player || playerName()]] : []),   // 没填玩家名称就不显示这一行
       ["通关时间", formatCnSeconds(rec.at)],
     ];
     $("pzResultList").innerHTML = rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${idHtml(v)}</dd>`).join("");

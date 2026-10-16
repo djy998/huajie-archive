@@ -2906,7 +2906,7 @@
     const tag = (k, v) => h("span", { class: "hjs-res-tag" }, h("small", { text: k }), h("b", { text: v }));
     const who = typeof playerName === "function" ? playerName() : "";
     const card = h("div", { class: "hjs-card hjs-res" }, h("h3", { class: "hjs-res-title", text: "演出结束" }), h("p", { class: "hjs-res-song", text: S.song.t }),
-      h("p", { class: "hjs-res-sub hjs-res-who", text: `演奏者：${who || "未填写"}` }),
+      who ? h("p", { class: "hjs-res-sub hjs-res-who", text: `演奏者：${who}` }) : null,   // 没填演奏者就不显示
       h("div", { class: "hjs-res-tags" }, tag("难度", diffMeta().label), tag("判定", judgeLabel()), tag("范围", rangeLabel()),
         S.learn ? tag("模式", "学习") : isAuto() ? tag("模式", "自动演奏") : null));
     if (!scored()) {

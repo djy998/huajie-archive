@@ -3191,12 +3191,25 @@ function initPopupAdmin() {
 
 /* ==== 9. 花语加密 ==== */
 const HUAYU_ADMIN_MAX = 20000;
-const HUAYU_MODE_NAME = { open: "完全开放", decrypt: "仅开放解密", off: "彻底关闭" };
-const HUAYU_MODE_NOTE = {
-  open: "访客可生成和解读花语",
-  decrypt: "访客仅可解读花语",
-  off: "隐藏入口，拒绝访客请求",
-};
+/* 访客端：加密（写）、解密（听）各一个三段开关：开启 / 仅登录账户 / 关闭 */
+const HUAYU_LEVEL_OPTS = [["on", "开启"], ["login", "仅登录账户"], ["off", "关闭"]];
+const HUAYU_LEVEL_NAME = Object.fromEntries(HUAYU_LEVEL_OPTS);
+const HUAYU_SWITCHES = { huayuEncSw: { field: "enc", name: "加密功能" }, huayuDecSw: { field: "dec", name: "解密功能" } };
+function huayuModeNote({ enc, dec }) {
+  if (enc === "off" && dec === "off") return "两项都关闭：首页隐藏「听得花间语」入口，拒绝访客请求。";
+  const who = (lv) => (lv === "on" ? "所有访客" : "登录了账户的访客");
+  return [enc !== "off" ? `${who(enc)}可以写花语` : "访客不能写花语", dec !== "off" ? `${who(dec)}可以听花语` : "访客不能听花语"].join("；")
+    + "。仅登录账户时，没登录的访客会看到登录提示。";
+}
+/* 三段开关：沿用 .ticket-switch 的样子，点哪一段就切到哪一段（当前那段由 setTicketSwitch 那边的捕获监听拦下） */
+function setLevelSwitch(btn, value) {
+  if (btn.querySelectorAll(".sw-opt").length !== HUAYU_LEVEL_OPTS.length) {
+    btn.innerHTML = HUAYU_LEVEL_OPTS.map(([v, t]) => `<span class="sw-opt" data-v="${v}">${t}</span>`).join("");
+  }
+  btn.querySelectorAll(".sw-opt").forEach((s) => s.classList.toggle("is-cur", s.dataset.v === value));
+  btn.disabled = false;
+  btn.setAttribute("aria-label", `${HUAYU_SWITCHES[btn.id].name}：${HUAYU_LEVEL_NAME[value] || value}`);
+}
 const HUAYU_ALGO_NOTE = {
   1: "一代：「听花语：」+ 草木字，篇幅最短",
   2: "二代：散文句式，长度约为一代的四五倍",
@@ -3221,12 +3234,13 @@ function setHuayuSeg(segId, value) {
 const huayuSegValue = (segId) => $(segId).querySelector("input:checked")?.value;
 
 function renderHuayuAdmin(d) {
-  setHuayuSeg("huayuModeSeg", d.mode);
+  setLevelSwitch($("huayuEncSw"), d.enc);
+  setLevelSwitch($("huayuDecSw"), d.dec);
   setHuayuSeg("huayuAlgoSeg", d.algo);
   setHuayuSeg("huayuAdminAlgoSeg", d.algo);
-  $("huayuModeNote").textContent = HUAYU_MODE_NOTE[d.mode] || "";
+  $("huayuModeNote").textContent = huayuModeNote(d);
   $("huayuAlgoNote").textContent = HUAYU_ALGO_NOTE[d.algo] || "";
-  $("huayuAdminStatus").textContent = `当前状态：${HUAYU_MODE_NAME[d.mode] || d.mode} · ${d.algo === 1 ? "一代" : "二代"}算法`
+  $("huayuAdminStatus").textContent = `当前状态：加密${HUAYU_LEVEL_NAME[d.enc] || d.enc} · 解密${HUAYU_LEVEL_NAME[d.dec] || d.dec} · ${d.algo === 1 ? "一代" : "二代"}算法`
     + (d.updatedAt ? ` · 更新于 ${formatCnTime(d.updatedAt)}` : "");
   const input = $("huayuKeyInput");
   if (document.activeElement !== input) input.value = d.key || "";
@@ -3363,13 +3377,14 @@ async function huayuAdminConvert(dir, btn) {
 }
 
 function initHuayuAdmin() {
-  $("huayuModeSeg").addEventListener("change", async (e) => {
-    const mode = e.target.value;
-    syncSegments($("huayuModeSeg"));
-    $("huayuModeNote").textContent = HUAYU_MODE_NOTE[mode] || "";
-    const ok = await saveHuayuAdmin({ mode }, `花语访客端：${HUAYU_MODE_NAME[mode]}`);
+  Object.entries(HUAYU_SWITCHES).forEach(([id, { field, name }]) => $(id).addEventListener("click", async (e) => {
+    const opt = e.target.closest(".sw-opt");
+    if (!opt || opt.classList.contains("is-cur")) return;
+    const btn = e.currentTarget;
+    setLevelSwitch(btn, opt.dataset.v);
+    const ok = await saveHuayuAdmin({ [field]: opt.dataset.v }, `花语${name}：${HUAYU_LEVEL_NAME[opt.dataset.v]}`, btn);
     if (!ok) refreshHuayuAdmin();
-  });
+  }));
   $("huayuAlgoSeg").addEventListener("change", async (e) => {
     const algo = Number(e.target.value);
     syncSegments($("huayuAlgoSeg"));
@@ -4441,10 +4456,13 @@ const ADMIN_PANELS_HTML = `
 
   <section class="ta-group">
     <h3 class="ta-group-title">访客端</h3>
-    <div class="alarm-seg" id="huayuModeSeg">
-      <label><input type="radio" name="huayuMode" value="open"><span>完全开放</span></label>
-      <label><input type="radio" name="huayuMode" value="decrypt"><span>仅开放解密</span></label>
-      <label><input type="radio" name="huayuMode" value="off"><span>彻底关闭</span></label>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">加密功能</span>
+      <button type="button" class="ticket-switch" id="huayuEncSw" disabled>—</button>
+    </div>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">解密功能</span>
+      <button type="button" class="ticket-switch" id="huayuDecSw" disabled>—</button>
     </div>
     <p class="ta-group-hint" id="huayuModeNote"></p>
   </section>

@@ -21,9 +21,9 @@
   const NOT_PORTABLE = new Set([STORE_ACCT, STORE_SYNC, STORE_REPLY_CHECK, STORE_BACKUP, "hj_internal_ticket", "hj_admin_seen",
     "hj_captcha_ok_at", "hj_captcha_manual_at", "hj_maint", "hj_reset_done", "hj_visited_3"]);
   const PORTABLE_KEY = /^hj_[A-Za-z0-9_-]{1,80}$/;
-  /* 「清除设置」保留的数据：提交记录、成绩与进度、玩家名称、闹铃、问卷、看过的公告与教程；其余能带走的都算设置，恢复默认 */
-  const DATA_KEYS = new Set([STORE_RECORDS, "hj_player_name", "hj_puzzle_records", "hj_puzzle_save", "hj_puzzle_entries", "hj_puzzle_player",
-    "hj_stage_best3", "hj_stage_best2", "hj_stage_unlock", "hj_stage_guide", "hj_alarm_items", "hj_alarm_notify",
+  /* 「清除设置」保留的数据：提交记录、成绩与进度、闹铃、问卷、看过的公告与教程；其余能带走的（含玩家名称）都算设置，恢复默认 */
+  const DATA_KEYS = new Set([STORE_RECORDS, "hj_puzzle_records", "hj_puzzle_save", "hj_puzzle_entries",
+    "hj_stage_best3", "hj_stage_best2", "hj_stage_unlock", "hj_stage_guide", "hj_alarm_items", "hj_alarm_sync", "hj_alarm_notify",
     "hj_popup_seen", "hj_popup_never", "hj_ticket_guide_ack"]);
   const DATA_PREFIXES = ["hj_survey_done_", "hj_survey_draft_"];
   const isDataKey = (k) => DATA_KEYS.has(k) || DATA_PREFIXES.some((p) => k.startsWith(p));
@@ -45,6 +45,7 @@
       "hj_stage_inst", "hj_stage_judge", "hj_stage_range", "hj_stage_fly", "hj_stage_stars", "hj_stage_cat", "hj_stage_guide",
       "hj_bard_opts", "hj_bard_inst",
       "hj_games_tab", "hj_games_poem_mode", "hj_games_spy_kind", "hj_games_spy_players", "hj_games_bomb_players",
+      "hj_alarm_sync",   // 闹铃本身（main.js 生成；倒计时、组件位置不在里面）
     ],
     prefixes: ["hj_games_macro_", "hj_survey_done_"],
   };
@@ -314,6 +315,7 @@
     return JSON.stringify({ ...A, best, list: list.slice(0, 30) });
   }
   const MERGE = {
+    hj_alarm_sync: (a, b) => (typeof window.alarmSyncMerge === "function" ? window.alarmSyncMerge(a, b) : a),
     hj_puzzle_records: mergePuzzle,
     hj_stage_best3: mergeBestBy("score"),
     hj_stage_best2: mergeBestBy("acc"),
@@ -341,6 +343,7 @@
     }
     const server = got.items || {};
     const meta = storage.json(STORE_SYNC) || {};
+    const alarmBefore = storage.get("hj_alarm_sync");
     const keys = new Set([...localSyncKeys(), ...Object.keys(server).filter(isSyncKey), ...Object.keys(meta).filter(isSyncKey)]);
     const put = {};
     const now = typeof hjNow === "function" ? hjNow() : Date.now();
@@ -383,6 +386,7 @@
       }
     }
     storage.set(STORE_SYNC, JSON.stringify(meta));
+    if (storage.get("hj_alarm_sync") !== alarmBefore) window.alarmSyncApply?.();   // 别的设备加、删、改过闹铃
     if (ok) { st.syncedAt = Date.now(); st.syncErr = ""; }
     return ok;
   }
@@ -545,7 +549,7 @@
           <dt>导出数据</dt><dd>将填写表单记录，花街拼图与舞台演奏成绩，闹铃，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等下载成json文件以便跨设备导入</dd>
           <dt>导入数据</dt><dd>将其他设备中的填写表单记录，花街拼图与舞台演奏成绩，闹铃，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等导入进本设备，导入后会覆盖当前设置和成绩</dd>
           <dt>清除缓存</dt><dd>仅删除图片、字体等离线缓存以释放空间；记录、设置和登录状态等仍然保存。</dd>
-          <dt>清除设置</dt><dd>仅将舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等恢复默认；表单记录、游戏成绩、闹铃和登录状态等都保留，点击后立即刷新网站。</dd>
+          <dt>清除设置</dt><dd>仅将玩家名称，舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等恢复默认；表单记录、游戏成绩、闹铃和登录状态等都保留，点击后立即刷新网站。</dd>
           <dt>清除数据</dt><dd>删除这台设备上本网站的全部数据：本机记录、拼图成绩、舞台演奏成绩、登录状态和缓存等，个人设置全部恢复默认，点击后立即刷新网站。</dd>
         </dl>
         <div class="group-btn-row">
@@ -714,13 +718,15 @@
     }
   }
 
-  /* 清除设置：能带走的数据里，不是 DATA_KEYS 的都删掉（恢复默认）后刷新。登录着时，同步的设置在账户里也跟着变成默认 */
+  /* 清除设置：能带走的数据里，不是 DATA_KEYS 的都删掉（恢复默认）后刷新。登录着时，同步的设置在账户里也跟着变成默认，
+     玩家名称恢复成登录时的默认值：游戏 id，没填就用用户名 */
   function resetSettings() {
     const keys = Object.keys(portableItems()).filter((k) => !isDataKey(k));
     if (!keys.length) { showToast("现在已经都是默认设置了"); return; }
-    if (!confirm("把各种设置恢复默认？\n\n舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等会恢复默认，表单记录、游戏成绩、闹铃和登录状态都保留，网站会立即刷新。"
+    if (!confirm("把各种设置恢复默认？\n\n玩家名称，舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等会恢复默认，表单记录、游戏成绩、闹铃和登录状态都保留，网站会立即刷新。"
       + (st.token ? "\n登录着账户：账户里同步的这些设置也会跟着恢复默认。" : ""))) return;
     keys.forEach((k) => storage.remove(k));
+    if (st.user) setPlayerName(charIdOf() || st.user.username);
     showToast("设置已恢复默认，正在刷新网站");
     setTimeout(() => location.reload(), 900);
   }
@@ -853,7 +859,7 @@
       </form>
       <div class="acct-sec">
         <p class="about-label">同步</p>
-        <p class="about-hint">花街拼图与舞台演奏的纪录、玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手的设置，会在登录了这个账户的设备之间自动同步。动画档位、音量、判定延迟这些跟设备有关的不同步。</p>
+        <p class="about-hint">花街拼图与舞台演奏的纪录、玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手的设置和闹铃，会在登录了这个账户的设备之间自动同步。动画档位、音量、判定延迟、闹铃与日历的摆放位置等与设备有关的设置不同步。</p>
         <p class="acct-sync-state" id="acctSyncState"></p>
         <div class="group-btn-row"><button type="button" class="share-site-btn" id="acctSyncBtn">立即同步</button></div>
       </div>

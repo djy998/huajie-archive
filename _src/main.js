@@ -1177,12 +1177,12 @@ async function finishCaptcha(proof) {
   const msg = $("captchaMsg");
   setMsg(msg, "验证中…");
   /* 听得花间语：验证与打开记录一并提交 */
-  const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof }, { load: "block" });
+  const data = await callWorker({ action: pending === "huayu" ? "huayu_visit" : "verify_turnstile", ...proof,
+    ...(pending === "huayu" ? window.HJAccount?.auth?.() || {} : {}) }, { load: "block" });
   if (session !== captchaSession) return;
   if (data?.error === "closed") {
     closeCaptcha();
-    applyHuayuMode({ mode: data.mode });
-    showToast(HUAYU_ERRORS.closed);
+    huayuVisitClosed(data);
     return;
   }
   if (data && data.ok) {
@@ -2543,7 +2543,7 @@ const MORE_ITEMS = [
     icon: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2.2 2.2"/><path d="M5.5 4.5l-2 2"/><path d="M18.5 4.5l2 2"/>' },
   { id: "calendar", label: "日历", open: () => openCalWidget(true),
     icon: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M4 10.5h16"/>' },
-  { id: "huayu", label: "听得花间语", open: () => requestHuayu(), shown: () => huayuMode === "open" || huayuMode === "decrypt",
+  { id: "huayu", label: "听得花间语", open: () => requestHuayu(), shown: () => !!huayuMode && (huayuMode.enc !== "off" || huayuMode.dec !== "off"),
     icon: [0, 90, 180, 270].map((a) => `<path transform="rotate(${a} 12 12)" d="${HUAYU_PETAL}"/>`).join("") },
   { id: "puzzle", label: "花街拼图", open: () => openPuzzle(),
     icon: '<path d="M4.5 12.5v-1.8A2.7 2.7 0 0 1 7.2 8h9.6a2.7 2.7 0 0 1 2.7 2.7v1.8"/><rect x="3.5" y="12.5" width="17" height="8" rx="1.6"/>'
@@ -3222,7 +3222,86 @@ function alarmLeaveGuard(now = hjNow()) {
 const alarmStopRing = (it) => alarms.ringing.get(it.id)?.stop();
 
 /* 本机存取 ------------------------------------------------------------------------------ */
-const alarmSave = () => storage.set(STORE.alarms, JSON.stringify(alarms.items));
+/* 跨设备同步：登录账户时 account.js 同步 hj_alarm_sync。只含闹铃本身（时间、日期、名称、铃声、启停），
+   不含倒计时、小组件的位置与大小、是否已响过。每条带 setAt（添加、启停的时刻），删除的记在 del 里，60 天后清掉；
+   本地时间相同（含日期）的重复闹铃只保留 setAt 较晚的一条 */
+const ALARM_SYNC_KEY = "hj_alarm_sync";
+const ALARM_SYNC_FIELDS = ["id", "zone", "hh", "mm", "date", "repeat", "name", "sound", "playSec", "enabled", "setAt"];
+const ALARM_DEL_KEEP_MS = 60 * 86400000;
+function alarmSyncParse(v) {
+  let o = null;
+  try { o = JSON.parse(v || "null"); } catch (e) { /* 坏数据当空的 */ }
+  return {
+    items: Array.isArray(o?.items) ? o.items.filter((x) => x && typeof x.id === "string") : [],
+    del: o?.del && typeof o.del === "object" && !Array.isArray(o.del) ? o.del : {},
+  };
+}
+const alarmSig = (x) => (x.zone === "cn" ? `${x.hh}:${x.mm}|${x.date || ""}` : "");
+function alarmSyncPack(items, del) {
+  const since = hjNow() - ALARM_DEL_KEEP_MS;
+  const keep = Object.fromEntries(Object.entries(del).filter(([, at]) => Number(at) > since).sort(([a], [b]) => (a < b ? -1 : 1)));
+  const list = items.map((x) => Object.fromEntries(ALARM_SYNC_FIELDS.map((f) => [f, x[f] ?? (f === "setAt" ? 0 : null)])))
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+  return JSON.stringify({ items: list, del: keep });
+}
+/* 两份 hj_alarm_sync 合并（account.js 的 MERGE 调用）：同一条取 setAt 晚的；删除记录取晚的，比它早的条目去掉；再按时间去重 */
+function alarmSyncMerge(a, b) {
+  const A = alarmSyncParse(a), B = alarmSyncParse(b);
+  const del = { ...A.del };
+  for (const [id, at] of Object.entries(B.del)) del[id] = Math.max(Number(del[id]) || 0, Number(at) || 0);
+  const byId = new Map();
+  for (const x of [...A.items, ...B.items]) {
+    const old = byId.get(x.id);
+    if (!old || (Number(x.setAt) || 0) > (Number(old.setAt) || 0)) byId.set(x.id, x);
+  }
+  const live = [...byId.values()].filter((x) => !(x.id in del) || Number(del[x.id]) < (Number(x.setAt) || 0));
+  const bySig = new Map();
+  const later = (x, y) => (Number(x.setAt) || 0) - (Number(y.setAt) || 0) || (x.id > y.id ? 1 : -1);
+  const out = [];
+  for (const x of live) {
+    const sig = alarmSig(x);
+    const other = sig && bySig.get(sig);
+    if (!other) { if (sig) bySig.set(sig, x); out.push(x); continue; }
+    const [win, lose] = later(x, other) > 0 ? [x, other] : [other, x];
+    del[lose.id] = Math.max(Number(del[lose.id]) || 0, Number(lose.setAt) || 0, hjNow());
+    bySig.set(sig, win);
+    out.splice(out.indexOf(other), 1, win);
+  }
+  return alarmSyncPack(out, del);
+}
+/* 同步回来的 hj_alarm_sync 落到本机的闹铃上：删掉的删、新的加、setAt 更晚的覆盖时间与设置（位置、大小不动） */
+function alarmSyncApply() {
+  const { items: list, del } = alarmSyncParse(storage.get(ALARM_SYNC_KEY));
+  const now = hjNow();
+  let changed = false;
+  alarms.items = alarms.items.filter((it) => {
+    if (it.kind !== "alarm" || !(it.id in del) || Number(del[it.id]) < (it.setAt || 0)) return true;
+    alarmStopRing(it);
+    changed = true;
+    return false;
+  });
+  for (const x of list) {
+    const raw = alarmNormalize({ ...x, kind: "alarm" });
+    if (!raw) continue;
+    let it = alarmById(raw.id);
+    if (it && raw.setAt <= (it.setAt || 0)) continue;
+    if (!it) { it = raw; alarms.items.push(it); }
+    else ALARM_SYNC_FIELDS.forEach((f) => { it[f] = raw[f]; });
+    it.done = false;
+    it.nextFireAt = it.enabled ? alarmNextFire(it, now) : 0;
+    if (it.enabled && !it.repeat && it.nextFireAt <= now) alarmFinish(it);
+    changed = true;
+  }
+  if (changed) alarmCommit();
+}
+window.alarmSyncApply = alarmSyncApply;
+window.alarmSyncMerge = alarmSyncMerge;
+
+function alarmSave() {
+  storage.set(STORE.alarms, JSON.stringify(alarms.items));
+  const next = alarmSyncPack(alarms.items.filter((it) => it.kind === "alarm"), alarmSyncParse(storage.get(ALARM_SYNC_KEY)).del);
+  if (next !== storage.get(ALARM_SYNC_KEY)) storage.set(ALARM_SYNC_KEY, next);
+}
 const positive = (v) => (Number(v) > 0 ? Number(v) : 0);
 const coord = (v) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -3253,6 +3332,7 @@ function alarmNormalize(raw) {
     remainMs: positive(raw.remainMs),
     endAt: positive(raw.endAt),
     nextFireAt: positive(raw.nextFireAt),
+    setAt: positive(raw.setAt),   // 添加、启停的时刻：跨设备同步时谁晚听谁的
   };
   return it.kind === "countdown" && it.durMs < 1000 ? null : it;
 }
@@ -3309,6 +3389,7 @@ function alarmCommit() {
 function alarmSetEnabled(it, on) {
   const now = hjNow();
   it.enabled = on;
+  it.setAt = now;
   if (it.kind === "alarm") {
     if (on && alarmDatePassed(it, now)) { showToast("这个闹铃的日期已经过了，请删除后重新设置"); it.enabled = false; alarmCommit(); return; }
     it.done = false;
@@ -3344,6 +3425,7 @@ function alarmTogglePause(it) {
 function alarmRestart(it) {
   if (it.kind === "alarm" && alarmDatePassed(it)) { showToast("这个闹铃的日期已经过了，请删除后重新设置"); return; }
   it.enabled = true;
+  it.setAt = hjNow();
   it.done = it.paused = false;
   if (it.kind === "alarm") {
     it.nextFireAt = alarmNextFire(it, hjNow());
@@ -3356,6 +3438,11 @@ function alarmRestart(it) {
 
 function alarmRemove(it) {
   alarmStopRing(it);
+  if (it.kind === "alarm") {   // 记下删除，别的设备同步后也删掉
+    const s = alarmSyncParse(storage.get(ALARM_SYNC_KEY));
+    s.del[it.id] = Math.max(hjNow(), (it.setAt || 0) + 1);
+    storage.set(ALARM_SYNC_KEY, alarmSyncPack(s.items, s.del));
+  }
   alarms.items = alarms.items.filter((x) => x !== it);
   alarmCommit();
   showToast(`已删除「${it.name}」`);
@@ -3600,7 +3687,7 @@ function alarmPreview() {
 }
 
 function addAlarmItem(raw, nameStem, toast) {
-  const it = alarmNormalize(raw);
+  const it = alarmNormalize({ ...raw, setAt: hjNow() });
   it.name ||= `${nameStem}${alarms.items.filter((x) => x.kind === it.kind).length + 1}`;
   alarms.items.push(it);
   alarmCommit();
@@ -3746,6 +3833,7 @@ function initAlarm() {
   const saved = storage.json(STORE.alarms);
   alarms.items = (Array.isArray(saved) ? saved : []).map(alarmNormalize).filter(Boolean);
   alarms.items.forEach((it) => alarmRevive(it, now));
+  alarmSyncApply();   // 恢复、导入后两份可能不一致：以 hj_alarm_sync 为准补齐
   alarmSave();
   alarmRenderWidgets();
   alarmTick();
@@ -3759,7 +3847,7 @@ function initAlarm() {
 
 
 /* ==== 13. 花语 ==== */
-/* 访客开关：open 可写可读 / decrypt 仅解读 / off 隐藏 */
+/* 访客开关：写（enc）、听（dec）各一档：on 开启 / login 仅登录账户 / off 关闭；两项都关闭时隐藏入口 */
 const HUAYU_VISITOR_MAX = 5000;
 const HUAYU_DETECT_NOW = 4000;    // 超过此长度时延迟识别
 let huayuMode = null;
@@ -3779,6 +3867,8 @@ const HUAYU_ERRORS = {
   need_key: "这段花语设了密钥，填上密钥再听",
   closed: "花语暂未开放",
   closed_seal: "现在只能听花语，暂时不能写",
+  closed_open: "现在只能写花语，暂时不能听",
+  need_login: "这项功能仅对登录账户开放，请先在「网站说明 → 登录与注册」登录",
   too_long: `太长啦，一次最多写 ${HUAYU_VISITOR_MAX} 字`,
   rate_limited: "操作太频繁了，歇一会儿再试",
   net: "连接失败，检查一下网络后再试",
@@ -3787,24 +3877,45 @@ const HUAYU_ERRORS = {
 const loadHuayuJs = (opts) => loadLateScript("huayu.js", () => !!window.HJHuayu, opts);
 const huayuErrorText = (res) => HUAYU_ERRORS[res && res.error] || "出了点问题，稍后再试";
 
-function applyHuayuMode({ mode, algo } = {}) {
+const HUAYU_LEVELS = ["on", "login", "off"];
+const HUAYU_LEGACY = { open: ["on", "on"], decrypt: ["off", "on"], off: ["off", "off"] };
+/* 登录状态变了，「仅登录账户」的那一项跟着能用 / 不能用 */
+let huayuWatchAccount = false;
+function applyHuayuMode({ mode, enc, dec, algo } = {}) {
   if ([1, 2].includes(Number(algo))) huayuAlgo = Number(algo);
-  const next = ["open", "decrypt", "off"].includes(mode) ? mode : null;
-  if (next === huayuMode) return;
+  if (!HUAYU_LEVELS.includes(enc) || !HUAYU_LEVELS.includes(dec)) [enc, dec] = HUAYU_LEGACY[mode] || [];   // 旧版 Worker 只回 mode
+  const next = enc && dec ? { enc, dec } : null;
+  if (!huayuWatchAccount && window.HJAccount?.onChange) {
+    huayuWatchAccount = true;
+    HJAccount.onChange(() => { if (!$("huayuOverlay").hidden) syncHuayuUi(); });
+  }
+  if (next && huayuMode && next.enc === huayuMode.enc && next.dec === huayuMode.dec) return;
+  if (!next && !huayuMode) return;
   huayuMode = next;
   renderMorePanel();
   if (!$("huayuOverlay").hidden) syncHuayuUi();
 }
+const huayuLoggedIn = () => !!window.HJAccount?.token?.();
+const huayuCan = (field) => !!huayuMode && (huayuMode[field] === "on" || (huayuMode[field] === "login" && huayuLoggedIn()));
+const huayuNeedsLogin = (field) => !!huayuMode && huayuMode[field] === "login" && !huayuLoggedIn();
+/* 「仅登录账户」的请求带上登录令牌，Worker 才认 */
+const huayuPost = (payload) => callWorker({ ...payload, ...(window.HJAccount?.auth?.() || {}) });
 
 function syncHuayuUi() {
-  const canWrite = huayuMode === "open";
+  const canWrite = huayuCan("enc");
+  const canRead = huayuCan("dec");
   const ready = !!window.HJHuayu;
+  const loginTip = [huayuNeedsLogin("enc") ? "写" : "", huayuNeedsLogin("dec") ? "听" : ""].filter(Boolean).join("和");
   $("huayuHint").textContent = !ready ? "花语字典加载中…"
-    : canWrite ? "写下想说的话化作花语，或把收到的花语贴进来听听"
-    : "把收到的花语贴进来，听听花在说什么";
-  $("huayuInputLabel").textContent = canWrite ? "想说的话 / 花语" : "花语";
-  $("huayuInput").placeholder = canWrite ? "写点什么，或者粘贴收到的花语" : "粘贴收到的花语";
+    : (canWrite && canRead ? "写下想说的话化作花语，或把收到的花语贴进来听听"
+      : canWrite ? "写下想说的话化作花语"
+      : canRead ? "把收到的花语贴进来，听听花在说什么"
+      : "花语功能需登录账户后使用")
+      + (loginTip && (canWrite || canRead) ? `。登录账户后可${loginTip}花语` : "");
+  $("huayuInputLabel").textContent = canWrite && canRead ? "想说的话 / 花语" : canWrite ? "想说的话" : "花语";
+  $("huayuInput").placeholder = canWrite && canRead ? "写点什么，或者粘贴收到的花语" : canWrite ? "写点什么" : "粘贴收到的花语";
   $("huayuSealBtn").hidden = !canWrite;
+  $("huayuOpenBtn").hidden = !canRead;
   $("huayuOpenBtn").disabled = $("huayuSealBtn").disabled = !ready || huayuBusy;
   syncHuayuInput();
 }
@@ -3860,43 +3971,59 @@ async function huayuSeal(H, text) {
   const already = H.detect(text);
   if (already.ok && (already.algo === 2 || text.includes(H.MARK))) return say("这已经是花语啦，点「听花解语」听听它在说什么");
   if (H.countChars(text) > HUAYU_VISITOR_MAX) return say(HUAYU_ERRORS.too_long);
-  let res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
+  let res = await H.encrypt(text, { algo: huayuAlgo, post: huayuPost });
   if (!res.ok && res.error === "algo_changed" && res.algo) {
     huayuAlgo = res.algo;
-    res = await H.encrypt(text, { algo: huayuAlgo, post: callWorker });
+    res = await H.encrypt(text, { algo: huayuAlgo, post: huayuPost });
   }
   if (res.ok) return showHuayuResult("花语", res.text, `原文 ${res.plainChars} 字 → 花语 ${res.cipherChars} 字`, "复制花语");
   if (res.error !== "closed") return say(huayuErrorText(res));
-  applyHuayuMode({ mode: res.mode });
-  say(res.mode === "decrypt" ? HUAYU_ERRORS.closed_seal : HUAYU_ERRORS.closed);
+  say(huayuClosedText(res, "enc"));
+}
+
+/* Worker 回 closed：更新开关，说明是要登录还是关掉了 */
+function huayuClosedText(res, field) {
+  applyHuayuMode(res);
+  if (res.need === "login") return HUAYU_ERRORS.need_login;
+  if (field === "enc" && huayuCan("dec")) return HUAYU_ERRORS.closed_seal;
+  if (field === "dec" && huayuCan("enc")) return HUAYU_ERRORS.closed_open;
+  return HUAYU_ERRORS.closed;
 }
 
 async function huayuOpen(H, text) {
   const say = (t) => setMsg($("huayuMsg"), t);
   if (!text.trim()) return say("先把花语粘贴进来吧");
-  const res = await H.decrypt(text, { post: callWorker, key: $("huayuKey").value.trim() });
+  const res = await H.decrypt(text, { post: huayuPost, key: $("huayuKey").value.trim() });
   if (res.ok) return showHuayuResult("花在说", res.text, res.kind === 1 ? "密钥花语" : "", "复制原文");
   if (res.error === "need_key") {
     $("huayuKeyRow").hidden = false;
     $("huayuKey").focus();
   }
-  if (res.error === "closed") applyHuayuMode({ mode: res.mode });
+  if (res.error === "closed") return say(huayuClosedText(res, "dec"));
   say(res.error === "bad_key" && res.kind === 1 ? HUAYU_ERRORS.bad_custom_key : huayuErrorText(res));
 }
 
 /* 每次打开页面后首次打开前需人机验证，Worker 同时记录一次打开 */
 let huayuVisited = false;
+/* 两项都只对登录账户开放、又没登录：提示后打开「登录与注册」 */
+function huayuAskLogin() {
+  showToast(HUAYU_ERRORS.need_login);
+  if (typeof openSiteAbout === "function") openSiteAbout("account");
+}
+function huayuVisitClosed(data) {
+  applyHuayuMode(data);
+  if (data.need === "login") huayuAskLogin();
+  else showToast(HUAYU_ERRORS.closed);
+}
+
 async function requestHuayu() {
   if (huayuVisited) return openHuayuModal();
   await siteStateReady();
+  if (!huayuCan("enc") && !huayuCan("dec") && (huayuNeedsLogin("enc") || huayuNeedsLogin("dec"))) return huayuAskLogin();
   if (captchaOn) return openCaptcha("huayu");
-  const data = await callWorker({ action: "huayu_visit" });
+  const data = await huayuPost({ action: "huayu_visit" });
   if (data?.error === "captcha") return openCaptcha("huayu");
-  if (data?.error === "closed") {
-    applyHuayuMode({ mode: data.mode });
-    showToast(HUAYU_ERRORS.closed);
-    return;
-  }
+  if (data?.error === "closed") return huayuVisitClosed(data);
   huayuVisited = !!data?.ok;
   openHuayuModal();
 }
