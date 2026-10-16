@@ -21,6 +21,12 @@
   const NOT_PORTABLE = new Set([STORE_ACCT, STORE_SYNC, STORE_REPLY_CHECK, STORE_BACKUP, "hj_internal_ticket", "hj_admin_seen",
     "hj_captcha_ok_at", "hj_captcha_manual_at", "hj_maint", "hj_reset_done", "hj_visited_3"]);
   const PORTABLE_KEY = /^hj_[A-Za-z0-9_-]{1,80}$/;
+  /* 「清除设置」保留的数据：提交记录、成绩与进度、玩家名称、闹铃、问卷、看过的公告与教程；其余能带走的都算设置，恢复默认 */
+  const DATA_KEYS = new Set([STORE_RECORDS, "hj_player_name", "hj_puzzle_records", "hj_puzzle_save", "hj_puzzle_entries", "hj_puzzle_player",
+    "hj_stage_best3", "hj_stage_best2", "hj_stage_unlock", "hj_stage_guide", "hj_alarm_items", "hj_alarm_notify",
+    "hj_popup_seen", "hj_popup_never", "hj_ticket_guide_ack"]);
+  const DATA_PREFIXES = ["hj_survey_done_", "hj_survey_draft_"];
+  const isDataKey = (k) => DATA_KEYS.has(k) || DATA_PREFIXES.some((p) => k.startsWith(p));
   const EXPORT_KIND = "huajie-local-data";
   const IMPORT_MAX = 4 * 1024 * 1024;
   const RECORDS_KEEP = 200;
@@ -536,9 +542,10 @@
       <div class="about-text mydata-tools">
         <p class="about-sub">本机数据</p>
         <dl class="about-list">
-          <dt>导出数据</dt><dd>将填写表单记录，花街拼图与舞台演奏成绩，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等下载成json文件以便跨设备导入</dd>
-          <dt>导入数据</dt><dd>将其他设备中的填写表单记录，花街拼图与舞台演奏成绩，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等导入进本设备，导入后会覆盖当前设置和成绩</dd>
+          <dt>导出数据</dt><dd>将填写表单记录，花街拼图与舞台演奏成绩，闹铃，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等下载成json文件以便跨设备导入</dd>
+          <dt>导入数据</dt><dd>将其他设备中的填写表单记录，花街拼图与舞台演奏成绩，闹铃，玩家名称、吟游诗人与舞台演奏的常用设置、小游戏助手设置等导入进本设备，导入后会覆盖当前设置和成绩</dd>
           <dt>清除缓存</dt><dd>仅删除图片、字体等离线缓存以释放空间；记录、设置和登录状态等仍然保存。</dd>
+          <dt>清除设置</dt><dd>仅将舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等恢复默认；表单记录、游戏成绩、闹铃和登录状态等都保留，点击后立即刷新网站。</dd>
           <dt>清除数据</dt><dd>删除这台设备上本网站的全部数据：本机记录、拼图成绩、舞台演奏成绩、登录状态和缓存等，个人设置全部恢复默认，点击后立即刷新网站。</dd>
         </dl>
         <div class="group-btn-row">
@@ -548,6 +555,7 @@
         </div>
         <div class="group-btn-row">
           <button type="button" class="share-site-btn" id="myCacheBtn">清除缓存</button>
+          <button type="button" class="share-site-btn" id="myResetBtn">清除设置</button>
           <button type="button" class="share-site-btn is-danger" id="myWipeBtn">清除数据</button>
         </div>
         <p class="about-sub">恢复数据</p>
@@ -567,6 +575,7 @@
       if (file) importLocal(file);
     });
     $("myCacheBtn").addEventListener("click", clearMediaCache);
+    $("myResetBtn").addEventListener("click", resetSettings);
     $("myWipeBtn").addEventListener("click", wipeAllData);
     $("myBackupList").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-backup]");
@@ -629,7 +638,7 @@
     const old = storage.json(STORE_BACKUP);
     if (old && old.checked === today) return;
     const items = portableItems();
-    const worth = Object.keys(items).some((k) => k === STORE_RECORDS || isSyncKey(k));
+    const worth = Object.keys(items).some((k) => k === STORE_RECORDS || k === "hj_alarm_items" || isSyncKey(k));
     const next = worth ? { checked: today, day: today, at: Date.now(), items } : { ...(old && old.items ? old : {}), checked: today };
     try { localStorage.setItem(STORE_BACKUP, JSON.stringify(next)); } catch (e) { /* 存不下就算了，不影响网站 */ }
   }
@@ -703,6 +712,17 @@
     } catch (e) {
       showToast("清除失败，请稍后再试");
     }
+  }
+
+  /* 清除设置：能带走的数据里，不是 DATA_KEYS 的都删掉（恢复默认）后刷新。登录着时，同步的设置在账户里也跟着变成默认 */
+  function resetSettings() {
+    const keys = Object.keys(portableItems()).filter((k) => !isDataKey(k));
+    if (!keys.length) { showToast("现在已经都是默认设置了"); return; }
+    if (!confirm("把各种设置恢复默认？\n\n舞台演奏、吟游诗人、花街拼图、小游戏助手的设置和动画档位、音量等会恢复默认，表单记录、游戏成绩、闹铃和登录状态都保留，网站会立即刷新。"
+      + (st.token ? "\n登录着账户：账户里同步的这些设置也会跟着恢复默认。" : ""))) return;
+    keys.forEach((k) => storage.remove(k));
+    showToast("设置已恢复默认，正在刷新网站");
+    setTimeout(() => location.reload(), 900);
   }
 
   /* 清除数据：先把还没同步的推上去，再退出登录、清空本机的一切（每日备份留着，误删了还能恢复），刷新 */

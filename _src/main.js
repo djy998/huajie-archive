@@ -2706,8 +2706,18 @@ function buildCalDays() {
   return days;
 }
 
+/* 指定日期的闹铃（本地时间）：日期 → 闹铃，按响铃时刻排 */
+function calAlarmDays() {
+  const days = {};
+  alarms.items.filter((it) => it.kind === "alarm" && it.date).sort((a, b) => alarmDateAt(a) - alarmDateAt(b))
+    .forEach((it) => (days[it.date] ||= []).push(it));
+  return days;
+}
+const calAlarmOff = (it) => !it.enabled || it.done;
+
 function renderCal() {
   cal.days ??= buildCalDays();
+  const almDays = calAlarmDays();
   const { y, m } = cal;
   $("calTitle").textContent = `${y}年${m}月`;
   $("calPrev").disabled = monthIndex(y, m) <= CAL_FIRST_MONTH;
@@ -2725,8 +2735,10 @@ function renderCal() {
     if (key === today) cls.push("is-today");
     if (key === cal.pick) cls.push("is-pick");
     const bars = (cal.days[key] || []).slice(0, 3).map((it) => `<i class="cal-bar tone-${calTone(it)}"></i>`).join("");
+    const alm = almDays[key];
+    const dot = alm ? `<i class="cal-alarm${alm.every(calAlarmOff) ? " is-off" : ""}" title="闹铃"></i>` : "";
     cells += `<button type="button" tabindex="-1" class="${cls.join(" ")}" data-date="${key}">`
-      + `<span class="cal-num">${d.getDate()}</span>${bars ? `<span class="cal-bars">${bars}</span>` : ""}</button>`;
+      + `<span class="cal-num">${d.getDate()}</span>${bars ? `<span class="cal-bars">${bars}</span>` : ""}${dot}</button>`;
   }
   $("calGrid").innerHTML = cells;
 
@@ -2736,12 +2748,15 @@ function renderCal() {
   const md = (key) => `${+key.slice(5, 7)}/${+key.slice(8, 10)}`;
   const list = HJ_CAL_ITEMS.filter((it) => calStart(it) <= last && calEnd(it) >= first)
     .sort((a, b) => calStart(a).localeCompare(calStart(b)));
-  $("calEvents").innerHTML = list.length ? list.map((it) => {
+  const almChips = Object.keys(almDays).filter((k) => k >= first && k <= last).sort().flatMap((k) => almDays[k]).map((it) =>
+    `<button type="button" class="cal-chip tone-wisteria is-alarm${calAlarmOff(it) ? " is-off" : ""}" data-date="${it.date}">`
+    + `<span class="cal-chip-tag">闹铃</span><span>${escapeHtml(it.name)}</span><span class="cal-chip-day">${md(it.date)} ${pad2(it.hh)}:${pad2(it.mm)}</span></button>`).join("");
+  $("calEvents").innerHTML = list.length || almChips ? list.map((it) => {
     const s = calStart(it);
     const e = calEnd(it);
     return `<button type="button" class="cal-chip tone-${calTone(it)}" data-date="${s >= first ? s : first}">`
       + `<span>${escapeHtml(it.label)}</span><span class="cal-chip-day">${s === e ? md(s) : `${md(s)}–${md(e)}`}</span></button>`;
-  }).join("") : '<p class="cal-empty">本月暂无活动标注</p>';
+  }).join("") + almChips : '<p class="cal-empty">本月暂无活动标注</p>';
 }
 
 function setCalZoom(zoom) {
@@ -3084,6 +3099,11 @@ function humanDuration(h, m, s) {
   return m > 0 ? `${m}分${s > 0 ? `${s}秒` : ""}` : `${s}秒`;
 }
 
+/* 指定日期的本地时间闹铃（date = "YYYY-MM-DD"，本地时间按北京时间算，和时间条一致）：响铃时刻；日历里也标出来 */
+const alarmDateAt = (it) => Date.parse(`${it.date}T${pad2(it.hh)}:${pad2(it.mm)}:00+08:00`);
+const alarmDatePassed = (it, now = hjNow()) => !!it.date && alarmDateAt(it) <= now;
+const alarmDateLabel = (date) => `${+date.slice(5, 7)}月${+date.slice(8, 10)}日`;
+
 function alarmNextFire(it, now) {
   if (it.zone === "et") {
     /* 正处于目标分钟内则立即响 */
@@ -3093,6 +3113,7 @@ function alarmNextFire(it, now) {
     if (Math.floor(tod / 60) === Math.floor(target / 60)) return now;
     return now + (((target - tod + 86400) % 86400) / EORZEA_RATE) * 1000;
   }
+  if (it.date) return alarmDateAt(it);   // 指定了日期：就那一刻（过了也照样返回，由调用处判断）
   const d = new Date(now + CN_TZ_OFFSET_MS);
   if (it.repeat) d.setUTCMinutes(it.mm, 0, 0);
   else d.setUTCHours(it.hh, it.mm, 0, 0);
@@ -3223,7 +3244,8 @@ function alarmNormalize(raw) {
     y: coord(raw.y),
     hh: clamp(Math.floor(Number(raw.hh) || 0), 0, 23),
     mm: clamp(Math.floor(Number(raw.mm) || 0), 0, 59),
-    repeat: !!raw.repeat,        // 本地时间每小时 / 艾欧泽亚每日
+    date: raw.zone !== "et" && /^\d{4}-\d{2}-\d{2}$/.test(raw.date || "") ? raw.date : "",   // 本地时间闹铃可指定日期（只响那一次）
+    repeat: !!raw.repeat && !raw.date,   // 本地时间每小时 / 艾欧泽亚每日
     durMs: positive(raw.durMs),
     durLabel: String(raw.durLabel || ""),
     loop: !!raw.loop,
@@ -3266,7 +3288,10 @@ function alarmTick() {
     else alarmFinish(it);
     dirty = true;
   });
-  if (dirty) alarmSave();
+  if (dirty) {
+    alarmSave();
+    if (!$("calWidget").hidden) renderCal();
+  }
   alarms.items.forEach(alarmPaintWidget);
   alarmPaintListLive();
   alarmPaintNowHints();
@@ -3278,12 +3303,14 @@ function alarmCommit() {
   alarmSave();
   alarmRenderWidgets();
   alarmRenderLists();
+  if (!$("calWidget").hidden) renderCal();   // 指定日期的闹铃标在日历上
 }
 
 function alarmSetEnabled(it, on) {
   const now = hjNow();
   it.enabled = on;
   if (it.kind === "alarm") {
+    if (on && alarmDatePassed(it, now)) { showToast("这个闹铃的日期已经过了，请删除后重新设置"); it.enabled = false; alarmCommit(); return; }
     it.done = false;
     it.nextFireAt = on ? alarmNextFire(it, now) : 0;
   } else if (on) {
@@ -3315,6 +3342,7 @@ function alarmTogglePause(it) {
 
 /* 倒计时重新开始；一次性闹铃重新启用 */
 function alarmRestart(it) {
+  if (it.kind === "alarm" && alarmDatePassed(it)) { showToast("这个闹铃的日期已经过了，请删除后重新设置"); return; }
   it.enabled = true;
   it.done = it.paused = false;
   if (it.kind === "alarm") {
@@ -3371,7 +3399,9 @@ function onAlarmAction(e, rowSelector) {
 function alarmButtons(it, inList) {
   const b = [];
   if (isRinging(it)) b.push(["stop", "停止响铃", "is-hot"]);
-  if (it.kind === "alarm") b.push(it.done ? ["restart", "重新启用"] : ["toggle", it.enabled ? "停用" : "启用"]);
+  if (it.kind === "alarm") {
+    if (!alarmDatePassed(it)) b.push(it.done ? ["restart", "重新启用"] : ["toggle", it.enabled ? "停用" : "启用"]);   // 指定日期已过的只能删除
+  }
   else if (it.done) b.push(["restart", "重新开始"]);
   else {
     if (inList || !it.enabled) b.push(["toggle", it.enabled ? "停用" : "启用"]);
@@ -3387,6 +3417,7 @@ function alarmButtons(it, inList) {
 
 function alarmSubText(it) {
   if (it.kind === "alarm") {
+    if (it.date) return `${alarmZoneName(it)}时间 · ${alarmDateLabel(it.date)} · 仅一次`;
     return `${alarmZoneName(it)}时间 · ${it.repeat ? (it.zone === "cn" ? "每小时重复" : "每日重复") : "仅一次"}`;
   }
   return `${alarmZoneName(it)}倒计时 · ${it.durLabel}${it.loop ? " · 自动循环" : ""}`;
@@ -3504,14 +3535,29 @@ function alarmNum(id) {
 const cnCountdownParts = () => [alarmNum("cdCnH"), alarmNum("cdCnM"), alarmNum("cdCnS")];
 const etCountdownParts = () => [alarmNum("cdEtH"), alarmNum("cdEtM")];
 
+/* 指定日期只给本地时间：只能选今天到一年以内（日历最远也只到一年后） */
+function alarmDateBounds() {
+  $("almDate").min = cnDate(0);
+  $("almDate").max = cnDate(365);
+  if (!$("almDate").value || $("almDate").value < $("almDate").min) $("almDate").value = $("almDate").min;
+}
+
 function syncAlarmForm() {
   const zone = alarmFormZone("almZone");
+  const dated = zone === "cn" && $("almDateOn").checked;
+  $("almDateRow").hidden = zone !== "cn";
+  $("almDate").hidden = !dated;
+  $("almRepeat").disabled = dated;   // 指定日期就只响那一次
+  if (dated) $("almRepeat").checked = false;
+  $("almRepeat").closest(".alarm-check").classList.toggle("is-disabled", dated);
   const rep = $("almRepeat").checked;
   const tv = $("almTime").value || "--:--";
   $("almRepeatText").textContent = zone === "cn" ? "每小时重复" : "每日重复";
-  $("almRepeatHint").textContent = zone === "cn"
-    ? (rep ? `每小时第 ${tv.slice(3)} 分响铃` : `下一个本地时间 ${tv} 响铃`)
-    : (rep ? `每个艾欧泽亚日 ${tv} 响铃` : `下一个艾欧泽亚 ${tv} 响铃`);
+  $("almRepeatHint").textContent = dated
+    ? ($("almDate").value ? `本地时间 ${alarmDateLabel($("almDate").value)} ${tv} 响铃，日历里会标出来` : "请选择日期")
+    : zone === "cn"
+      ? (rep ? `每小时第 ${tv.slice(3)} 分响铃` : `下一个本地时间 ${tv} 响铃`)
+      : (rep ? `每个艾欧泽亚日 ${tv} 响铃` : `下一个艾欧泽亚 ${tv} 响铃`);
 }
 
 function syncCountdownForm() {
@@ -3570,11 +3616,17 @@ function submitAlarm() {
   if (!m) { alarmMsg("请先选择响铃时间"); return; }
   const hh = Number(m[1]);
   const mm = Number(m[2]);
-  const dup = zone === "cn" && alarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === hh && x.mm === mm);
-  if (dup) { alarmMsg(`本地时间 ${pad2(hh)}:${pad2(mm)} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`); return; }
+  const date = zone === "cn" && $("almDateOn").checked ? $("almDate").value : "";
+  if (zone === "cn" && $("almDateOn").checked) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alarmMsg("请选择响铃日期"); return; }
+    if (date > cnDate(365)) { alarmMsg("最远只能设到一年以后"); return; }
+    if (alarmDatePassed({ date, hh, mm })) { alarmMsg("只能设置未来的时间，请换一个日期或时间"); return; }
+  }
+  const dup = zone === "cn" && alarms.items.find((x) => x.kind === "alarm" && x.zone === "cn" && x.hh === hh && x.mm === mm && (x.date || "") === date);
+  if (dup) { alarmMsg(`本地时间${date ? ` ${alarmDateLabel(date)}` : ""} ${pad2(hh)}:${pad2(mm)} 已经设过闹铃「${dup.name}」，同一时间不能设置两个`); return; }
   const raw = {
-    kind: "alarm", zone, hh, mm,
-    repeat: $("almRepeat").checked,
+    kind: "alarm", zone, hh, mm, date,
+    repeat: !date && $("almRepeat").checked,
     name: $("almName").value.trim(),
     sound: $("almSound").value,
     playSec: $("almPlaySec").value,
@@ -3648,6 +3700,8 @@ function alarmPaintListLive() {
 function openAlarmModal(open) {
   $("alarmOverlay").hidden = !open;
   if (open) {
+    alarmDateBounds();
+    syncAlarmForm();
     alarmRenderLists();
     alarmPaintNowHints();
     playFadeOnly($("alarmOverlay").querySelector(".alarm-card"));
@@ -3676,6 +3730,8 @@ function initAlarm() {
   $("cdZoneSeg").addEventListener("change", (e) => { syncSegments(e.currentTarget); syncCountdownForm(); });
   $("almRepeat").addEventListener("change", syncAlarmForm);
   $("almTime").addEventListener("input", syncAlarmForm);
+  $("almDateOn").addEventListener("change", () => { alarmDateBounds(); syncAlarmForm(); });
+  $("almDate").addEventListener("input", syncAlarmForm);
   ["cdCnH", "cdCnM", "cdCnS", "cdEtH", "cdEtM"].forEach((id) => $(id).addEventListener("input", syncCountdownForm));
   $("almPreview").addEventListener("click", alarmPreview);
   $("cdPreview").addEventListener("click", alarmPreview);

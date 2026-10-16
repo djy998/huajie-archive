@@ -852,6 +852,11 @@ body.day-mode .more-item:hover {
 }
 .cal-chip:hover { filter: brightness(1.1); }
 .cal-chip-day { font-size: .68rem; opacity: .8; }
+/* 指定日期的闹铃：日格右上角一个小圆点，本月列表里是带「闹铃」小签的紫色签；响过 / 停用的淡一些 */
+.cal-alarm { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: #a58bc4; box-shadow: 0 0 0 1.5px rgba(255,255,255,.75), 0 1px 3px rgba(10,7,22,.4); }
+.cal-alarm.is-off { opacity: .45; }
+.cal-chip.is-alarm.is-off { opacity: .6; }
+.cal-chip-tag { padding: 0 6px; border-radius: 999px; font-size: .64rem; background: rgba(255,255,255,.26); }
 
 body.day-mode .cal-widget {
   color: #5b4326;
@@ -3479,6 +3484,10 @@ body.day-mode .ticket-card select option { color: var(--day-cream); background: 
 .alarm-check:hover { color: var(--cream); }
 .alarm-hint { margin: 6px 0 0; font-size: .76rem; line-height: 1.6; color: var(--text-mute); }
 .alarm-hint:empty { display: none; }
+/* 本地时间闹铃的「指定日期」：勾选框后面接日期栏，窄屏日期栏换到下一行 */
+.alarm-date-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0 14px; }
+.alarm-check.is-disabled { opacity: .45; cursor: default; }
+.alarm-card .alarm-date-row input[type="date"] { flex: 1 1 160px; width: auto; min-width: 0; margin-top: 10px; }
 
 .alarm-row2 { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .alarm-row2-gap { margin-top: 15px; }
