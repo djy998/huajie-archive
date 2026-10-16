@@ -3765,17 +3765,17 @@ body.day-mode #gamesOverlay #gamesClose.is-closing,
 
 /* 凸起玻璃小按钮（--glass-up）：悬停浮起一点，按下压进去。
    用 translate / scale 而不是 transform，不会顶掉按钮自己定位用的 transform */
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act) {
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline) {
   transition: translate .15s ease, scale .15s ease, box-shadow .2s ease, filter .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
 }
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act):hover:not(:disabled) { translate: 0 -1px; }
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act):active:not(:disabled) {
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):hover:not(:disabled) { translate: 0 -1px; }
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):active:not(:disabled) {
   translate: 0 .5px;
   scale: .96;
   box-shadow: var(--glass-down-shadow);
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act):is(:hover, :active) { translate: none; scale: none; }
+  :is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):is(:hover, :active) { translate: none; scale: none; }
 }
 
 /* ==== 19. 网站说明与反馈 ==== */
@@ -8061,25 +8061,38 @@ body.day-mode .mydata-reply p, body.day-mode .fb-reply p { color: var(--day-crea
 .acct-home .acct-char-row { margin-bottom: 10px; }
 .acct-sync-state { margin: 0 0 10px; text-align: center; font-size: .8rem; color: var(--text-mute); }
 .acct-sec .group-btn-row, .acct-more .group-btn-row { margin-bottom: 4px; }
-.acct-more {
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--panel-soft);
-}
+/* 我的账户里可展开的三栏（修改密码 / 登录设备 / 导出与注销）：标题栏是凸起玻璃按钮（--glass-up），展开的内容放在它下面 */
+.acct-more { margin: 0 0 12px; }
 .acct-more > summary {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
   font-weight: 600; font-size: .9rem;
   color: var(--cream);
+  background: var(--glass-up);
+  border: 1px solid var(--glass-up-edge);
+  box-shadow: var(--glass-up-shadow);
+  -webkit-backdrop-filter: blur(9px) saturate(1.18);
+  backdrop-filter: blur(9px) saturate(1.18);
   cursor: var(--cursor-link);
   list-style-position: inside;
 }
+.acct-more > summary:hover { border-color: var(--accent); }
 .acct-more[open] > summary { margin-bottom: 12px; }
+.acct-more > :not(summary) { margin-left: 6px; margin-right: 6px; }
 .acct-devices { display: grid; gap: 8px; margin-bottom: 12px; }
 .acct-device { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .86rem; color: var(--text-soft); }
 .acct-device em { margin-left: 8px; padding: 0 8px; border-radius: 999px; font-style: normal; font-size: .72rem; color: var(--accent-ink); background: var(--accent); }
 .acct-device small { display: block; font-size: .74rem; color: var(--text-mute); }
-.acct-device .pill-btn-outline { flex: 0 0 auto; padding: 4px 14px; font-size: .78rem; }
+.acct-device .pill-btn-outline {
+  flex: 0 0 auto; padding: 4px 14px; font-size: .78rem;
+  border-radius: 999px;
+  color: var(--pill-ink);
+  background: var(--glass-up);
+  border: 1px solid var(--glass-up-edge);
+  box-shadow: var(--glass-up-shadow);
+  cursor: var(--cursor-link);
+}
+.acct-device .pill-btn-outline:hover { border-color: var(--accent); }
 .acct-logout-row { margin-top: 18px; }
 .acct-reset-who { text-align: center; font-size: .9rem; }
 .acct-tip { text-align: center; }
@@ -8090,8 +8103,8 @@ body.day-mode .acct-role { color: var(--day-lilac); background: rgba(255,252,240
 body.day-mode .acct-role.is-internal { color: #fff6e0; background: #8a5a1c; }
 body.day-mode .acct-must { color: #8d2216; background: rgba(176,38,27,.1); }
 body.day-mode .acct-sync-state, body.day-mode .acct-device small { color: var(--day-lilac); }
-body.day-mode .acct-more { background: rgba(255,252,240,.5); border-color: #c98f3a; }
 body.day-mode .acct-more > summary { color: var(--day-cream); }
+body.day-mode .acct-more > summary:hover, body.day-mode .acct-device .pill-btn-outline:hover { border-color: var(--pill-edge-hi); }
 body.day-mode .acct-device { color: var(--day-cream); }
 
 /* 内部入口 */
@@ -8163,13 +8176,12 @@ body.day-mode .ua-off { color: #b0261b; }
   .mydata-kv dd { margin-bottom: 4px; }
 }
 
-/* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @ */
-.hj-at { display: inline-block; width: 1.19em; height: 1.14em; margin: -.07em .025em; vertical-align: -.21em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.svg") center / contain no-repeat; }
-/* 选中时：透明的 @ 不显形；小花反色、底下铺选区色（main.js 给选区里的小花加 is-sel）。复制出来仍是 @ */
+/* 「角色名@服务器」里代替 @ 的小花（main.js 的 idHtml）；@ 字透明留着，复制出来仍是 @。
+   world.png 是游戏自己的图标 88（图集下半张 2 倍图里的 40×40 格子），游戏里就占一个字宽，所以这里是 1em 见方 */
+.hj-at { display: inline-block; width: 1em; height: 1em; margin: 0 .04em; vertical-align: -.14em; overflow: hidden; color: transparent; line-height: 1; background: url("assets/site/world.png") center / contain no-repeat; }
+/* 选中时：透明的 @ 不显形；小花保持原色，底下铺选区色接上选区（main.js 给选区里的小花加 is-sel）。复制出来仍是 @ */
 .hj-at::selection { color: transparent; background: transparent; }
-.hj-at { position: relative; }
-.hj-at.is-sel { background-image: none; background-color: var(--wisteria); }   /* 选区底色接上，不留缺口 */
-.hj-at.is-sel::before { content: ""; position: absolute; inset: 0; background: url("assets/site/world.svg") center / contain no-repeat; filter: invert(1); }
+.hj-at.is-sel { background-color: var(--wisteria); }
 .acct-opts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: -8px 0 14px; }
 .acct-opts .password-show-label { margin: 0; }
 .acct-opts { margin-bottom: 4px; }
