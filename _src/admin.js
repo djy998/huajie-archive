@@ -55,7 +55,7 @@ let editingAnnouncementId = null;
 let pendingAnnouncementImageUrl = null;
 
 /* 管理接口的身份：账户的登录令牌（account.js），加上填内部码换来的通行证（账户的内部码规则不是「首次填写」时要带）。
-   Worker 也还认旧版密码，只是页面上不再有只填密码的入口 */
+   旧版密码（PASSWORD_A / B / C / VIEW）过渡期已结束，Worker 不再认 */
 const INTERNAL_TICKET_STORE = "hj_internal_ticket";   // 「每 x 天」的通行证存在本机 { user, ticket, exp }；「每次进入」的只放在内存里，刷新就没了
 let internalTicket = null;
 const adminAuth = () => ({ ...(window.HJAccount?.auth?.() || {}), ...(internalTicket ? { ticket: internalTicket } : {}) });
@@ -87,7 +87,9 @@ let internalGate = null;   // 登录要过人机验证；已经登录着、只�
 function initInternal() {
   internalGate = createFormGate($("internalVerify"), {
     shouldOpen: () => !$("view-internal").hidden && !$("internalGate").hidden && !window.HJAccount?.user?.(),
-    onPass: () => setMsg($("internalMsg"), ""),
+    onPass: () => {   // 只清掉「请先完成验证」这类提示，密码不对、账户停用等结果留着
+      if ($("internalMsg").dataset.gate === "1") { setMsg($("internalMsg"), ""); delete $("internalMsg").dataset.gate; }
+    },
   });
   $("internalSubmit").addEventListener("click", internalEnter);
   ["internalUser", "internalPassword", "internalCode"].forEach((id) => $(id).addEventListener("keydown", (e) => {
@@ -159,8 +161,9 @@ async function internalEnter() {
       const pw = $("internalPassword").value;
       if (!name || !pw) { setMsg(msg, "请填写用户名和密码"); return; }
       const need = internalGate.missing();
-      if (need) { setMsg(msg, need); return; }
+      if (need) { setMsg(msg, need); msg.dataset.gate = "1"; return; }
       setMsg(msg, "登录中…");
+      delete msg.dataset.gate;
       const data = await A.login(name, pw, { internalCode: code, proof: internalGate.proof(), remember: $("internalRemember").checked });
       if (!data.ok) {
         if (data.error !== "locked" && data.error !== "no_crypto") internalGate.sync(true);   // 验证凭证用掉了，换一题
@@ -2413,11 +2416,29 @@ function renderUserAdmin() {
   }).join("") : `<tr><td colspan="8" class="fb-empty">${users.length ? "没有符合条件的账户" : "还没有账户"}</td></tr>`;
 }
 
+/* 私信开关：三段（开放私信 / 仅与管理员 / 关闭），样式同其他开关；点哪段切到哪段 */
+const UA_MAIL_MODES = [["open", "开放私信"], ["admin", "仅与管理员"], ["off", "关闭私信"]];
+const UA_MAIL_NOTES = {
+  open: "登录的用户之间可以按用户名互发私信。管理员发出的私信带「管理员」标注。",
+  admin: "普通用户只能给管理员发私信，管理员可以给任何用户发私信。",
+  off: "普通用户不能发私信，页头的莫古邮件按钮只对管理员和有未读邮件的用户显示。管理员仍可以给用户发私信。",
+};
+function paintMailSwitch(mode) {
+  const btn = $("uaMailSw");
+  if (btn.querySelectorAll(".sw-opt").length !== UA_MAIL_MODES.length) {
+    btn.innerHTML = UA_MAIL_MODES.map(([v, t]) => `<span class="sw-opt" data-v="${v}">${t}</span>`).join("");
+  }
+  btn.querySelectorAll(".sw-opt").forEach((o) => o.classList.toggle("is-cur", o.dataset.v === mode));
+  btn.disabled = false;
+  btn.setAttribute("aria-label", `私信：${(UA_MAIL_MODES.find(([v]) => v === mode) || [, mode])[1]}`);
+  $("uaMailNote").textContent = UA_MAIL_NOTES[mode] || "";
+}
+
 function renderUserAdminCodes() {
   const c = userAdmin.envCodes || {};
   $("uaEnvCodes").innerHTML = UA_CODE_ROWS.map(([k, name, what]) =>
     `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(what)}${k === "admin" && userAdmin.envAdmin ? `（账户 ${escapeHtml(userAdmin.envAdmin)}）` : ""} · <b class="${c[k] ? "ua-on" : "ua-off"}">${c[k] ? "已设置" : "未设置"}</b></dd>`).join("");
-  $("uaLegacyLogin").checked = userAdmin.settings.legacyLogin !== false;
+  paintMailSwitch(userAdmin.settings.mailMode || "off");
 }
 
 async function refreshUserAdmin() {
@@ -2539,20 +2560,24 @@ function initUserAdmin() {
       showToast("已删除");
     }
   });
-  $("uaLegacyLogin").addEventListener("change", async (e) => {
-    const on = e.currentTarget.checked;
-    if (!on && !confirm("关掉之后，只有登录了有内部权限的账户才能进内部入口、用管理功能（只填旧版密码不再管用）。确定关掉？")) {
-      e.currentTarget.checked = true;
-      return;
-    }
-    const data = await callWorker({ action: "user_admin_settings", ...adminAuth(), legacyLogin: on });
+  $("uaMailSw").addEventListener("click", async (e) => {
+    const opt = e.target.closest(".sw-opt");
+    if (!opt || opt.classList.contains("is-cur")) return;
+    const btn = e.currentTarget;
+    const mode = opt.dataset.v;
+    paintMailSwitch(mode);
+    btn.disabled = true;
+    const data = await callWorker({ action: "user_admin_settings", ...adminAuth(), mailMode: mode }, { load: "block" });
+    btn.disabled = false;
     if (!data || !data.ok) {
-      e.currentTarget.checked = !on;
+      paintMailSwitch(userAdmin.settings.mailMode || "off");
       setMsg($("uaMsg"), adminErr(data, "保存失败，请稍后再试", UA_ERRORS));
       return;
     }
     userAdmin.settings = data.settings;
-    showToast(on ? "已允许只用旧版密码" : "已关闭只用旧版密码");
+    paintMailSwitch(data.settings.mailMode);
+    window.HJAccount?.setMailUnread?.(Number(window.HJAccount.user()?.mailUnread) || 0, data.settings.mailMode);
+    showToast(`私信：${UA_MAIL_MODES.find(([v]) => v === mode)[1]}`);
   });
 }
 
@@ -2730,7 +2755,9 @@ function initVenueAdmin() {
 
 /* ==== 7. 活动问卷 ==== */
 /* 统计仅含有效答卷；「第 n 份」为有效答卷顺序，#编号 为数据库编号 */
-const surveyAdmin = { items: [], open: true, lockdown: false, loaded: false, readonly: false };
+const surveyAdmin = { items: [], open: true, lockdown: false, loaded: false, readonly: false, title: "", surveys: [] };
+/* 记录用的问卷标题：管理页改过的优先，没改过用 survey.js 的 SURVEY.name */
+const surveyName = () => surveyAdmin.title || SURVEY.name || SURVEY.title || SURVEY.id;
 
 const surveyAdminValid = () => surveyAdmin.items.filter((i) => !i.voided);
 
@@ -2873,9 +2900,18 @@ function renderSurveyAdmin() {
   const items = surveyAdmin.items;
   const valid = surveyAdminValid().length;
   const voided = items.length - valid;
-  $("surveyAdminStatus").textContent = items.length
+  $("surveyAdminStatus").textContent = `${surveyName()} · ` + (items.length
     ? `共 ${items.length} 份 · 有效 ${valid} 份${voided ? ` · 已作废 ${voided} 份` : ""}`
-    : "暂无答卷";
+    : "暂无答卷");
+  const input = $("surveyTitleInput");
+  if (document.activeElement !== input) input.value = surveyName();
+  input.disabled = $("surveyTitleSaveBtn").disabled = surveyAdmin.readonly;
+  $("surveyAllTable").innerHTML = `<thead><tr><th>问卷标题</th><th>问卷 id</th><th>答卷</th><th>收集时间</th></tr></thead><tbody>`
+    + surveyAdmin.surveys.map((x) => `<tr${x.id === SURVEY.id ? ' class="is-current"' : ""}>
+      <td>${escapeHtml(x.title || (x.id === SURVEY.id ? surveyName() : "未填写标题"))}${x.id === SURVEY.id ? "<small>当前</small>" : ""}</td>
+      <td>${escapeHtml(x.id)}</td><td>${x.count} 份（有效 ${x.valid}）</td>
+      <td>${x.firstAt ? `${escapeHtml(formatCnTime(x.firstAt).slice(0, 10))} ~ ${escapeHtml(formatCnTime(x.lastAt).slice(0, 10))}` : "—"}</td></tr>`).join("")
+    + "</tbody>";
   setTicketSwitch($("surveyOpenBtn"), surveyAdmin.open, "开放", "关闭");
   $("surveyLockNote").hidden = !surveyAdmin.lockdown;
   const view = $("surveyViewSelect").value;
@@ -2899,6 +2935,8 @@ async function refreshSurveyAdmin() {
   surveyAdmin.items = Array.isArray(data.items) ? data.items : [];
   surveyAdmin.open = data.open !== false;
   surveyAdmin.lockdown = !!data.lockdown;
+  surveyAdmin.title = typeof data.title === "string" ? data.title : "";
+  surveyAdmin.surveys = Array.isArray(data.surveys) ? data.surveys : [];
   surveyAdmin.loaded = true;
   noteAdminItems("surveyAdminPanel", surveyAdmin.items);
   renderSurveyAdmin();
@@ -2965,7 +3003,7 @@ async function exportSurveyExcel() {
   tw.getColumn(4).width = 80;
   tw.getColumn(4).alignment = { wrapText: true, vertical: "top" };
 
-  await saveWorkbook(wb, `花街活动问卷_${SURVEY.id}`);
+  await saveWorkbook(wb, surveyName().replace(/[\\/:*?"<>|\s]+/g, "_"));
 }
 
 async function surveyAdminVoid(item, voided) {
@@ -3013,6 +3051,21 @@ function initSurveyAdmin() {
     } finally {
       btn.disabled = false;
     }
+  });
+  $("surveyTitleSaveBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const title = $("surveyTitleInput").value.trim();
+    if (!title) { setMsg($("surveyAdminMsg"), "请填写问卷标题"); return; }
+    btn.disabled = true;
+    const data = await callWorker({ action: "survey_admin_set", ...adminAuth(), survey: SURVEY.id, title }, { load: "block" });
+    btn.disabled = false;
+    if (!data || !data.ok) { setMsg($("surveyAdminMsg"), adminErr(data, "保存失败，请稍后再试", { title_long: "问卷标题最多 60 字" })); return; }
+    setMsg($("surveyAdminMsg"), "");
+    surveyAdmin.title = data.title || "";
+    const cur = surveyAdmin.surveys.find((x) => x.id === SURVEY.id);
+    if (cur) cur.title = surveyAdmin.title;
+    renderSurveyAdmin();
+    showToast("问卷标题已保存");
   });
   $("surveyExportBtn").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
@@ -4377,6 +4430,13 @@ const ADMIN_PANELS_HTML = `
 <div class="gate-card admin-card ticket-admin feedback-admin survey-admin" id="surveyAdminPanel" hidden>
   <h2>活动问卷</h2>
   <p class="hint" id="surveyAdminStatus">加载中…</p>
+  <div class="ticket-admin-row survey-title-row">
+    <label class="ticket-admin-key" for="surveyTitleInput">问卷标题</label>
+    <span class="ticket-limit-edit survey-title-edit">
+      <input type="text" id="surveyTitleInput" maxlength="60" placeholder="如 2026莫古力中秋月轮祭-游客问卷">
+      <button type="button" id="surveyTitleSaveBtn">保存</button>
+    </span>
+  </div>
   <div class="ticket-admin-row">
     <span class="ticket-admin-key">问卷收集</span>
     <button type="button" class="ticket-switch" id="surveyOpenBtn" aria-pressed="false">—</button>
@@ -4399,6 +4459,11 @@ const ADMIN_PANELS_HTML = `
   <p class="form-msg" id="surveyAdminMsg" hidden></p>
   <div class="survey-stats" id="surveyAdminStats"></div>
   <div class="fb-admin-list survey-admin-list" id="surveyAdminList" hidden></div>
+  <details class="acct-more survey-all" id="surveyAllBox">
+    <summary>全部问卷</summary>
+    <p class="ta-group-hint">每份问卷按问卷 id 分开记录。做新问卷时在 survey.js 换一个新的 id，旧问卷的答卷和标题都会保留在这里。</p>
+    <div class="ticket-table-wrap"><table class="ticket-table survey-all-table" id="surveyAllTable"></table></div>
+  </details>
 </div>
 <div class="gate-card admin-card ticket-admin feedback-admin" id="feedbackAdminPanel" hidden>
   <h2>反馈建议箱</h2>
@@ -4723,8 +4788,11 @@ const ADMIN_PANELS_HTML = `
     <dl class="about-list ua-envcodes" id="uaEnvCodes"></dl>
   </section>
   <section id="uaSettings" hidden>
-    <label class="audience-opt ua-setting"><input type="checkbox" id="uaLegacyLogin"><span>允许只用旧版密码进内部入口、用管理功能</span></label>
-    <p class="ta-group-hint">过渡期用：页面上已经没有只填密码的入口了，这一项只影响还开着旧版页面的人，以及直接调用接口的情况。大家都改用账户以后建议关掉；关掉要先用管理员账户登录。</p>
+    <div class="ticket-admin-row">
+      <span class="ticket-admin-key">私信</span>
+      <button type="button" class="ticket-switch" id="uaMailSw" disabled>—</button>
+    </div>
+    <p class="ta-group-hint" id="uaMailNote"></p>
   </section>
 </div>
 <div class="gate-card admin-card" id="postAnnouncementPanel" hidden>

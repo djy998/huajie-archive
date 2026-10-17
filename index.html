@@ -17,8 +17,8 @@
 <meta name="twitter:image" content="https://swayingsussurrusstreet.dpdns.org/og-image.jpg">
 <link rel="icon" type="image/png" href="assets/site/favicon.png">
 <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-<link rel="preload" as="script" href="boot.js?v=20261018b">
-<link rel="preload" as="style" href="style.css?v=20261018b">
+<link rel="preload" as="script" href="boot.js?v=20261019a">
+<link rel="preload" as="style" href="style.css?v=20261019a">
 <style>body{margin:0;background:#1c1830}html.css-wait body{visibility:hidden}html.boot-pending,html.boot-pending body{overflow:hidden}html.boot-pending body>header,html.boot-pending body>main,html.boot-pending body>footer{visibility:hidden}#skyBase{transition:opacity .8s ease}html.boot-pending:not(.sky-ready) #skyBase{opacity:0}#bootOverlay{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:18px}html.boot-pending #bootOverlay{display:flex}html.boot-leaving #bootOverlay{display:flex;opacity:0;transition:opacity .45s ease;pointer-events:none}#bootImageBtn{position:relative;appearance:none;-webkit-appearance:none;border:none;background:none;padding:0;margin:0;line-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;transition:transform .2s ease}#bootImageBtn:hover{transform:scale(1.04)}#bootImageBtn:before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 8px 30px #00000059;pointer-events:none}#bootSpinner{position:relative;display:block;animation:bootIdle 36s linear infinite;pointer-events:none;will-change:transform}@keyframes bootIdle{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootImage{display:block;width:min(56vw,280px);height:auto;will-change:transform;-webkit-user-drag:none;user-select:none;pointer-events:none}#bootImage.is-spinning{animation:bootSpin 1s ease-in-out}@keyframes bootSpin{0%{transform:rotate(0)}to{transform:rotate(720deg)}}#bootImage.is-looping{animation:bootLoop .7s ease-in-out infinite}@keyframes bootLoop{0%{transform:rotate(0)}to{transform:rotate(360deg)}}#bootFx{position:fixed;inset:0;z-index:650;pointer-events:none;overflow:hidden}.boot-petal,.boot-star,.boot-twinkle{position:absolute}#bootFx.is-full .boot-petal,#bootFx.is-full .boot-star,#bootFx.is-full .boot-twinkle{will-change:transform,opacity}.boot-petal{background:center / contain no-repeat;animation:bootPetal 1.3s cubic-bezier(.2,.7,.3,1) both}#bootFx.is-full .boot-petal{filter:drop-shadow(0 1px 2px rgba(60,42,10,.3))}@keyframes bootPetal{0%{transform:translate(-50%,-50%) scale(.4) rotate(0);opacity:0}10%{opacity:1}55%{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(1) rotate(calc(var(--br) * .6))}75%{opacity:.9}to{transform:translate(calc(-50% + var(--bx) * 1.12),calc(-50% + var(--by) * 1.12 + 46px)) scale(.75) rotate(var(--br));opacity:0}}.boot-star{border-radius:50%;background:#fff4d6;box-shadow:0 0 7px 2px #fff4d6cc;animation:bootStar .9s ease-out both}@keyframes bootStar{0%{transform:translate(-50%,-50%) scale(1.2);opacity:0}8%{opacity:1}to{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(.2);opacity:0}}.boot-twinkle{border-radius:50%;background:#fff4d6;box-shadow:0 0 5px 1px #fff4d6b3;animation:bootTwinkle .45s ease-in-out both}@keyframes bootTwinkle{0%,to{transform:translate(-50%,-50%) scale(.4);opacity:0}50%{transform:translate(-50%,-50%) scale(1.25);opacity:1}}#bootHint{min-height:1.5em;color:#c9bfe0;font:600 .9rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em;opacity:0;transition:opacity .3s ease}#bootOverlay.is-waiting #bootHint{opacity:1;animation:bootPulse 1.4s ease-in-out infinite}@keyframes bootPulse{50%{opacity:.45}}#bootVeil{display:none;position:fixed;inset:0;height:100vh;height:100dvh;z-index:600;flex-direction:column;align-items:center;justify-content:center;gap:16px;visibility:visible;background:linear-gradient(180deg,#272c3a,#282d3c 25%,#252939 45%,#222536,#1f1f33 75%,#1c192d 88%,#1c1830);cursor:-webkit-image-set(url(assets/site/cursor/sakura-00.png) 1x,url(assets/site/cursor/sakura-00@2x.png) 2x) 15 15,progress;user-select:none;-webkit-user-select:none}html.boot-veil #bootVeil{display:flex}html.boot-veil-day #bootVeil{background:linear-gradient(180deg,#4c99eb,#5a9ae2 18%,#5592da 32%,#4a8bd2 45%,#3e77b9,#325581 75%,#283550 88%,#1c1830)}html.veil-leaving #bootVeil{opacity:0;transition:opacity .4s ease;pointer-events:none}#bootVeilSpin,#bootVeilText{opacity:0;animation:bootVeilIn .3s ease .3s forwards}@keyframes bootVeilIn{to{opacity:1}}#bootVeilSpin{display:block;line-height:0;border-radius:50%;box-shadow:0 8px 30px #00000059}html.boot-veil-day #bootVeilSpin{box-shadow:0 8px 26px #10285a52}#bootVeilSpin img{display:block;width:min(40vw,168px);height:auto;pointer-events:none;-webkit-user-drag:none;animation:bootLoop .9s ease-in-out infinite}#bootVeilText{margin:0;color:#c9bfe0;font:600 .95rem/1.5 "Noto Serif SC",Songti SC,serif;letter-spacing:.12em}html.boot-veil-day #bootVeilText{color:#fff6e0;text-shadow:0 1px 6px rgba(16,40,90,.55)}#maintNotice{display:none}html.hj-maint #maintNotice{display:flex;position:fixed;inset:0;z-index:640;align-items:center;justify-content:center;padding:24px;text-align:center}#maintNotice p{margin:0;color:#f7f0e2;font:600 clamp(1.3rem,5vw,2rem)/1.6 "Noto Serif SC","Songti SC",serif;letter-spacing:.18em;text-shadow:0 2px 14px rgba(10,8,20,.75),0 0 2px rgba(10,8,20,.6)}html.hj-maint,html.hj-maint body{overflow:hidden}html.hj-maint #bootOverlay,html.hj-maint #bootVeil,html.hj-maint body>header,html.hj-maint body>main,html.hj-maint body>footer,html.hj-maint .info-overlay,html.hj-maint .lightbox-overlay,html.hj-maint .puzzle-overlay,html.hj-maint .bard-widget,html.hj-maint .bard-stage,html.hj-maint .toast{display:none!important}html.hj-maint #skyBase{opacity:1!important}@media(prefers-reduced-motion:reduce){#bootSpinner,#bootImage.is-spinning,#bootImage.is-looping,#bootOverlay.is-waiting #bootHint{animation:none}#skyBase,html.boot-leaving #bootOverlay,html.veil-leaving #bootVeil{transition:none}#bootVeilSpin img{animation-duration:2.4s;animation-timing-function:linear}}</style>
 <noscript><link rel="stylesheet" href="style.css"></noscript>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"花舞之街 · 薰风花语町","url":"https://swayingsussurrusstreet.dpdns.org/","inLanguage":"zh-CN","description":"最终幻想14莫古力区梦羽宝境花街的活动档案：最新活动、往期回顾、店家与场地"}</script>
@@ -41,7 +41,7 @@
 <p id="bootVeilText">正在加载库啵……</p>
 </div>
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
-<script src="boot.js?v=20261018b"></script>
+<script src="boot.js?v=20261019a"></script>
 <div id="skyBase"></div>
 <div id="skyFade"></div>
 <div id="fxLayer" aria-hidden="true"></div>
@@ -62,6 +62,10 @@ aria-haspopup="true" aria-expanded="false" aria-label="更多" title="更多">
 <button class="daynight-toggle clock-toggle hb-slot-4" id="clockToggle" type="button" aria-pressed="false"
 aria-label="显示时间条" title="显示时间条">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+</button>
+<button class="daynight-toggle mail-toggle hb-slot-6" id="mailToggle" type="button" aria-label="莫古邮件" title="莫古邮件" hidden>
+<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6.2L20.5 7"/></svg>
+<span class="hb-new-dot" id="mailDot" title="有未读邮件" hidden></span>
 </button>
 <button class="daynight-toggle sound-toggle hb-slot-5" id="soundToggle" type="button"
 aria-haspopup="true" aria-expanded="false" aria-label="音量" title="音量">
@@ -347,9 +351,9 @@ controlslist="nodownload" hidden></video>
 <label class="password-show-label" id="internalRememberLabel"><input type="checkbox" id="internalRemember"> 自动登录</label>
 </div>
 <p class="acct-remember-hint" id="internalRememberHint">请不要在网吧或者公用设备上勾选“自动登录”</p>
+<p class="form-msg" id="internalMsg" hidden></p>
 <div class="verify-host internal-verify" id="internalVerify"></div>
 <button type="button" id="internalSubmit">进入</button>
-<p class="form-msg" id="internalMsg" hidden></p>
 <p class="internal-reg">还没有账户？<button type="button" class="about-inline-link" id="internalRegLink">去注册</button></p>
 </div>
 <div class="internal-account" id="internalAccountBar" hidden>
@@ -693,6 +697,56 @@ controlslist="nodownload" hidden></video>
 <p class="huayu-note">仅供娱乐，禁止用于任何非法用途（详见页面底部「网站说明」）</p>
 </div>
 </div>
+<div class="info-overlay" id="mailOverlay" role="dialog" aria-modal="true" aria-labelledby="mailTitle" data-close-only-x="1" hidden>
+<div class="gate-card mail-card" id="mailCard">
+<button type="button" class="info-close" id="mailClose" aria-label="关闭"></button>
+<h2 id="mailTitle">莫古邮件</h2>
+<div class="mail-layout">
+<section class="mail-side" aria-label="邮件列表">
+<div class="mail-side-head">
+<button type="button" class="share-site-btn mail-new" id="mailNewBtn">写新邮件</button>
+<button type="button" class="pill-btn-outline mail-refresh" id="mailRefreshBtn">刷新</button>
+</div>
+<div class="alarm-seg mail-tabs" id="mailTabs" role="radiogroup" aria-label="邮箱">
+<label class="is-active"><input type="radio" name="mailBox" value="unread" checked><span>未读邮件</span></label>
+<label><input type="radio" name="mailBox" value="in"><span>收件箱</span></label>
+<label><input type="radio" name="mailBox" value="sent"><span>已发送</span></label>
+</div>
+<div class="mail-list" id="mailList"></div>
+<p class="mail-foot" id="mailFoot"></p>
+</section>
+<section class="mail-main" aria-label="邮件内容">
+<button type="button" class="pill-btn-outline mail-back" id="mailBack">返回列表</button>
+<p class="mail-empty" id="mailEmpty">选择一封邮件查看，或点击「写新邮件」。</p>
+<article class="mail-read" id="mailRead" hidden>
+<div class="mail-read-head" id="mailReadHead"></div>
+<p class="mail-read-meta" id="mailReadMeta"></p>
+<h3 class="mail-read-title" id="mailReadTitle"></h3>
+<div class="mail-read-body" id="mailReadBody"></div>
+<div class="mail-read-btns">
+<button type="button" class="share-site-btn" id="mailReplyBtn">回复</button>
+<button type="button" class="share-site-btn is-danger" id="mailDeleteBtn">删除</button>
+</div>
+</article>
+<form class="mail-compose about-form" id="mailCompose" novalidate autocomplete="off" hidden>
+<p class="about-hint mail-send-hint" id="mailSendHint" hidden></p>
+<div class="about-field"><label class="about-label is-required" for="mailTo">收信人</label>
+<input type="text" id="mailTo" maxlength="16" placeholder="对方的用户名" spellcheck="false" autocapitalize="off"></div>
+<div class="about-field"><label class="about-label" for="mailSubject">标题</label>
+<input type="text" id="mailSubject" maxlength="30" placeholder="选填"></div>
+<div class="about-field"><label class="about-label is-required" for="mailBody">正文</label>
+<textarea id="mailBody" maxlength="500"></textarea>
+<p class="about-count" id="mailCount">0 / 500</p></div>
+<p class="form-msg" id="mailSendMsg" hidden></p>
+<div class="mail-read-btns">
+<button type="submit" class="share-site-btn" id="mailSendBtn">发送</button>
+<button type="button" class="share-site-btn" id="mailCancelBtn">取消</button>
+</div>
+</form>
+</section>
+</div>
+</div>
+</div>
 <div class="info-overlay" id="gamesOverlay" role="dialog" aria-modal="true" aria-labelledby="gamesTitle" data-close-only-x="1" hidden>
 <div class="gate-card games-card" id="gamesCard">
 <button type="button" class="info-close" id="gamesClose" aria-label="关闭"></button>
@@ -728,12 +782,12 @@ controlslist="nodownload" hidden></video>
 <div class="tab-panel" id="infoPanelRecord" hidden></div>
 </div>
 </div>
-<script src="verify.js?v=20261018b"></script>
-<script src="config.js?v=20261018b"></script>
-<script src="main.js?v=20261018b"></script>
-<script src="account.js?v=20261018b"></script>
-<script src="ticket.js?v=20261018b"></script>
-<script src="venue.js?v=20261018b"></script>
-<script src="survey.js?v=20261018b"></script>
+<script src="verify.js?v=20261019a"></script>
+<script src="config.js?v=20261019a"></script>
+<script src="main.js?v=20261019a"></script>
+<script src="account.js?v=20261019a"></script>
+<script src="ticket.js?v=20261019a"></script>
+<script src="venue.js?v=20261019a"></script>
+<script src="survey.js?v=20261019a"></script>
 </body>
 </html>

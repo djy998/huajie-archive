@@ -426,6 +426,20 @@ body.day-mode .daynight-toggle:active {
 .hb-slot-3 { right: 122px; }
 .hb-slot-4 { right: 174px; }
 .hb-slot-5 { right: 226px; }
+.hb-slot-6 { right: 278px; }
+/* 页头按钮右上角的新消息小圆点（莫古邮件）：同管理页按钮的提示点，夜间紫藤色、白天琥珀色 */
+.daynight-toggle .hb-new-dot {
+  position: absolute; top: -2px; right: -2px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--new-dot);
+  box-shadow: 0 0 0 2px rgba(20,14,36,.75), 0 0 8px rgba(198,174,245,.55);
+  pointer-events: none;
+}
+.daynight-toggle .hb-new-dot[hidden] { display: none; }
+.daynight-toggle .hb-new-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: admin-new-ping 2.2s ease-out infinite; }
+body.day-mode .daynight-toggle .hb-new-dot { box-shadow: 0 0 0 2px rgba(255,248,232,.9), 0 0 6px rgba(224,138,30,.5); }
+body.fx-off .daynight-toggle .hb-new-dot::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .daynight-toggle .hb-new-dot::after { animation: none; } }
 
 #dayNightToggle .ico-sun { display: none; }
 body.day-mode #dayNightToggle .ico-moon { display: none; }
@@ -2193,14 +2207,16 @@ body.day-mode .share-site-btn:active {
   box-shadow: 0 2px 5px rgba(96,64,16,.18), inset 0 2px 6px rgba(120,80,20,.2);
 }
 
-.captcha-card { position: relative; user-select: none; -webkit-user-select: none; }
+/* 内容高过屏幕时（手机上的仙人微彩）卡片里滚动，同小游戏助手；× 停在右上角（见「手机上弹窗卡片的高度与关闭按钮」） */
+.captcha-card { position: relative; margin-block: 0; max-height: min(90vh, 860px); overflow-y: auto; overscroll-behavior: contain; user-select: none; -webkit-user-select: none; }
 /* 仙人微彩时放宽一点，棋盘和报酬一览才能并排（同游戏里）；放不下时报酬一览自动排到下面 */
 .captcha-card:has(.vc-game) { max-width: 540px; }
 /* 双 ID 提高特指度，还原圆形关闭按钮 */
 #captchaOverlay #captchaClose,
 #alarmOverlay #alarmClose,
 #huayuOverlay #huayuClose,
-#gamesOverlay #gamesClose {
+#gamesOverlay #gamesClose,
+#mailOverlay #mailClose {
   width: 36px; height: 36px;
   padding: 0;
   border-radius: 50%;
@@ -2221,7 +2237,8 @@ body.day-mode .share-site-btn:active {
 #captchaOverlay #captchaClose:hover,
 #alarmOverlay #alarmClose:hover,
 #huayuOverlay #huayuClose:hover,
-#gamesOverlay #gamesClose:hover {
+#gamesOverlay #gamesClose:hover,
+#mailOverlay #mailClose:hover {
   color: var(--cream);
   border-color: var(--accent);
   transform: translateY(-1px);
@@ -2234,11 +2251,14 @@ body.day-mode .share-site-btn:active {
 #huayuOverlay #huayuClose:active,
 #gamesOverlay #gamesClose:active,
 #huayuOverlay #huayuClose.is-closing,
-#gamesOverlay #gamesClose.is-closing { transform: scale(.93); }
+#gamesOverlay #gamesClose.is-closing,
+#mailOverlay #mailClose:active,
+#mailOverlay #mailClose.is-closing { transform: scale(.93); }
 body.day-mode #captchaOverlay #captchaClose,
 body.day-mode #alarmOverlay #alarmClose,
 body.day-mode #huayuOverlay #huayuClose,
-body.day-mode #gamesOverlay #gamesClose {
+body.day-mode #gamesOverlay #gamesClose,
+body.day-mode #mailOverlay #mailClose {
   color: var(--day-lilac);
   background:
     linear-gradient(160deg, rgba(255,255,255,.4) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.2) 100%),
@@ -2249,7 +2269,8 @@ body.day-mode #gamesOverlay #gamesClose {
 body.day-mode #captchaOverlay #captchaClose:hover,
 body.day-mode #alarmOverlay #alarmClose:hover,
 body.day-mode #huayuOverlay #huayuClose:hover,
-body.day-mode #gamesOverlay #gamesClose:hover { color: var(--day-cream); border-color: var(--accent); }
+body.day-mode #gamesOverlay #gamesClose:hover,
+body.day-mode #mailOverlay #mailClose:hover { color: var(--day-cream); border-color: var(--accent); }
 
 .lightbox-overlay {
   position: fixed; inset: 0; z-index: 300;
@@ -2435,6 +2456,7 @@ body.day-mode footer { color: var(--day-title); }
   .hb-slot-3 { right: 104px; }
   .hb-slot-4 { right: 150px; }
   .hb-slot-5 { right: 196px; }
+  .hb-slot-6 { right: 242px; }
   .vol-panel { right: 196px; top: 58px; }
   .more-panel { right: 12px; top: 60px; gap: 6px; }   /* 按钮底边 54 + 间距 6 */
 
@@ -2748,6 +2770,11 @@ body.day-mode .ticket-switch .sw-opt.is-cur { color: #fff6e0; }
 .ticket-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ticket-limit-edit { display: inline-flex; align-items: center; gap: 8px; }
 .gate-card .ticket-limit-edit input { width: 110px; margin: 0; padding: 9px 14px; }
+/* 活动问卷：问卷标题一栏、全部问卷 */
+.gate-card .survey-title-edit { flex: 1 1 260px; justify-content: flex-end; }
+.gate-card .survey-title-edit input { flex: 1 1 auto; width: auto; min-width: 0; max-width: 340px; text-align: left; }
+.survey-all { margin-top: 20px; text-align: left; }
+.survey-all-table td small { margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: .7rem; color: var(--accent-ink); background: var(--accent); }
 
 .ticket-sched-row { align-items: flex-start; }
 .ticket-sched-edit { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -3774,17 +3801,17 @@ body.day-mode #gamesOverlay #gamesClose.is-closing,
 
 /* 凸起玻璃小按钮（--glass-up）：悬停浮起一点，按下压进去。
    用 translate / scale 而不是 transform，不会顶掉按钮自己定位用的 transform */
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline) {
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline, .mail-item, .mail-card .mail-refresh, .mail-card .mail-back) {
   transition: translate .15s ease, scale .15s ease, box-shadow .2s ease, filter .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
 }
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):hover:not(:disabled) { translate: 0 -1px; }
-:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):active:not(:disabled) {
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline, .mail-item, .mail-card .mail-refresh, .mail-card .mail-back):hover:not(:disabled) { translate: 0 -1px; }
+:is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline, .mail-item, .mail-card .mail-refresh, .mail-card .mail-back):active:not(:disabled) {
   translate: 0 .5px;
   scale: .96;
   box-shadow: var(--glass-down-shadow);
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline):is(:hover, :active) { translate: none; scale: none; }
+  :is(.cal-tool, .cal-nav, .cal-chip, .alm-tool, .alm-btn, .alarm-seg label, .hj-date-nav, .hj-date-btn, .bard-tool, .bard-more, .ticket-table .tt-act, .acct-more > summary, .acct-device .pill-btn-outline, .mail-item, .mail-card .mail-refresh, .mail-card .mail-back):is(:hover, :active) { translate: none; scale: none; }
 }
 
 /* ==== 19. 网站说明与反馈 ==== */
@@ -5082,6 +5109,87 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
   text-align: left;
 }
 .huayu-card h2, .huayu-card > .hint { text-align: center; }
+
+/* ==== 莫古邮件（mail.js） ====
+   参照游戏里的莫古邮件：左栏列表（写新邮件、未读 / 收件箱 / 已发送、条目、底部计数），右栏看信或写信。
+   电脑上两栏固定高度、各自滚动；手机上一次一栏（.is-main 时显示右栏，带「返回列表」） */
+.mail-card {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  max-height: min(90vh, 820px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 32px 26px 24px;
+  text-align: left;
+}
+.mail-card h2 { text-align: center; }
+.mail-layout { display: grid; grid-template-columns: minmax(250px, 320px) 1fr; gap: 18px; height: min(62vh, 560px); }
+.mail-side, .mail-main { min-height: 0; display: flex; flex-direction: column; }
+.mail-side-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.mail-card .mail-new { flex: 1 1 auto; margin: 0; padding: 9px 18px; }
+.mail-card .mail-refresh, .mail-card .mail-back {
+  flex: none; padding: 8px 14px; min-height: 38px; font-size: .8rem;
+  border-radius: 999px; color: var(--pill-ink);
+  background: var(--glass-up); border: 1px solid var(--glass-up-edge); box-shadow: var(--glass-up-shadow);
+  cursor: var(--cursor-link);
+}
+.mail-card .mail-refresh:hover, .mail-card .mail-back:hover { border-color: var(--accent); }
+.mail-tabs { margin-bottom: 10px; }
+.mail-tabs label span { white-space: nowrap; }
+.mail-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 8px; padding: 2px 4px 4px 2px; }
+.mail-item {
+  display: block; width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-family: inherit; text-align: left;
+  color: var(--text-soft);
+  background-color: var(--panel-soft);
+  cursor: var(--cursor-link);
+}
+:is(body, body.day-mode) .mail-item.is-cur { --lq-pane-edge: var(--lq-pane-edge-hi); }
+.mail-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mail-item-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; color: var(--lantern-soft); }
+.mail-item-time { flex: none; font-size: .72rem; color: var(--text-mute); }
+.mail-item-text { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .84rem; }
+.mail-item.is-unread .mail-item-text { font-weight: 700; color: var(--cream); }
+.mail-item.is-unread .mail-item-who::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--new-dot); }
+.mail-tag-admin { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: .68rem; font-weight: 700; line-height: 1.6; vertical-align: 1px; color: var(--accent-ink); background: var(--accent); }
+.mail-foot { margin: 8px 0 0; font-size: .76rem; text-align: right; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.mail-main { overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.mail-card .mail-back { display: none; align-self: flex-start; margin-bottom: 10px; }
+.mail-empty { margin: auto; padding: 20px; text-align: center; font-size: .88rem; color: var(--text-mute); }
+.mail-read { padding: 16px 18px; border-radius: var(--radius-sm); background-color: var(--panel-soft); }
+.mail-read-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: .92rem; }
+.mail-read-label { font-size: .78rem; color: var(--text-mute); }
+.mail-read-who { color: var(--lantern-soft); font-weight: 600; overflow-wrap: anywhere; }
+.mail-uname { white-space: nowrap; font-weight: 400; color: var(--text-soft); }
+.mail-read-meta { margin: 4px 0 0; font-size: .74rem; color: var(--text-mute); }
+.mail-read-title { margin: 12px 0 0; font-size: 1rem; font-weight: 700; color: var(--cream); overflow-wrap: anywhere; }
+.mail-read-body { margin-top: 10px; font-size: .92rem; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--cream); }
+.mail-read-btns { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.mail-card .mail-read-btns .share-site-btn { margin: 0; padding: 9px 24px; }
+.mail-compose .about-field { margin-bottom: 12px; }
+.mail-card .mail-compose input { text-align: left; margin-bottom: 0; }
+.mail-card .mail-compose textarea { min-height: 150px; margin-bottom: 0; }
+.mail-send-hint { margin: 0 0 10px; color: #e8a49b; }
+#mailCount.is-over { color: #e8a49b; }
+body.day-mode .mail-item-who, body.day-mode .mail-read-who { color: var(--day-gold); }
+body.day-mode .mail-item, body.day-mode .mail-read { background-color: rgba(255,252,240,.5); color: var(--day-cream); }
+body.day-mode .mail-item.is-unread .mail-item-text, body.day-mode .mail-read-title, body.day-mode .mail-read-body { color: var(--day-cream); }
+body.day-mode :is(.mail-item-time, .mail-foot, .mail-empty, .mail-read-label, .mail-read-meta, .mail-uname) { color: var(--day-lilac); }
+body.day-mode .mail-tag-admin { color: #fff6e0; background: #8a5a1c; }
+body.day-mode .mail-send-hint, body.day-mode #mailCount.is-over { color: #a3261a; }
+@media (max-width: 760px) {
+  .mail-card { padding: 28px 16px 18px; }
+  .mail-layout { display: block; height: auto; }
+  .mail-list { overflow: visible; }
+  .mail-main { display: none; overflow: visible; }
+  .mail-card.is-main .mail-side { display: none; }
+  .mail-card.is-main .mail-main { display: flex; }
+  .mail-card .mail-back { display: inline-flex; }
+  .mail-empty { margin: 10px 0; }
+}
 .huayu-card textarea { min-height: 120px; margin-bottom: 4px; }
 .huayu-count { min-height: 1.3em; margin: 0 6px 10px; text-align: right; font-size: .76rem; color: var(--text-mute); }
 .huayu-count.is-over { color: #e08e84; }
@@ -5426,7 +5534,8 @@ body.day-mode .pz-rec-table td.pz-rec-adj { color: #7a4a10; }
 .pz-crop-handle[data-h="se"] { right: 2px; bottom: 2px; cursor: nwse-resize; }
 .pz-crop-info { text-align: center; }
 .pz-rec-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-bottom: 10px; }
-.pz-rec-tools select { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink-2); color: var(--cream); font-family: inherit; }
+/* 去掉浏览器自带的箭头，只留玻璃输入栏那一个（--lq-arrow），右边留出箭头的位置 */
+.pz-rec-tools select { padding: 6px 34px 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink-2); color: var(--cream); font-family: inherit; appearance: none; -webkit-appearance: none; cursor: var(--cursor-link); }
 .gate-card .pz-rec-tools button { padding: 6px 16px; font-size: .84rem; }
 .pz-rec-table td { white-space: nowrap; }
 .pz-rec-table td.pz-rec-player { white-space: normal; word-break: break-all; min-width: 90px; color: var(--cream); }
@@ -7653,19 +7762,20 @@ html.hj-intro-only footer { visibility: hidden; }
   .admin-modal { max-height: min(86dvh, calc(100dvh - 48px)); }
   .alarm-card, .huayu-card { max-height: min(86dvh, 760px, calc(100dvh - 48px)); }
   .info-box.guide-box { max-height: min(88dvh, calc(100dvh - 48px)); }
-  .games-card { max-height: min(90dvh, 860px, calc(100dvh - 48px)); }
+  .games-card, .captcha-card { max-height: min(90dvh, 860px, calc(100dvh - 48px)); }
+  .mail-card { max-height: min(90dvh, 820px, calc(100dvh - 48px)); }
   .lightbox-overlay img { max-height: 92dvh; }
   @media (max-width: 640px) {
     .admin-modal { max-height: calc(100dvh - 48px); }
     .info-box.guide-box { max-height: calc(100dvh - 48px); }
   }
   @media (max-width: 560px) {
-    .games-card { max-height: calc(100dvh - 24px); }
+    .games-card, .mail-card { max-height: calc(100dvh - 24px); }
   }
 }
 /* 可滚动卡片里的 ×：不再随内容滚走。sticky + float 停在右上角（离卡片边 16 / 18 px，同原来的位置），负的下边距让它不占一行。
    卡片的内边距各不相同，main.js 的 pinCloseButtons 打开时量好写进 --pad-t / --pad-r */
-:is(.info-box:not(.guide-box), .games-card, .huayu-card, .alarm-card) > .info-close {
+:is(.info-box:not(.guide-box), .games-card, .captcha-card, .mail-card, .huayu-card, .alarm-card) > .info-close {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
@@ -7884,6 +7994,7 @@ body.day-mode {
   .alarm-item, .venue-edit, .survey-draft-note, .survey-q.is-card, .sv-overview, .sv-stat, .sv-texts li,
   .ta-group, .ta-round, .huayu-result, .st-perf-row ul,
   .pz-resume, .pz-contest, .pz-rec-list li, .pz-code,
+  .mail-item, .mail-read,
   .gm-macro, .gm-say, .gm-hint, .gm-answer, .gm-spy-card, .gm-spy-p, .gm-chip, .gm-kw-big, .gm-bomb-stage,
   .vc-rules) {
   --lq-pane-edge: initial;   /* 状态描边只给自己，不往里面的框传 */
@@ -7898,6 +8009,7 @@ body.day-mode {
   .alarm-item, .venue-edit, .survey-draft-note, .survey-q.is-card, .sv-overview, .sv-stat, .sv-texts li,
   .ta-group, .ta-round, .huayu-result, .st-perf-row ul,
   .pz-resume, .pz-rec-list li, .pz-code,
+  .mail-item, .mail-read,
   .gm-macro, .gm-say, .gm-hint, .gm-answer, .gm-spy-card, .gm-spy-p, .gm-chip,
   .vc-rules) {
   background-image: var(--lq-pane-sheen);

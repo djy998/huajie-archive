@@ -15,8 +15,11 @@ const SURVEY_PROJECTS = [
 ];
 
 /* 题型：choice（multi / exclusive / other）、score、card、text；show 为显示条件 */
+/* 做新问卷时换一个新的 id（Worker 的 SURVEYS 同步加上），旧问卷的答卷照样留在库里；
+   name 是记录用的问卷标题（管理页、个人数据里显示），管理页「活动问卷」里可以改，改过的以管理页为准；title 是访客看到的大标题 */
 const SURVEY = {
   id: "moguri2026",
+  name: "2026莫古力中秋月轮祭-游客问卷",
   title: "活动调查问卷",
   intro: "感谢参与「2026莫古力中秋月轮祭」！问卷约需 3～5 分钟，* 为必答题，未提交的内容会自动暂存。",
   closedText: "本次问卷已经结束收集啦，感谢您的关注和支持！",

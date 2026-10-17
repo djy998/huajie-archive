@@ -37,6 +37,7 @@
   const PW_MIN = 6;
   const PW_MAX = 64;
   const SYNC_EVERY_MS = 5 * 60 * 1000;
+  const MAIL_POLL_MS = 3 * 60 * 1000;   // 莫古邮件的未读数多久查一次（页面在前台、登录着时）
   const REPLY_CHECK_MS = 10 * 60 * 1000;
   const SYNC = {
     keys: [
@@ -93,6 +94,7 @@
     replies: new Map(),                  // 本机回执查到的回复：反馈编号 → { reply, replyAt, replyRead }
     gates: {}, filter: "all",
     syncing: null, syncTimer: 0, syncSoonTimer: 0, syncedAt: 0, syncErr: "",
+    mailMode: null,                      // 私信开关 open / admin / off（站点状态里的 mail）
     rendered: { account: "", data: false },
   };
 
@@ -122,6 +124,7 @@
     renderAccountPanel();
     paintDots();
     $("aboutAccountTab").textContent = st.token ? "我的账户" : "登录与注册";
+    paintMail();
     if (!$("aboutPanelThanks").hidden) renderThanksPanel();
     st.listeners.forEach((fn) => { try { fn(st.user); } catch (e) { console.error(e); } });
   }
@@ -133,6 +136,7 @@
     st.cloud = null;
     st.reset = null;
     storage.remove(STORE_SYNC);   // 换了账户：同步从头比
+    window.HJMail?.reset?.();
     if (!playerName() && st.user) setPlayerName(charIdOf() || st.user.username);
     changed();
     startSyncTimer();
@@ -140,6 +144,7 @@
   }
 
   function signOutLocal(msg) {
+    window.HJMail?.reset?.();
     st.token = null;
     st.user = null;
     st.cloud = null;
@@ -161,6 +166,7 @@
 
   /* get_site_state 的 account：对象 = 还在登录；false = 令牌失效；没有 = 没带令牌或 Worker 读不到，维持原样 */
   function applySite(data) {
+    if (data && typeof data.mail === "string") { st.mailMode = data.mail; paintMail(); }
     if (!st.token || !data || !("account" in data)) return;
     if (data.account === false) { signOutLocal("登录已过期，请重新登录"); return; }
     st.user = data.account;
@@ -440,9 +446,54 @@
     paintDots();
   }
 
+  /* ==== 莫古邮件（私信）的页头按钮 ====
+     只对登录账户显示：私信没关、或者是管理员、或者还有未读的信时显示；有未读时右上角亮小圆点。界面在 mail.js，第一次点开时加载 */
+  function paintMail() {
+    const btn = $("mailToggle");
+    if (!btn) return;
+    const u = st.token ? st.user : null;
+    const unread = u ? Number(u.mailUnread) || 0 : 0;
+    btn.hidden = !u || !(st.mailMode && st.mailMode !== "off" || u.role === "c" || unread > 0);
+    $("mailDot").hidden = btn.hidden || !unread;
+    btn.setAttribute("aria-label", unread ? `莫古邮件，${unread} 封未读` : "莫古邮件");
+  }
+  function setMailUnread(n, mode) {
+    if (!st.user) return;
+    if (typeof mode === "string") st.mailMode = mode;
+    if (Number(st.user.mailUnread) !== n) { st.user.mailUnread = n; saveState(); }
+    paintMail();
+  }
+  async function pollMail() {
+    if (!st.token || document.hidden) return;
+    const data = await callWorker({ action: "mail_unread", ...auth() }, { load: "none" });
+    if (data && data.ok) setMailUnread(Number(data.unread) || 0, data.mode);
+    else if (data && data.error === "auth") signOutLocal("登录已过期，请重新登录");
+  }
+  function openMail() {
+    loadLateScript("mail.js", () => !!window.HJMail).then(() => window.HJMail.open()).catch(() => showToast("莫古邮件没有加载出来，请检查网络后再试"));
+  }
+
   /* ==== 网站说明 · 致谢 ====
      名单在 config.js 的 SITE_THANKS；最后一行「多场活动长期合作的店家和老师们」下面一行 and、再一行接登录着的人自己的 id（游戏 id，没填用用户名）：
      每个人只看得到自己，算个小彩蛋。没登录就只有这一句。登录状态变了就重画 */
+  /* 名单按首字母排：英文取首字母，汉字取拼音首字母（拼音排序的边界字），同一字母里再按拼音排；浏览器不支持拼音排序时照 config.js 的顺序 */
+  const PINYIN_BOUNDS = [["A", "阿"], ["B", "芭"], ["C", "擦"], ["D", "搭"], ["E", "蛾"], ["F", "发"], ["G", "噶"], ["H", "哈"], ["J", "击"], ["K", "喀"], ["L", "垃"],
+    ["M", "妈"], ["N", "拿"], ["O", "哦"], ["P", "啪"], ["Q", "期"], ["R", "然"], ["S", "撒"], ["T", "塌"], ["W", "挖"], ["X", "昔"], ["Y", "压"], ["Z", "匝"]];
+  function thanksSorted(list) {
+    let coll = null;
+    try { coll = new Intl.Collator("zh-Hans-u-co-pinyin"); } catch (e) { /* 旧浏览器 */ }
+    if (!coll || coll.resolvedOptions().collation !== "pinyin") return list;
+    const initial = (s) => {
+      const ch = [...s][0] || "";
+      if (/[A-Za-z]/.test(ch)) return ch.toUpperCase();
+      if (!/[㐀-鿿]/.test(ch)) return "#";
+      let out = "#";
+      for (const [letter, bound] of PINYIN_BOUNDS) if (coll.compare(ch, bound) >= 0) out = letter;
+      return out;
+    };
+    return [...list].sort((a, b) => initial(a.name).localeCompare(initial(b.name)) || coll.compare(a.name, b.name));
+  }
+
   function renderThanksPanel() {
     const me = st.user ? charIdOf() || st.user.username : "";
     /* 自己就在名单里（角色名相同；填了服务器时服务器也要相同）：那一行变紫，下面不再单独列 */
@@ -451,7 +502,7 @@
     const listed = SITE_THANKS.some(mine);
     $("aboutPanelThanks").innerHTML = `<div class="about-text">
       <dl class="about-list thanks-list">
-        ${SITE_THANKS.map((t) => `<dt${mine(t) ? ' class="thanks-mine"' : ""}>${idHtml(t.name)}</dt><dd${mine(t) ? ' class="thanks-mine"' : ""}>${escapeHtml(t.what)}</dd>`).join("")}
+        ${thanksSorted(SITE_THANKS).map((t) => `<dt${mine(t) ? ' class="thanks-mine"' : ""}>${idHtml(t.name)}</dt><dd${mine(t) ? ' class="thanks-mine"' : ""}>${escapeHtml(t.what)}</dd>`).join("")}
         <dt class="thanks-wide">${escapeHtml(SITE_THANKS_PARTNERS)}${me && !listed ? `<span class="thanks-and">and</span><span class="thanks-me">${idHtml(me)}</span>` : ""}</dt>
       </dl>
       <p class="about-thanks">花舞之街·薰风花语町感谢大家的支持！</p>
@@ -468,7 +519,8 @@
     st.cloudAt = Date.now();
   }
 
-  const surveyTitle = (id) => (typeof SURVEY !== "undefined" && SURVEY.id === id ? SURVEY.title : `问卷（${id}）`);
+  /* 问卷名：账户记录带回来的标题（管理页填的）优先，其次是当前问卷的 SURVEY.name */
+  const surveyTitle = (id, title) => title || (typeof SURVEY !== "undefined" && SURVEY.id === id ? SURVEY.name || SURVEY.title : `问卷 ${id}`);
   const roundLabel = (day) => (typeof ticketRoundLabel === "function" ? ticketRoundLabel(day) : day);
   const holderText = (h) => (typeof formatHolder === "function" ? formatHolder(h) : h && h.name ? `${h.name}@${h.server}` : "待定");
 
@@ -493,7 +545,7 @@
     const c = st.token && st.cloud;
     if (c) {
       c.tickets.forEach((r) => put(`t:${r.day}#${r.seq}`, { type: "ticket", at: r.createdAt, day: r.day, seq: r.seq, qty: r.qty, contact: r.contact, holders: r.holders, message: r.message, anonymous: r.anonymous, voided: r.voided }, "cloud"));
-      c.surveys.forEach((r) => put(`s:${r.id}`, { type: "survey", at: r.createdAt, id: r.id, survey: r.survey, voided: r.voided }, "cloud"));
+      c.surveys.forEach((r) => put(`s:${r.id}`, { type: "survey", at: r.createdAt, id: r.id, survey: r.survey, surveyTitle: r.title || "", voided: r.voided }, "cloud"));
       c.venues.forEach((r) => put(`v:${r.id}`, { type: "venue", at: r.createdAt, id: r.id, rows: typeof venueSummaryRows === "function" ? venueSummaryRows(r) : [], voided: r.voided }, "cloud"));
       c.feedback.forEach((r) => put(`f:${r.id}`, { type: "feedback", at: r.createdAt, id: r.id, category: r.category, content: r.content, contact: r.contact, reply: r.reply, replyAt: r.replyAt, replyRead: r.replyRead }, "cloud"));
     }
@@ -510,7 +562,7 @@
         ...(x.message ? [["留言", `${x.message}（${x.anonymous ? "匿名" : "实名"}）`]] : []),
       ];
     }
-    if (x.type === "survey") return [["问卷", surveyTitle(x.survey)], ["编号", `#${x.id}`]];
+    if (x.type === "survey") return [["问卷", surveyTitle(x.survey, x.surveyTitle)], ["编号", `#${x.id}`]];
     if (x.type === "venue") return [["编号", `#${x.id}`], ...x.rows];
     const cats = typeof FEEDBACK_CATEGORIES !== "undefined" ? FEEDBACK_CATEGORIES : {};
     return [["类别", cats[x.category] || x.category || ""], ...(x.contact ? [["联系方式", x.contact]] : [])];
@@ -778,9 +830,9 @@
         <div class="about-field"><label class="about-label" for="acctLoginPw">密码</label>
           <input type="password" id="acctLoginPw" maxlength="64" autocomplete="current-password" data-pw></div>
         ${pwOpts("acctLoginRemember")}
+        <p class="form-msg acct-form-msg" id="acctLoginMsg" hidden></p>
         <div class="verify-host about-verify" id="acctLoginVerify"></div>
         <div class="about-submit-row"><button type="submit" class="share-site-btn" id="acctLoginBtn">登录</button></div>
-        <p class="form-msg" id="acctLoginMsg" hidden></p>
         <p class="acct-links"><button type="button" class="about-inline-link" data-acct-tip="forgot">忘记密码？</button></p>
       </form>
       <form class="about-form acct-form" id="acctRegForm" novalidate${st.mode === "register" && !st.reset ? "" : " hidden"}>
@@ -806,9 +858,9 @@
           </div></div>
         <div class="about-field"><label class="about-label" for="acctRegContact">联系方式（选填）</label>
           <input type="text" id="acctRegContact" maxlength="60" autocomplete="off"></div>
+        <p class="form-msg acct-form-msg" id="acctRegMsg" hidden></p>
         <div class="verify-host about-verify" id="acctRegVerify"></div>
         <div class="about-submit-row"><button type="submit" class="share-site-btn" id="acctRegBtn">注册</button></div>
-        <p class="form-msg" id="acctRegMsg" hidden></p>
       </form>
       <form class="about-form acct-form" id="acctResetForm" novalidate${st.reset ? "" : " hidden"}>
         <p class="about-hint acct-reset-who" id="acctResetWho"></p>
@@ -928,7 +980,11 @@
       const el = $(host);
       return createFormGate(el, {
         shouldOpen: () => el.isConnected && panelShowing() && !st.token && !st.reset && st.mode === mode,
-        onPass: () => setMsg($(mode === "login" ? "acctLoginMsg" : "acctRegMsg"), ""),
+        /* 验证通过时只清掉「请先完成验证」这类提示；密码不对、账户停用等结果留着（提示放在验证上方，换题后也看得到） */
+        onPass: () => {
+          const msg = $(mode === "login" ? "acctLoginMsg" : "acctRegMsg");
+          if (msg && msg.dataset.gate === "1") { setMsg(msg, ""); delete msg.dataset.gate; }
+        },
       });
     };
     st.gates = { login: gateFor("acctLoginVerify", "login"), register: gateFor("acctRegVerify", "register") };
@@ -965,6 +1021,12 @@
     if (st.gates[st.mode]) st.gates[st.mode].open();
   }
 
+  /* 人机验证还没完成的提示：验证通过后自动清掉 */
+  function gateMsg(msg, text) {
+    setMsg(msg, text);
+    msg.dataset.gate = "1";
+  }
+
   async function submitLogin(e) {
     e.preventDefault();
     const msg = $("acctLoginMsg");
@@ -973,10 +1035,11 @@
     if (!name || !pw) { setMsg(msg, "请填写用户名和密码"); return; }
     const gate = st.gates.login;
     const need = gate.missing();
-    if (need) { setMsg(msg, need); return; }
+    if (need) { gateMsg(msg, need); return; }
     const btn = $("acctLoginBtn");
     btn.disabled = true;
     setMsg(msg, "登录中…");
+    delete msg.dataset.gate;
     const data = await login(name, pw, { proof: gate.proof(), remember: $("acctLoginRemember").checked });
     btn.disabled = false;
     if (!data.ok) {
@@ -1002,10 +1065,11 @@
     if (bad) { setMsg(msg, bad); return; }
     const gate = st.gates.register;
     const need = gate.missing();
-    if (need) { setMsg(msg, need); return; }
+    if (need) { gateMsg(msg, need); return; }
     const btn = $("acctRegBtn");
     btn.disabled = true;
     setMsg(msg, "注册中…");
+    delete msg.dataset.gate;
     let derived;
     try { derived = await derivePw(name, pw); } catch (err) { btn.disabled = false; setMsg(msg, ERRORS.no_crypto); return; }
     const remember = $("acctRegRemember").checked;
@@ -1228,6 +1292,9 @@
     $("acctTipClose").addEventListener("click", closeTip);
     closeOnBackdrop($("acctTipOverlay"), closeTip);
     paintDots();
+    paintMail();
+    $("mailToggle").addEventListener("click", openMail);
+    setInterval(() => runQuietly(pollMail), MAIL_POLL_MS);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) { dailyBackup(); return; }   // 网页开着过了零点：回来时补存前一天的
       if (st.token && localDirty()) syncNow();
@@ -1240,7 +1307,7 @@
   window.HJAccount = {
     init, auth, token: () => st.token, user: () => st.user, isInternal, ROLE_NAMES, INTERNAL_ROLES,
     login, logout, applyUser, applySite, errorText, onChange: (fn) => st.listeners.add(fn),
-    record, fillTicket, fillVenue, fillFeedback, syncNow, syncSoon, openReset, onAboutTab, closeTip,
+    record, fillTicket, fillVenue, fillFeedback, syncNow, syncSoon, openReset, onAboutTab, closeTip, setMailUnread,
     charId: () => charIdOf(),
   };
 })();

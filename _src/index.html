@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261018b">
-  <link rel="preload" as="style" href="style.css?v=20261018b">
+  <link rel="preload" as="script" href="boot.js?v=20261019a">
+  <link rel="preload" as="style" href="style.css?v=20261019a">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261018b"></script>
+<script src="boot.js?v=20261019a"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -276,6 +276,11 @@
   <button class="daynight-toggle clock-toggle hb-slot-4" id="clockToggle" type="button" aria-pressed="false"
           aria-label="显示时间条" title="显示时间条">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+  </button>
+  <!-- 莫古邮件（私信）：只对登录账户显示，有未读时右上角亮小圆点；account.js 管显示，mail.js 管界面 -->
+  <button class="daynight-toggle mail-toggle hb-slot-6" id="mailToggle" type="button" aria-label="莫古邮件" title="莫古邮件" hidden>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6.2L20.5 7"/></svg>
+    <span class="hb-new-dot" id="mailDot" title="有未读邮件" hidden></span>
   </button>
   <button class="daynight-toggle sound-toggle hb-slot-5" id="soundToggle" type="button"
           aria-haspopup="true" aria-expanded="false" aria-label="音量" title="音量">
@@ -585,9 +590,9 @@
         <label class="password-show-label" id="internalRememberLabel"><input type="checkbox" id="internalRemember"> 自动登录</label>
       </div>
       <p class="acct-remember-hint" id="internalRememberHint">请不要在网吧或者公用设备上勾选“自动登录”</p>
+      <p class="form-msg" id="internalMsg" hidden></p>
       <div class="verify-host internal-verify" id="internalVerify"></div>
       <button type="button" id="internalSubmit">进入</button>
-      <p class="form-msg" id="internalMsg" hidden></p>
       <p class="internal-reg">还没有账户？<button type="button" class="about-inline-link" id="internalRegLink">去注册</button></p>
     </div>
 
@@ -964,6 +969,57 @@
   </div>
 </div>
 
+<div class="info-overlay" id="mailOverlay" role="dialog" aria-modal="true" aria-labelledby="mailTitle" data-close-only-x="1" hidden>
+  <div class="gate-card mail-card" id="mailCard">
+    <button type="button" class="info-close" id="mailClose" aria-label="关闭"></button>
+    <h2 id="mailTitle">莫古邮件</h2>
+    <div class="mail-layout">
+      <section class="mail-side" aria-label="邮件列表">
+        <div class="mail-side-head">
+          <button type="button" class="share-site-btn mail-new" id="mailNewBtn">写新邮件</button>
+          <button type="button" class="pill-btn-outline mail-refresh" id="mailRefreshBtn">刷新</button>
+        </div>
+        <div class="alarm-seg mail-tabs" id="mailTabs" role="radiogroup" aria-label="邮箱">
+          <label class="is-active"><input type="radio" name="mailBox" value="unread" checked><span>未读邮件</span></label>
+          <label><input type="radio" name="mailBox" value="in"><span>收件箱</span></label>
+          <label><input type="radio" name="mailBox" value="sent"><span>已发送</span></label>
+        </div>
+        <div class="mail-list" id="mailList"></div>
+        <p class="mail-foot" id="mailFoot"></p>
+      </section>
+      <section class="mail-main" aria-label="邮件内容">
+        <button type="button" class="pill-btn-outline mail-back" id="mailBack">返回列表</button>
+        <p class="mail-empty" id="mailEmpty">选择一封邮件查看，或点击「写新邮件」。</p>
+        <article class="mail-read" id="mailRead" hidden>
+          <div class="mail-read-head" id="mailReadHead"></div>
+          <p class="mail-read-meta" id="mailReadMeta"></p>
+          <h3 class="mail-read-title" id="mailReadTitle"></h3>
+          <div class="mail-read-body" id="mailReadBody"></div>
+          <div class="mail-read-btns">
+            <button type="button" class="share-site-btn" id="mailReplyBtn">回复</button>
+            <button type="button" class="share-site-btn is-danger" id="mailDeleteBtn">删除</button>
+          </div>
+        </article>
+        <form class="mail-compose about-form" id="mailCompose" novalidate autocomplete="off" hidden>
+          <p class="about-hint mail-send-hint" id="mailSendHint" hidden></p>
+          <div class="about-field"><label class="about-label is-required" for="mailTo">收信人</label>
+            <input type="text" id="mailTo" maxlength="16" placeholder="对方的用户名" spellcheck="false" autocapitalize="off"></div>
+          <div class="about-field"><label class="about-label" for="mailSubject">标题</label>
+            <input type="text" id="mailSubject" maxlength="30" placeholder="选填"></div>
+          <div class="about-field"><label class="about-label is-required" for="mailBody">正文</label>
+            <textarea id="mailBody" maxlength="500"></textarea>
+            <p class="about-count" id="mailCount">0 / 500</p></div>
+          <p class="form-msg" id="mailSendMsg" hidden></p>
+          <div class="mail-read-btns">
+            <button type="submit" class="share-site-btn" id="mailSendBtn">发送</button>
+            <button type="button" class="share-site-btn" id="mailCancelBtn">取消</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>
+
 <div class="info-overlay" id="gamesOverlay" role="dialog" aria-modal="true" aria-labelledby="gamesTitle" data-close-only-x="1" hidden>
   <div class="gate-card games-card" id="gamesCard">
     <button type="button" class="info-close" id="gamesClose" aria-label="关闭"></button>
@@ -1002,12 +1058,12 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261018b"></script>
-<script src="config.js?v=20261018b"></script>
-<script src="main.js?v=20261018b"></script>
-<script src="account.js?v=20261018b"></script>
-<script src="ticket.js?v=20261018b"></script>
-<script src="venue.js?v=20261018b"></script>
-<script src="survey.js?v=20261018b"></script>
+<script src="verify.js?v=20261019a"></script>
+<script src="config.js?v=20261019a"></script>
+<script src="main.js?v=20261019a"></script>
+<script src="account.js?v=20261019a"></script>
+<script src="ticket.js?v=20261019a"></script>
+<script src="venue.js?v=20261019a"></script>
+<script src="survey.js?v=20261019a"></script>
 </body>
 </html>

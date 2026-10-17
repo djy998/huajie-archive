@@ -4556,6 +4556,7 @@ const MODALS = [
   { overlay: "huayuOverlay", closeBtn: "huayuClose", close: closeHuayuModal },
   { overlay: "puzzleOverlay", closeBtn: "puzzleClose", close: closePuzzle },
   { overlay: "gamesOverlay", closeBtn: "gamesClose", close: closeGames },
+  { overlay: "mailOverlay", closeBtn: "mailClose", close: () => window.HJMail?.close?.() },
   { overlay: "sitePopupOverlay", closeBtn: "sitePopupClose", close: closeSitePopup },
   { overlay: "acctTipOverlay", closeBtn: "acctTipClose", close: () => window.HJAccount?.closeTip?.() },
   { overlay: "lightboxOverlay", closeBtn: "lightboxClose", close: closeLightbox },
