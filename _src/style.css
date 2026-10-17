@@ -2278,8 +2278,21 @@ body.day-mode #mailOverlay #mailClose:hover { color: var(--day-cream); border-co
   padding: 20px;
   background: rgba(6,5,12,.92);
 }
-/* 大图预览的遮罩昼夜都是深色：放大镜固定用夜晚的橙色版 */
-.lightbox-overlay { --cursor-zoom-in: var(--cursor-zoom-in-night); --cursor-zoom-out: var(--cursor-zoom-out-night); }
+/* 放大镜光标跟着昼夜：白天用紫色、夜晚用橙色（遮罩昼夜都是深色，但白天点开后仍用白天那套，和页面上一致） */
+/* 下方的操作提示：深色遮罩上的一条小玻璃签，不挡点击；触屏设备没有左右键，不显示 */
+.lightbox-hint {
+  position: fixed; left: 50%; bottom: 18px; z-index: 1;
+  translate: -50% 0;
+  margin: 0; padding: 6px 16px;
+  border-radius: 999px;
+  font-size: .82rem; letter-spacing: .04em; white-space: nowrap;
+  color: rgba(255,255,255,.88);
+  background: rgba(20,16,36,.55);
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 2px 8px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12);
+  pointer-events: none;
+}
+@media (hover: none), (pointer: coarse) { .lightbox-hint { display: none; } }
 .lightbox-overlay img {
   max-width: 95vw;
   max-height: 92vh;
@@ -5160,6 +5173,10 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 .mail-item.is-unread .mail-item-text { font-weight: 700; color: var(--cream); }
 .mail-item.is-unread .mail-item-who::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--new-dot); }
 .mail-tag-admin { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: .68rem; font-weight: 700; line-height: 1.6; vertical-align: 1px; color: var(--accent-ink); background: var(--accent); }
+.mail-tag-admin.is-bcast { color: var(--cream); background: rgba(255,255,255,.16); border: 1px solid var(--line); }
+body.day-mode .mail-tag-admin.is-bcast { color: var(--day-cream); background: rgba(255,252,240,.6); border-color: #c98f3a; }
+.mail-card .mail-all-opt { margin-top: 8px; justify-content: flex-start; }
+.mail-card .mail-compose input:disabled { opacity: .6; }
 .mail-foot { margin: 8px 0 0; font-size: .76rem; text-align: right; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .mail-main { overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
 .mail-card .mail-back { align-self: flex-end; margin-bottom: 10px; }

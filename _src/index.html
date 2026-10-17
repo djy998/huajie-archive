@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261019c">
-  <link rel="preload" as="style" href="style.css?v=20261019c">
+  <link rel="preload" as="script" href="boot.js?v=20261019e">
+  <link rel="preload" as="style" href="style.css?v=20261019e">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261019c"></script>
+<script src="boot.js?v=20261019e"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -643,6 +643,7 @@
 <div class="lightbox-overlay" id="lightboxOverlay" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
   <button type="button" class="lightbox-close" id="lightboxClose" aria-label="关闭"></button>
   <img id="lightboxImg" alt="">
+  <p class="lightbox-hint" id="lightboxHint" hidden>左键放大图片，右键缩小图片</p>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -996,13 +997,15 @@
           <div class="mail-read-body" id="mailReadBody"></div>
           <div class="mail-read-btns">
             <button type="button" class="share-site-btn" id="mailReplyBtn">回复</button>
+            <button type="button" class="share-site-btn" id="mailForwardBtn">转发</button>
             <button type="button" class="share-site-btn is-danger" id="mailDeleteBtn">删除</button>
           </div>
         </article>
         <form class="mail-compose about-form" id="mailCompose" novalidate autocomplete="off" hidden>
           <p class="about-hint mail-send-hint" id="mailSendHint" hidden></p>
           <div class="about-field"><label class="about-label is-required" for="mailTo">收信人</label>
-            <input type="text" id="mailTo" maxlength="16" placeholder="对方的用户名" spellcheck="false" autocapitalize="off"></div>
+            <input type="text" id="mailTo" maxlength="16" placeholder="对方的用户名" spellcheck="false" autocapitalize="off">
+            <label class="password-show-label mail-all-opt" id="mailAllRow" hidden><input type="checkbox" id="mailAll"> 群发给所有用户</label></div>
           <div class="about-field"><label class="about-label" for="mailSubject">标题</label>
             <input type="text" id="mailSubject" maxlength="30" placeholder="选填"></div>
           <div class="about-field"><label class="about-label is-required" for="mailBody">正文</label>
@@ -1057,12 +1060,12 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261019c"></script>
-<script src="config.js?v=20261019c"></script>
-<script src="main.js?v=20261019c"></script>
-<script src="account.js?v=20261019c"></script>
-<script src="ticket.js?v=20261019c"></script>
-<script src="venue.js?v=20261019c"></script>
-<script src="survey.js?v=20261019c"></script>
+<script src="verify.js?v=20261019e"></script>
+<script src="config.js?v=20261019e"></script>
+<script src="main.js?v=20261019e"></script>
+<script src="account.js?v=20261019e"></script>
+<script src="ticket.js?v=20261019e"></script>
+<script src="venue.js?v=20261019e"></script>
+<script src="survey.js?v=20261019e"></script>
 </body>
 </html>

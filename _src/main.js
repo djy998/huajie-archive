@@ -1558,7 +1558,9 @@ function initSitePopup() {
 
 
 /* ==== 8. 大图预览 ==== */
-/* 单击放大、右键缩小、拖动、双指缩放；相册图双击设为背景；长图按宽度滚动 */
+/* 单击放大、右键缩小、拖动、双指缩放；相册图双击设为背景；长图按宽度滚动。
+   能放大缩小的图下方提示「左键放大图片，右键缩小图片」（只在有鼠标的设备上显示）。
+   光标：只能放大时是放大镜、只能缩小时是缩小镜；两样都能时跟着最近一次操作（刚放大过是放大镜，刚缩小过是缩小镜） */
 const LB_ZOOM_STEP = 2.5;
 const LB_MAX_SCALE = 20;
 const LB_LONG_RATIO = 2.5;
@@ -1570,7 +1572,7 @@ let lbState = null;
 let lbSeq = 0;
 
 function resetLightboxTransform() {
-  lbState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0, moved: false };
+  lbState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0, moved: false, lastDir: "in" };
   $("lightboxImg").style.transformOrigin = "50% 50%";
   applyLightboxTransform();
 }
@@ -1578,7 +1580,21 @@ function resetLightboxTransform() {
 function applyLightboxTransform() {
   const img = $("lightboxImg");
   img.style.transform = `translate(${lbState.tx}px, ${lbState.ty}px) scale(${lbState.scale})`;
-  if (!lbState.dragging) img.style.cursor = lightboxMode === "gallery" || lbLong ? "default" : lbState.scale > 1 ? "var(--cursor-zoom-out)" : "var(--cursor-zoom-in)";
+  if (!lbState.dragging) img.style.cursor = lightboxMode === "gallery" || lbLong ? "default" : `var(--cursor-zoom-${lbCursorDir()})`;
+}
+
+/* 光标方向：只能放大 → in，只能缩小 → out，两样都能 → 最近一次操作的方向 */
+function lbCursorDir() {
+  const canIn = lbState.scale < LB_MAX_SCALE - 0.001;
+  const canOut = lbState.scale > 1.001;
+  if (canIn && !canOut) return "in";
+  if (canOut && !canIn) return "out";
+  return lbState.lastDir;
+}
+
+/* 下方的操作提示：能放大缩小的图才显示（相册图双击设背景、海报长图滚动查看，都不显示） */
+function syncLightboxHint() {
+  $("lightboxHint").hidden = $("lightboxOverlay").hidden || lightboxMode === "gallery" || lbLong;
 }
 
 function setLightboxLong(long) {
@@ -1586,6 +1602,7 @@ function setLightboxLong(long) {
   $("lightboxOverlay").classList.toggle("is-long", long);
   if (long) $("lightboxOverlay").scrollTop = 0;
   applyLightboxTransform();
+  syncLightboxHint();
 }
 
 /* 没有缩略图先垫着的大图，下载完之前是一片空白，套上加载提示；关掉大图时一并结束 */
@@ -1612,6 +1629,7 @@ function openLightbox(src, mode, preview) {
     full.src = src;
   }
   $("lightboxOverlay").hidden = false;
+  syncLightboxHint();
   if (img.complete && img.naturalWidth) img.onload();
   else if (!preview || preview === src) {
     trackLoad(new Promise((resolve) => {
@@ -1653,6 +1671,7 @@ function setTransformOriginAt(img, clientX, clientY) {
 }
 
 function zoomAt(clientX, clientY, factor) {
+  lbState.lastDir = factor > 1 ? "in" : "out";
   setTransformOriginAt($("lightboxImg"), clientX, clientY);
   const next = lbState.scale * factor;
   if (next <= 1.001) Object.assign(lbState, { scale: 1, tx: 0, ty: 0 });
@@ -1737,6 +1756,7 @@ function initLightbox() {
     if (e.touches.length === 2 && pinch) {
       e.preventDefault();
       const scale = clamp(pinch.scale * (touchDist(e.touches) / pinch.dist), 1, LB_MAX_SCALE);
+      if (scale !== lbState.scale) lbState.lastDir = scale > lbState.scale ? "in" : "out";
       Object.assign(lbState, scale <= 1.001 ? { scale: 1, tx: 0, ty: 0 } : { scale }, { moved: true });
       applyLightboxTransform();
     } else if (e.touches.length === 1 && !pinch && lbState.scale > 1) {
