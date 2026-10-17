@@ -2230,7 +2230,6 @@ const LQ_TARGETS = [
   ".pz-resume", ".pz-contest", ".pz-rec-list li", ".pz-code",
   ".gm-macro", ".gm-say", ".gm-hint", ".gm-answer", ".gm-spy-card", ".gm-spy-p", ".gm-chip", ".gm-kw-big", ".gm-bomb-stage",
   ".vc-rules",
-  ".gate-card textarea", ".about-form textarea", ".alarm-card textarea",
   /* 按钮与选项 */
   ".daynight-toggle", ".more-item", ".venue-choice", ".survey-scale-opt span",
 ].join(", ");

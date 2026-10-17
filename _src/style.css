@@ -7993,6 +7993,84 @@ body.day-mode {
   :is(input, select, textarea):focus {
   --lq-ring: 0 0 0 3px var(--lq-focus-ring);
 }
+/* ==== 31b. 卡片里的文本域、吟游诗人模拟器的乐器选择：烘焙渐变的立体玻璃 ====
+   文本域（.gate-card / .about-form / .alarm-card 里的 textarea）不再透出背景、不做折射：底色是一层上浅下深的渐变，
+   1px 亮边（顶、底最亮）、很淡的噪点、贴身近影 + 收紧的远影、顶部一道高光和底部一点厚度，圆角 24px，不能拖动改大小。
+   框是不透明的，所以 main.js「9b」不再给文本域生成折射滤镜（省掉滚动和缩放时的重算）。聚焦时照旧在外面加一圈淡光（--lq-ring）。
+   乐器选择（.bard-select）用同一套做法，做成胶囊形，箭头叠在最上面 */
+body.day-mode :is(.gate-card, .about-form, .alarm-card) textarea {
+  --lq-edge-convex: linear-gradient(180deg,
+    rgba(255,255,255,.62) 0%, rgba(255,250,238,.46) 4%, rgba(244,214,164,.34) 14%, rgba(214,168,96,.26) 50%,
+    rgba(244,214,164,.34) 86%, rgba(255,250,238,.46) 96%, rgba(255,255,255,.52) 100%);
+  border: 1px solid transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #fdf6e8 0%, #f9ecd2 22%, #f4dfb8 58%, #eed4a2 100%),
+    var(--lq-edge-convex);
+  background-size: 64px 64px, auto, auto;
+  background-clip: padding-box, padding-box, border-box;
+  background-origin: border-box;
+  box-shadow: 0 1px 2px rgba(8,6,18,.07), 0 5px 12px rgba(120,80,20,.09),
+    inset 0 1px 0 rgba(255,255,255,.58), inset 0 -2px 5px rgba(120,80,20,.09), var(--lq-ring);
+  border-radius: 24px;
+  resize: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body:not(.day-mode) :is(.gate-card, .about-form, .alarm-card) textarea {
+  --lq-edge-convex: linear-gradient(180deg,
+    rgba(255,255,255,.30) 0%, rgba(255,255,255,.22) 4%, rgba(255,255,255,.15) 14%, rgba(255,255,255,.12) 50%,
+    rgba(255,255,255,.15) 86%, rgba(255,255,255,.22) 96%, rgba(255,255,255,.28) 100%);
+  border: 1px solid transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #2a2440 0%, #241e38 30%, #1d192c 70%, #191526 100%),
+    var(--lq-edge-convex);
+  background-size: 64px 64px, auto, auto;
+  background-clip: padding-box, padding-box, border-box;
+  background-origin: border-box;
+  box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 5px 12px rgba(0,0,0,.20),
+    inset 0 1px 0 rgba(255,255,255,.26), inset 0 -2px 5px rgba(0,0,0,.22), var(--lq-ring);
+  border-radius: 24px;
+  resize: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.bard-select {
+  border: 1px solid transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9bfe0' stroke-width='1.6'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #2f2848 0%, #29223f 30%, #211c33 70%, #1c182c 100%),
+    linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.16) 30%, rgba(255,255,255,.12) 55%, rgba(255,255,255,.28) 100%);
+  background-repeat: no-repeat, repeat, no-repeat, no-repeat;
+  background-position: right 14px center, 0 0, 0 0, 0 0;
+  background-size: auto, 64px 64px, auto, auto;
+  background-clip: border-box, padding-box, padding-box, border-box;
+  background-origin: border-box;
+  box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.28), inset 0 -2px 5px rgba(0,0,0,.24);
+  transition: box-shadow .2s ease, translate .15s ease;
+}
+.bard-select:hover { translate: 0 -1px; box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 6px 14px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.32), inset 0 -2px 5px rgba(0,0,0,.24); }
+.bard-select:focus { box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -2px 5px rgba(0,0,0,.24), 0 0 0 3px rgba(185,164,224,.15); }
+.bard-select option { color: var(--cream); background: var(--ink-2); }
+body.day-mode .bard-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #fdf6e8 0%, #f9ecd2 22%, #f4dfb8 58%, #eed4a2 100%),
+    linear-gradient(180deg, rgba(255,255,255,.66) 0%, rgba(244,214,164,.40) 25%, rgba(214,168,96,.32) 55%, rgba(255,255,255,.56) 100%);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(8,6,18,.07), 0 4px 10px rgba(120,80,20,.12),
+    inset 0 1px 0 rgba(255,255,255,.62), inset 0 -2px 5px rgba(120,80,20,.10);
+}
+body.day-mode .bard-select:hover { box-shadow: 0 1px 2px rgba(8,6,18,.07), 0 6px 14px rgba(120,80,20,.16), inset 0 1px 0 rgba(255,255,255,.66), inset 0 -2px 5px rgba(120,80,20,.10); }
+body.day-mode .bard-select:focus { box-shadow: 0 1px 2px rgba(8,6,18,.07), 0 4px 10px rgba(120,80,20,.12), inset 0 1px 0 rgba(255,255,255,.62), inset 0 -2px 5px rgba(120,80,20,.10), 0 0 0 3px rgba(201,143,58,.30); }
+body.day-mode .bard-select option { color: var(--day-cream); background: #f6e3bb; }
+@media (prefers-reduced-motion: reduce) { .bard-select:hover { translate: none; } }
+
+/* 管理页的下拉框：同主页面卡片里的下拉框（购票、网站说明），夜晚用深色的下拉列表和选项底色，
+   不再弹出浅色列表、系统的亮蓝高亮；白天用浅色。聚焦仍是外面一圈淡光（--lq-ring） */
+.admin-card select { color-scheme: dark; }
+.admin-card select option, .admin-card select optgroup { color: var(--cream); background: var(--ink-2); }
+body.day-mode .admin-card select { color-scheme: light; }
+body.day-mode .admin-card select option, body.day-mode .admin-card select optgroup { color: var(--day-cream); background: #f6e3bb; }
+
 /* 校验失败 / 输入错误：换成暖红描边 */
 :is(body, body.day-mode) .ticket-card .th-name.is-invalid,
 :is(body, body.day-mode) .games-card input.is-wrong,
