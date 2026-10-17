@@ -8041,9 +8041,10 @@ body:not(.day-mode) :is(.gate-card, .about-form, .alarm-card) textarea {
     linear-gradient(180deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.16) 30%, rgba(255,255,255,.12) 55%, rgba(255,255,255,.28) 100%);
   background-repeat: no-repeat, repeat, no-repeat, no-repeat;
   background-position: right 14px center, 0 0, 0 0, 0 0;
-  background-size: auto, 64px 64px, auto, auto;
+  background-size: auto, 64px 64px, 100% 100%, 100% 100%;
   background-clip: border-box, padding-box, padding-box, border-box;
-  background-origin: border-box;
+  background-origin: border-box, border-box, border-box, border-box;
+  background-color: transparent;
   box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.22),
     inset 0 1px 0 rgba(255,255,255,.28), inset 0 -2px 5px rgba(0,0,0,.24);
   transition: box-shadow .2s ease, translate .15s ease;
@@ -8051,11 +8052,20 @@ body:not(.day-mode) :is(.gate-card, .about-form, .alarm-card) textarea {
 .bard-select:hover { translate: 0 -1px; box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 6px 14px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.32), inset 0 -2px 5px rgba(0,0,0,.24); }
 .bard-select:focus { box-shadow: 0 1px 2px rgba(0,0,0,.24), 0 4px 10px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -2px 5px rgba(0,0,0,.24), 0 0 0 3px rgba(185,164,224,.15); }
 .bard-select option { color: var(--cream); background: var(--ink-2); }
+/* 白天：整个胶囊用「右端那一角」的材质——淡金底色上叠一层上亮、中间带金、下缘回亮的半透明渐变；
+   外圈 1px 亮边比底色再亮一档，看得出轮廓。所有 background 子属性都写全，不和上面旧的 body.day-mode .bard-select 简写混在一起 */
 body.day-mode .bard-select {
+  border: 1px solid transparent;
+  background-color: transparent;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b3610' stroke-width='1.6'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
-    linear-gradient(180deg, #fdf6e8 0%, #f9ecd2 22%, #f4dfb8 58%, #eed4a2 100%),
-    linear-gradient(180deg, rgba(255,255,255,.66) 0%, rgba(244,214,164,.40) 25%, rgba(214,168,96,.32) 55%, rgba(255,255,255,.56) 100%);
-  border-color: transparent;
+    linear-gradient(180deg, rgba(255,255,255,.66) 0%, rgba(244,214,164,.40) 25%, rgba(214,168,96,.32) 55%, rgba(255,255,255,.56) 100%),
+    linear-gradient(#f6e3bb, #f6e3bb),
+    linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(232,196,132,.55) 45%, rgba(214,168,96,.50) 60%, rgba(255,255,255,.80) 100%);
+  background-repeat: no-repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-position: right 14px center, 0 0, 0 0, 0 0, 0 0;
+  background-size: auto, 64px 64px, 100% 100%, 100% 100%, 100% 100%;
+  background-clip: border-box, padding-box, padding-box, padding-box, border-box;
+  background-origin: border-box, border-box, border-box, border-box, border-box;
   box-shadow: 0 1px 2px rgba(8,6,18,.07), 0 4px 10px rgba(120,80,20,.12),
     inset 0 1px 0 rgba(255,255,255,.62), inset 0 -2px 5px rgba(120,80,20,.10);
 }
