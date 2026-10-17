@@ -5112,12 +5112,11 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 
 /* ==== 邮差莫古力（mail.js） ====
    参照游戏里的莫古邮件：左栏列表（写新邮件、未读 / 收件箱 / 已发送、条目、底部计数），右栏看信或写信。
-   平时卡片收起、只有列表；看信或写信时（.is-open）展开成两栏，各自滚动。手机上展开时只显示右栏，「收起」回到列表 */
+   平时卡片收起、只有列表；看信或写信时（.is-open）直接展开成两栏（不做展开动画，省性能，同吟游诗人模拟器的「高级功能」），各自滚动。手机上展开时只显示右栏，「收起」回到列表 */
 .mail-card {
   position: relative;
   width: 100%;
   max-width: 440px;
-  transition: max-width .25s ease;
   max-height: min(90vh, 820px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -5131,7 +5130,6 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 .mail-layout { display: grid; grid-template-columns: 1fr; gap: 18px; height: min(62vh, 560px); }
 .mail-card.is-open .mail-layout { grid-template-columns: minmax(250px, 320px) 1fr; }
 .mail-card:not(.is-open) .mail-main { display: none; }
-body.fx-off .mail-card { transition: none; }
 .mail-side, .mail-main { min-height: 0; display: flex; flex-direction: column; }
 .mail-side-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .mail-card .mail-new { flex: 1 1 auto; margin: 0; padding: 9px 18px; }
