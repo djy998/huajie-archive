@@ -37,7 +37,7 @@
   const PW_MIN = 6;
   const PW_MAX = 64;
   const SYNC_EVERY_MS = 5 * 60 * 1000;
-  const MAIL_POLL_MS = 3 * 60 * 1000;   // 莫古邮件的未读数多久查一次（页面在前台、登录着时）
+  const MAIL_POLL_MS = 3 * 60 * 1000;   // 邮差莫古力的未读数多久查一次（页面在前台、登录着时）
   const REPLY_CHECK_MS = 10 * 60 * 1000;
   const SYNC = {
     keys: [
@@ -446,7 +446,7 @@
     paintDots();
   }
 
-  /* ==== 莫古邮件（私信）的页头按钮 ====
+  /* ==== 邮差莫古力（私信）的页头按钮 ====
      只对登录账户显示：私信没关、或者是管理员、或者还有未读的信时显示；有未读时右上角亮小圆点。界面在 mail.js，第一次点开时加载 */
   function paintMail() {
     const btn = $("mailToggle");
@@ -455,7 +455,7 @@
     const unread = u ? Number(u.mailUnread) || 0 : 0;
     btn.hidden = !u || !(st.mailMode && st.mailMode !== "off" || u.role === "c" || unread > 0);
     $("mailDot").hidden = btn.hidden || !unread;
-    btn.setAttribute("aria-label", unread ? `莫古邮件，${unread} 封未读` : "莫古邮件");
+    btn.setAttribute("aria-label", unread ? `邮差莫古力，${unread} 封未读` : "邮差莫古力");
   }
   function setMailUnread(n, mode) {
     if (!st.user) return;
@@ -470,7 +470,7 @@
     else if (data && data.error === "auth") signOutLocal("登录已过期，请重新登录");
   }
   function openMail() {
-    loadLateScript("mail.js", () => !!window.HJMail).then(() => window.HJMail.open()).catch(() => showToast("莫古邮件没有加载出来，请检查网络后再试"));
+    loadLateScript("mail.js", () => !!window.HJMail).then(() => window.HJMail.open()).catch(() => showToast("邮差莫古力没有加载出来，请检查网络后再试"));
   }
 
   /* ==== 网站说明 · 致谢 ====

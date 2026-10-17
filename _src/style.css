@@ -427,7 +427,7 @@ body.day-mode .daynight-toggle:active {
 .hb-slot-4 { right: 174px; }
 .hb-slot-5 { right: 226px; }
 .hb-slot-6 { right: 278px; }
-/* 页头按钮右上角的新消息小圆点（莫古邮件）：同管理页按钮的提示点，夜间紫藤色、白天琥珀色 */
+/* 页头按钮右上角的新消息小圆点（邮差莫古力）：同管理页按钮的提示点，夜间紫藤色、白天琥珀色 */
 .daynight-toggle .hb-new-dot {
   position: absolute; top: -2px; right: -2px;
   width: 11px; height: 11px; border-radius: 50%;
@@ -5110,21 +5110,28 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 }
 .huayu-card h2, .huayu-card > .hint { text-align: center; }
 
-/* ==== 莫古邮件（mail.js） ====
+/* ==== 邮差莫古力（mail.js） ====
    参照游戏里的莫古邮件：左栏列表（写新邮件、未读 / 收件箱 / 已发送、条目、底部计数），右栏看信或写信。
-   电脑上两栏固定高度、各自滚动；手机上一次一栏（.is-main 时显示右栏，带「返回列表」） */
+   平时卡片收起、只有列表；看信或写信时（.is-open）展开成两栏，各自滚动。手机上展开时只显示右栏，「收起」回到列表 */
 .mail-card {
   position: relative;
   width: 100%;
-  max-width: 900px;
+  max-width: 440px;
+  transition: max-width .25s ease;
   max-height: min(90vh, 820px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 32px 26px 24px;
   text-align: left;
 }
+.mail-card.is-open { max-width: 900px; }
 .mail-card h2 { text-align: center; }
-.mail-layout { display: grid; grid-template-columns: minmax(250px, 320px) 1fr; gap: 18px; height: min(62vh, 560px); }
+/* 标题右边的邮差莫古力小图（assets/site/mail-moogle.png，透明底、竖长 87 × 206）：气球高出标题字，挎包底边只比字的底线低一点，不碰下面的按钮，也不撑高标题行 */
+.mail-title-moogle { display: inline-block; width: .9em; height: 2.1em; margin: -1em 0 -.1em .15em; vertical-align: -.15em; background: url("assets/site/mail-moogle.png") center / contain no-repeat; }
+.mail-layout { display: grid; grid-template-columns: 1fr; gap: 18px; height: min(62vh, 560px); }
+.mail-card.is-open .mail-layout { grid-template-columns: minmax(250px, 320px) 1fr; }
+.mail-card:not(.is-open) .mail-main { display: none; }
+body.fx-off .mail-card { transition: none; }
 .mail-side, .mail-main { min-height: 0; display: flex; flex-direction: column; }
 .mail-side-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .mail-card .mail-new { flex: 1 1 auto; margin: 0; padding: 9px 18px; }
@@ -5157,8 +5164,7 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 .mail-tag-admin { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: .68rem; font-weight: 700; line-height: 1.6; vertical-align: 1px; color: var(--accent-ink); background: var(--accent); }
 .mail-foot { margin: 8px 0 0; font-size: .76rem; text-align: right; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .mail-main { overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
-.mail-card .mail-back { display: none; align-self: flex-start; margin-bottom: 10px; }
-.mail-empty { margin: auto; padding: 20px; text-align: center; font-size: .88rem; color: var(--text-mute); }
+.mail-card .mail-back { align-self: flex-end; margin-bottom: 10px; }
 .mail-read { padding: 16px 18px; border-radius: var(--radius-sm); background-color: var(--panel-soft); }
 .mail-read-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: .92rem; }
 .mail-read-label { font-size: .78rem; color: var(--text-mute); }
@@ -5177,18 +5183,17 @@ body.day-mode .gate-card .ta-point .ta-point-at { color-scheme: light; }
 body.day-mode .mail-item-who, body.day-mode .mail-read-who { color: var(--day-gold); }
 body.day-mode .mail-item, body.day-mode .mail-read { background-color: rgba(255,252,240,.5); color: var(--day-cream); }
 body.day-mode .mail-item.is-unread .mail-item-text, body.day-mode .mail-read-title, body.day-mode .mail-read-body { color: var(--day-cream); }
-body.day-mode :is(.mail-item-time, .mail-foot, .mail-empty, .mail-read-label, .mail-read-meta, .mail-uname) { color: var(--day-lilac); }
+body.day-mode :is(.mail-item-time, .mail-foot, .mail-read-label, .mail-read-meta) { color: var(--day-lilac); }
+body.day-mode .mail-uname { color: var(--day-cream); }
 body.day-mode .mail-tag-admin { color: #fff6e0; background: #8a5a1c; }
 body.day-mode .mail-send-hint, body.day-mode #mailCount.is-over { color: #a3261a; }
 @media (max-width: 760px) {
-  .mail-card { padding: 28px 16px 18px; }
-  .mail-layout { display: block; height: auto; }
+  .mail-card, .mail-card.is-open { max-width: 560px; padding: 28px 16px 18px; }
+  .mail-layout, .mail-card.is-open .mail-layout { display: block; height: auto; }
   .mail-list { overflow: visible; }
-  .mail-main { display: none; overflow: visible; }
-  .mail-card.is-main .mail-side { display: none; }
-  .mail-card.is-main .mail-main { display: flex; }
-  .mail-card .mail-back { display: inline-flex; }
-  .mail-empty { margin: 10px 0; }
+  .mail-main { overflow: visible; }
+  .mail-card.is-open .mail-side { display: none; }
+  .mail-card .mail-back { align-self: flex-start; }
 }
 .huayu-card textarea { min-height: 120px; margin-bottom: 4px; }
 .huayu-count { min-height: 1.3em; margin: 0 6px 10px; text-align: right; font-size: .76rem; color: var(--text-mute); }

@@ -20,8 +20,8 @@
 
   <link rel="icon" type="image/png" href="assets/site/favicon.png">
   <link rel="preload" as="image" href="boot-moguri-v2.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="boot.js?v=20261019a">
-  <link rel="preload" as="style" href="style.css?v=20261019a">
+  <link rel="preload" as="script" href="boot.js?v=20261019b">
+  <link rel="preload" as="style" href="style.css?v=20261019b">
 
   <!-- 开屏与样式表加载前的状态 -->
   <style>
@@ -252,7 +252,7 @@
 
 <div id="maintNotice" role="status"><p>网站正在维护中……</p></div>
 
-<script src="boot.js?v=20261019a"></script>
+<script src="boot.js?v=20261019b"></script>
 
 <div id="skyBase"></div>
 <div id="skyFade"></div>
@@ -277,8 +277,8 @@
           aria-label="显示时间条" title="显示时间条">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
   </button>
-  <!-- 莫古邮件（私信）：只对登录账户显示，有未读时右上角亮小圆点；account.js 管显示，mail.js 管界面 -->
-  <button class="daynight-toggle mail-toggle hb-slot-6" id="mailToggle" type="button" aria-label="莫古邮件" title="莫古邮件" hidden>
+  <!-- 邮差莫古力（私信）：只对登录账户显示，有未读时右上角亮小圆点；account.js 管显示，mail.js 管界面 -->
+  <button class="daynight-toggle mail-toggle hb-slot-6" id="mailToggle" type="button" aria-label="邮差莫古力" title="邮差莫古力" hidden>
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6.2L20.5 7"/></svg>
     <span class="hb-new-dot" id="mailDot" title="有未读邮件" hidden></span>
   </button>
@@ -972,7 +972,7 @@
 <div class="info-overlay" id="mailOverlay" role="dialog" aria-modal="true" aria-labelledby="mailTitle" data-close-only-x="1" hidden>
   <div class="gate-card mail-card" id="mailCard">
     <button type="button" class="info-close" id="mailClose" aria-label="关闭"></button>
-    <h2 id="mailTitle">莫古邮件</h2>
+    <h2 id="mailTitle">邮差莫古力<span class="mail-title-moogle" aria-hidden="true"></span></h2>
     <div class="mail-layout">
       <section class="mail-side" aria-label="邮件列表">
         <div class="mail-side-head">
@@ -988,8 +988,7 @@
         <p class="mail-foot" id="mailFoot"></p>
       </section>
       <section class="mail-main" aria-label="邮件内容">
-        <button type="button" class="pill-btn-outline mail-back" id="mailBack">返回列表</button>
-        <p class="mail-empty" id="mailEmpty">选择一封邮件查看，或点击「写新邮件」。</p>
+        <button type="button" class="pill-btn-outline mail-back" id="mailBack">收起</button>
         <article class="mail-read" id="mailRead" hidden>
           <div class="mail-read-head" id="mailReadHead"></div>
           <p class="mail-read-meta" id="mailReadMeta"></p>
@@ -1007,8 +1006,8 @@
           <div class="about-field"><label class="about-label" for="mailSubject">标题</label>
             <input type="text" id="mailSubject" maxlength="30" placeholder="选填"></div>
           <div class="about-field"><label class="about-label is-required" for="mailBody">正文</label>
-            <textarea id="mailBody" maxlength="500"></textarea>
-            <p class="about-count" id="mailCount">0 / 500</p></div>
+            <textarea id="mailBody" maxlength="1000"></textarea>
+            <p class="about-count" id="mailCount">0 / 1000</p></div>
           <p class="form-msg" id="mailSendMsg" hidden></p>
           <div class="mail-read-btns">
             <button type="submit" class="share-site-btn" id="mailSendBtn">发送</button>
@@ -1058,12 +1057,12 @@
   </div>
 </div>
 
-<script src="verify.js?v=20261019a"></script>
-<script src="config.js?v=20261019a"></script>
-<script src="main.js?v=20261019a"></script>
-<script src="account.js?v=20261019a"></script>
-<script src="ticket.js?v=20261019a"></script>
-<script src="venue.js?v=20261019a"></script>
-<script src="survey.js?v=20261019a"></script>
+<script src="verify.js?v=20261019b"></script>
+<script src="config.js?v=20261019b"></script>
+<script src="main.js?v=20261019b"></script>
+<script src="account.js?v=20261019b"></script>
+<script src="ticket.js?v=20261019b"></script>
+<script src="venue.js?v=20261019b"></script>
+<script src="survey.js?v=20261019b"></script>
 </body>
 </html>

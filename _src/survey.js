@@ -15,7 +15,7 @@ const SURVEY_PROJECTS = [
 ];
 
 /* 题型：choice（multi / exclusive / other）、score、card、text；show 为显示条件 */
-/* 做新问卷时换一个新的 id（Worker 的 SURVEYS 同步加上），旧问卷的答卷照样留在库里；
+/* 做新问卷时换一个新的 id（Worker 的 SURVEYS 同步加上），旧问卷的答卷照样留在库里，旧的 SURVEY 整个挪进下面的 SURVEY_ARCHIVE；
    name 是记录用的问卷标题（管理页、个人数据里显示），管理页「活动问卷」里可以改，改过的以管理页为准；title 是访客看到的大标题 */
 const SURVEY = {
   id: "moguri2026",
@@ -194,12 +194,34 @@ function surveyFlatten(items) {
   return fields;
 }
 const SURVEY_FIELDS = surveyFlatten(SURVEY_ITEMS);
-const SURVEY_FIELD_ITEM = new Map();   // 字段 → 所属的题
-SURVEY_ITEMS.forEach((it) => {
-  SURVEY_FIELD_ITEM.set(it.key, it);
-  if (it.other) SURVEY_FIELD_ITEM.set(it.other.key, it);
-  if (it.comment) SURVEY_FIELD_ITEM.set(it.comment.key, it);
-});
+function surveyFieldItems(items) {   // 字段 → 所属的题
+  const map = new Map();
+  items.forEach((it) => {
+    map.set(it.key, it);
+    if (it.other) map.set(it.other.key, it);
+    if (it.comment) map.set(it.comment.key, it);
+  });
+  return map;
+}
+const SURVEY_FIELD_ITEM = surveyFieldItems(SURVEY_ITEMS);
+
+/* 往期问卷：做新问卷时把旧的 SURVEY 对象原样挪进来（id 不要改），管理页「活动问卷」切换到旧问卷时仍按原来的题目统计和导出。
+   没挪进来的旧问卷也能在管理页查看，只是题目显示成字段名、没有统计图 */
+const SURVEY_ARCHIVE = [];
+const surveyDefCache = new Map();
+/* 一份问卷的定义 { survey, items, fields, fieldItem }；找不到返回 null */
+function surveyDef(id) {
+  if (surveyDefCache.has(id)) return surveyDefCache.get(id);
+  const survey = id === SURVEY.id ? SURVEY : SURVEY_ARCHIVE.find((s) => s.id === id);
+  let def = null;
+  if (survey === SURVEY) def = { survey, items: SURVEY_ITEMS, fields: SURVEY_FIELDS, fieldItem: SURVEY_FIELD_ITEM };
+  else if (survey) {
+    const items = survey.sections.flatMap((sec, si) => sec.items.map((it) => ({ ...it, section: si })));
+    def = { survey, items, fields: surveyFlatten(items), fieldItem: surveyFieldItems(items) };
+  }
+  surveyDefCache.set(id, def);
+  return def;
+}
 
 /* 校验规则与 Worker 一致：返回 { answers } 或 { field, reason } */
 const surveyCleanText = (v) => v.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ").trim();
@@ -263,8 +285,8 @@ function surveyOptionLabel(it, key) {
   return o ? o.label : key;
 }
 
-function surveyFieldHeader(key) {
-  const it = SURVEY_FIELD_ITEM.get(key);
+function surveyFieldHeader(key, fieldItem = SURVEY_FIELD_ITEM) {
+  const it = fieldItem.get(key);
   if (!it) return key;
   const name = it.card ? it.card.title : it.short || it.label;
   if (it.other && key === it.other.key) return `${name}·其他`;
@@ -272,9 +294,9 @@ function surveyFieldHeader(key) {
   return it.card ? `${name}·满意度` : name;
 }
 
-function surveyAnswerText(key, value) {
+function surveyAnswerText(key, value, fieldItem = SURVEY_FIELD_ITEM) {
   if (value === undefined || value === null || value === "") return "";
-  const it = SURVEY_FIELD_ITEM.get(key);
+  const it = fieldItem.get(key);
   if (it && it.kind === "choice" && key === it.key) {
     return Array.isArray(value) ? value.map((k) => surveyOptionLabel(it, k)).join("、") : surveyOptionLabel(it, value);
   }

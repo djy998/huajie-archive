@@ -1,9 +1,10 @@
-/* 花舞之街 · 莫古邮件（私信）：登录账户之间按用户名发信。页头信封按钮第一次点开时由 account.js 加载，对外是 window.HJMail。
-   布局参照游戏里的莫古邮件：左边是「未读 / 收件箱 / 已发送」列表和「写新邮件」，右边看信或写信；手机上一次只显示一栏。
+/* 花舞之街 · 邮差莫古力（私信）：登录账户之间按用户名发信。页头信封按钮第一次点开时由 account.js 加载，对外是 window.HJMail。
+   布局参照游戏里的莫古邮件：平时卡片收起，只有左边的列表（写新邮件、未读 / 收件箱 / 已发送）；点开一封信或写新邮件时卡片展开，
+   右边看信或写信，点「收起」回到只有列表。手机上展开时只显示右边那一栏。
    开关在管理页「用户管理 → 设置」：开放私信 / 仅开放与管理员私信 / 关闭私信（Worker 的 mail_mode）。管理员发的信标「管理员」 */
 (() => {
   const TITLE_MAX = 30;
-  const BODY_MAX = 500;
+  const BODY_MAX = 1000;
   const ERRORS = {
     mail_off: "私信功能已关闭",
     admin_only: "目前只能给管理员写信",
@@ -25,8 +26,7 @@
     box: "unread",                 // 列表页签：unread / in / sent
     lists: { in: null, sent: null },
     sel: null,                     // 正在看的信 { box, id }
-    view: "list",                  // 手机上：list / main
-    mode: "off", canSend: "none", unread: 0, total: 0, max: 200,
+    mode: "off", canSend: "none", unread: 0, total: 0, max: 300,
     bound: false,
   };
   const A = () => window.HJAccount;
@@ -76,11 +76,16 @@
     $("mailFoot").textContent = `未读 ${st.unread} · 收件箱 ${st.total} / ${st.max}`;
   }
 
+  /* 右栏：read 看信 / compose 写信 / empty 收起（卡片只剩列表） */
   function paintMain(which) {
     $("mailRead").hidden = which !== "read";
     $("mailCompose").hidden = which !== "compose";
-    $("mailEmpty").hidden = which !== "empty";
-    $("mailCard").classList.toggle("is-main", st.view === "main");
+    $("mailCard").classList.toggle("is-open", which !== "empty");
+  }
+  function collapse() {
+    st.sel = null;
+    paintMain("empty");
+    paintList();
   }
 
   function findMail(box, id) {
@@ -89,7 +94,7 @@
 
   function paintRead() {
     const m = st.sel && findMail(st.sel.box, st.sel.id);
-    if (!m) { st.sel = null; st.view = "list"; paintMain("empty"); return; }
+    if (!m) { collapse(); return; }
     const sent = st.sel.box === "sent";
     $("mailReadHead").innerHTML = sent
       ? `<span class="mail-read-label">发给</span><span class="mail-read-who">${peerHtml(m.to)}</span>`
@@ -135,7 +140,6 @@
     const m = findMail(box, id);
     if (!m) return;
     st.sel = { box, id };
-    st.view = "main";
     paintRead();
     paintList();
     if (box === "in" && !m.read) {
@@ -156,7 +160,6 @@
     countBody();
     setMsg($("mailSendMsg"), "");
     st.sel = null;
-    st.view = "main";
     paintList();
     paintMain("compose");
     ($("mailTo").value ? $("mailBody") : $("mailTo")).focus({ preventScroll: true });
@@ -186,8 +189,7 @@
     st.lists.sent = null;
     st.box = "sent";
     syncTabs();
-    st.view = "list";
-    paintMain("empty");
+    collapse();
     load("sent");
   }
 
@@ -200,10 +202,7 @@
     st.lists[box] = (st.lists[box] || []).filter((m) => m.id !== id);
     if (box === "in") st.total = Math.max(0, st.total - 1);
     applyMeta({ unread: data.unread });
-    st.sel = null;
-    st.view = "list";
-    paintMain("empty");
-    paintList();
+    collapse();
     showToast("邮件已删除");
   }
 
@@ -220,10 +219,7 @@
     $("mailTabs").addEventListener("change", (e) => {
       st.box = e.target.value;
       syncSegments($("mailTabs"));
-      st.view = "list";
-      paintMain(st.sel ? "read" : "empty");
-      $("mailCard").classList.remove("is-main");
-      paintList();
+      collapse();
       if (!st.lists[dataBox()]) load(dataBox());
     });
     $("mailList").addEventListener("click", (e) => {
@@ -232,10 +228,7 @@
     });
     $("mailNewBtn").addEventListener("click", () => compose());
     $("mailRefreshBtn").addEventListener("click", () => { load("in"); if (st.lists.sent) load("sent"); });
-    $("mailBack").addEventListener("click", () => {
-      st.view = "list";
-      $("mailCard").classList.remove("is-main");
-    });
+    $("mailBack").addEventListener("click", collapse);
     $("mailReplyBtn").addEventListener("click", () => {
       const m = st.sel && findMail(st.sel.box, st.sel.id);
       if (!m) return;
@@ -245,11 +238,7 @@
     $("mailDeleteBtn").addEventListener("click", remove);
     $("mailCompose").addEventListener("submit", send);
     $("mailBody").addEventListener("input", countBody);
-    $("mailCancelBtn").addEventListener("click", () => {
-      st.view = "list";
-      $("mailCard").classList.remove("is-main");
-      paintMain("empty");
-    });
+    $("mailCancelBtn").addEventListener("click", collapse);
   }
 
   function open() {
@@ -259,10 +248,7 @@
     playFadeOnly($("mailCard"));
     st.box = st.unread > 0 || !st.lists.in ? "unread" : st.box;
     syncTabs();
-    st.view = "list";
-    paintMain(st.sel ? "read" : "empty");
-    $("mailCard").classList.remove("is-main");
-    paintList();
+    collapse();
     load("in");
     if (st.lists.sent) load("sent", { quiet: true });
   }

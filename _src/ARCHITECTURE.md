@@ -29,7 +29,7 @@
 | 5 | `account.js` | 账户与个人数据：网站说明的「致谢」「个人数据」「登录与注册」、登录状态、自动填表、本机提交记录、跨设备同步，提供 `window.HJAccount` |
 | 6 | `ticket.js` / `venue.js` / `survey.js` | 各自一个功能，依赖 `main.js` 的工具 |
 
-按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`bard-stage.js`（模拟器里点「来舞台演奏」）、`games.js`（打开小游戏助手）、`mail.js`（点开页头的莫古邮件）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
+按需加载的有：`admin.js`（进入 `#internal`）、`huayu.js`（打开花语）、`puzzle.js`（打开花街拼图）、`bard.js`（打开吟游诗人模拟器）、`bard-stage.js`（模拟器里点「来舞台演奏」）、`games.js`（打开小游戏助手）、`mail.js`（点开页头的邮差莫古力）、`assets/lib/exceljs.min.js`（导出 Excel）、`fonts.css`（正文字体，开屏后）。
 
 加载提示（`main.js` 的 `trackLoad(promise, how)`）全站通用，都用开屏的莫古力，按「会不会挡住访客」分两种，网快时什么都看不到：
 
